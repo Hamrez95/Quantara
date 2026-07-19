@@ -28,7 +28,7 @@ With the pinned .NET 8 SDK, Python 3, and Docker Compose installed:
 
 ```bash
 dotnet restore Quantara.sln
-dotnet format Quantara.sln --verify-no-changes --no-restore
+dotnet format whitespace Quantara.sln --verify-no-changes --no-restore
 dotnet build Quantara.sln --configuration Release --no-restore
 dotnet test Quantara.sln --configuration Release --no-build
 python3 scripts/validate-milestone1.py
