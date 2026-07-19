@@ -15,11 +15,11 @@ public sealed class DeterministicMockExchangeConnector : IExchangeConnector
 
     public Task<IReadOnlyList<Balance>> GetBalancesAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<Balance>>([new Balance("USDT", 100_000m, 100_000m)]);
 
-    public Task<IReadOnlyList<Candle>> GetCandlesAsync(Symbol symbol, TimeSpan timeframe, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<Candle>> GetCandlesAsync(Symbol symbol, TimeSpan timeframe, DateTimeOffset startInclusive, DateTimeOffset endExclusive, CancellationToken cancellationToken)
     {
         var candles = new List<Candle>();
         var index = 0;
-        for (var time = from; time < to; time = time.Add(timeframe), index++)
+        for (var time = startInclusive; time < endExclusive; time = time.Add(timeframe), index++)
         {
             var open = 50_000m + index * 10m;
             candles.Add(new Candle(symbol, time, timeframe, open, open + 100m, open - 100m, open + 25m, 1000m + index));
