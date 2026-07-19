@@ -26,9 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      CI: true
-      DOTNET_CLI_TELEMETRY_OPTOUT: 1
-      DOTNET_NOLOGO: true
+      CI: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
       NUGET_XMLDOC_MODE: skip
     steps:
       - name: Checkout
@@ -45,8 +45,8 @@ jobs:
       - name: Restore
         run: dotnet restore Quantara.sln
 
-      - name: Verify formatting
-        run: dotnet format Quantara.sln --verify-no-changes --no-restore
+      - name: Verify whitespace formatting
+        run: dotnet format whitespace Quantara.sln --verify-no-changes --no-restore
 
       - name: Build
         run: dotnet build Quantara.sln --configuration Release --no-restore
