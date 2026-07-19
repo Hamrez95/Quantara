@@ -35,14 +35,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-          cache: true
-          cache-dependency-path: '**/*.csproj'
 
       - name: Display SDK information
         run: dotnet --info
 
       - name: Restore
-        run: dotnet restore Quantara.sln --locked-mode
+        run: dotnet restore Quantara.sln
 
       - name: Verify formatting
         run: dotnet format Quantara.sln --verify-no-changes --no-restore
