@@ -49,7 +49,13 @@ jobs:
         run: dotnet format whitespace Quantara.sln --verify-no-changes --no-restore
 
       - name: Build
-        run: dotnet build Quantara.sln --configuration Release --no-restore
+        shell: bash
+        run: |
+          set +e
+          dotnet build Quantara.sln --configuration Release --no-restore --verbosity minimal > build.log 2>&1
+          status=$?
+          tail -n 120 build.log
+          exit $status
 
       - name: Test
         run: >-
@@ -59,12 +65,14 @@ jobs:
           --logger "trx;LogFileName=quantara-tests.trx"
           --results-directory TestResults
 
-      - name: Upload test results
+      - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dotnet-test-results
-          path: TestResults/**/*.trx
+          name: dotnet-diagnostics
+          path: |
+            build.log
+            TestResults/**/*.trx
           if-no-files-found: ignore
           retention-days: 14
 
