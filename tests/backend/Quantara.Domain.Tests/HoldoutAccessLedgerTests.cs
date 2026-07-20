@@ -63,7 +63,9 @@ public sealed class HoldoutAccessLedgerTests
             provenance: ResearchTestData.CreateProvenance("fixture://source-a"),
             datasetId: "dataset-a");
         var secondDataset = ResearchTestData.CreateDataset(
-            provenance: ResearchTestData.CreateProvenance("fixture://source-b"),
+            provenance: ResearchTestData.CreateProvenance(
+                "fixture://source-b",
+                provider: "renamed-provider"),
             datasetId: "dataset-b");
         Assert.Equal(firstDataset.ContentSha256, secondDataset.ContentSha256);
         Assert.NotEqual(firstDataset.ManifestSha256, secondDataset.ManifestSha256);
@@ -88,7 +90,7 @@ public sealed class HoldoutAccessLedgerTests
     }
 
     [Fact]
-    public void ChangedContentCannotResetSameMarketCohortHoldout()
+    public void ChangedContentOrProviderCannotResetSameMarketCohortHoldout()
     {
         var firstDataset = ResearchTestData.CreateDataset(datasetId: "dataset-a");
         var changedCandles = ResearchTestData.CreateCandles();
@@ -98,6 +100,9 @@ public sealed class HoldoutAccessLedgerTests
         };
         var secondDataset = ResearchTestData.CreateDataset(
             candles: changedCandles,
+            provenance: ResearchTestData.CreateProvenance(
+                "fixture://refreshed-source",
+                provider: "independent-provider"),
             datasetId: "dataset-b");
         Assert.NotEqual(firstDataset.ContentSha256, secondDataset.ContentSha256);
         var first = ResearchTestData.CreateExperiment(
@@ -120,7 +125,7 @@ public sealed class HoldoutAccessLedgerTests
     }
 
     [Fact]
-    public void AllowsDistinctContentAndMarketCohortForSameResearchLineage()
+    public void AllowsDistinctContentAndMarketTypeForSameResearchLineage()
     {
         var firstDataset = ResearchTestData.CreateDataset(datasetId: "dataset-a");
         var changedCandles = ResearchTestData.CreateCandles();
@@ -131,8 +136,9 @@ public sealed class HoldoutAccessLedgerTests
         var secondDataset = ResearchTestData.CreateDataset(
             candles: changedCandles,
             provenance: ResearchTestData.CreateProvenance(
-                "fixture://independent-source",
-                provider: "independent-provider"),
+                "fixture://inverse-market",
+                provider: "independent-provider",
+                market: "inverse-perpetual"),
             datasetId: "dataset-b");
         var first = ResearchTestData.CreateExperiment(
             firstDataset,
