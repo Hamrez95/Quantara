@@ -168,7 +168,7 @@ public sealed class EfOrderStore : IOrderStore
             ApplicationCode = result.Code,
             PreviousState = result.PreviousState,
             CurrentState = result.CurrentState,
-            OccurredAt = orderEvent.OccurredAt.ToUniversalTime(),
+            OccurredAt = PostgreSqlTimestamp.Normalize(orderEvent.OccurredAt),
             Reason = orderEvent.Reason,
             CreatedAt = persistedAt
         });
@@ -256,7 +256,8 @@ public sealed class EfOrderStore : IOrderStore
                 requestedOrderId,
                 StringComparison.Ordinal)
             && existingEvent.TargetState == requestedEvent.TargetState
-            && existingEvent.OccurredAt == requestedEvent.OccurredAt.ToUniversalTime()
+            && existingEvent.OccurredAt
+                == PostgreSqlTimestamp.Normalize(requestedEvent.OccurredAt)
             && string.Equals(
                 existingEvent.Reason,
                 requestedEvent.Reason,
