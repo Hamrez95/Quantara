@@ -179,28 +179,33 @@ public sealed class PositionAccountingAggregateTests
     }
 
     [Fact]
-    public void RehydratesOnlyWhenSnapshotReconcilesWithExecutionHistory()
+    public void PreservesFillOrderAndRehydratesOnlyWhenHistoryReconciles()
     {
         var source = new PositionAccountingAggregate(BtcUsdt, 1m);
-        var fill = CreateFill("fill-1", OrderSide.Buy, 100m, 1m, fee: 0.5m);
+        var openingFill = CreateFill("open", OrderSide.Buy, 100m, 2m, fee: 0.5m);
+        var reversalFill = CreateFill("reverse", OrderSide.Sell, 90m, 3m, fee: 1m);
         var settlement = new FundingSettlement("funding-1", BtcUsdt, -1m, Timestamp);
-        Assert.Equal(ExecutionApplicationCode.Applied, source.ApplyFill(fill).Code);
+        Assert.Equal(ExecutionApplicationCode.Applied, source.ApplyFill(openingFill).Code);
+        Assert.Equal(ExecutionApplicationCode.Applied, source.ApplyFill(reversalFill).Code);
         Assert.Equal(ExecutionApplicationCode.Applied, source.ApplyFunding(settlement).Code);
 
+        Assert.Equal(
+            new[] { "open", "reverse" },
+            source.ProcessedFills.Select(fill => fill.FillId));
         var rehydrated = PositionAccountingAggregate.Rehydrate(
             source.Snapshot,
-            source.ProcessedFills.Values,
-            source.ProcessedFundingSettlements.Values);
+            source.ProcessedFills,
+            source.ProcessedFundingSettlements);
 
         Assert.Equal(source.Snapshot, rehydrated.Snapshot);
         Assert.Equal(
             ExecutionApplicationCode.DuplicateIgnored,
-            rehydrated.ApplyFill(fill).Code);
+            rehydrated.ApplyFill(openingFill).Code);
         Assert.Throws<InvalidOperationException>(
             () => PositionAccountingAggregate.Rehydrate(
                 source.Snapshot with { FeesPaid = 2m },
-                source.ProcessedFills.Values,
-                source.ProcessedFundingSettlements.Values));
+                source.ProcessedFills,
+                source.ProcessedFundingSettlements));
     }
 
     private static ExecutionFill CreateFill(
