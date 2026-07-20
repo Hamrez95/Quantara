@@ -944,7 +944,6 @@ class _QuoteCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Semantics(
-      button: true,
       label:
           '${quote.displayName}, ${_formatMoney(quote.price)}, ${quote.changePercent.toStringAsFixed(2)} percent',
       child: Material(
@@ -952,7 +951,7 @@ class _QuoteCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(17),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () {},
+          onTap: null,
           child: Padding(
             padding: const EdgeInsets.all(15),
             child: Column(
