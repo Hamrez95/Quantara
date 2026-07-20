@@ -231,20 +231,21 @@ public sealed class DeterministicBacktestRunnerTests
     }
 
     [Fact]
-    public void ReportsSubMinimumNonzeroTargetAsNormalizedToFlat()
+    public void ReportsSubMinimumTargetAsNormalizedCloseForExistingPosition()
     {
         var fixture = CreateFixture();
+        var strategy = new SequenceTargetStrategy([1m, 0.05m, 0.05m, 0.05m, 0.05m, 0.05m]);
 
-        var result = Run(fixture, new ConstantTargetStrategy(0.05m));
+        var result = Run(fixture, strategy);
 
         Assert.True(result.IsCompleted);
-        Assert.Empty(result.Fills);
-        Assert.All(result.Decisions, decision =>
-        {
-            Assert.Equal(0.05m, decision.RequestedTargetSignedQuantity);
-            Assert.Equal(0m, decision.NormalizedTargetSignedQuantity);
-            Assert.Equal(BacktestDecisionCode.NormalizedToFlat, decision.Code);
-        });
+        Assert.Equal(2, result.Fills.Count);
+        Assert.Equal(OrderSide.Buy, result.Fills[0].Side);
+        Assert.Equal(OrderSide.Sell, result.Fills[1].Side);
+        Assert.Contains(result.Decisions, decision =>
+            decision.RequestedTargetSignedQuantity == 0.05m
+            && decision.NormalizedTargetSignedQuantity == 0m
+            && decision.Code == BacktestDecisionCode.NormalizedToFlat);
         Assert.Equal(0m, result.FinalPosition?.SignedQuantity);
     }
 
