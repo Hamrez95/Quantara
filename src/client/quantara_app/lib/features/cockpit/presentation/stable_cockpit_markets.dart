@@ -25,7 +25,9 @@ class _MarketsViewState extends State<_MarketsView> {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     if (widget.quotes.isEmpty) {
-      return SectionCard(child: Text('${strings.markets} برای نمایش وجود ندارد.'));
+      return SectionCard(
+        child: Text('${strings.markets} برای نمایش وجود ندارد.'),
+      );
     }
 
     final selected = widget.quotes[_selectedIndex];
