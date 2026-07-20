@@ -5,7 +5,14 @@ namespace Quantara.Domain.Tests;
 
 public sealed class ResearchEvidenceEnvelopeFactoryTests
 {
+    private const string OfficialSourceId = "fred-alfred-api";
+    private const string HypothesisSourceId = "tradecitypro-youtube-channel";
+    private const string ComplianceSourceId = "youtube-api-developer-policy";
+    private const string DisabledSourceId = "disabled-market-source";
+    private const string BlockedSourceId = "coinmetrics-community-api";
+
     private static readonly Symbol BtcUsdt = new("BTCUSDT");
+    private static readonly string RegistryHash = new('c', 64);
     private static readonly string RawHash = new('a', 64);
     private static readonly string NormalizedHash = new('b', 64);
     private static readonly DateTimeOffset RetrievedAt = new(
@@ -23,7 +30,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
         var symbols = new List<Symbol> { BtcUsdt };
 
         var result = Create(
-            OfficialSource(),
+            CreateRegistry(),
+            OfficialSourceId,
             ResearchEvidenceKind.OfficialFact,
             symbols,
             publishedAt: RetrievedAt - TimeSpan.FromMinutes(5),
@@ -34,6 +42,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
         Assert.Empty(result.RejectionReasons);
         var envelope = Assert.IsType<ResearchEvidenceEnvelope>(result.Envelope);
         Assert.Equal(ResearchExecutionAuthority.None, envelope.ExecutionAuthority);
+        Assert.Equal("1.0.0", envelope.RegistryVersion);
+        Assert.Equal(RegistryHash, envelope.RegistrySha256);
         Assert.Equal(TimeSpan.Zero, envelope.RetrievedAt.Offset);
         Assert.Single(envelope.AffectedSymbols);
         Assert.Equal(BtcUsdt, envelope.AffectedSymbols[0]);
@@ -43,7 +53,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     public void RejectsPublicationAfterRetrieval()
     {
         var result = Create(
-            OfficialSource(),
+            CreateRegistry(),
+            OfficialSourceId,
             ResearchEvidenceKind.OfficialFact,
             [BtcUsdt],
             publishedAt: RetrievedAt + TimeSpan.FromMinutes(1));
@@ -59,7 +70,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     public void RejectsExpiredEnvelopeAtRetrieval()
     {
         var result = Create(
-            OfficialSource(),
+            CreateRegistry(),
+            OfficialSourceId,
             ResearchEvidenceKind.OfficialFact,
             [BtcUsdt],
             expiresAt: RetrievedAt);
@@ -73,14 +85,9 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     [Fact]
     public void RejectsHypothesisSourceUsedAsFact()
     {
-        var source = new RegisteredResearchSource(
-            "1.0.0",
-            "tradecitypro-youtube-channel",
-            new Uri("https://www.youtube.com/c/tradecitypro"),
-            ResearchDecisionRole.HypothesisOnly);
-
         var result = Create(
-            source,
+            CreateRegistry(),
+            HypothesisSourceId,
             ResearchEvidenceKind.OfficialFact,
             [BtcUsdt]);
 
@@ -94,7 +101,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     public void RejectsDuplicateAffectedSymbols()
     {
         var result = Create(
-            OfficialSource(),
+            CreateRegistry(),
+            OfficialSourceId,
             ResearchEvidenceKind.OfficialFact,
             [BtcUsdt, BtcUsdt]);
 
@@ -109,7 +117,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     {
         var result = ResearchEvidenceEnvelopeFactory.Create(
             "evidence-1",
-            OfficialSource(),
+            CreateRegistry(),
+            OfficialSourceId,
             "provider-item-1",
             RetrievedAt,
             RetrievedAt - TimeSpan.FromMinutes(5),
@@ -128,16 +137,11 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     }
 
     [Fact]
-    public void RejectsInsecureSourceUri()
+    public void RejectsUnknownSourceId()
     {
-        var source = new RegisteredResearchSource(
-            "1.0.0",
-            "fred-alfred-api",
-            new Uri("http://example.com/data"),
-            ResearchDecisionRole.DirectFact);
-
         var result = Create(
-            source,
+            CreateRegistry(),
+            "unregistered-source",
             ResearchEvidenceKind.OfficialFact,
             [BtcUsdt]);
 
@@ -152,7 +156,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     {
         var result = ResearchEvidenceEnvelopeFactory.Create(
             "evidence-1",
-            OfficialSource(),
+            CreateRegistry(),
+            OfficialSourceId,
             "provider-item-1",
             RetrievedAt,
             RetrievedAt - TimeSpan.FromMinutes(5),
@@ -172,14 +177,9 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     [Fact]
     public void AllowsComplianceEvidenceWithoutSymbols()
     {
-        var source = new RegisteredResearchSource(
-            "1.0.0",
-            "youtube-api-developer-policy",
-            new Uri("https://developers.google.com/youtube/terms/developer-policies"),
-            ResearchDecisionRole.ComplianceOnly);
-
         var result = Create(
-            source,
+            CreateRegistry(),
+            ComplianceSourceId,
             ResearchEvidenceKind.ComplianceDecision,
             []);
 
@@ -189,17 +189,113 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
         Assert.Equal(ResearchExecutionAuthority.None, envelope.ExecutionAuthority);
     }
 
-    private static RegisteredResearchSource OfficialSource()
+    [Fact]
+    public void RejectsRegistryExpiredAtRetrievalDate()
     {
-        return new RegisteredResearchSource(
+        var result = ResearchEvidenceEnvelopeFactory.Create(
+            "evidence-1",
+            CreateRegistry(),
+            OfficialSourceId,
+            "provider-item-1",
+            new DateTimeOffset(2026, 8, 21, 0, 0, 0, TimeSpan.Zero),
+            null,
+            null,
+            RawHash,
+            NormalizedHash,
+            "official-fact-v1",
+            ResearchEvidenceKind.OfficialFact,
+            [BtcUsdt]);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchEvidenceCode.RegistryExpired,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsDisabledSource()
+    {
+        var result = Create(
+            CreateRegistry(),
+            DisabledSourceId,
+            ResearchEvidenceKind.FeatureObservation,
+            [BtcUsdt]);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchEvidenceCode.SourceDisabled,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsSourceBlockedPendingCommercialLicense()
+    {
+        var result = Create(
+            CreateRegistry(),
+            BlockedSourceId,
+            ResearchEvidenceKind.FeatureObservation,
+            [BtcUsdt]);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchEvidenceCode.SourceLicenseBlocked,
+            result.RejectionReasons);
+        Assert.Contains(
+            ResearchEvidenceCode.SourceDisabled,
+            result.RejectionReasons);
+    }
+
+    private static ResearchSourceRegistrySnapshot CreateRegistry()
+    {
+        var result = ResearchSourceRegistrySnapshotFactory.Create(
             "1.0.0",
-            "fred-alfred-api",
-            new Uri("https://fred.stlouisfed.org/docs/api/fred/overview.html"),
-            ResearchDecisionRole.DirectFact);
+            RegistryHash,
+            new DateTimeOffset(2026, 7, 20, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 8, 20, 0, 0, 0, TimeSpan.Zero),
+            [
+                new RegisteredResearchSource(
+                    OfficialSourceId,
+                    new Uri("https://fred.stlouisfed.org/docs/api/fred/overview.html"),
+                    ResearchDecisionRole.DirectFact,
+                    ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+                    true),
+                new RegisteredResearchSource(
+                    HypothesisSourceId,
+                    new Uri("https://www.youtube.com/c/tradecitypro"),
+                    ResearchDecisionRole.HypothesisOnly,
+                    ResearchCommercialUseStatus.CitationOnly,
+                    true),
+                new RegisteredResearchSource(
+                    ComplianceSourceId,
+                    new Uri("https://developers.google.com/youtube/terms/developer-policies"),
+                    ResearchDecisionRole.ComplianceOnly,
+                    ResearchCommercialUseStatus.NotApplicable,
+                    true),
+                new RegisteredResearchSource(
+                    DisabledSourceId,
+                    new Uri("https://example.com/disabled-market-source"),
+                    ResearchDecisionRole.FeatureInput,
+                    ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+                    false),
+                new RegisteredResearchSource(
+                    BlockedSourceId,
+                    new Uri("https://docs.coinmetrics.io/api"),
+                    ResearchDecisionRole.FeatureInput,
+                    ResearchCommercialUseStatus.BlockedPendingLicense,
+                    false)
+            ]);
+        if (!result.IsCreated || result.Snapshot is null)
+        {
+            throw new InvalidOperationException(
+                $"Research registry fixture was rejected: {string.Join(", ", result.RejectionReasons)}");
+        }
+
+        return result.Snapshot;
     }
 
     private static ResearchEvidenceBuildResult Create(
-        RegisteredResearchSource source,
+        ResearchSourceRegistrySnapshot registry,
+        string sourceId,
         ResearchEvidenceKind kind,
         IReadOnlyList<Symbol> symbols,
         DateTimeOffset? publishedAt = null,
@@ -207,7 +303,8 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     {
         return ResearchEvidenceEnvelopeFactory.Create(
             "evidence-1",
-            source,
+            registry,
+            sourceId,
             "provider-item-1",
             RetrievedAt,
             publishedAt,
