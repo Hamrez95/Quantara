@@ -6,7 +6,7 @@ public static class ResearchEvidenceEnvelopeFactory
 {
     public static ResearchEvidenceBuildResult Create(
         string evidenceId,
-        RegisteredResearchSource source,
+        RegisteredResearchSource? source,
         string providerItemId,
         DateTimeOffset retrievedAt,
         DateTimeOffset? publishedAt,
@@ -77,12 +77,13 @@ public static class ResearchEvidenceEnvelopeFactory
                 null);
         }
 
+        var validatedSource = source!;
         return new ResearchEvidenceBuildResult(
             true,
             Array.Empty<ResearchEvidenceCode>(),
             new ResearchEvidenceEnvelope(
                 evidenceId,
-                source,
+                validatedSource,
                 providerItemId,
                 retrievedAtUtc,
                 publishedAtUtc,
