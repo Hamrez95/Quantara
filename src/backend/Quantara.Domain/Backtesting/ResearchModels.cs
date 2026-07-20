@@ -15,18 +15,56 @@ public sealed record DatasetProvenance(
     string SchemaVersion,
     DateTimeOffset RetrievedAt);
 
-public sealed record HistoricalDatasetManifest(
-    string DatasetId,
-    Symbol Symbol,
-    TimeSpan Timeframe,
-    DateTimeOffset StartInclusive,
-    DateTimeOffset EndExclusive,
-    int CandleCount,
-    int FundingPointCount,
-    string ContentSha256,
-    string ManifestSha256,
-    DatasetProvenance Provenance,
-    DateTimeOffset CreatedAt);
+public sealed class HistoricalDatasetManifest
+{
+    internal HistoricalDatasetManifest(
+        string datasetId,
+        Symbol symbol,
+        TimeSpan timeframe,
+        DateTimeOffset startInclusive,
+        DateTimeOffset endExclusive,
+        int candleCount,
+        int fundingPointCount,
+        string contentSha256,
+        string manifestSha256,
+        DatasetProvenance provenance,
+        DateTimeOffset createdAt)
+    {
+        DatasetId = datasetId;
+        Symbol = symbol;
+        Timeframe = timeframe;
+        StartInclusive = startInclusive;
+        EndExclusive = endExclusive;
+        CandleCount = candleCount;
+        FundingPointCount = fundingPointCount;
+        ContentSha256 = contentSha256;
+        ManifestSha256 = manifestSha256;
+        Provenance = provenance;
+        CreatedAt = createdAt;
+    }
+
+    public string DatasetId { get; }
+
+    public Symbol Symbol { get; }
+
+    public TimeSpan Timeframe { get; }
+
+    public DateTimeOffset StartInclusive { get; }
+
+    public DateTimeOffset EndExclusive { get; }
+
+    public int CandleCount { get; }
+
+    public int FundingPointCount { get; }
+
+    public string ContentSha256 { get; }
+
+    public string ManifestSha256 { get; }
+
+    public DatasetProvenance Provenance { get; }
+
+    public DateTimeOffset CreatedAt { get; }
+}
 
 public enum DatasetBuildCode
 {
@@ -68,6 +106,7 @@ public sealed record ResearchWindow(
 public enum SplitValidationCode
 {
     Valid,
+    InvalidDatasetManifest,
     InvalidEmbargo,
     InvalidTrainWindow,
     InvalidValidationWindow,
@@ -80,13 +119,40 @@ public enum SplitValidationCode
     EmbargoViolation
 }
 
-public sealed record TemporalSplitPlan(
-    ResearchWindow Train,
-    ResearchWindow Validation,
-    ResearchWindow Test,
-    ResearchWindow Holdout,
-    TimeSpan MinimumEmbargo,
-    string FingerprintSha256);
+public sealed class TemporalSplitPlan
+{
+    internal TemporalSplitPlan(
+        string datasetContentSha256,
+        ResearchWindow train,
+        ResearchWindow validation,
+        ResearchWindow test,
+        ResearchWindow holdout,
+        TimeSpan minimumEmbargo,
+        string fingerprintSha256)
+    {
+        DatasetContentSha256 = datasetContentSha256;
+        Train = train;
+        Validation = validation;
+        Test = test;
+        Holdout = holdout;
+        MinimumEmbargo = minimumEmbargo;
+        FingerprintSha256 = fingerprintSha256;
+    }
+
+    public string DatasetContentSha256 { get; }
+
+    public ResearchWindow Train { get; }
+
+    public ResearchWindow Validation { get; }
+
+    public ResearchWindow Test { get; }
+
+    public ResearchWindow Holdout { get; }
+
+    public TimeSpan MinimumEmbargo { get; }
+
+    public string FingerprintSha256 { get; }
+}
 
 public sealed record SplitValidationResult(
     bool IsValid,
@@ -207,7 +273,7 @@ public enum HoldoutAccessCode
 public sealed record HoldoutAccessReceipt(
     string ScopeSha256,
     string ResearchLineageId,
-    string DatasetManifestSha256,
+    string DatasetContentSha256,
     DateTimeOffset HoldoutStartInclusive,
     DateTimeOffset HoldoutEndExclusive,
     string ExperimentFingerprintSha256,
