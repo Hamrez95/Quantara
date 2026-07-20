@@ -1,0 +1,48 @@
+name: Apply cockpit API refinement once
+
+on:
+  push:
+    branches:
+      - feat/31-readonly-cockpit-api
+    paths:
+      - scripts/refine_cockpit_api_adapter.py
+      - .github/workflows/apply-cockpit-api-refinement-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/31-readonly-cockpit-api
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Apply focused adapter changes
+        run: python3 scripts/refine_cockpit_api_adapter.py
+      - name: Normalize .NET and Flutter files
+        run: |
+          dotnet restore Quantara.sln
+          dotnet format whitespace Quantara.sln --no-restore
+          cd src/client/quantara_app
+          flutter pub get
+          dart format lib test
+      - name: Remove one-time tooling and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/refine_cockpit_api_adapter.py
+          git rm .github/workflows/apply-cockpit-api-refinement-once.yml
+          if [ -f .github/workflows/normalize-cockpit-api-once.yml ]; then
+            git rm .github/workflows/normalize-cockpit-api-once.yml
+          fi
+          git add src tests scripts Quantara.sln .github/workflows/ci.yml
+          git commit -m "refactor: tighten and normalize cockpit API integration"
+          git push origin HEAD:feat/31-readonly-cockpit-api
