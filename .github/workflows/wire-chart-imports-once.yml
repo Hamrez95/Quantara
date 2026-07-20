@@ -1,0 +1,45 @@
+name: Wire chart imports once
+
+on:
+  push:
+    branches:
+      - feat/36-multitimeframe-chart-analysis
+    paths:
+      - .github/workflows/wire-chart-imports-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/36-multitimeframe-chart-analysis
+      - name: Add market analysis imports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/client/quantara_app/lib/features/cockpit/presentation/stable_cockpit_page.dart')
+          text = path.read_text()
+          anchor = "import '../domain/cockpit_models.dart';\n"
+          imports = (
+              "import '../domain/cockpit_models.dart';\n"
+              "import '../../market_analysis/data/demo_market_chart_factory.dart';\n"
+              "import '../../market_analysis/domain/market_chart_models.dart';\n"
+              "import '../../market_analysis/presentation/quantara_candlestick_chart.dart';\n"
+          )
+          if 'demo_market_chart_factory.dart' not in text:
+              text = text.replace(anchor, imports)
+          path.write_text(text)
+          PY
+      - name: Remove one-time workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/wire-chart-imports-once.yml
+          git add src/client/quantara_app/lib/features/cockpit/presentation/stable_cockpit_page.dart
+          git commit -m "feat: wire chart analysis into cockpit"
+          git push origin HEAD:feat/36-multitimeframe-chart-analysis
