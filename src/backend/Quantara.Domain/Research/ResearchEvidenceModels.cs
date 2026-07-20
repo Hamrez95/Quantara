@@ -22,6 +22,7 @@ public enum ResearchCommercialUseStatus
 public enum ResearchEvidenceKind
 {
     OfficialFact,
+    ScheduledEvent,
     FeatureObservation,
     CandidateHypothesis,
     ComplianceDecision
@@ -48,12 +49,32 @@ public enum ResearchEvidenceCode
     IncompatibleDecisionRole
 }
 
-public sealed record RegisteredResearchSource(
-    string SourceId,
-    Uri CanonicalUri,
-    ResearchDecisionRole DecisionRole,
-    ResearchCommercialUseStatus CommercialUseStatus,
-    bool IsEnabled);
+public sealed class RegisteredResearchSource
+{
+    internal RegisteredResearchSource(
+        string sourceId,
+        Uri canonicalUri,
+        ResearchDecisionRole decisionRole,
+        ResearchCommercialUseStatus commercialUseStatus,
+        bool isEnabled)
+    {
+        SourceId = sourceId;
+        CanonicalUri = canonicalUri;
+        DecisionRole = decisionRole;
+        CommercialUseStatus = commercialUseStatus;
+        IsEnabled = isEnabled;
+    }
+
+    public string SourceId { get; }
+
+    public Uri CanonicalUri { get; }
+
+    public ResearchDecisionRole DecisionRole { get; }
+
+    public ResearchCommercialUseStatus CommercialUseStatus { get; }
+
+    public bool IsEnabled { get; }
+}
 
 public sealed class ResearchEvidenceEnvelope
 {
