@@ -1,0 +1,41 @@
+name: Promote chart snapshot once
+
+on:
+  push:
+    branches:
+      - feat/36-multitimeframe-chart-analysis
+    paths:
+      - .github/workflows/promote-chart-snapshot-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/36-multitimeframe-chart-analysis
+      - name: Use the public immutable result type
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/client/quantara_app/lib/features/market_analysis/data/chart_structure_analyzer.dart')
+          text = path.read_text()
+          text = text.replace('static _ChartStructure analyze(', 'static ChartStructureSnapshot analyze(')
+          text = text.replace('return _ChartStructure(', 'return ChartStructureSnapshot(')
+          marker = '\nfinal class _ChartStructure {'
+          if marker in text:
+              text = text.split(marker, 1)[0].rstrip() + '\n'
+          path.write_text(text)
+          PY
+      - name: Remove one-time workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/promote-chart-snapshot-once.yml
+          git add src/client/quantara_app/lib/features/market_analysis/data/chart_structure_analyzer.dart
+          git commit -m "refactor: expose chart structure snapshot"
+          git push origin HEAD:feat/36-multitimeframe-chart-analysis
