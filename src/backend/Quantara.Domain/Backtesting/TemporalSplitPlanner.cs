@@ -103,15 +103,7 @@ public static class TemporalSplitPlanner
         HistoricalDatasetManifest dataset,
         HashSet<SplitValidationCode> rejections)
     {
-        var coverage = dataset.EndExclusive - dataset.StartInclusive;
-        var expectedCoverage = TimeSpan.FromTicks(
-            dataset.Timeframe.Ticks * dataset.CandleCount);
-        if (!CanonicalResearchHash.IsSha256(dataset.ContentSha256)
-            || !CanonicalResearchHash.IsSha256(dataset.ManifestSha256)
-            || dataset.Timeframe <= TimeSpan.Zero
-            || dataset.CandleCount <= 0
-            || dataset.EndExclusive <= dataset.StartInclusive
-            || coverage != expectedCoverage)
+        if (!ResearchManifestIntegrity.IsDatasetConsistent(dataset))
         {
             rejections.Add(SplitValidationCode.InvalidDatasetManifest);
         }
