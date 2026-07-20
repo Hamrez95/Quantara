@@ -11,12 +11,12 @@ namespace Quantara.Domain.Tests;
 
 public sealed class PostgreSqlPersistenceTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
-        .WithDatabase("quantara_tests")
-        .WithUsername("quantara")
-        .WithPassword("quantara_tests_only")
-        .Build();
+    private readonly PostgreSqlContainer _container =
+        new PostgreSqlBuilder("postgres:16-alpine")
+            .WithDatabase("quantara_tests")
+            .WithUsername("quantara")
+            .WithPassword("quantara_tests_only")
+            .Build();
 
     public async Task InitializeAsync()
     {
