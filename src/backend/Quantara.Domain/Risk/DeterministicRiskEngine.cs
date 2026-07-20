@@ -173,7 +173,7 @@ public static class DeterministicRiskEngine
             if (validCorrelationContext is not null)
             {
                 var maximumCorrelatedExposure = normalizedRequest.AccountEquity
-                    * validCorrelationContext.MaximumExposurePercent
+                    * policy.MaximumCorrelatedExposurePercent
                     / 100m;
                 if (correlatedExposureAfter > maximumCorrelatedExposure)
                 {
@@ -464,7 +464,8 @@ public static class DeterministicRiskEngine
             && policy.MaximumAllowedSpreadPercent >= 0m
             && policy.MaximumAllowedSlippagePercent >= 0m
             && policy.MaximumConsecutiveLosses >= 0
-            && policy.MaximumTradingAllocationPercent > 0m;
+            && policy.MaximumTradingAllocationPercent > 0m
+            && policy.MaximumCorrelatedExposurePercent > 0m;
     }
 
     private static bool AreInstrumentRulesValid(InstrumentRiskRules instrumentRules)
@@ -491,7 +492,6 @@ public static class DeterministicRiskEngine
         return correlationContext is not null
             && !string.IsNullOrWhiteSpace(correlationContext.Group)
             && correlationContext.CurrentExposure >= 0m
-            && correlationContext.MaximumExposurePercent > 0m
             && correlationContext.ProposedExposureFactor is >= 0m and <= 1m;
     }
 
