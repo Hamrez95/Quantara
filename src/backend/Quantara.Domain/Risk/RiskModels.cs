@@ -16,6 +16,7 @@ public enum RiskDecisionCode
     InvalidStopDirection,
     InvalidTakeProfit,
     InvalidMarketCost,
+    InvalidCorrelationContext,
     MinimumRiskRewardNotMet,
     DailyLossLimitReached,
     WeeklyLossLimitReached,
@@ -23,6 +24,7 @@ public enum RiskDecisionCode
     LeverageLimitExceeded,
     PortfolioExposureLimitExceeded,
     SymbolExposureLimitExceeded,
+    CorrelatedExposureLimitExceeded,
     ConcurrentPositionLimitReached,
     SpreadLimitExceeded,
     SlippageLimitExceeded,
@@ -68,6 +70,12 @@ public sealed record InstrumentRiskRules(
     int QuantityPrecision,
     decimal MaximumLeverage);
 
+public sealed record CorrelationRiskContext(
+    string Group,
+    decimal CurrentExposure,
+    decimal MaximumExposurePercent,
+    decimal ProposedExposureFactor);
+
 public sealed record RiskEvaluationRequest(
     Symbol Symbol,
     TradeDirection Direction,
@@ -102,6 +110,9 @@ public sealed record RiskEvaluationResult(
     RiskDecisionCode DecisionCode,
     IReadOnlyList<RiskDecisionCode> RejectionReasons,
     IReadOnlyList<string> Warnings,
+    decimal NormalizedEntryPrice,
+    decimal NormalizedStopLoss,
+    decimal NormalizedTakeProfit,
     decimal RiskAmount,
     decimal RawQuantity,
     decimal NormalizedQuantity,
@@ -110,6 +121,9 @@ public sealed record RiskEvaluationResult(
     decimal EstimatedSlippage,
     decimal PortfolioExposureBefore,
     decimal PortfolioExposureAfter,
+    string CorrelationGroup,
+    decimal CorrelatedExposureBefore,
+    decimal CorrelatedExposureAfter,
     DateTimeOffset EvaluatedAt,
     string RiskPolicyVersion);
 
