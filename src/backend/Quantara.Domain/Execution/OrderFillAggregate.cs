@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using Quantara.Domain.Trading;
 
 namespace Quantara.Domain.Execution;
@@ -7,6 +6,7 @@ public sealed class OrderFillAggregate
 {
     private readonly Dictionary<string, ExecutionFill> _processedFills =
         new(StringComparer.Ordinal);
+    private readonly List<ExecutionFill> _appliedFills = [];
     private readonly string _orderId;
     private readonly Symbol _symbol;
     private readonly OrderSide _side;
@@ -34,8 +34,7 @@ public sealed class OrderFillAggregate
 
     public OrderFillSnapshot Snapshot => CreateSnapshot();
 
-    public IReadOnlyDictionary<string, ExecutionFill> ProcessedFills =>
-        _processedFills.ToFrozenDictionary(StringComparer.Ordinal);
+    public IReadOnlyList<ExecutionFill> ProcessedFills => _appliedFills.ToArray();
 
     public static OrderFillAggregate Rehydrate(
         OrderFillSnapshot expectedSnapshot,
@@ -137,6 +136,7 @@ public sealed class OrderFillAggregate
         _weightedFillValue += normalizedFill.Price * normalizedFill.Quantity;
         _feesPaid += normalizedFill.Fee;
         _processedFills.Add(normalizedFill.FillId, normalizedFill);
+        _appliedFills.Add(normalizedFill);
 
         var current = CreateSnapshot();
         return new OrderFillApplicationResult(
