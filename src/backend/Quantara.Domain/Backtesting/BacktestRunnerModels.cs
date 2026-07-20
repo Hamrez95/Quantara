@@ -243,7 +243,7 @@ public sealed class BacktestRunResult
         IReadOnlyList<BacktestRunWarning> warnings,
         PositionSnapshot? finalPosition,
         decimal finalEquity,
-        decimal pendingTargetSignedQuantity)
+        decimal effectiveTargetSignedQuantity)
     {
         Code = code;
         Message = message;
@@ -255,7 +255,7 @@ public sealed class BacktestRunResult
         Warnings = Array.AsReadOnly(warnings.ToArray());
         FinalPosition = finalPosition;
         FinalEquity = finalEquity;
-        PendingTargetSignedQuantity = pendingTargetSignedQuantity;
+        EffectiveTargetSignedQuantity = effectiveTargetSignedQuantity;
     }
 
     public BacktestRunCode Code { get; }
@@ -278,7 +278,7 @@ public sealed class BacktestRunResult
 
     public decimal FinalEquity { get; }
 
-    public decimal PendingTargetSignedQuantity { get; }
+    public decimal EffectiveTargetSignedQuantity { get; }
 
     public bool IsCompleted => Code == BacktestRunCode.Completed;
 }
