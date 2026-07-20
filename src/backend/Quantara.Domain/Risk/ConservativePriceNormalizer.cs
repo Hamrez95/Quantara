@@ -47,36 +47,36 @@ public static class ConservativePriceNormalizer
         };
     }
 
-    public static decimal NormalizeDown(decimal price, decimal tickSize, int precision)
+    public static decimal NormalizeDown(decimal value, decimal increment, int precision)
     {
-        if (price <= 0m || tickSize <= 0m || precision is < 0 or > 28)
+        if (value <= 0m || increment <= 0m || precision is < 0 or > 28)
         {
             return 0m;
         }
 
-        var steppedPrice = decimal.Floor(price / tickSize) * tickSize;
-        return decimal.Round(steppedPrice, precision, MidpointRounding.ToZero);
+        var steppedValue = decimal.Floor(value / increment) * increment;
+        return decimal.Round(steppedValue, precision, MidpointRounding.ToZero);
     }
 
-    public static decimal NormalizeUp(decimal price, decimal tickSize, int precision)
+    public static decimal NormalizeUp(decimal value, decimal increment, int precision)
     {
-        if (price <= 0m || tickSize <= 0m || precision is < 0 or > 28)
+        if (value <= 0m || increment <= 0m || precision is < 0 or > 28)
         {
             return 0m;
         }
 
-        var steppedPrice = decimal.Ceiling(price / tickSize) * tickSize;
-        return decimal.Round(steppedPrice, precision, MidpointRounding.ToZero);
+        var steppedValue = decimal.Ceiling(value / increment) * increment;
+        return decimal.Round(steppedValue, precision, MidpointRounding.ToZero);
     }
 
-    public static bool IsTickCompatibleWithPrecision(decimal tickSize, int precision)
+    public static bool IsIncrementCompatibleWithPrecision(decimal increment, int precision)
     {
-        if (tickSize <= 0m || precision is < 0 or > 28)
+        if (increment <= 0m || precision is < 0 or > 28)
         {
             return false;
         }
 
-        var text = tickSize
+        var text = increment
             .ToString(CultureInfo.InvariantCulture)
             .TrimEnd('0')
             .TrimEnd('.');
