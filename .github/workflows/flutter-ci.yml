@@ -63,17 +63,25 @@ jobs:
           cat flutter-analyze.log
           exit $status
 
+      - name: Run widget tests
+        shell: bash
+        run: |
+          set +e
+          flutter test --reporter expanded > flutter-test.log 2>&1
+          status=$?
+          cat flutter-test.log
+          exit $status
+
       - name: Upload Flutter diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: flutter-diagnostics
-          path: src/client/quantara_app/flutter-analyze.log
+          path: |
+            src/client/quantara_app/flutter-analyze.log
+            src/client/quantara_app/flutter-test.log
           if-no-files-found: ignore
           retention-days: 14
-
-      - name: Run widget tests
-        run: flutter test --reporter expanded
 
       - name: Build web PWA
         run: flutter build web --release
