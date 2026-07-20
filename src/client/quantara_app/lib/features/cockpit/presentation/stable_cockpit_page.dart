@@ -1,4 +1,3 @@
-library stable_cockpit_page;
 
 import 'package:flutter/material.dart';
 
