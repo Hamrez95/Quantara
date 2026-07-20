@@ -117,9 +117,7 @@ internal static class ResearchSourceRegistrySnapshotFactory
                     continue;
                 }
 
-                if (source.IsEnabled
-                    && source.CommercialUseStatus
-                        == ResearchCommercialUseStatus.BlockedPendingLicense)
+                if (!IsValidPolicy(source))
                 {
                     rejections.Add(ResearchSourceRegistryCode.InvalidSourcePolicy);
                 }
@@ -155,9 +153,89 @@ internal static class ResearchSourceRegistrySnapshotFactory
         return source is not null
             && ResearchIdentityRules.IsKebabIdentifier(source.SourceId)
             && ResearchIdentityRules.IsSecureHttpsUri(source.CanonicalUri)
+            && source.TermsUris.All(ResearchIdentityRules.IsSecureHttpsUri)
+            && source.TermsUris.Distinct().Count() == source.TermsUris.Count
+            && Enum.IsDefined(typeof(ResearchSourceClass), source.SourceClass)
+            && Enum.IsDefined(typeof(ResearchAuthorityTier), source.AuthorityTier)
+            && Enum.IsDefined(typeof(ResearchAccessClass), source.AccessClass)
+            && Enum.IsDefined(typeof(ResearchIngestionMode), source.IngestionMode)
             && Enum.IsDefined(typeof(ResearchDecisionRole), source.DecisionRole)
             && Enum.IsDefined(
                 typeof(ResearchCommercialUseStatus),
                 source.CommercialUseStatus);
+    }
+
+    private static bool IsValidPolicy(RegisteredResearchSource source)
+    {
+        if (source.AutomatedScrapingAllowed)
+        {
+            return false;
+        }
+
+        if (source.AuthorityTier == ResearchAuthorityTier.CreatorHypothesis
+            && (source.SourceClass != ResearchSourceClass.EducationalHypothesis
+                || source.DecisionRole != ResearchDecisionRole.HypothesisOnly))
+        {
+            return false;
+        }
+
+        if ((source.AuthorityTier == ResearchAuthorityTier.ComplianceAuthority
+                || source.SourceClass == ResearchSourceClass.CompliancePolicy)
+            && source.DecisionRole != ResearchDecisionRole.ComplianceOnly)
+        {
+            return false;
+        }
+
+        if (source.DecisionRole == ResearchDecisionRole.DirectFact
+            && source.AuthorityTier != ResearchAuthorityTier.OfficialPrimary)
+        {
+            return false;
+        }
+
+        if (source.DecisionRole == ResearchDecisionRole.FeatureInput
+            && source.AuthorityTier is ResearchAuthorityTier.CreatorHypothesis
+                or ResearchAuthorityTier.PublisherReference)
+        {
+            return false;
+        }
+
+        if (source.AccessClass is ResearchAccessClass.CopyrightedReference
+                or ResearchAccessClass.RestrictedPaid
+            && (source.IngestionMode is not ResearchIngestionMode.CitationOnly
+                    and not ResearchIngestionMode.ManualMetadata
+                    and not ResearchIngestionMode.NoIngestion
+                || source.CommercialUseStatus
+                    is not ResearchCommercialUseStatus.CitationOnly
+                    and not ResearchCommercialUseStatus.BlockedPendingLicense))
+        {
+            return false;
+        }
+
+        if (source.AccessClass == ResearchAccessClass.CommunityNoncommercial
+            && (source.CommercialUseStatus
+                    != ResearchCommercialUseStatus.BlockedPendingLicense
+                || source.IsEnabled))
+        {
+            return false;
+        }
+
+        if (source.IngestionMode is ResearchIngestionMode.Api
+                or ResearchIngestionMode.YoutubeApiMetadata
+            && source.TermsUris.Count == 0)
+        {
+            return false;
+        }
+
+        if (source.IngestionMode == ResearchIngestionMode.YoutubeApiMetadata
+            && (source.AuthorityTier != ResearchAuthorityTier.CreatorHypothesis
+                || source.CommercialUseStatus
+                    != ResearchCommercialUseStatus.CitationOnly))
+        {
+            return false;
+        }
+
+        return source.CommercialUseStatus
+                != ResearchCommercialUseStatus.BlockedPendingLicense
+            || !source.IsEnabled;
     }
 }
