@@ -13,6 +13,8 @@ A report is created only when all of the following are valid:
 - the benchmark is positive, ordered, and timestamp-aligned with the strategy equity curve;
 - decision, fill, and funding sequences are contiguous;
 - fill and funding identifiers are unique;
+- execution price is consistent with the recorded adverse spread/slippage evidence;
+- fee and funding amounts exactly reconcile to the cost model, contract multiplier, signed quantity, price, and rate;
 - final position direction, signed quantity, contract multiplier, and average entry are internally consistent.
 
 Invalid inputs fail closed with structured rejection codes.
@@ -41,6 +43,8 @@ The report includes:
 - deterministic moving-block bootstrap interval for total return.
 
 Metrics that are mathematically undefined remain explicit structured values with a reason. A valid zero is not confused with an undefined value: zero volatility and zero tracking error are reported as defined zero, while Sharpe or information ratio with zero denominator are undefined.
+
+Bootstrap samples are capped at 100,000 per synchronous report build to prevent an unbounded research request from becoming a CPU or memory denial-of-service path. Larger studies must be orchestrated as separate bounded research jobs.
 
 ## Drawdown duration
 
