@@ -77,6 +77,7 @@ public sealed class ResearchEvidenceEnvelope
         ExpiresAt = expiresAt?.ToUniversalTime();
         ExtractionModelVersion = extractionModelVersion;
         PromptVersion = promptVersion;
+        ExecutionAuthority = ResearchExecutionAuthority.None;
     }
 
     public string EvidenceId { get; }
@@ -107,7 +108,7 @@ public sealed class ResearchEvidenceEnvelope
 
     public string? PromptVersion { get; }
 
-    public ResearchExecutionAuthority ExecutionAuthority => ResearchExecutionAuthority.None;
+    public ResearchExecutionAuthority ExecutionAuthority { get; }
 }
 
 public sealed record ResearchEvidenceBuildResult(
