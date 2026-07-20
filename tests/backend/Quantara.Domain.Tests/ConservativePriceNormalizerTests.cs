@@ -131,6 +131,49 @@ public sealed class ConservativePriceNormalizerTests
         Assert.NotEmpty(result.Warnings);
     }
 
+    [Fact]
+    public void RejectsLongTargetThatCrossesEntryAfterNormalization()
+    {
+        var request = CreateRequest() with
+        {
+            EntryPrice = 100.04m,
+            StopLoss = 99.86m,
+            TakeProfit = 100.06m
+        };
+
+        var result = DeterministicRiskEngine.Evaluate(
+            request,
+            CreatePolicy(),
+            CreateInstrumentRules());
+
+        Assert.False(result.IsApproved);
+        Assert.Equal(100.1m, result.NormalizedEntryPrice);
+        Assert.Equal(100.0m, result.NormalizedTakeProfit);
+        Assert.Contains(RiskDecisionCode.InvalidTakeProfit, result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsShortTargetThatCrossesEntryAfterNormalization()
+    {
+        var request = CreateRequest() with
+        {
+            Direction = TradeDirection.Short,
+            EntryPrice = 100.06m,
+            StopLoss = 100.24m,
+            TakeProfit = 100.04m
+        };
+
+        var result = DeterministicRiskEngine.Evaluate(
+            request,
+            CreatePolicy(),
+            CreateInstrumentRules());
+
+        Assert.False(result.IsApproved);
+        Assert.Equal(100.0m, result.NormalizedEntryPrice);
+        Assert.Equal(100.1m, result.NormalizedTakeProfit);
+        Assert.Contains(RiskDecisionCode.InvalidTakeProfit, result.RejectionReasons);
+    }
+
     private static RiskPolicy CreatePolicy()
     {
         return new RiskPolicy(
