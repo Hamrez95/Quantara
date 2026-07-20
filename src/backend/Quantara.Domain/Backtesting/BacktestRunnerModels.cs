@@ -181,7 +181,8 @@ public enum BacktestDecisionCode
     NoChange,
     RejectedInvalidReason,
     RejectedTargetLimit,
-    RejectedLeverage
+    RejectedLeverage,
+    NormalizedToFlat
 }
 
 public sealed record BacktestDecisionRecord(
