@@ -15,6 +15,22 @@ public sealed class BacktestStrategyContext
 
     internal BacktestStrategyContext(
         IReadOnlyList<Candle> allCandles,
+        PositionSnapshot position,
+        decimal equity,
+        IReadOnlyDictionary<string, string> parameters,
+        IDeterministicRandom random)
+        : this(
+            allCandles,
+            allCandles.Count,
+            position,
+            equity,
+            parameters,
+            random)
+    {
+    }
+
+    internal BacktestStrategyContext(
+        IReadOnlyList<Candle> allCandles,
         int visibleCandleCount,
         PositionSnapshot position,
         decimal equity,
