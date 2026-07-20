@@ -36,6 +36,10 @@ public sealed class OrderFillAggregateTests
         Assert.Equal(0m, second.Current.RemainingQuantity);
         Assert.Equal(105m, second.Current.AverageFillPrice);
         Assert.Equal(2.5m, second.Current.FeesPaid);
+        Assert.Collection(
+            aggregate.ProcessedFills,
+            fill => Assert.Equal("fill-1", fill.FillId),
+            fill => Assert.Equal("fill-2", fill.FillId));
     }
 
     [Fact]
@@ -56,7 +60,9 @@ public sealed class OrderFillAggregateTests
         Assert.Equal(ExecutionApplicationCode.OverfillRejected, rejected.Code);
         Assert.Equal(before, rejected.Current);
         Assert.Equal(before, aggregate.Snapshot);
-        Assert.DoesNotContain("fill-2", aggregate.ProcessedFills.Keys);
+        Assert.DoesNotContain(
+            aggregate.ProcessedFills,
+            fill => string.Equals(fill.FillId, "fill-2", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -140,7 +146,7 @@ public sealed class OrderFillAggregateTests
 
         var rehydrated = OrderFillAggregate.Rehydrate(
             source.Snapshot,
-            source.ProcessedFills.Values);
+            source.ProcessedFills);
         var replay = rehydrated.Apply(fill);
 
         Assert.Equal(source.Snapshot, rehydrated.Snapshot);
@@ -148,7 +154,7 @@ public sealed class OrderFillAggregateTests
         Assert.Throws<InvalidOperationException>(
             () => OrderFillAggregate.Rehydrate(
                 source.Snapshot with { FilledQuantity = 2m, RemainingQuantity = 0m },
-                source.ProcessedFills.Values));
+                source.ProcessedFills));
     }
 
     private static ExecutionFill CreateFill(
