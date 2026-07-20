@@ -22,7 +22,8 @@ public enum OrderEventApplicationCode
 {
     Applied,
     DuplicateIgnored,
-    InvalidTransition
+    InvalidTransition,
+    ConcurrencyConflict
 }
 
 public sealed record OrderLifecycleEvent(
@@ -39,19 +40,43 @@ public sealed record OrderEventApplicationResult(
 
 public sealed class OrderAggregate
 {
-    private readonly HashSet<string> _processedEventIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _processedEventIds;
 
     public OrderAggregate(string orderId)
+        : this(orderId, OrderState.Created, Array.Empty<string>())
+    {
+    }
+
+    private OrderAggregate(
+        string orderId,
+        OrderState state,
+        IEnumerable<string> processedEventIds)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
+        ArgumentNullException.ThrowIfNull(processedEventIds);
+
         OrderId = orderId;
+        State = state;
+        _processedEventIds = new HashSet<string>(
+            processedEventIds.Select(ValidateEventId),
+            StringComparer.Ordinal);
     }
 
     public string OrderId { get; }
 
-    public OrderState State { get; private set; } = OrderState.Created;
+    public OrderState State { get; private set; }
 
     public bool IsTerminal => OrderStateMachine.IsTerminal(State);
+
+    public IReadOnlySet<string> ProcessedEventIds => _processedEventIds;
+
+    public static OrderAggregate Rehydrate(
+        string orderId,
+        OrderState state,
+        IEnumerable<string> processedEventIds)
+    {
+        return new OrderAggregate(orderId, state, processedEventIds);
+    }
 
     public OrderEventApplicationResult Apply(OrderLifecycleEvent orderEvent)
     {
@@ -93,6 +118,12 @@ public sealed class OrderAggregate
             previousState,
             State,
             orderEvent.Reason);
+    }
+
+    private static string ValidateEventId(string eventId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(eventId);
+        return eventId;
     }
 }
 
