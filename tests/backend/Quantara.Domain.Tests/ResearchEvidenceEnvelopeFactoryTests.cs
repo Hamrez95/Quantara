@@ -113,6 +113,24 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
     }
 
     [Fact]
+    public void RejectsNullAffectedSymbol()
+    {
+        var symbols = new List<Symbol> { null! };
+
+        var result = Create(
+            CreateRegistry(),
+            OfficialSourceId,
+            ResearchEvidenceKind.OfficialFact,
+            symbols);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchEvidenceCode.InvalidSymbols,
+            result.RejectionReasons);
+        Assert.Null(result.Envelope);
+    }
+
+    [Fact]
     public void RejectsIncompleteExtractionMetadata()
     {
         var result = ResearchEvidenceEnvelopeFactory.Create(
@@ -253,36 +271,11 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
             new DateTimeOffset(2026, 7, 20, 0, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2026, 8, 20, 0, 0, 0, TimeSpan.Zero),
             [
-                new RegisteredResearchSource(
-                    OfficialSourceId,
-                    new Uri("https://fred.stlouisfed.org/docs/api/fred/overview.html"),
-                    ResearchDecisionRole.DirectFact,
-                    ResearchCommercialUseStatus.ApprovedSubjectToTerms,
-                    true),
-                new RegisteredResearchSource(
-                    HypothesisSourceId,
-                    new Uri("https://www.youtube.com/c/tradecitypro"),
-                    ResearchDecisionRole.HypothesisOnly,
-                    ResearchCommercialUseStatus.CitationOnly,
-                    true),
-                new RegisteredResearchSource(
-                    ComplianceSourceId,
-                    new Uri("https://developers.google.com/youtube/terms/developer-policies"),
-                    ResearchDecisionRole.ComplianceOnly,
-                    ResearchCommercialUseStatus.NotApplicable,
-                    true),
-                new RegisteredResearchSource(
-                    DisabledSourceId,
-                    new Uri("https://example.com/disabled-market-source"),
-                    ResearchDecisionRole.FeatureInput,
-                    ResearchCommercialUseStatus.ApprovedSubjectToTerms,
-                    false),
-                new RegisteredResearchSource(
-                    BlockedSourceId,
-                    new Uri("https://docs.coinmetrics.io/api"),
-                    ResearchDecisionRole.FeatureInput,
-                    ResearchCommercialUseStatus.BlockedPendingLicense,
-                    false)
+                OfficialSource(),
+                HypothesisSource(),
+                ComplianceSource(),
+                DisabledSource(),
+                BlockedSource()
             ]);
         if (!result.IsCreated || result.Snapshot is null)
         {
@@ -291,6 +284,91 @@ public sealed class ResearchEvidenceEnvelopeFactoryTests
         }
 
         return result.Snapshot;
+    }
+
+    private static RegisteredResearchSource OfficialSource()
+    {
+        return new RegisteredResearchSource(
+            OfficialSourceId,
+            new Uri("https://fred.stlouisfed.org/docs/api/fred/overview.html"),
+            [new Uri("https://fred.stlouisfed.org/docs/api/terms_of_use.html")],
+            ResearchSourceClass.OfficialEventData,
+            ResearchAuthorityTier.OfficialPrimary,
+            ResearchAccessClass.PublicApiWithTerms,
+            ResearchIngestionMode.Api,
+            ResearchDecisionRole.DirectFact,
+            ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+            true,
+            false,
+            true);
+    }
+
+    private static RegisteredResearchSource HypothesisSource()
+    {
+        return new RegisteredResearchSource(
+            HypothesisSourceId,
+            new Uri("https://www.youtube.com/c/tradecitypro"),
+            [new Uri("https://developers.google.com/youtube/terms/developer-policies")],
+            ResearchSourceClass.EducationalHypothesis,
+            ResearchAuthorityTier.CreatorHypothesis,
+            ResearchAccessClass.PublicWebReference,
+            ResearchIngestionMode.YoutubeApiMetadata,
+            ResearchDecisionRole.HypothesisOnly,
+            ResearchCommercialUseStatus.CitationOnly,
+            true,
+            false,
+            true);
+    }
+
+    private static RegisteredResearchSource ComplianceSource()
+    {
+        return new RegisteredResearchSource(
+            ComplianceSourceId,
+            new Uri("https://developers.google.com/youtube/terms/developer-policies"),
+            [new Uri("https://developers.google.com/youtube/terms/api-services-terms-of-service")],
+            ResearchSourceClass.CompliancePolicy,
+            ResearchAuthorityTier.ComplianceAuthority,
+            ResearchAccessClass.PublicWebReference,
+            ResearchIngestionMode.NoIngestion,
+            ResearchDecisionRole.ComplianceOnly,
+            ResearchCommercialUseStatus.NotApplicable,
+            true,
+            false,
+            true);
+    }
+
+    private static RegisteredResearchSource DisabledSource()
+    {
+        return new RegisteredResearchSource(
+            DisabledSourceId,
+            new Uri("https://example.com/disabled-market-source"),
+            [new Uri("https://example.com/terms")],
+            ResearchSourceClass.LiveMarketData,
+            ResearchAuthorityTier.VendorPrimary,
+            ResearchAccessClass.PublicApiWithTerms,
+            ResearchIngestionMode.Api,
+            ResearchDecisionRole.FeatureInput,
+            ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+            true,
+            false,
+            false);
+    }
+
+    private static RegisteredResearchSource BlockedSource()
+    {
+        return new RegisteredResearchSource(
+            BlockedSourceId,
+            new Uri("https://docs.coinmetrics.io/api"),
+            [new Uri("https://coinmetrics.io/terms-of-use/")],
+            ResearchSourceClass.LiveMarketData,
+            ResearchAuthorityTier.VendorPrimary,
+            ResearchAccessClass.CommunityNoncommercial,
+            ResearchIngestionMode.Api,
+            ResearchDecisionRole.FeatureInput,
+            ResearchCommercialUseStatus.BlockedPendingLicense,
+            true,
+            false,
+            false);
     }
 
     private static ResearchEvidenceBuildResult Create(
