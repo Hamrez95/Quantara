@@ -53,7 +53,9 @@ final class ApiCockpitRepository implements CockpitRepository {
       throw CockpitTransportException('API request failed: $error');
     }
 
-    if (response.statusCode >= 500) {
+    if (response.statusCode >= 500 ||
+        response.statusCode == 408 ||
+        response.statusCode == 429) {
       throw CockpitTransportException(
         'API is temporarily unavailable (${response.statusCode}).',
       );
@@ -117,15 +119,12 @@ final class _CockpitParser {
   CockpitSnapshot parse(Object? value) {
     final root = _object(value, 'root');
     _expectString(root, 'schemaVersion', allowed: const {'cockpit-v1'});
-    final environmentText = _expectString(
-      root,
-      'environment',
-      allowed: const {'demo', 'paper'},
-    );
+    _expectString(root, 'language', allowed: const {'fa'});
+    _expectString(root, 'environment', allowed: const {'demo'});
     _expectString(
       root,
       'dataSourceMode',
-      allowed: const {'deterministic_demo', 'paper_service'},
+      allowed: const {'deterministic_demo'},
     );
     final marketStatusCode = _expectString(root, 'marketStatusCode');
     final marketStatus = _expectString(root, 'marketStatus');
@@ -133,7 +132,7 @@ final class _CockpitParser {
     _validateFreshTimestamp(generatedAt, 'generatedAt');
     _validateSafety(_object(root['safety'], 'safety'));
 
-    if (environmentText == 'demo' && marketStatusCode != 'demo_not_connected') {
+    if (marketStatusCode != 'demo_not_connected') {
       throw const CockpitContractException(
         'Demo responses must declare that they are not connected.',
       );
@@ -189,14 +188,17 @@ final class _CockpitParser {
     }
 
     final analysis = _parseAnalysis(_object(root['analysis'], 'analysis'));
+    if (!symbols.contains(analysis.symbol)) {
+      throw const CockpitContractException(
+        'The analysis symbol must exist in the watchlist.',
+      );
+    }
     final account = _parsePaperAccount(
       _object(root['paperAccount'], 'paperAccount'),
     );
 
     return CockpitSnapshot(
-      environment: environmentText == 'demo'
-          ? AppEnvironment.demo
-          : AppEnvironment.paper,
+      environment: AppEnvironment.demo,
       watchlist: List.unmodifiable(watchlist),
       analysis: analysis,
       paperAccount: account,
@@ -228,7 +230,10 @@ final class _CockpitParser {
       'regime',
       allowed: const {'trending', 'ranging', 'volatile', 'uncertain'},
     );
-    final confidence = _integer(value['confidencePercent'], 'confidencePercent');
+    final confidence = _integer(
+      value['confidencePercent'],
+      'confidencePercent',
+    );
     if (confidence < 0 || confidence > 100) {
       throw const CockpitContractException(
         'confidencePercent must be between 0 and 100.',
@@ -244,6 +249,7 @@ final class _CockpitParser {
     final factors = <AnalysisFactor>[];
     for (var index = 0; index < factorsValue.length; index++) {
       final factor = _object(factorsValue[index], 'factors[$index]');
+      _expectString(factor, 'code');
       final impactText = _expectString(
         factor,
         'impact',
@@ -370,7 +376,9 @@ final class _CockpitParser {
     final value = _expectString(object, field);
     final parsed = DateTime.tryParse(value);
     if (parsed == null || !parsed.isUtc) {
-      throw CockpitContractException('$field must be an explicit UTC timestamp.');
+      throw CockpitContractException(
+        '$field must be an explicit UTC timestamp.',
+      );
     }
     return parsed;
   }

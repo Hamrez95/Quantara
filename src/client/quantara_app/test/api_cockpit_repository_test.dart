@@ -48,7 +48,10 @@ void main() {
       now: () => now,
     );
 
-    await expectLater(repository.load(), throwsA(isA<CockpitContractException>()));
+    await expectLater(
+      repository.load(),
+      throwsA(isA<CockpitContractException>()),
+    );
   });
 
   test('uses explicit demo data only for transport failure', () async {
@@ -85,7 +88,10 @@ void main() {
       fallback: const MockCockpitRepository(),
     );
 
-    await expectLater(repository.load(), throwsA(isA<CockpitContractException>()));
+    await expectLater(
+      repository.load(),
+      throwsA(isA<CockpitContractException>()),
+    );
   });
 
   test('rejects insecure non-local API configuration', () {
@@ -121,7 +127,9 @@ Map<String, Object?> _payload(DateTime now) {
         'price': 118420.5,
         'changePercent': 1.82,
         'spreadBps': 1.4,
-        'observedAt': now.subtract(const Duration(seconds: 12)).toIso8601String(),
+        'observedAt': now
+            .subtract(const Duration(seconds: 12))
+            .toIso8601String(),
         'sparkline': <num>[117000, 117500, 118420.5],
       },
     ],

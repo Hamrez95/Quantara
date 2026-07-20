@@ -6,9 +6,7 @@ import 'mock_cockpit_repository.dart';
 
 abstract final class CockpitRepositoryFactory {
   static CockpitRepository create({
-    String apiBaseUrl = const String.fromEnvironment(
-      'QUANTARA_API_BASE_URL',
-    ),
+    String apiBaseUrl = const String.fromEnvironment('QUANTARA_API_BASE_URL'),
     http.Client? client,
   }) {
     final value = apiBaseUrl.trim();
@@ -29,12 +27,13 @@ abstract final class CockpitRepositoryFactory {
       );
     }
 
-    final localHost = baseUri.host == 'localhost' ||
+    final localHost =
+        baseUri.host == 'localhost' ||
         baseUri.host == '127.0.0.1' ||
         baseUri.host == '::1' ||
         baseUri.host == '10.0.2.2';
-    final secure = baseUri.scheme == 'https' ||
-        (baseUri.scheme == 'http' && localHost);
+    final secure =
+        baseUri.scheme == 'https' || (baseUri.scheme == 'http' && localHost);
     if (!secure) {
       throw const CockpitContractException(
         'The API must use HTTPS except for approved local development hosts.',
