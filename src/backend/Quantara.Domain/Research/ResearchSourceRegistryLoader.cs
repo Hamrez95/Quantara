@@ -255,8 +255,8 @@ internal static class ResearchSourceRegistryLoader
 
     private static bool HasExactProperties(
         JsonElement element,
-        IReadOnlySet<string> required,
-        IReadOnlySet<string> allowed)
+        HashSet<string> required,
+        HashSet<string> allowed)
     {
         var observed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in element.EnumerateObject())
@@ -329,9 +329,16 @@ internal static class ResearchSourceRegistryLoader
         out Uri uri)
     {
         uri = null!;
-        return TryGetRequiredString(element, propertyName, 2048, out var text)
-            && Uri.TryCreate(text, UriKind.Absolute, out uri)
-            && ResearchIdentityRules.IsSecureHttpsUri(uri);
+        if (!TryGetRequiredString(element, propertyName, 2048, out var text)
+            || !Uri.TryCreate(text, UriKind.Absolute, out var resolvedUri)
+            || resolvedUri is null
+            || !ResearchIdentityRules.IsSecureHttpsUri(resolvedUri))
+        {
+            return false;
+        }
+
+        uri = resolvedUri;
+        return true;
     }
 
     private static bool TryGetSecureUriArray(
@@ -351,14 +358,18 @@ internal static class ResearchSourceRegistryLoader
         foreach (var item in property.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.String
-                || !Uri.TryCreate(item.GetString(), UriKind.Absolute, out var uri)
-                || !ResearchIdentityRules.IsSecureHttpsUri(uri)
-                || !unique.Add(uri.AbsoluteUri))
+                || !Uri.TryCreate(
+                    item.GetString(),
+                    UriKind.Absolute,
+                    out var resolvedUri)
+                || resolvedUri is null
+                || !ResearchIdentityRules.IsSecureHttpsUri(resolvedUri)
+                || !unique.Add(resolvedUri.AbsoluteUri))
             {
                 return false;
             }
 
-            values.Add(uri);
+            values.Add(resolvedUri);
         }
 
         uris = Array.AsReadOnly(values.ToArray());
