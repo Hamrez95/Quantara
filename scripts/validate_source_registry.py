@@ -7,7 +7,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -395,7 +395,11 @@ def _validate_source(source: object, index: int, errors: list[str]) -> str | Non
     return valid_source_id
 
 
-def validate_registry(registry: object) -> list[str]:
+def validate_registry(
+    registry: object,
+    *,
+    today: date | None = None,
+) -> list[str]:
     """Return deterministic validation errors for a registry object."""
     errors: list[str] = []
     if not isinstance(registry, dict):
@@ -428,6 +432,10 @@ def validate_registry(registry: object) -> list[str]:
             errors.append("review_due_at must not precede reviewed_at.")
         if (review_due_at - reviewed_at).days > 180:
             errors.append("Registry review interval must not exceed 180 days.")
+
+    effective_today = today or datetime.now(timezone.utc).date()
+    if review_due_at and review_due_at < effective_today:
+        errors.append("Registry review is overdue and must be renewed.")
 
     if registry.get("execution_authority") != "none":
         errors.append("execution_authority must remain none.")
