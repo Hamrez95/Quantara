@@ -11,6 +11,14 @@ public enum ResearchDecisionRole
     ComplianceOnly
 }
 
+public enum ResearchCommercialUseStatus
+{
+    ApprovedSubjectToTerms,
+    BlockedPendingLicense,
+    CitationOnly,
+    NotApplicable
+}
+
 public enum ResearchEvidenceKind
 {
     OfficialFact,
@@ -29,6 +37,9 @@ public enum ResearchEvidenceCode
     Created,
     InvalidEvidenceIdentity,
     InvalidSourceIdentity,
+    RegistryExpired,
+    SourceDisabled,
+    SourceLicenseBlocked,
     InvalidTimestamp,
     InvalidHash,
     InvalidSchemaVersion,
@@ -38,10 +49,11 @@ public enum ResearchEvidenceCode
 }
 
 public sealed record RegisteredResearchSource(
-    string RegistryVersion,
     string SourceId,
     Uri CanonicalUri,
-    ResearchDecisionRole DecisionRole);
+    ResearchDecisionRole DecisionRole,
+    ResearchCommercialUseStatus CommercialUseStatus,
+    bool IsEnabled);
 
 public sealed class ResearchEvidenceEnvelope
 {
@@ -49,6 +61,8 @@ public sealed class ResearchEvidenceEnvelope
 
     internal ResearchEvidenceEnvelope(
         string evidenceId,
+        string registryVersion,
+        string registrySha256,
         RegisteredResearchSource source,
         string providerItemId,
         DateTimeOffset retrievedAt,
@@ -64,6 +78,8 @@ public sealed class ResearchEvidenceEnvelope
         string? promptVersion)
     {
         EvidenceId = evidenceId;
+        RegistryVersion = registryVersion;
+        RegistrySha256 = registrySha256;
         Source = source;
         ProviderItemId = providerItemId;
         RetrievedAt = retrievedAt.ToUniversalTime();
@@ -81,6 +97,10 @@ public sealed class ResearchEvidenceEnvelope
     }
 
     public string EvidenceId { get; }
+
+    public string RegistryVersion { get; }
+
+    public string RegistrySha256 { get; }
 
     public RegisteredResearchSource Source { get; }
 
