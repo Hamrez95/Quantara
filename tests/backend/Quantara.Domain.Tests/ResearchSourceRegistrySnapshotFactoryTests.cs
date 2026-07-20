@@ -39,6 +39,7 @@ public sealed class ResearchSourceRegistrySnapshotFactoryTests
         Assert.Single(snapshot.Sources);
         Assert.True(snapshot.TryGetSource("fred-alfred-api", out var source));
         Assert.Equal(ResearchDecisionRole.DirectFact, source.DecisionRole);
+        Assert.Equal(ResearchAuthorityTier.OfficialPrimary, source.AuthorityTier);
         Assert.False(snapshot.TryGetSource("tradecitypro-youtube-channel", out _));
         Assert.False(snapshot.IsExpiredAt(ReviewDueAt));
         Assert.True(snapshot.IsExpiredAt(ReviewDueAt.AddDays(1)));
@@ -62,12 +63,7 @@ public sealed class ResearchSourceRegistrySnapshotFactoryTests
     public void RejectsEnabledSourceBlockedPendingLicense()
     {
         var result = Create([
-            new RegisteredResearchSource(
-                "coinmetrics-community-api",
-                new Uri("https://docs.coinmetrics.io/api"),
-                ResearchDecisionRole.FeatureInput,
-                ResearchCommercialUseStatus.BlockedPendingLicense,
-                true)
+            CommunitySource(isEnabled: true)
         ]);
 
         Assert.False(result.IsCreated);
@@ -80,12 +76,7 @@ public sealed class ResearchSourceRegistrySnapshotFactoryTests
     public void AllowsBlockedSourceOnlyWhenDisabled()
     {
         var result = Create([
-            new RegisteredResearchSource(
-                "coinmetrics-community-api",
-                new Uri("https://docs.coinmetrics.io/api"),
-                ResearchDecisionRole.FeatureInput,
-                ResearchCommercialUseStatus.BlockedPendingLicense,
-                false)
+            CommunitySource(isEnabled: false)
         ]);
 
         Assert.True(result.IsCreated);
@@ -98,14 +89,96 @@ public sealed class ResearchSourceRegistrySnapshotFactoryTests
             new RegisteredResearchSource(
                 "fred-alfred-api",
                 new Uri("http://example.com/data"),
+                [new Uri("https://example.com/terms")],
+                ResearchSourceClass.OfficialEventData,
+                ResearchAuthorityTier.OfficialPrimary,
+                ResearchAccessClass.PublicApiWithTerms,
+                ResearchIngestionMode.Api,
                 ResearchDecisionRole.DirectFact,
                 ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+                true,
+                false,
                 true)
         ]);
 
         Assert.False(result.IsCreated);
         Assert.Contains(
             ResearchSourceRegistryCode.InvalidSources,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsCreatorPromotedBeyondHypothesisRole()
+    {
+        var result = Create([
+            new RegisteredResearchSource(
+                "tradecitypro-youtube-channel",
+                new Uri("https://www.youtube.com/c/tradecitypro"),
+                [new Uri("https://developers.google.com/youtube/terms/developer-policies")],
+                ResearchSourceClass.EducationalHypothesis,
+                ResearchAuthorityTier.CreatorHypothesis,
+                ResearchAccessClass.PublicWebReference,
+                ResearchIngestionMode.YoutubeApiMetadata,
+                ResearchDecisionRole.DirectFact,
+                ResearchCommercialUseStatus.CitationOnly,
+                true,
+                false,
+                true)
+        ]);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchSourceRegistryCode.InvalidSourcePolicy,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsApiSourceWithoutTerms()
+    {
+        var result = Create([
+            new RegisteredResearchSource(
+                "fred-alfred-api",
+                new Uri("https://fred.stlouisfed.org/docs/api/fred/overview.html"),
+                [],
+                ResearchSourceClass.OfficialEventData,
+                ResearchAuthorityTier.OfficialPrimary,
+                ResearchAccessClass.PublicApiWithTerms,
+                ResearchIngestionMode.Api,
+                ResearchDecisionRole.DirectFact,
+                ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+                true,
+                false,
+                true)
+        ]);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchSourceRegistryCode.InvalidSourcePolicy,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsSourceThatAllowsAutomatedScraping()
+    {
+        var result = Create([
+            new RegisteredResearchSource(
+                "tradecitypro-youtube-channel",
+                new Uri("https://www.youtube.com/c/tradecitypro"),
+                [new Uri("https://developers.google.com/youtube/terms/developer-policies")],
+                ResearchSourceClass.EducationalHypothesis,
+                ResearchAuthorityTier.CreatorHypothesis,
+                ResearchAccessClass.PublicWebReference,
+                ResearchIngestionMode.YoutubeApiMetadata,
+                ResearchDecisionRole.HypothesisOnly,
+                ResearchCommercialUseStatus.CitationOnly,
+                true,
+                true,
+                true)
+        ]);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchSourceRegistryCode.InvalidSourcePolicy,
             result.RejectionReasons);
     }
 
@@ -160,8 +233,15 @@ public sealed class ResearchSourceRegistrySnapshotFactoryTests
         return new RegisteredResearchSource(
             "fred-alfred-api",
             new Uri("https://fred.stlouisfed.org/docs/api/fred/overview.html"),
+            [new Uri("https://fred.stlouisfed.org/docs/api/terms_of_use.html")],
+            ResearchSourceClass.OfficialEventData,
+            ResearchAuthorityTier.OfficialPrimary,
+            ResearchAccessClass.PublicApiWithTerms,
+            ResearchIngestionMode.Api,
             ResearchDecisionRole.DirectFact,
             ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+            true,
+            false,
             true);
     }
 
@@ -170,8 +250,32 @@ public sealed class ResearchSourceRegistrySnapshotFactoryTests
         return new RegisteredResearchSource(
             "tradecitypro-youtube-channel",
             new Uri("https://www.youtube.com/c/tradecitypro"),
+            [new Uri("https://developers.google.com/youtube/terms/developer-policies")],
+            ResearchSourceClass.EducationalHypothesis,
+            ResearchAuthorityTier.CreatorHypothesis,
+            ResearchAccessClass.PublicWebReference,
+            ResearchIngestionMode.YoutubeApiMetadata,
             ResearchDecisionRole.HypothesisOnly,
             ResearchCommercialUseStatus.CitationOnly,
+            true,
+            false,
             true);
+    }
+
+    private static RegisteredResearchSource CommunitySource(bool isEnabled)
+    {
+        return new RegisteredResearchSource(
+            "coinmetrics-community-api",
+            new Uri("https://docs.coinmetrics.io/api"),
+            [new Uri("https://coinmetrics.io/terms-of-use/")],
+            ResearchSourceClass.LiveMarketData,
+            ResearchAuthorityTier.VendorPrimary,
+            ResearchAccessClass.CommunityNoncommercial,
+            ResearchIngestionMode.Api,
+            ResearchDecisionRole.FeatureInput,
+            ResearchCommercialUseStatus.BlockedPendingLicense,
+            true,
+            false,
+            isEnabled);
     }
 }
