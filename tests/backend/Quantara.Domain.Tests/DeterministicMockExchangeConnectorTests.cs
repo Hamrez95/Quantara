@@ -7,7 +7,7 @@ namespace Quantara.Domain.Tests;
 public sealed class DeterministicMockExchangeConnectorTests
 {
     [Fact]
-    public async Task GetCandlesAsync_ReturnsRepeatableValidCandles()
+    public async Task GetCandlesAsyncReturnsRepeatableValidCandles()
     {
         var connector = new DeterministicMockExchangeConnector();
         var from = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -18,7 +18,7 @@ public sealed class DeterministicMockExchangeConnectorTests
     }
 
     [Fact]
-    public async Task PlaceOrderAsync_IsIdempotentByClientOrderId()
+    public async Task PlaceOrderAsyncIsIdempotentByClientOrderId()
     {
         var connector = new DeterministicMockExchangeConnector();
         var request = new OrderRequest("client-1", new Symbol("BTCUSDT"), OrderSide.Buy, OrderType.Limit, 1m, 50_000m, false);
