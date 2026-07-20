@@ -5,9 +5,13 @@ namespace Quantara.Domain.Research;
 public enum ResearchSourceRegistryCode
 {
     Created,
+    InvalidDocument,
+    UnsupportedSchema,
+    ExecutionAuthorityViolation,
     InvalidRegistryIdentity,
     InvalidRegistryHash,
     InvalidReviewWindow,
+    RegistryExpired,
     InvalidSources,
     DuplicateSourceId,
     InvalidSourcePolicy
@@ -68,7 +72,7 @@ public sealed class ResearchSourceRegistrySnapshot
     }
 }
 
-public static class ResearchSourceRegistrySnapshotFactory
+internal static class ResearchSourceRegistrySnapshotFactory
 {
     public static ResearchSourceRegistryBuildResult Create(
         string registryVersion,
