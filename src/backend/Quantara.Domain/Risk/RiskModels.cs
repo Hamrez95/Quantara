@@ -15,6 +15,7 @@ public enum RiskDecisionCode
     InvalidStopLoss,
     InvalidStopDirection,
     InvalidTakeProfit,
+    InvalidMarketCost,
     MinimumRiskRewardNotMet,
     DailyLossLimitReached,
     WeeklyLossLimitReached,
