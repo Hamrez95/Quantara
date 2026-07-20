@@ -12,7 +12,7 @@ void main() {
   testWidgets('shows an unmistakable demo cockpit and no-trade decision', (
     tester,
   ) async {
-    await _setViewport(tester, const Size(390, 844));
+    _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(const QuantaraApp());
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -21,12 +21,13 @@ void main() {
     expect(find.text('BTCUSDT'), findsWidgets);
     expect(find.text('معامله با پول واقعی قفل است'), findsOneWidget);
     expect(find.textContaining('هیچ سفارش واقعی'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('uses bottom navigation on a phone-sized viewport', (
     tester,
   ) async {
-    await _setViewport(tester, const Size(390, 844));
+    _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(const QuantaraApp());
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -37,7 +38,7 @@ void main() {
   testWidgets('uses side navigation on a desktop-sized viewport', (
     tester,
   ) async {
-    await _setViewport(tester, const Size(1440, 1000));
+    _setViewport(tester, const Size(1440, 1000));
     await tester.pumpWidget(const QuantaraApp());
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -48,13 +49,13 @@ void main() {
 
   testWidgets('keeps loading and loaded states explicit', (tester) async {
     final repository = _ControlledRepository();
-    await _setViewport(tester, const Size(390, 844));
+    _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(QuantaraApp(repository: repository));
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.text('عدم معامله'), findsNothing);
 
-    repository.complete(await const MockCockpitRepository().load());
+    repository.complete(MockCockpitRepository.demoSnapshot);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -63,7 +64,7 @@ void main() {
   });
 }
 
-Future<void> _setViewport(WidgetTester tester, Size size) async {
+void _setViewport(WidgetTester tester, Size size) {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
