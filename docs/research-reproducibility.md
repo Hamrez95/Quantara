@@ -78,12 +78,14 @@ A holdout-stage experiment must be authorized through `HoldoutAccessLedger`.
 
 The ledger applies two independent locks for the same research lineage and holdout window:
 
-1. **Content lock** — identical market content remains consumed even when its alias or provenance changes.
-2. **Cohort lock** — the same provider, market, symbol, and timeframe remains consumed even when market content is edited or refreshed.
+1. **Content lock** — identical market content remains consumed even when its alias, provider, source identifier, or other provenance changes.
+2. **Cohort lock** — the same market type, symbol, and timeframe remains consumed even when the data provider changes or market content is edited, refreshed, or replaced.
+
+Provider is deliberately excluded from cohort identity. Changing a vendor label or switching to another feed for the same evaluation universe cannot reset the final holdout.
 
 The first final experiment is authorized. Replaying the identical experiment is idempotent. A different fingerprint under either consumed scope is rejected as retuning against holdout data.
 
-A new authorization requires both different content and a different market cohort, or a genuinely different holdout window. Stable lineage governance and durable receipt persistence will be added before the laboratory exposes holdout execution through an API.
+A new authorization requires both different content and a genuinely different market type, symbol, timeframe, or holdout window. Stable lineage governance and durable receipt persistence will be added before the laboratory exposes holdout execution through an API.
 
 ## Dataset validation
 
