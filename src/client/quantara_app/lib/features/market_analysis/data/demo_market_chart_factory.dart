@@ -26,7 +26,12 @@ abstract final class DemoMarketChartFactory {
       volatilityPercent: structure.volatilityPercent,
       summary: _summary(structure, candles.last.close, timeframe),
       generatedAt: DateTime.utc(2026, 7, 20, 23),
-      fingerprint: _fingerprint(quote.symbol, timeframe, candles, structure.zones),
+      fingerprint: _fingerprint(
+        quote.symbol,
+        timeframe,
+        candles,
+        structure.zones,
+      ),
     );
   }
 
@@ -50,14 +55,16 @@ abstract final class DemoMarketChartFactory {
       ChartDirection.bearish => 'ساختار $timeframe متمایل به نزول است',
       ChartDirection.sideways => 'ساختار $timeframe فعلاً خنثی و نوسانی است',
     };
-    final below = structure.zones
-        .where((zone) => zone.center < currentValue)
-        .toList(growable: false)
-      ..sort((left, right) => right.center.compareTo(left.center));
-    final above = structure.zones
-        .where((zone) => zone.center > currentValue)
-        .toList(growable: false)
-      ..sort((left, right) => left.center.compareTo(right.center));
+    final below =
+        structure.zones
+            .where((zone) => zone.center < currentValue)
+            .toList(growable: false)
+          ..sort((left, right) => right.center.compareTo(left.center));
+    final above =
+        structure.zones
+            .where((zone) => zone.center > currentValue)
+            .toList(growable: false)
+          ..sort((left, right) => left.center.compareTo(right.center));
     final support = below.isEmpty
         ? 'حمایت معتبر نزدیک پیدا نشد'
         : 'حمایت نزدیک ${below.first.center.toStringAsFixed(2)}';

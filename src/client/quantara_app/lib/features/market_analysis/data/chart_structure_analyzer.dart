@@ -67,9 +67,14 @@ abstract final class ChartStructureAnalyzer {
     });
     final clusters = <_PivotCluster>[];
     for (final pivot in pivots) {
-      final tolerance = math.max(pivot.value * 0.001, pivot.averageRange * 0.58);
+      final tolerance = math.max(
+        pivot.value * 0.001,
+        pivot.averageRange * 0.58,
+      );
       if (clusters.isEmpty ||
-          pivot.value > clusters.last.center + math.max(clusters.last.maxTolerance, tolerance)) {
+          pivot.value >
+              clusters.last.center +
+                  math.max(clusters.last.maxTolerance, tolerance)) {
         clusters.add(_PivotCluster(pivot, tolerance));
       } else {
         clusters.last.add(pivot, tolerance);
@@ -83,7 +88,10 @@ abstract final class ChartStructureAnalyzer {
       if (cluster.items.length < 2) {
         continue;
       }
-      final halfWidth = math.max(cluster.averageTolerance / 2, cluster.center * 0.0004);
+      final halfWidth = math.max(
+        cluster.averageTolerance / 2,
+        cluster.center * 0.0004,
+      );
       final lower = cluster.center - halfWidth;
       final upper = cluster.center + halfWidth;
       final originalRole = cluster.highCount > cluster.lowCount
@@ -95,10 +103,12 @@ abstract final class ChartStructureAnalyzer {
           ? ChartZoneRole.support
           : ChartZoneRole.pivot;
       var state = ChartZoneState.active;
-      if (originalRole == ChartZoneRole.resistance && current > upper + currentRange * 0.75) {
+      if (originalRole == ChartZoneRole.resistance &&
+          current > upper + currentRange * 0.75) {
         role = ChartZoneRole.support;
         state = ChartZoneState.flipped;
-      } else if (originalRole == ChartZoneRole.support && current < lower - currentRange * 0.75) {
+      } else if (originalRole == ChartZoneRole.support &&
+          current < lower - currentRange * 0.75) {
         role = ChartZoneRole.resistance;
         state = ChartZoneState.flipped;
       }
@@ -108,7 +118,11 @@ abstract final class ChartStructureAnalyzer {
       final recencyScore = 1 / (1 + age / 48);
       final rejectionScore = math.min(1, cluster.averageRejection / 1.5);
       final volumeScore = math.min(1, cluster.averageRelativeVolume / 1.75);
-      var strength = touchScore * 0.45 + recencyScore * 0.25 + rejectionScore * 0.2 + volumeScore * 0.1;
+      var strength =
+          touchScore * 0.45 +
+          recencyScore * 0.25 +
+          rejectionScore * 0.2 +
+          volumeScore * 0.1;
       if (state == ChartZoneState.flipped) {
         strength *= 0.9;
       }
@@ -194,7 +208,9 @@ abstract final class ChartStructureAnalyzer {
       isHigh: isHigh,
       index: index,
       averageRange: averageRange,
-      rejection: averageRange == 0 ? 0 : (wick / averageRange).clamp(0, 3).toDouble(),
+      rejection: averageRange == 0
+          ? 0
+          : (wick / averageRange).clamp(0, 3).toDouble(),
       relativeVolume: averageVolume == 0
           ? 0
           : (candle.volume / averageVolume).clamp(0, 5).toDouble(),
@@ -209,13 +225,19 @@ abstract final class ChartStructureAnalyzer {
     return total / count;
   }
 
-  static String _explanation(ChartZoneRole role, ChartZoneState state, int touches) {
+  static String _explanation(
+    ChartZoneRole role,
+    ChartZoneState state,
+    int touches,
+  ) {
     final roleText = switch (role) {
       ChartZoneRole.support => 'حمایتی',
       ChartZoneRole.resistance => 'مقاومتی',
       ChartZoneRole.pivot => 'تصمیم',
     };
-    final stateText = state == ChartZoneState.flipped ? 'تغییر نقش داده' : 'فعال است';
+    final stateText = state == ChartZoneState.flipped
+        ? 'تغییر نقش داده'
+        : 'فعال است';
     return 'ناحیه $roleText با $touches واکنش تأییدشده؛ $stateText.';
   }
 }
@@ -240,14 +262,14 @@ final class _Pivot {
 
 final class _PivotCluster {
   _PivotCluster(_Pivot first, double tolerance)
-      : _valueSum = first.value,
-        _toleranceSum = tolerance,
-        _rejectionSum = first.rejection,
-        _volumeSum = first.relativeVolume,
-        maxTolerance = tolerance,
-        lastIndex = first.index,
-        highCount = first.isHigh ? 1 : 0,
-        lowCount = first.isHigh ? 0 : 1 {
+    : _valueSum = first.value,
+      _toleranceSum = tolerance,
+      _rejectionSum = first.rejection,
+      _volumeSum = first.relativeVolume,
+      maxTolerance = tolerance,
+      lastIndex = first.index,
+      highCount = first.isHigh ? 1 : 0,
+      lowCount = first.isHigh ? 0 : 1 {
     items.add(first);
   }
 

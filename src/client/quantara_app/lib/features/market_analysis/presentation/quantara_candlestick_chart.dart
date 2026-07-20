@@ -26,7 +26,9 @@ class QuantaraCandlestickChart extends StatelessWidget {
               .toList(growable: false);
     return RepaintBoundary(
       child: SizedBox(
-        key: ValueKey('candles-${analysis.symbol}-${analysis.timeframe}-${analysis.fingerprint}'),
+        key: ValueKey(
+          'candles-${analysis.symbol}-${analysis.timeframe}-${analysis.fingerprint}',
+        ),
         height: height,
         width: double.infinity,
         child: CustomPaint(
@@ -70,7 +72,10 @@ final class _CandlestickPainter extends CustomPainter {
       6,
       topPadding,
       math.max(7, size.width - rightScaleWidth),
-      math.max(topPadding + 1, size.height - bottomAxisHeight - volumeHeight - volumeGap),
+      math.max(
+        topPadding + 1,
+        size.height - bottomAxisHeight - volumeHeight - volumeGap,
+      ),
     );
     final volumeRect = Rect.fromLTRB(
       plot.left,
@@ -181,7 +186,9 @@ final class _CandlestickPainter extends CustomPainter {
     for (var index = 0; index < candles.length; index++) {
       final candle = candles[index];
       final centerX = plot.left + slot * (index + 0.5);
-      final color = candle.isBullish ? QuantaraColors.success : QuantaraColors.danger;
+      final color = candle.isBullish
+          ? QuantaraColors.success
+          : QuantaraColors.danger;
       final highY = yFor(candle.high);
       final lowY = yFor(candle.low);
       final openY = yFor(candle.open);
@@ -206,7 +213,9 @@ final class _CandlestickPainter extends CustomPainter {
           ..style = PaintingStyle.fill,
       );
 
-      final volumeRatio = maximumVolume == 0 ? 0 : candle.volume / maximumVolume;
+      final volumeRatio = maximumVolume == 0
+          ? 0
+          : candle.volume / maximumVolume;
       final volumeBar = Rect.fromLTRB(
         centerX - bodyWidth / 2,
         volumeRect.bottom - volumeRect.height * volumeRatio,
@@ -263,7 +272,8 @@ final class _CandlestickPainter extends CustomPainter {
     final indexes = <int>[0, candles.length ~/ 2, candles.length - 1];
     for (final index in indexes) {
       final candle = candles[index];
-      final x = plot.left + plot.width * index / math.max(1, candles.length - 1);
+      final x =
+          plot.left + plot.width * index / math.max(1, candles.length - 1);
       final label = '${candle.openTime.month}/${candle.openTime.day}';
       _paintText(
         canvas,

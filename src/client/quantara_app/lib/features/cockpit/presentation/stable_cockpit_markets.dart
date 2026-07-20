@@ -106,9 +106,9 @@ class _MarketsViewState extends State<_MarketsView> {
               const SizedBox(height: 18),
               Text(
                 'نمودار کندل‌استیک',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 8),
               QuantaraCandlestickChart(analysis: analysis),
@@ -130,8 +130,7 @@ class _MarketsViewState extends State<_MarketsView> {
                   selected: index == _selectedIndex,
                   onTap: () => setState(() => _selectedIndex = index),
                 ),
-                if (index != widget.quotes.length - 1)
-                  const Divider(height: 1),
+                if (index != widget.quotes.length - 1) const Divider(height: 1),
               ],
             ],
           ),
@@ -230,17 +229,17 @@ class _ImportantZones extends StatelessWidget {
               Expanded(
                 child: Text(
                   'حمایت و مقاومت',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               Text(
                 analysis.timeframe,
                 textDirection: TextDirection.ltr,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
             ],
           ),
@@ -332,9 +331,9 @@ class _ZoneRow extends StatelessWidget {
                 Text(
                   '${QuantaraNumberFormat.marketValue(zone.lower)} – ${QuantaraNumberFormat.marketValue(zone.upper)}',
                   textDirection: TextDirection.ltr,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 4),
                 Text(
