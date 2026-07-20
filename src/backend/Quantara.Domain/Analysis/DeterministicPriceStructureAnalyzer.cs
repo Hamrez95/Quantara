@@ -208,7 +208,7 @@ public sealed class DeterministicPriceStructureAnalyzer
             }
 
             var barsSinceLastTouch = candleCount - 1 - cluster.LastCandleIndex;
-            var touchScore = Math.Clamp(cluster.Candidates.Count / 5m, 0m, 1m);
+            var touchScore = Math.Clamp(cluster.Candidates.Count / 12m, 0m, 1m);
             var recencyScore = 1m / (
                 1m + (decimal)barsSinceLastTouch / specification.RecencyHalfLifeBars);
             var rejectionScore = Math.Clamp(cluster.AverageRejectionScore / 1.5m, 0m, 1m);

@@ -114,7 +114,7 @@ abstract final class ChartStructureAnalyzer {
       }
 
       final age = candles.length - 1 - cluster.lastIndex;
-      final touchScore = math.min(1, cluster.items.length / 5);
+      final touchScore = math.min(1, cluster.items.length / 12);
       final recencyScore = 1 / (1 + age / 48);
       final rejectionScore = math.min(1, cluster.averageRejection / 1.5);
       final volumeScore = math.min(1, cluster.averageRelativeVolume / 1.75);
