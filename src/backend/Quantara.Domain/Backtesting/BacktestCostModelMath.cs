@@ -8,12 +8,13 @@ internal static class BacktestCostModelMath
     {
         ArgumentNullException.ThrowIfNull(costModel);
 
-        if (volumeParticipation < 0m
-            || costModel.MaximumVolumeParticipation <= 0m)
+        if (costModel.MaximumVolumeParticipation <= 0m
+            || volumeParticipation < 0m
+            || volumeParticipation > costModel.MaximumVolumeParticipation)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(volumeParticipation),
-                "Volume participation and the model participation cap must be valid.");
+                "Volume participation must be inside the cost model participation range.");
         }
 
         return costModel.BaseSlippageBps
