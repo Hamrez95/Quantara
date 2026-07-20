@@ -57,7 +57,8 @@ public sealed record RiskPolicy(
     decimal MaximumAllowedSlippagePercent,
     int MaximumConsecutiveLosses,
     decimal MaximumTradingAllocationPercent,
-    bool KillSwitchEnabled);
+    bool KillSwitchEnabled,
+    decimal MaximumCorrelatedExposurePercent = 100m);
 
 public sealed record InstrumentRiskRules(
     decimal TickSize,
@@ -73,7 +74,6 @@ public sealed record InstrumentRiskRules(
 public sealed record CorrelationRiskContext(
     string Group,
     decimal CurrentExposure,
-    decimal MaximumExposurePercent,
     decimal ProposedExposureFactor);
 
 public sealed record RiskEvaluationRequest(
