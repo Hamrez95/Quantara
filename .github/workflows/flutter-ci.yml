@@ -65,3 +65,19 @@ jobs:
 
       - name: Build Android debug package
         run: flutter build apk --debug
+
+      - name: Upload web preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-web-preview
+          path: src/client/quantara_app/build/web
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Android debug package
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-android-debug
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
