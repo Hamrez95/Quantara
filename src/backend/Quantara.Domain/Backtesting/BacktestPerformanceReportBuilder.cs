@@ -56,7 +56,10 @@ public static class BacktestPerformanceReportBuilder
 
         if (rejections.Count > 0)
         {
-            return Rejected(rejections);
+            return new BacktestReportBuildResult(
+                false,
+                Array.AsReadOnly(rejections.Order().ToArray()),
+                null);
         }
 
         var strategyReturns = CalculatePeriodicReturns(
@@ -119,15 +122,6 @@ public static class BacktestPerformanceReportBuilder
                 run.FinalPosition!,
                 run.EffectiveTargetSignedQuantity,
                 run.Warnings));
-    }
-
-    private static BacktestReportBuildResult Rejected(
-        IEnumerable<BacktestReportCode> rejections)
-    {
-        return new BacktestReportBuildResult(
-            false,
-            Array.AsReadOnly(rejections.Distinct().Order().ToArray()),
-            null);
     }
 
     private static bool IsValidSpecification(BacktestReportSpecification specification)
@@ -211,8 +205,8 @@ public static class BacktestPerformanceReportBuilder
         if (run.EquityCurve.Count < 2
             || rules.StartingEquity <= 0m
             || run.EquityCurve.Any(point =>
-                point.Timestamp < manifest.EvaluationWindow.StartInclusive
-                || point.Timestamp >= manifest.EvaluationWindow.EndExclusive
+                point.Timestamp <= manifest.EvaluationWindow.StartInclusive
+                || point.Timestamp > manifest.EvaluationWindow.EndExclusive
                 || point.Equity <= 0m
                 || point.MarkPrice <= 0m
                 || point.GrossExposure < 0m
@@ -385,12 +379,11 @@ public static class BacktestPerformanceReportBuilder
     {
         var mean = Mean(returns);
         var standardDeviation = SampleStandardDeviation(returns, mean);
-        var annualizedReturnValue = Math.Pow(
+        var annualizedReturn = FiniteMetric(
+            Math.Pow(
                 1d + totalReturn,
                 specification.PeriodsPerYear / returns.Count)
-            - 1d;
-        var annualizedReturn = FiniteMetric(
-            annualizedReturnValue,
+                - 1d,
             "Annualized return is not finite for this return path and annualization factor.");
         var annualizedVolatility = BacktestMetric.Defined(
             standardDeviation * Math.Sqrt(specification.PeriodsPerYear));
