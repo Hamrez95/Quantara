@@ -35,7 +35,7 @@ public static class BacktestPerformanceReportBuilder
             rejections.Add(BacktestReportCode.InvalidRunIdentity);
         }
 
-        if (!IsValidEquityCurve(run, rules))
+        if (!IsValidEquityCurve(manifest, run, rules))
         {
             rejections.Add(BacktestReportCode.InvalidEquityCurve);
         }
@@ -56,10 +56,7 @@ public static class BacktestPerformanceReportBuilder
 
         if (rejections.Count > 0)
         {
-            return new BacktestReportBuildResult(
-                false,
-                Array.AsReadOnly(rejections.Order().ToArray()),
-                null);
+            return Rejected(rejections);
         }
 
         var strategyReturns = CalculatePeriodicReturns(
@@ -68,14 +65,13 @@ public static class BacktestPerformanceReportBuilder
         var benchmarkReturns = CalculatePeriodicReturns(
             benchmark.StartingValue,
             benchmark.Points.Select(point => point.Value));
-        var totalReturn = CalculateTotalReturn(
-            rules.StartingEquity,
-            run.FinalEquity);
+        var totalReturn = CalculateTotalReturn(rules.StartingEquity, run.FinalEquity);
         var returnMetrics = CalculateReturnMetrics(
             strategyReturns,
             totalReturn,
             run.EquityCurve,
             rules.StartingEquity,
+            manifest.EvaluationWindow.StartInclusive,
             specification);
         var executionMetrics = CalculateExecutionMetrics(run, rules);
         var benchmarkMetrics = CalculateBenchmarkMetrics(
@@ -89,9 +85,11 @@ public static class BacktestPerformanceReportBuilder
             manifest.RandomSeed,
             specification);
         var ledgerSha256 = BacktestLedgerHasher.ComputeSha256(run);
+        var benchmarkSha256 = BenchmarkEquityHasher.ComputeSha256(benchmark);
         var reportSha256 = ComputeReportSha256(
             specification,
             ledgerSha256,
+            benchmarkSha256,
             manifest,
             run,
             returnMetrics,
@@ -106,6 +104,7 @@ public static class BacktestPerformanceReportBuilder
             new BacktestPerformanceReport(
                 specification.Version,
                 ledgerSha256,
+                benchmarkSha256,
                 reportSha256,
                 manifest.FingerprintSha256,
                 run.RunFingerprintSha256!,
@@ -120,6 +119,15 @@ public static class BacktestPerformanceReportBuilder
                 run.FinalPosition!,
                 run.EffectiveTargetSignedQuantity,
                 run.Warnings));
+    }
+
+    private static BacktestReportBuildResult Rejected(
+        IEnumerable<BacktestReportCode> rejections)
+    {
+        return new BacktestReportBuildResult(
+            false,
+            Array.AsReadOnly(rejections.Distinct().Order().ToArray()),
+            null);
     }
 
     private static bool IsValidSpecification(BacktestReportSpecification specification)
@@ -196,13 +204,16 @@ public static class BacktestPerformanceReportBuilder
     }
 
     private static bool IsValidEquityCurve(
+        ExperimentManifest manifest,
         BacktestRunResult run,
         BacktestExecutionRules rules)
     {
         if (run.EquityCurve.Count < 2
             || rules.StartingEquity <= 0m
             || run.EquityCurve.Any(point =>
-                point.Equity <= 0m
+                point.Timestamp < manifest.EvaluationWindow.StartInclusive
+                || point.Timestamp >= manifest.EvaluationWindow.EndExclusive
+                || point.Equity <= 0m
                 || point.MarkPrice <= 0m
                 || point.GrossExposure < 0m
                 || point.GrossLeverage < 0m))
@@ -225,6 +236,8 @@ public static class BacktestPerformanceReportBuilder
     private static bool IsValidBenchmark(BenchmarkEquitySeries benchmark)
     {
         if (string.IsNullOrWhiteSpace(benchmark.Name)
+            || benchmark.Name.Length > 128
+            || !string.Equals(benchmark.Name, benchmark.Name.Trim(), StringComparison.Ordinal)
             || benchmark.StartingValue <= 0m
             || benchmark.Points.Count < 2
             || benchmark.Points.Any(point => point.Value <= 0m))
@@ -250,8 +263,9 @@ public static class BacktestPerformanceReportBuilder
     {
         return equityCurve.Count == benchmark.Count
             && equityCurve
-                .Select(point => point.Timestamp)
-                .SequenceEqual(benchmark.Select(point => point.Timestamp));
+                .Select(point => point.Timestamp.ToUniversalTime())
+                .SequenceEqual(
+                    benchmark.Select(point => point.Timestamp.ToUniversalTime()));
     }
 
     private static bool IsValidFinalState(
@@ -259,28 +273,68 @@ public static class BacktestPerformanceReportBuilder
         BacktestExecutionRules rules)
     {
         if (run.FinalPosition is null
-            || run.FinalPosition.ContractMultiplier != rules.ContractMultiplier
-            || run.FinalPosition.Quantity < 0m
-            || run.FinalPosition.Quantity != Math.Abs(run.FinalPosition.SignedQuantity)
+            || !IsValidPosition(run.FinalPosition, rules)
             || Math.Abs(run.EffectiveTargetSignedQuantity)
-                > rules.MaximumAbsoluteTargetQuantity)
+                > rules.MaximumAbsoluteTargetQuantity
+            || !HasContiguousSequences(run.Decisions.Select(item => item.Sequence))
+            || !HasContiguousSequences(run.Fills.Select(item => item.Sequence))
+            || !HasContiguousSequences(run.Funding.Select(item => item.Sequence)))
         {
             return false;
         }
 
-        return HasContiguousSequences(run.Decisions.Select(item => item.Sequence))
-            && HasContiguousSequences(run.Fills.Select(item => item.Sequence))
-            && HasContiguousSequences(run.Funding.Select(item => item.Sequence))
+        var fillIds = new HashSet<string>(StringComparer.Ordinal);
+        var settlementIds = new HashSet<string>(StringComparer.Ordinal);
+
+        return run.Decisions.All(decision =>
+                Enum.IsDefined(typeof(BacktestDecisionCode), decision.Code)
+                && decision.EarliestExecutionAt >= decision.DecidedAt
+                && !string.IsNullOrWhiteSpace(decision.Reason))
             && run.Fills.All(fill =>
-                fill.ExecutionPrice > 0m
+                Enum.IsDefined(typeof(Trading.OrderSide), fill.Side)
+                && fill.ExecutionPrice > 0m
                 && fill.ReferencePrice > 0m
                 && fill.Quantity > 0m
                 && fill.Fee >= 0m
+                && fill.SpreadBps >= 0m
+                && fill.SlippageBps >= 0m
                 && fill.VolumeParticipation is >= 0m and <= 1m
-                && !string.IsNullOrWhiteSpace(fill.FillId))
+                && !string.IsNullOrWhiteSpace(fill.FillId)
+                && fillIds.Add(fill.FillId))
+            && run.Funding.All(point =>
+                point.ReferencePrice > 0m
+                && !string.IsNullOrWhiteSpace(point.SettlementId)
+                && settlementIds.Add(point.SettlementId))
             && run.Warnings.All(warning =>
                 !string.IsNullOrWhiteSpace(warning.Code)
                 && !string.IsNullOrWhiteSpace(warning.Message));
+    }
+
+    private static bool IsValidPosition(
+        PositionSnapshot position,
+        BacktestExecutionRules rules)
+    {
+        if (position.ContractMultiplier != rules.ContractMultiplier
+            || position.Quantity < 0m
+            || position.Quantity != Math.Abs(position.SignedQuantity)
+            || position.FeesPaid < 0m)
+        {
+            return false;
+        }
+
+        if (position.Quantity == 0m)
+        {
+            return position.Direction is null
+                && position.SignedQuantity == 0m
+                && position.AverageEntryPrice == 0m;
+        }
+
+        return position.Direction is not null
+            && position.AverageEntryPrice > 0m
+            && ((position.SignedQuantity > 0m
+                    && position.Direction == Trading.TradeDirection.Long)
+                || (position.SignedQuantity < 0m
+                    && position.Direction == Trading.TradeDirection.Short));
     }
 
     private static bool HasContiguousSequences(IEnumerable<long> sequences)
@@ -326,20 +380,20 @@ public static class BacktestPerformanceReportBuilder
         double totalReturn,
         IReadOnlyList<BacktestEquityPoint> equityCurve,
         decimal startingEquity,
+        DateTimeOffset evaluationStart,
         BacktestReportSpecification specification)
     {
         var mean = Mean(returns);
         var standardDeviation = SampleStandardDeviation(returns, mean);
-        var annualizedReturn = totalReturn <= -1d
-            ? BacktestMetric.Undefined(
-                "Annualized return is undefined when terminal equity is zero or negative.")
-            : BacktestMetric.Defined(
-                Math.Pow(1d + totalReturn, specification.PeriodsPerYear / returns.Count) - 1d);
-        var annualizedVolatility = standardDeviation == 0d
-            ? BacktestMetric.Undefined(
-                "Annualized volatility is undefined for a zero-variance return series.")
-            : BacktestMetric.Defined(
-                standardDeviation * Math.Sqrt(specification.PeriodsPerYear));
+        var annualizedReturnValue = Math.Pow(
+                1d + totalReturn,
+                specification.PeriodsPerYear / returns.Count)
+            - 1d;
+        var annualizedReturn = FiniteMetric(
+            annualizedReturnValue,
+            "Annualized return is not finite for this return path and annualization factor.");
+        var annualizedVolatility = BacktestMetric.Defined(
+            standardDeviation * Math.Sqrt(specification.PeriodsPerYear));
         var riskFreePerPeriod = Math.Pow(
                 1d + specification.AnnualRiskFreeRate,
                 1d / specification.PeriodsPerYear)
@@ -348,25 +402,31 @@ public static class BacktestPerformanceReportBuilder
         var sharpe = standardDeviation == 0d
             ? BacktestMetric.Undefined(
                 "Sharpe ratio is undefined for a zero-variance return series.")
-            : BacktestMetric.Defined(
+            : FiniteMetric(
                 excessMean
-                * Math.Sqrt(specification.PeriodsPerYear)
-                / standardDeviation);
+                    * Math.Sqrt(specification.PeriodsPerYear)
+                    / standardDeviation,
+                "Sharpe ratio is not finite for this return path.");
         var downsideDeviation = DownsideDeviation(returns, riskFreePerPeriod);
         var sortino = downsideDeviation == 0d
             ? BacktestMetric.Undefined(
                 "Sortino ratio is undefined when there are no downside observations.")
-            : BacktestMetric.Defined(
+            : FiniteMetric(
                 excessMean
-                * Math.Sqrt(specification.PeriodsPerYear)
-                / downsideDeviation);
-        var drawdown = CalculateDrawdown(equityCurve, startingEquity);
+                    * Math.Sqrt(specification.PeriodsPerYear)
+                    / downsideDeviation,
+                "Sortino ratio is not finite for this return path.");
+        var drawdown = CalculateDrawdown(
+            equityCurve,
+            startingEquity,
+            evaluationStart);
         var calmar = drawdown.MaximumDrawdown == 0d
             ? BacktestMetric.Undefined(
                 "Calmar ratio is undefined when maximum drawdown is zero.")
             : annualizedReturn.IsDefined
-                ? BacktestMetric.Defined(
-                    annualizedReturn.Value!.Value / drawdown.MaximumDrawdown)
+                ? FiniteMetric(
+                    annualizedReturn.Value!.Value / drawdown.MaximumDrawdown,
+                    "Calmar ratio is not finite for this return path.")
                 : BacktestMetric.Undefined(
                     "Calmar ratio is undefined because annualized return is undefined.");
         var wins = returns.Count(value => value > 0d);
@@ -383,6 +443,13 @@ public static class BacktestPerformanceReportBuilder
             drawdown.MaximumDuration,
             wins / (double)returns.Count,
             losses / (double)returns.Count);
+    }
+
+    private static BacktestMetric FiniteMetric(double value, string undefinedReason)
+    {
+        return double.IsFinite(value)
+            ? BacktestMetric.Defined(value)
+            : BacktestMetric.Undefined(undefinedReason);
     }
 
     private static BacktestExecutionMetrics CalculateExecutionMetrics(
@@ -458,13 +525,18 @@ public static class BacktestPerformanceReportBuilder
         var beta = benchmarkVariance == 0d
             ? BacktestMetric.Undefined(
                 "Beta is undefined for a zero-variance benchmark.")
-            : BacktestMetric.Defined(covariance / benchmarkVariance);
+            : FiniteMetric(
+                covariance / benchmarkVariance,
+                "Beta is not finite for these return paths.");
         var correlationDenominator = Math.Sqrt(
             strategyVariance * benchmarkVariance);
         var correlation = correlationDenominator == 0d
             ? BacktestMetric.Undefined(
                 "Correlation is undefined when either return series has zero variance.")
-            : BacktestMetric.Defined(covariance / correlationDenominator);
+            : BacktestMetric.Defined(Math.Clamp(
+                covariance / correlationDenominator,
+                -1d,
+                1d));
         var activeReturns = strategyReturns
             .Zip(benchmarkReturns, (strategy, baseline) => strategy - baseline)
             .ToArray();
@@ -472,18 +544,16 @@ public static class BacktestPerformanceReportBuilder
         var activeStandardDeviation = SampleStandardDeviation(
             activeReturns,
             activeMean);
-        var trackingError = activeStandardDeviation == 0d
-            ? BacktestMetric.Undefined(
-                "Tracking error is undefined for a zero-variance active-return series.")
-            : BacktestMetric.Defined(
-                activeStandardDeviation * Math.Sqrt(specification.PeriodsPerYear));
+        var trackingError = BacktestMetric.Defined(
+            activeStandardDeviation * Math.Sqrt(specification.PeriodsPerYear));
         var informationRatio = activeStandardDeviation == 0d
             ? BacktestMetric.Undefined(
                 "Information ratio is undefined for a zero-variance active-return series.")
-            : BacktestMetric.Defined(
+            : FiniteMetric(
                 activeMean
-                * Math.Sqrt(specification.PeriodsPerYear)
-                / activeStandardDeviation);
+                    * Math.Sqrt(specification.PeriodsPerYear)
+                    / activeStandardDeviation,
+                "Information ratio is not finite for these return paths.");
 
         return new BacktestBenchmarkMetrics(
             benchmark.Name,
@@ -541,10 +611,11 @@ public static class BacktestPerformanceReportBuilder
 
     private static DrawdownResult CalculateDrawdown(
         IReadOnlyList<BacktestEquityPoint> equityCurve,
-        decimal startingEquity)
+        decimal startingEquity,
+        DateTimeOffset evaluationStart)
     {
         var peak = startingEquity;
-        var peakTimestamp = equityCurve[0].Timestamp;
+        var peakTimestamp = evaluationStart.ToUniversalTime();
         var underwaterStart = (DateTimeOffset?)null;
         var maximumDrawdown = 0d;
         var maximumDuration = TimeSpan.Zero;
@@ -680,6 +751,7 @@ public static class BacktestPerformanceReportBuilder
     private static string ComputeReportSha256(
         BacktestReportSpecification specification,
         string ledgerSha256,
+        string benchmarkSha256,
         ExperimentManifest manifest,
         BacktestRunResult run,
         BacktestReturnMetrics returns,
@@ -690,7 +762,7 @@ public static class BacktestPerformanceReportBuilder
     {
         return CanonicalResearchHash.Compute(builder =>
         {
-            CanonicalResearchHash.Append(builder, "quantara-performance-report-v1");
+            CanonicalResearchHash.Append(builder, "quantara-performance-report-v2");
             CanonicalResearchHash.Append(builder, specification.Version);
             CanonicalResearchHash.Append(builder, specification.PeriodsPerYear);
             CanonicalResearchHash.Append(builder, specification.AnnualRiskFreeRate);
@@ -700,6 +772,7 @@ public static class BacktestPerformanceReportBuilder
                 specification.BootstrapConfidenceLevel);
             CanonicalResearchHash.Append(builder, specification.BootstrapBlockLength);
             CanonicalResearchHash.Append(builder, ledgerSha256);
+            CanonicalResearchHash.Append(builder, benchmarkSha256);
             CanonicalResearchHash.Append(builder, manifest.FingerprintSha256);
             CanonicalResearchHash.Append(builder, run.RunFingerprintSha256!);
             CanonicalResearchHash.Append(builder, startingEquity);
