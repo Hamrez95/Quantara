@@ -14,6 +14,10 @@ public static class DeterministicRiskEngine
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(instrumentRules);
 
+        var validCorrelationContext = IsCorrelationContextValid(correlationContext)
+            ? correlationContext
+            : null;
+
         if (!AreInstrumentRulesValid(instrumentRules))
         {
             return CreateRejectedResult(
@@ -21,7 +25,7 @@ public static class DeterministicRiskEngine
                 policy.Version,
                 RiskDecisionCode.InstrumentRuleViolation,
                 new PriceNormalizationResult(0m, 0m, 0m, true),
-                correlationContext);
+                validCorrelationContext);
         }
 
         var normalizedPrices = ConservativePriceNormalizer.Normalize(
@@ -39,7 +43,8 @@ public static class DeterministicRiskEngine
                 policy,
                 instrumentRules,
                 normalizedPrices,
-                correlationContext);
+                correlationContext,
+                validCorrelationContext);
         }
 
         if (!IsPolicyValid(policy))
@@ -49,7 +54,7 @@ public static class DeterministicRiskEngine
                 policy.Version,
                 RiskDecisionCode.InvalidPolicy,
                 normalizedPrices,
-                correlationContext);
+                validCorrelationContext);
         }
 
         var normalizedRequest = request with
@@ -123,11 +128,9 @@ public static class DeterministicRiskEngine
         var symbolExposureAfter = normalizedRequest.CurrentSymbolExposure + positionNotional;
         var allocatedCapitalAfter = normalizedRequest.CurrentAllocatedCapital + requiredMargin + estimatedFees;
 
-        var correlationGroup = correlationContext?.Group ?? string.Empty;
-        var correlatedExposureBefore = correlationContext?.CurrentExposure ?? 0m;
-        var correlationFactor = IsCorrelationContextValid(correlationContext)
-            ? correlationContext!.ProposedExposureFactor
-            : 0m;
+        var correlationGroup = validCorrelationContext?.Group ?? string.Empty;
+        var correlatedExposureBefore = validCorrelationContext?.CurrentExposure ?? 0m;
+        var correlationFactor = validCorrelationContext?.ProposedExposureFactor ?? 0m;
         var correlatedExposureAfter = correlatedExposureBefore + positionNotional * correlationFactor;
 
         if (rawQuantity > 0m && normalizedQuantity < instrumentRules.MinimumQuantity)
@@ -167,10 +170,10 @@ public static class DeterministicRiskEngine
                 AddUnique(rejectionReasons, RiskDecisionCode.TradingAllocationExceeded);
             }
 
-            if (correlationContext is not null && IsCorrelationContextValid(correlationContext))
+            if (validCorrelationContext is not null)
             {
                 var maximumCorrelatedExposure = normalizedRequest.AccountEquity
-                    * correlationContext.MaximumExposurePercent
+                    * validCorrelationContext.MaximumExposurePercent
                     / 100m;
                 if (correlatedExposureAfter > maximumCorrelatedExposure)
                 {
@@ -218,7 +221,8 @@ public static class DeterministicRiskEngine
         RiskPolicy policy,
         InstrumentRiskRules instrumentRules,
         PriceNormalizationResult normalizedPrices,
-        CorrelationRiskContext? correlationContext)
+        CorrelationRiskContext? suppliedCorrelationContext,
+        CorrelationRiskContext? validCorrelationContext)
     {
         var rejectionReasons = new List<RiskDecisionCode>();
         var warnings = new List<string>();
@@ -243,17 +247,13 @@ public static class DeterministicRiskEngine
             warnings.Add("Kill switch is active; reduce-only exposure reduction remains permitted.");
         }
 
-        if (correlationContext is not null && !IsCorrelationContextValid(correlationContext))
+        if (suppliedCorrelationContext is not null && validCorrelationContext is null)
         {
             warnings.Add("Invalid correlation context was ignored for the reduce-only exposure reduction.");
         }
 
-        var correlationGroup = IsCorrelationContextValid(correlationContext)
-            ? correlationContext!.Group
-            : string.Empty;
-        var correlatedExposure = IsCorrelationContextValid(correlationContext)
-            ? correlationContext!.CurrentExposure
-            : 0m;
+        var correlationGroup = validCorrelationContext?.Group ?? string.Empty;
+        var correlatedExposure = validCorrelationContext?.CurrentExposure ?? 0m;
         var isApproved = rejectionReasons.Count == 0;
 
         return new RiskEvaluationResult(
@@ -284,14 +284,10 @@ public static class DeterministicRiskEngine
         string policyVersion,
         RiskDecisionCode decisionCode,
         PriceNormalizationResult normalizedPrices,
-        CorrelationRiskContext? correlationContext)
+        CorrelationRiskContext? validCorrelationContext)
     {
-        var correlationGroup = IsCorrelationContextValid(correlationContext)
-            ? correlationContext!.Group
-            : string.Empty;
-        var correlatedExposure = IsCorrelationContextValid(correlationContext)
-            ? correlationContext!.CurrentExposure
-            : 0m;
+        var correlationGroup = validCorrelationContext?.Group ?? string.Empty;
+        var correlatedExposure = validCorrelationContext?.CurrentExposure ?? 0m;
 
         return new RiskEvaluationResult(
             false,
