@@ -51,6 +51,7 @@ Future information and future schedules are different concepts.
 
 - `OfficialFact`, `FeatureObservation`, and `CandidateHypothesis` may not claim an `EventAt` later than retrieval time. This prevents look-ahead evidence.
 - `ScheduledEvent` requires an event time strictly after retrieval time. It represents a known future calendar event, not a known future result.
+- A `ScheduledEvent` also requires `ExpiresAt` at or after the event time. This prevents a calendar item from remaining indefinitely actionable after the scheduled event has occurred.
 - `ComplianceDecision` may omit event time.
 - Publication time may never be later than retrieval time.
 
