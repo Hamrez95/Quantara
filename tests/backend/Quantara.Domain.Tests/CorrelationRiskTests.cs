@@ -11,7 +11,6 @@ public sealed class CorrelationRiskTests
         var context = new CorrelationRiskContext(
             "large-cap-crypto",
             1_000m,
-            30m,
             0.50m);
 
         var result = DeterministicRiskEngine.Evaluate(
@@ -33,7 +32,6 @@ public sealed class CorrelationRiskTests
         var context = new CorrelationRiskContext(
             "large-cap-crypto",
             2_900m,
-            30m,
             1m);
 
         var result = DeterministicRiskEngine.Evaluate(
@@ -55,7 +53,6 @@ public sealed class CorrelationRiskTests
         var context = new CorrelationRiskContext(
             string.Empty,
             -1m,
-            0m,
             1.1m);
 
         var result = DeterministicRiskEngine.Evaluate(
@@ -71,6 +68,28 @@ public sealed class CorrelationRiskTests
         Assert.Equal(string.Empty, result.CorrelationGroup);
         Assert.Equal(0m, result.CorrelatedExposureBefore);
         Assert.Equal(0m, result.CorrelatedExposureAfter);
+    }
+
+    [Fact]
+    public void RejectsMalformedCorrelationLimitInRiskPolicy()
+    {
+        var context = new CorrelationRiskContext(
+            "large-cap-crypto",
+            1_000m,
+            0.50m);
+        var policy = CreatePolicy() with
+        {
+            MaximumCorrelatedExposurePercent = 0m
+        };
+
+        var result = DeterministicRiskEngine.Evaluate(
+            CreateRequest(),
+            policy,
+            CreateInstrumentRules(),
+            context);
+
+        Assert.False(result.IsApproved);
+        Assert.Equal(RiskDecisionCode.InvalidPolicy, result.DecisionCode);
     }
 
     [Fact]
@@ -98,7 +117,6 @@ public sealed class CorrelationRiskTests
         var context = new CorrelationRiskContext(
             string.Empty,
             -1m,
-            0m,
             2m);
 
         var result = DeterministicRiskEngine.Evaluate(
@@ -130,7 +148,8 @@ public sealed class CorrelationRiskTests
             0.30m,
             3,
             50m,
-            false);
+            false,
+            30m);
     }
 
     private static InstrumentRiskRules CreateInstrumentRules()
