@@ -4,7 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import '../core/theme/quantara_theme.dart';
 import '../features/cockpit/data/mock_cockpit_repository.dart';
 import '../features/cockpit/domain/cockpit_models.dart';
-import '../features/cockpit/presentation/cockpit_page.dart';
+import '../features/cockpit/presentation/stable_cockpit_page.dart';
 
 class QuantaraApp extends StatefulWidget {
   const QuantaraApp({
@@ -46,7 +46,8 @@ class _QuantaraAppState extends State<QuantaraApp> {
       theme: QuantaraTheme.light(),
       darkTheme: QuantaraTheme.dark(),
       themeMode: _themeMode,
-      home: CockpitPage(
+      themeAnimationDuration: Duration.zero,
+      home: StableCockpitPage(
         repository: widget.repository,
         themeMode: _themeMode,
         onToggleTheme: _toggleTheme,

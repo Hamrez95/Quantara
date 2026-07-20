@@ -20,13 +20,13 @@ class SectionCard extends StatelessWidget {
     final card = DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.8)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.72)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -61,10 +61,10 @@ class StatusPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.32)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -104,6 +104,8 @@ class MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Semantics(
       label: '$label: $value',
       child: Column(
@@ -113,9 +115,7 @@ class MetricTile extends StatelessWidget {
           Text(
             label,
             style: textTheme.labelMedium?.copyWith(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.62),
+              color: onSurface.withValues(alpha: 0.62),
             ),
           ),
           const SizedBox(height: 5),
@@ -132,9 +132,7 @@ class MetricTile extends StatelessWidget {
             Text(
               caption!,
               style: textTheme.bodySmall?.copyWith(
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.52),
+                color: onSurface.withValues(alpha: 0.52),
               ),
             ),
           ],
@@ -157,14 +155,14 @@ class RiskProgress extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Semantics(
-      label: 'Risk usage ${(value * 100).round()} percent',
+      label: 'میزان مصرف ریسک روزانه',
       value: '${(value * 100).round()}%',
       child: ClipRRect(
         borderRadius: BorderRadius.circular(999),
         child: LinearProgressIndicator(
           value: value,
           minHeight: 9,
-          backgroundColor: scheme.outline.withValues(alpha: 0.35),
+          backgroundColor: scheme.outline.withValues(alpha: 0.32),
           valueColor: AlwaysStoppedAnimation<Color>(
             value > 0.75 ? scheme.error : scheme.primary,
           ),
@@ -189,11 +187,13 @@ class SparklineChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ExcludeSemantics(
-      child: SizedBox(
-        height: height,
-        width: double.infinity,
-        child: CustomPaint(
-          painter: _SparklinePainter(values: values, color: color),
+      child: RepaintBoundary(
+        child: SizedBox(
+          height: height,
+          width: double.infinity,
+          child: CustomPaint(
+            painter: _SparklinePainter(values: values, color: color),
+          ),
         ),
       ),
     );
@@ -244,7 +244,7 @@ class _SparklinePainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [color.withValues(alpha: 0.22), color.withValues(alpha: 0)],
+        colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0)],
       ).createShader(Offset.zero & size)
       ..style = PaintingStyle.fill;
     canvas.drawPath(fillPath, fill);
