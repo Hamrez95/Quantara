@@ -272,6 +272,7 @@ public enum HoldoutAccessCode
 
 public sealed record HoldoutAccessReceipt(
     string ScopeSha256,
+    string DatasetCohortSha256,
     string ResearchLineageId,
     string DatasetContentSha256,
     DateTimeOffset HoldoutStartInclusive,
