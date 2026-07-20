@@ -2,8 +2,46 @@ using Quantara.Domain.Trading;
 
 namespace Quantara.Domain.Risk;
 
-public sealed record RiskLimits(
-    decimal RiskPerTradePercent,
+public enum RiskDecisionCode
+{
+    Approved,
+    ReduceOnlyApproved,
+    InvalidPolicy,
+    InvalidAccountEquity,
+    InvalidAvailableBalance,
+    InvalidRiskPercentage,
+    RiskPerTradeExceeded,
+    InvalidEntryPrice,
+    InvalidStopLoss,
+    InvalidStopDirection,
+    InvalidTakeProfit,
+    MinimumRiskRewardNotMet,
+    DailyLossLimitReached,
+    WeeklyLossLimitReached,
+    DrawdownLimitReached,
+    LeverageLimitExceeded,
+    PortfolioExposureLimitExceeded,
+    SymbolExposureLimitExceeded,
+    ConcurrentPositionLimitReached,
+    SpreadLimitExceeded,
+    SlippageLimitExceeded,
+    StaleMarketData,
+    ExchangeDisconnected,
+    CircuitBreakerActive,
+    CooldownActive,
+    ConsecutiveLossLimitReached,
+    KillSwitchActive,
+    TradingAllocationExceeded,
+    InsufficientAvailableBalance,
+    InstrumentRuleViolation,
+    QuantityBelowMinimum,
+    QuantityAboveMaximum,
+    MinimumNotionalNotMet
+}
+
+public sealed record RiskPolicy(
+    string Version,
+    decimal MaximumRiskPerTradePercent,
     decimal MaximumDailyLossPercent,
     decimal MaximumWeeklyLossPercent,
     decimal MaximumDrawdownPercent,
@@ -14,26 +52,82 @@ public sealed record RiskLimits(
     decimal MinimumRiskReward,
     decimal MaximumAllowedSpreadPercent,
     decimal MaximumAllowedSlippagePercent,
+    int MaximumConsecutiveLosses,
+    decimal MaximumTradingAllocationPercent,
     bool KillSwitchEnabled);
 
-public sealed record RiskContext(
-    Money AccountEquity,
+public sealed record InstrumentRiskRules(
+    decimal TickSize,
+    decimal QuantityStep,
+    decimal MinimumQuantity,
+    decimal MaximumQuantity,
+    decimal MinimumNotional,
+    decimal ContractSize,
+    int PricePrecision,
+    int QuantityPrecision,
+    decimal MaximumLeverage);
+
+public sealed record RiskEvaluationRequest(
+    Symbol Symbol,
+    TradeDirection Direction,
+    decimal AccountEquity,
+    decimal AvailableBalance,
+    decimal EntryPrice,
+    decimal StopLoss,
+    decimal TakeProfit,
+    decimal RequestedRiskPercent,
+    decimal Leverage,
+    decimal CurrentPortfolioExposure,
+    decimal CurrentSymbolExposure,
+    decimal CurrentAllocatedCapital,
+    int OpenPositionCount,
     decimal CurrentDailyLossPercent,
     decimal CurrentWeeklyLossPercent,
     decimal CurrentDrawdownPercent,
-    int OpenPositionCount,
+    decimal SpreadPercent,
+    decimal EstimatedSlippagePercent,
+    decimal RoundTripFeePercent,
     bool MarketDataFresh,
     bool ExchangeConnected,
-    bool CircuitBreakerActive);
+    bool CircuitBreakerActive,
+    bool CooldownActive,
+    int ConsecutiveLosses,
+    bool IsReduceOnly,
+    decimal? RequestedQuantity,
+    DateTimeOffset EvaluatedAt);
 
-public sealed record RiskAssessment(bool Approved, Quantity SuggestedQuantity, IReadOnlyList<string> Reasons);
+public sealed record RiskEvaluationResult(
+    bool IsApproved,
+    RiskDecisionCode DecisionCode,
+    IReadOnlyList<RiskDecisionCode> RejectionReasons,
+    IReadOnlyList<string> Warnings,
+    decimal RiskAmount,
+    decimal RawQuantity,
+    decimal NormalizedQuantity,
+    decimal RequiredMargin,
+    decimal EstimatedFees,
+    decimal EstimatedSlippage,
+    decimal PortfolioExposureBefore,
+    decimal PortfolioExposureAfter,
+    DateTimeOffset EvaluatedAt,
+    string RiskPolicyVersion);
 
 public static class PositionSizer
 {
-    public static Quantity Calculate(decimal accountEquity, decimal riskPercent, decimal entryPrice, decimal stopLoss, decimal feeReserve, decimal slippageReserve)
+    public static Quantity Calculate(
+        decimal accountEquity,
+        decimal riskPercent,
+        decimal entryPrice,
+        decimal stopLoss,
+        decimal feeReserve,
+        decimal slippageReserve)
     {
         var stopDistance = Math.Abs(entryPrice - stopLoss);
-        if (accountEquity <= 0m || riskPercent <= 0m || stopDistance <= 0m) return new Quantity(0m);
+        if (accountEquity <= 0m || riskPercent <= 0m || stopDistance <= 0m)
+        {
+            return new Quantity(0m);
+        }
+
         var riskBudget = accountEquity * (riskPercent / 100m);
         var perUnitRisk = stopDistance + feeReserve + slippageReserve;
         return new Quantity(decimal.Round(riskBudget / perUnitRisk, 8, MidpointRounding.ToZero));
