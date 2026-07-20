@@ -1,0 +1,30 @@
+name: Apply UI cleanup once
+
+on:
+  push:
+    branches:
+      - feat/29-flutter-cockpit-foundation
+    paths:
+      - scripts/refine_flutter_cockpit_layout.py
+      - .github/workflows/apply-ui-cleanup-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/29-flutter-cockpit-foundation
+      - name: Update responsive layout
+        run: python3 scripts/refine_flutter_cockpit_layout.py
+      - name: Commit the focused change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/refine_flutter_cockpit_layout.py .github/workflows/apply-ui-cleanup-once.yml
+          git add src/client/quantara_app/lib/features/cockpit/presentation/cockpit_page.dart
+          git commit -m "refactor: stabilize responsive cockpit layout"
+          git push origin HEAD:feat/29-flutter-cockpit-foundation
