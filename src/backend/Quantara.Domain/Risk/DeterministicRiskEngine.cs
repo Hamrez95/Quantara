@@ -7,45 +7,92 @@ public static class DeterministicRiskEngine
     public static RiskEvaluationResult Evaluate(
         RiskEvaluationRequest request,
         RiskPolicy policy,
-        InstrumentRiskRules instrumentRules)
+        InstrumentRiskRules instrumentRules,
+        CorrelationRiskContext? correlationContext = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(instrumentRules);
 
+        var validCorrelationContext = IsCorrelationContextValid(correlationContext)
+            ? correlationContext
+            : null;
+
         if (!AreInstrumentRulesValid(instrumentRules))
         {
-            return CreateRejectedResult(request, policy.Version, RiskDecisionCode.InstrumentRuleViolation);
+            return CreateRejectedResult(
+                request,
+                policy.Version,
+                RiskDecisionCode.InstrumentRuleViolation,
+                new PriceNormalizationResult(0m, 0m, 0m, true),
+                validCorrelationContext);
         }
+
+        var normalizedPrices = ConservativePriceNormalizer.Normalize(
+            request.Direction,
+            request.EntryPrice,
+            request.StopLoss,
+            request.TakeProfit,
+            instrumentRules.TickSize,
+            instrumentRules.PricePrecision);
 
         if (request.IsReduceOnly)
         {
-            return EvaluateReduceOnly(request, policy, instrumentRules);
+            return EvaluateReduceOnly(
+                request,
+                policy,
+                instrumentRules,
+                normalizedPrices,
+                correlationContext,
+                validCorrelationContext);
         }
 
         if (!IsPolicyValid(policy))
         {
-            return CreateRejectedResult(request, policy.Version, RiskDecisionCode.InvalidPolicy);
+            return CreateRejectedResult(
+                request,
+                policy.Version,
+                RiskDecisionCode.InvalidPolicy,
+                normalizedPrices,
+                validCorrelationContext);
         }
 
+        var normalizedRequest = request with
+        {
+            EntryPrice = normalizedPrices.EntryPrice,
+            StopLoss = normalizedPrices.StopLoss,
+            TakeProfit = normalizedPrices.TakeProfit
+        };
         var rejectionReasons = new List<RiskDecisionCode>();
         var warnings = new List<string>();
-        ValidateOpeningRequest(request, policy, instrumentRules, rejectionReasons);
 
-        var stopDistance = request.EntryPrice > 0m
-            && request.StopLoss > 0m
-            && request.EntryPrice != request.StopLoss
-                ? Math.Abs(request.EntryPrice - request.StopLoss)
+        if (normalizedPrices.WasAdjusted)
+        {
+            warnings.Add("Entry, stop-loss, or take-profit was conservatively normalized to the instrument tick size.");
+        }
+
+        ValidateOpeningRequest(
+            normalizedRequest,
+            policy,
+            instrumentRules,
+            correlationContext,
+            rejectionReasons);
+
+        var stopDistance = normalizedRequest.EntryPrice > 0m
+            && normalizedRequest.StopLoss > 0m
+            && normalizedRequest.EntryPrice != normalizedRequest.StopLoss
+                ? Math.Abs(normalizedRequest.EntryPrice - normalizedRequest.StopLoss)
                 : 0m;
 
-        var riskAmount = request.AccountEquity > 0m && request.RequestedRiskPercent > 0m
-            ? request.AccountEquity * request.RequestedRiskPercent / 100m
-            : 0m;
+        var riskAmount = normalizedRequest.AccountEquity > 0m
+            && normalizedRequest.RequestedRiskPercent > 0m
+                ? normalizedRequest.AccountEquity * normalizedRequest.RequestedRiskPercent / 100m
+                : 0m;
 
-        var feeRate = Math.Max(request.RoundTripFeePercent, 0m) / 100m;
-        var slippageRate = Math.Max(request.EstimatedSlippagePercent, 0m) / 100m;
-        var entryNotionalPerUnit = request.EntryPrice > 0m
-            ? request.EntryPrice * instrumentRules.ContractSize
+        var feeRate = Math.Max(normalizedRequest.RoundTripFeePercent, 0m) / 100m;
+        var slippageRate = Math.Max(normalizedRequest.EstimatedSlippagePercent, 0m) / 100m;
+        var entryNotionalPerUnit = normalizedRequest.EntryPrice > 0m
+            ? normalizedRequest.EntryPrice * instrumentRules.ContractSize
             : 0m;
         var perUnitRisk = stopDistance > 0m
             ? stopDistance * instrumentRules.ContractSize
@@ -72,14 +119,19 @@ public static class DeterministicRiskEngine
         }
 
         var positionNotional = normalizedQuantity * entryNotionalPerUnit;
-        var requiredMargin = request.Leverage > 0m
-            ? positionNotional / request.Leverage
+        var requiredMargin = normalizedRequest.Leverage > 0m
+            ? positionNotional / normalizedRequest.Leverage
             : 0m;
         var estimatedFees = positionNotional * feeRate;
         var estimatedSlippage = positionNotional * slippageRate;
-        var portfolioExposureAfter = request.CurrentPortfolioExposure + positionNotional;
-        var symbolExposureAfter = request.CurrentSymbolExposure + positionNotional;
-        var allocatedCapitalAfter = request.CurrentAllocatedCapital + requiredMargin + estimatedFees;
+        var portfolioExposureAfter = normalizedRequest.CurrentPortfolioExposure + positionNotional;
+        var symbolExposureAfter = normalizedRequest.CurrentSymbolExposure + positionNotional;
+        var allocatedCapitalAfter = normalizedRequest.CurrentAllocatedCapital + requiredMargin + estimatedFees;
+
+        var correlationGroup = validCorrelationContext?.Group ?? string.Empty;
+        var correlatedExposureBefore = validCorrelationContext?.CurrentExposure ?? 0m;
+        var correlationFactor = validCorrelationContext?.ProposedExposureFactor ?? 0m;
+        var correlatedExposureAfter = correlatedExposureBefore + positionNotional * correlationFactor;
 
         if (rawQuantity > 0m && normalizedQuantity < instrumentRules.MinimumQuantity)
         {
@@ -91,15 +143,15 @@ public static class DeterministicRiskEngine
             AddUnique(rejectionReasons, RiskDecisionCode.MinimumNotionalNotMet);
         }
 
-        if (request.AccountEquity > 0m)
+        if (normalizedRequest.AccountEquity > 0m)
         {
-            var maximumPortfolioExposure = request.AccountEquity
+            var maximumPortfolioExposure = normalizedRequest.AccountEquity
                 * policy.MaximumPortfolioExposurePercent
                 / 100m;
-            var maximumSymbolExposure = request.AccountEquity
+            var maximumSymbolExposure = normalizedRequest.AccountEquity
                 * policy.MaximumSymbolExposurePercent
                 / 100m;
-            var maximumTradingAllocation = request.AccountEquity
+            var maximumTradingAllocation = normalizedRequest.AccountEquity
                 * policy.MaximumTradingAllocationPercent
                 / 100m;
 
@@ -117,9 +169,20 @@ public static class DeterministicRiskEngine
             {
                 AddUnique(rejectionReasons, RiskDecisionCode.TradingAllocationExceeded);
             }
+
+            if (validCorrelationContext is not null)
+            {
+                var maximumCorrelatedExposure = normalizedRequest.AccountEquity
+                    * policy.MaximumCorrelatedExposurePercent
+                    / 100m;
+                if (correlatedExposureAfter > maximumCorrelatedExposure)
+                {
+                    AddUnique(rejectionReasons, RiskDecisionCode.CorrelatedExposureLimitExceeded);
+                }
+            }
         }
 
-        if (requiredMargin + estimatedFees > request.AvailableBalance)
+        if (requiredMargin + estimatedFees > normalizedRequest.AvailableBalance)
         {
             AddUnique(rejectionReasons, RiskDecisionCode.InsufficientAvailableBalance);
         }
@@ -130,33 +193,36 @@ public static class DeterministicRiskEngine
             isApproved ? RiskDecisionCode.Approved : rejectionReasons[0],
             rejectionReasons.AsReadOnly(),
             warnings.AsReadOnly(),
+            normalizedPrices.EntryPrice,
+            normalizedPrices.StopLoss,
+            normalizedPrices.TakeProfit,
             riskAmount,
             rawQuantity,
             normalizedQuantity,
             requiredMargin,
             estimatedFees,
             estimatedSlippage,
-            request.CurrentPortfolioExposure,
+            normalizedRequest.CurrentPortfolioExposure,
             portfolioExposureAfter,
-            request.EvaluatedAt,
+            correlationGroup,
+            correlatedExposureBefore,
+            correlatedExposureAfter,
+            normalizedRequest.EvaluatedAt,
             policy.Version);
     }
 
     public static decimal NormalizeQuantityDown(decimal quantity, decimal stepSize, int precision)
     {
-        if (quantity <= 0m || stepSize <= 0m || precision is < 0 or > 28)
-        {
-            return 0m;
-        }
-
-        var steppedQuantity = decimal.Floor(quantity / stepSize) * stepSize;
-        return decimal.Round(steppedQuantity, precision, MidpointRounding.ToZero);
+        return ConservativePriceNormalizer.NormalizeDown(quantity, stepSize, precision);
     }
 
     private static RiskEvaluationResult EvaluateReduceOnly(
         RiskEvaluationRequest request,
         RiskPolicy policy,
-        InstrumentRiskRules instrumentRules)
+        InstrumentRiskRules instrumentRules,
+        PriceNormalizationResult normalizedPrices,
+        CorrelationRiskContext? suppliedCorrelationContext,
+        CorrelationRiskContext? validCorrelationContext)
     {
         var rejectionReasons = new List<RiskDecisionCode>();
         var warnings = new List<string>();
@@ -181,12 +247,23 @@ public static class DeterministicRiskEngine
             warnings.Add("Kill switch is active; reduce-only exposure reduction remains permitted.");
         }
 
+        if (suppliedCorrelationContext is not null && validCorrelationContext is null)
+        {
+            warnings.Add("Invalid correlation context was ignored for the reduce-only exposure reduction.");
+        }
+
+        var correlationGroup = validCorrelationContext?.Group ?? string.Empty;
+        var correlatedExposure = validCorrelationContext?.CurrentExposure ?? 0m;
         var isApproved = rejectionReasons.Count == 0;
+
         return new RiskEvaluationResult(
             isApproved,
             isApproved ? RiskDecisionCode.ReduceOnlyApproved : rejectionReasons[0],
             rejectionReasons.AsReadOnly(),
             warnings.AsReadOnly(),
+            normalizedPrices.EntryPrice,
+            normalizedPrices.StopLoss,
+            normalizedPrices.TakeProfit,
             0m,
             rawQuantity,
             normalizedQuantity,
@@ -195,6 +272,9 @@ public static class DeterministicRiskEngine
             0m,
             request.CurrentPortfolioExposure,
             request.CurrentPortfolioExposure,
+            correlationGroup,
+            correlatedExposure,
+            correlatedExposure,
             request.EvaluatedAt,
             policy.Version);
     }
@@ -202,13 +282,21 @@ public static class DeterministicRiskEngine
     private static RiskEvaluationResult CreateRejectedResult(
         RiskEvaluationRequest request,
         string policyVersion,
-        RiskDecisionCode decisionCode)
+        RiskDecisionCode decisionCode,
+        PriceNormalizationResult normalizedPrices,
+        CorrelationRiskContext? validCorrelationContext)
     {
+        var correlationGroup = validCorrelationContext?.Group ?? string.Empty;
+        var correlatedExposure = validCorrelationContext?.CurrentExposure ?? 0m;
+
         return new RiskEvaluationResult(
             false,
             decisionCode,
             new[] { decisionCode },
             Array.Empty<string>(),
+            normalizedPrices.EntryPrice,
+            normalizedPrices.StopLoss,
+            normalizedPrices.TakeProfit,
             0m,
             0m,
             0m,
@@ -217,6 +305,9 @@ public static class DeterministicRiskEngine
             0m,
             request.CurrentPortfolioExposure,
             request.CurrentPortfolioExposure,
+            correlationGroup,
+            correlatedExposure,
+            correlatedExposure,
             request.EvaluatedAt,
             policyVersion);
     }
@@ -225,6 +316,7 @@ public static class DeterministicRiskEngine
         RiskEvaluationRequest request,
         RiskPolicy policy,
         InstrumentRiskRules instrumentRules,
+        CorrelationRiskContext? correlationContext,
         List<RiskDecisionCode> rejectionReasons)
     {
         if (request.AccountEquity <= 0m)
@@ -282,6 +374,11 @@ public static class DeterministicRiskEngine
             || request.RoundTripFeePercent < 0m)
         {
             AddUnique(rejectionReasons, RiskDecisionCode.InvalidMarketCost);
+        }
+
+        if (correlationContext is not null && !IsCorrelationContextValid(correlationContext))
+        {
+            AddUnique(rejectionReasons, RiskDecisionCode.InvalidCorrelationContext);
         }
 
         if (request.CurrentDailyLossPercent >= policy.MaximumDailyLossPercent)
@@ -367,7 +464,8 @@ public static class DeterministicRiskEngine
             && policy.MaximumAllowedSpreadPercent >= 0m
             && policy.MaximumAllowedSlippagePercent >= 0m
             && policy.MaximumConsecutiveLosses >= 0
-            && policy.MaximumTradingAllocationPercent > 0m;
+            && policy.MaximumTradingAllocationPercent > 0m
+            && policy.MaximumCorrelatedExposurePercent > 0m;
     }
 
     private static bool AreInstrumentRulesValid(InstrumentRiskRules instrumentRules)
@@ -380,7 +478,21 @@ public static class DeterministicRiskEngine
             && instrumentRules.ContractSize > 0m
             && instrumentRules.PricePrecision is >= 0 and <= 28
             && instrumentRules.QuantityPrecision is >= 0 and <= 28
-            && instrumentRules.MaximumLeverage > 0m;
+            && instrumentRules.MaximumLeverage > 0m
+            && ConservativePriceNormalizer.IsIncrementCompatibleWithPrecision(
+                instrumentRules.TickSize,
+                instrumentRules.PricePrecision)
+            && ConservativePriceNormalizer.IsIncrementCompatibleWithPrecision(
+                instrumentRules.QuantityStep,
+                instrumentRules.QuantityPrecision);
+    }
+
+    private static bool IsCorrelationContextValid(CorrelationRiskContext? correlationContext)
+    {
+        return correlationContext is not null
+            && !string.IsNullOrWhiteSpace(correlationContext.Group)
+            && correlationContext.CurrentExposure >= 0m
+            && correlationContext.ProposedExposureFactor is >= 0m and <= 1m;
     }
 
     private static bool HasValidStopDirection(RiskEvaluationRequest request)
