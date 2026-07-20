@@ -114,7 +114,7 @@ public static class ResearchEvidenceEnvelopeFactory
 
     private static bool IsSemanticVersion(string? value)
     {
-        if (!IsValidText(value, 64))
+        if (value is null || !IsValidText(value, 64))
         {
             return false;
         }
@@ -129,7 +129,8 @@ public static class ResearchEvidenceEnvelopeFactory
 
     private static bool IsKebabIdentifier(string? value)
     {
-        if (!IsValidText(value, 128)
+        if (value is null
+            || !IsValidText(value, 128)
             || value[0] == '-'
             || value[^1] == '-')
         {
