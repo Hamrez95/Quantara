@@ -5,7 +5,7 @@ final class MockCockpitRepository implements CockpitRepository {
 
   static const demoSnapshot = CockpitSnapshot(
     environment: AppEnvironment.demo,
-    marketStatus: 'بازار باز است · داده نمایشی',
+    marketStatus: 'داده نمایشی · بدون اتصال به بازار زنده',
     watchlist: [
       MarketQuote(
         symbol: 'BTCUSDT',
