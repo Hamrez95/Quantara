@@ -1,0 +1,72 @@
+name: Fix price structure build once
+
+on:
+  push:
+    branches:
+      - feat/36-multitimeframe-chart-analysis
+    paths:
+      - .github/workflows/fix-price-structure-build-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/36-multitimeframe-chart-analysis
+      - name: Apply compiler and analyzer fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          deterministic = Path('src/backend/Quantara.Domain/Analysis/DeterministicPriceStructureAnalyzer.cs')
+          text = deterministic.read_text()
+          text = text.replace(
+              'private const string SchemaVersion = "price-structure-v1";\n',
+              'private const string SchemaVersion = "price-structure-v1";\n    private readonly string _schemaVersion = SchemaVersion;\n')
+          text = text.replace('normalizedCandles.Count,', 'normalizedCandles.Length,')
+          text = text.replace(
+              'private static IReadOnlyList<PivotCandidate> DetectCandidates(',
+              'private static List<PivotCandidate> DetectCandidates(')
+          text = text.replace(
+              'private static IReadOnlyList<PriceStructureZone> BuildZones(',
+              'private static PriceStructureZone[] BuildZones(')
+          text = text.replace(
+              'private static IReadOnlyList<string> BuildWarnings(',
+              'private static List<string> BuildWarnings(')
+          text = text.replace(
+              'private static string ComputeFingerprint(',
+              'private string ComputeFingerprint(')
+          text = text.replace(
+              'PriceStructureMath.Append(builder, SchemaVersion);',
+              'PriceStructureMath.Append(builder, _schemaVersion);')
+          deterministic.write_text(text)
+
+          multi = Path('src/backend/Quantara.Domain/Analysis/MultiTimeframePriceStructureAnalyzer.cs')
+          text = multi.read_text()
+          text = text.replace(
+              'private const string SchemaVersion = "multi-timeframe-structure-v1";\n',
+              'private const string SchemaVersion = "multi-timeframe-structure-v1";\n    private readonly string _schemaVersion = SchemaVersion;\n')
+          text = text.replace(
+              'private static IReadOnlyList<ConfluenceCluster> Cluster(',
+              'private static List<ConfluenceCluster> Cluster(')
+          text = text.replace(
+              'private static string ComputeFingerprint(',
+              'private string ComputeFingerprint(')
+          text = text.replace(
+              'PriceStructureMath.Append(builder, SchemaVersion);',
+              'PriceStructureMath.Append(builder, _schemaVersion);')
+          multi.write_text(text)
+          PY
+      - name: Remove one-time workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-price-structure-build-once.yml
+          git add src/backend/Quantara.Domain/Analysis
+          git commit -m "fix: satisfy price structure build gates"
+          git push origin HEAD:feat/36-multitimeframe-chart-analysis
