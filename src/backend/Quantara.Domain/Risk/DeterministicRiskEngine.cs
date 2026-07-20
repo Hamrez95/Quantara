@@ -1,3 +1,5 @@
+using Quantara.Domain.Trading;
+
 namespace Quantara.Domain.Risk;
 
 public static class DeterministicRiskEngine
@@ -11,29 +13,30 @@ public static class DeterministicRiskEngine
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(instrumentRules);
 
-        var rejectionReasons = new List<RiskDecisionCode>();
-        var warnings = new List<string>();
-
-        if (!IsPolicyValid(policy))
-        {
-            AddUnique(rejectionReasons, RiskDecisionCode.InvalidPolicy);
-        }
-
         if (!AreInstrumentRulesValid(instrumentRules))
         {
-            AddUnique(rejectionReasons, RiskDecisionCode.InstrumentRuleViolation);
+            return CreateRejectedResult(request, policy.Version, RiskDecisionCode.InstrumentRuleViolation);
         }
 
         if (request.IsReduceOnly)
         {
-            return EvaluateReduceOnly(request, policy, instrumentRules, rejectionReasons, warnings);
+            return EvaluateReduceOnly(request, policy, instrumentRules);
         }
 
+        if (!IsPolicyValid(policy))
+        {
+            return CreateRejectedResult(request, policy.Version, RiskDecisionCode.InvalidPolicy);
+        }
+
+        var rejectionReasons = new List<RiskDecisionCode>();
+        var warnings = new List<string>();
         ValidateOpeningRequest(request, policy, instrumentRules, rejectionReasons);
 
-        var stopDistance = request.EntryPrice > 0m && request.StopLoss > 0m
-            ? Math.Abs(request.EntryPrice - request.StopLoss)
-            : 0m;
+        var stopDistance = request.EntryPrice > 0m
+            && request.StopLoss > 0m
+            && request.EntryPrice != request.StopLoss
+                ? Math.Abs(request.EntryPrice - request.StopLoss)
+                : 0m;
 
         var riskAmount = request.AccountEquity > 0m && request.RequestedRiskPercent > 0m
             ? request.AccountEquity * request.RequestedRiskPercent / 100m
@@ -41,10 +44,10 @@ public static class DeterministicRiskEngine
 
         var feeRate = Math.Max(request.RoundTripFeePercent, 0m) / 100m;
         var slippageRate = Math.Max(request.EstimatedSlippagePercent, 0m) / 100m;
-        var entryNotionalPerUnit = request.EntryPrice > 0m && instrumentRules.ContractSize > 0m
+        var entryNotionalPerUnit = request.EntryPrice > 0m
             ? request.EntryPrice * instrumentRules.ContractSize
             : 0m;
-        var perUnitRisk = stopDistance > 0m && instrumentRules.ContractSize > 0m
+        var perUnitRisk = stopDistance > 0m
             ? stopDistance * instrumentRules.ContractSize
                 + entryNotionalPerUnit * feeRate
                 + entryNotionalPerUnit * slippageRate
@@ -59,7 +62,7 @@ public static class DeterministicRiskEngine
             instrumentRules.QuantityStep,
             instrumentRules.QuantityPrecision);
 
-        if (normalizedQuantity > instrumentRules.MaximumQuantity && instrumentRules.MaximumQuantity > 0m)
+        if (normalizedQuantity > instrumentRules.MaximumQuantity)
         {
             normalizedQuantity = NormalizeQuantityDown(
                 instrumentRules.MaximumQuantity,
@@ -68,9 +71,7 @@ public static class DeterministicRiskEngine
             warnings.Add("Quantity was capped to the instrument maximum without increasing monetary risk.");
         }
 
-        var positionNotional = normalizedQuantity > 0m
-            ? normalizedQuantity * entryNotionalPerUnit
-            : 0m;
+        var positionNotional = normalizedQuantity * entryNotionalPerUnit;
         var requiredMargin = request.Leverage > 0m
             ? positionNotional / request.Leverage
             : 0m;
@@ -90,16 +91,17 @@ public static class DeterministicRiskEngine
             AddUnique(rejectionReasons, RiskDecisionCode.MinimumNotionalNotMet);
         }
 
-        if (normalizedQuantity > instrumentRules.MaximumQuantity)
-        {
-            AddUnique(rejectionReasons, RiskDecisionCode.QuantityAboveMaximum);
-        }
-
         if (request.AccountEquity > 0m)
         {
-            var maximumPortfolioExposure = request.AccountEquity * policy.MaximumPortfolioExposurePercent / 100m;
-            var maximumSymbolExposure = request.AccountEquity * policy.MaximumSymbolExposurePercent / 100m;
-            var maximumTradingAllocation = request.AccountEquity * policy.MaximumTradingAllocationPercent / 100m;
+            var maximumPortfolioExposure = request.AccountEquity
+                * policy.MaximumPortfolioExposurePercent
+                / 100m;
+            var maximumSymbolExposure = request.AccountEquity
+                * policy.MaximumSymbolExposurePercent
+                / 100m;
+            var maximumTradingAllocation = request.AccountEquity
+                * policy.MaximumTradingAllocationPercent
+                / 100m;
 
             if (portfolioExposureAfter > maximumPortfolioExposure)
             {
@@ -154,22 +156,17 @@ public static class DeterministicRiskEngine
     private static RiskEvaluationResult EvaluateReduceOnly(
         RiskEvaluationRequest request,
         RiskPolicy policy,
-        InstrumentRiskRules instrumentRules,
-        List<RiskDecisionCode> rejectionReasons,
-        List<string> warnings)
+        InstrumentRiskRules instrumentRules)
     {
+        var rejectionReasons = new List<RiskDecisionCode>();
+        var warnings = new List<string>();
         var rawQuantity = request.RequestedQuantity.GetValueOrDefault();
         var normalizedQuantity = NormalizeQuantityDown(
             rawQuantity,
             instrumentRules.QuantityStep,
             instrumentRules.QuantityPrecision);
 
-        if (rawQuantity <= 0m)
-        {
-            AddUnique(rejectionReasons, RiskDecisionCode.QuantityBelowMinimum);
-        }
-
-        if (normalizedQuantity < instrumentRules.MinimumQuantity)
+        if (rawQuantity <= 0m || normalizedQuantity < instrumentRules.MinimumQuantity)
         {
             AddUnique(rejectionReasons, RiskDecisionCode.QuantityBelowMinimum);
         }
@@ -202,6 +199,28 @@ public static class DeterministicRiskEngine
             policy.Version);
     }
 
+    private static RiskEvaluationResult CreateRejectedResult(
+        RiskEvaluationRequest request,
+        string policyVersion,
+        RiskDecisionCode decisionCode)
+    {
+        return new RiskEvaluationResult(
+            false,
+            decisionCode,
+            new[] { decisionCode },
+            Array.Empty<string>(),
+            0m,
+            0m,
+            0m,
+            0m,
+            0m,
+            0m,
+            request.CurrentPortfolioExposure,
+            request.CurrentPortfolioExposure,
+            request.EvaluatedAt,
+            policyVersion);
+    }
+
     private static void ValidateOpeningRequest(
         RiskEvaluationRequest request,
         RiskPolicy policy,
@@ -232,7 +251,10 @@ public static class DeterministicRiskEngine
             AddUnique(rejectionReasons, RiskDecisionCode.InvalidEntryPrice);
         }
 
-        if (request.StopLoss <= 0m || request.StopLoss == request.EntryPrice)
+        var hasValidStopDistance = request.StopLoss > 0m
+            && request.EntryPrice > 0m
+            && request.StopLoss != request.EntryPrice;
+        if (!hasValidStopDistance)
         {
             AddUnique(rejectionReasons, RiskDecisionCode.InvalidStopLoss);
         }
@@ -245,7 +267,7 @@ public static class DeterministicRiskEngine
         {
             AddUnique(rejectionReasons, RiskDecisionCode.InvalidTakeProfit);
         }
-        else if (request.EntryPrice > 0m && request.StopLoss > 0m)
+        else if (hasValidStopDistance)
         {
             var riskReward = Math.Abs(request.TakeProfit - request.EntryPrice)
                 / Math.Abs(request.EntryPrice - request.StopLoss);
@@ -253,6 +275,13 @@ public static class DeterministicRiskEngine
             {
                 AddUnique(rejectionReasons, RiskDecisionCode.MinimumRiskRewardNotMet);
             }
+        }
+
+        if (request.SpreadPercent < 0m
+            || request.EstimatedSlippagePercent < 0m
+            || request.RoundTripFeePercent < 0m)
+        {
+            AddUnique(rejectionReasons, RiskDecisionCode.InvalidMarketCost);
         }
 
         if (request.CurrentDailyLossPercent >= policy.MaximumDailyLossPercent)
@@ -358,8 +387,8 @@ public static class DeterministicRiskEngine
     {
         return request.Direction switch
         {
-            Trading.TradeDirection.Long => request.StopLoss < request.EntryPrice,
-            Trading.TradeDirection.Short => request.StopLoss > request.EntryPrice,
+            TradeDirection.Long => request.StopLoss < request.EntryPrice,
+            TradeDirection.Short => request.StopLoss > request.EntryPrice,
             _ => false
         };
     }
@@ -368,8 +397,8 @@ public static class DeterministicRiskEngine
     {
         return request.Direction switch
         {
-            Trading.TradeDirection.Long => request.TakeProfit > request.EntryPrice,
-            Trading.TradeDirection.Short => request.TakeProfit < request.EntryPrice,
+            TradeDirection.Long => request.TakeProfit > request.EntryPrice,
+            TradeDirection.Short => request.TakeProfit < request.EntryPrice,
             _ => false
         };
     }
