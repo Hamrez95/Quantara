@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using Quantara.Domain.Trading;
 
 namespace Quantara.Domain.Execution;
@@ -9,6 +8,8 @@ public sealed class PositionAccountingAggregate
         new(StringComparer.Ordinal);
     private readonly Dictionary<string, FundingSettlement> _processedFundingSettlements =
         new(StringComparer.Ordinal);
+    private readonly List<ExecutionFill> _appliedFills = [];
+    private readonly List<FundingSettlement> _appliedFundingSettlements = [];
     private readonly Symbol _symbol;
     private readonly decimal _contractMultiplier;
     private decimal _signedQuantity;
@@ -29,11 +30,10 @@ public sealed class PositionAccountingAggregate
 
     public PositionSnapshot Snapshot => CreateSnapshot();
 
-    public IReadOnlyDictionary<string, ExecutionFill> ProcessedFills =>
-        _processedFills.ToFrozenDictionary(StringComparer.Ordinal);
+    public IReadOnlyList<ExecutionFill> ProcessedFills => _appliedFills.ToArray();
 
-    public IReadOnlyDictionary<string, FundingSettlement> ProcessedFundingSettlements =>
-        _processedFundingSettlements.ToFrozenDictionary(StringComparer.Ordinal);
+    public IReadOnlyList<FundingSettlement> ProcessedFundingSettlements =>
+        _appliedFundingSettlements.ToArray();
 
     public static PositionAccountingAggregate Rehydrate(
         PositionSnapshot expectedSnapshot,
@@ -136,6 +136,7 @@ public sealed class PositionAccountingAggregate
         _grossRealizedPnl += grossRealizedPnlDelta;
         _feesPaid += normalizedFill.Fee;
         _processedFills.Add(normalizedFill.FillId, normalizedFill);
+        _appliedFills.Add(normalizedFill);
 
         return new PositionFillApplicationResult(
             ExecutionApplicationCode.Applied,
@@ -186,6 +187,7 @@ public sealed class PositionAccountingAggregate
         _processedFundingSettlements.Add(
             normalizedSettlement.SettlementId,
             normalizedSettlement);
+        _appliedFundingSettlements.Add(normalizedSettlement);
 
         return new FundingApplicationResult(
             ExecutionApplicationCode.Applied,
