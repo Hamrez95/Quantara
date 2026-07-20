@@ -42,6 +42,18 @@ internal static class CanonicalResearchHash
         Append(builder, value.ToString("G29", CultureInfo.InvariantCulture));
     }
 
+    public static void Append(StringBuilder builder, double value)
+    {
+        if (!double.IsFinite(value))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(value),
+                "Canonical research hashes cannot contain NaN or infinity.");
+        }
+
+        Append(builder, value.ToString("R", CultureInfo.InvariantCulture));
+    }
+
     public static void Append(StringBuilder builder, DateTimeOffset value)
     {
         Append(builder, value.ToUniversalTime().Ticks);
