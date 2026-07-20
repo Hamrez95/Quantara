@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
 import unittest
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR_PATH = REPOSITORY_ROOT / "scripts" / "validate_source_registry.py"
 REGISTRY_PATH = REPOSITORY_ROOT / "docs" / "research" / "source-registry.v1.yaml"
+SCHEMA_PATH = REPOSITORY_ROOT / "docs" / "research" / "source-registry.schema.v1.json"
 
 SPEC = importlib.util.spec_from_file_location(
     "validate_source_registry",
@@ -33,6 +35,40 @@ class SourceRegistryValidatorTests(unittest.TestCase):
 
     def test_valid_registry_passes(self) -> None:
         self.assertEqual([], VALIDATOR.validate_registry(self.registry))
+
+    def test_schema_contract_matches_validator(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        source_schema = schema["properties"]["sources"]["items"]
+        source_properties = set(source_schema["properties"])
+        source_required = set(source_schema["required"])
+
+        self.assertEqual(VALIDATOR.TOP_LEVEL_FIELDS, set(schema["required"]))
+        self.assertEqual(VALIDATOR.SOURCE_FIELDS, source_properties)
+        self.assertEqual(VALIDATOR.SOURCE_FIELDS - {"notes"}, source_required)
+        self.assertEqual(
+            VALIDATOR.ALLOWED_SOURCE_CLASSES,
+            set(source_schema["properties"]["source_class"]["enum"]),
+        )
+        self.assertEqual(
+            VALIDATOR.ALLOWED_AUTHORITY_TIERS,
+            set(source_schema["properties"]["authority_tier"]["enum"]),
+        )
+        self.assertEqual(
+            VALIDATOR.ALLOWED_ACCESS_CLASSES,
+            set(source_schema["properties"]["access_class"]["enum"]),
+        )
+        self.assertEqual(
+            VALIDATOR.ALLOWED_INGESTION_MODES,
+            set(source_schema["properties"]["ingestion_mode"]["enum"]),
+        )
+        self.assertEqual(
+            VALIDATOR.ALLOWED_DECISION_ROLES,
+            set(source_schema["properties"]["decision_role"]["enum"]),
+        )
+        self.assertEqual(
+            VALIDATOR.ALLOWED_COMMERCIAL_STATUSES,
+            set(source_schema["properties"]["commercial_use_status"]["enum"]),
+        )
 
     def test_duplicate_source_id_is_rejected(self) -> None:
         mutated = copy.deepcopy(self.registry)
