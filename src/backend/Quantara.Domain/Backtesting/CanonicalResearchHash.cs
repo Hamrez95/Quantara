@@ -52,14 +52,18 @@ internal static class CanonicalResearchHash
         Append(builder, value.Ticks);
     }
 
-    public static bool IsSha256(string value)
+    public static bool IsSha256(string? value)
     {
-        return value.Length == 64 && value.All(IsLowerHexCharacter);
+        return value is not null
+            && value.Length == 64
+            && value.All(IsLowerHexCharacter);
     }
 
-    public static bool IsGitCommitSha(string value)
+    public static bool IsGitCommitSha(string? value)
     {
-        return value.Length is 40 or 64 && value.All(IsHexCharacter);
+        return value is not null
+            && value.Length is 40 or 64
+            && value.All(IsHexCharacter);
     }
 
     private static bool IsLowerHexCharacter(char value)
