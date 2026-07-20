@@ -98,8 +98,8 @@ public sealed class OrderAggregate
 
 public static class OrderStateMachine
 {
-    private static readonly IReadOnlyDictionary<OrderState, IReadOnlySet<OrderState>> AllowedTransitions =
-        new Dictionary<OrderState, IReadOnlySet<OrderState>>
+    private static readonly Dictionary<OrderState, HashSet<OrderState>> AllowedTransitions =
+        new()
         {
             [OrderState.Created] = CreateSet(
                 OrderState.RiskRejected,
@@ -174,7 +174,7 @@ public static class OrderStateMachine
             or OrderState.Expired;
     }
 
-    private static IReadOnlySet<OrderState> CreateSet(params OrderState[] states)
+    private static HashSet<OrderState> CreateSet(params OrderState[] states)
     {
         return new HashSet<OrderState>(states);
     }
