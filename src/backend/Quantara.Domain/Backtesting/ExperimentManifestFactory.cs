@@ -45,12 +45,12 @@ public static class ExperimentManifestFactory
             rejections.Add(ExperimentManifestCode.InvalidCodeCommit);
         }
 
-        if (!HistoricalDatasetManifestBuilder.IsInternallyConsistent(dataset))
+        if (!ResearchManifestIntegrity.IsDatasetConsistent(dataset))
         {
             rejections.Add(ExperimentManifestCode.InvalidDatasetManifest);
         }
 
-        if (!TemporalSplitPlanner.IsInternallyConsistent(dataset, splitPlan))
+        if (!ResearchManifestIntegrity.IsSplitConsistent(dataset, splitPlan))
         {
             rejections.Add(ExperimentManifestCode.InvalidSplitPlan);
         }
