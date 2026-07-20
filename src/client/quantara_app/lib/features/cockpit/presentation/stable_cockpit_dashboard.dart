@@ -70,10 +70,11 @@ class _DecisionSummary extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       _decisionLabel(analysis.decision),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: decisionColor,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: decisionColor,
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                   ],
                 ),
@@ -90,14 +91,15 @@ class _DecisionSummary extends StatelessWidget {
             analysis.summary,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.55),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(height: 1.55),
           ),
           if (leadingFactors.isNotEmpty) ...[
             const SizedBox(height: 16),
             for (var index = 0; index < leadingFactors.length; index++) ...[
               _ReasonLine(factor: leadingFactors[index]),
-              if (index != leadingFactors.length - 1)
-                const SizedBox(height: 8),
+              if (index != leadingFactors.length - 1) const SizedBox(height: 8),
             ],
           ],
           const SizedBox(height: 14),
@@ -121,9 +123,9 @@ class _DecisionSummary extends StatelessWidget {
               Text(
                 analysis.symbol,
                 textDirection: TextDirection.ltr,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
             ],
           ),
@@ -156,9 +158,9 @@ class _ReasonLine extends StatelessWidget {
             Expanded(
               child: Text(
                 factor.title,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -190,9 +192,9 @@ class _AccountSummary extends StatelessWidget {
               Expanded(
                 child: Text(
                   'حساب آزمایشی',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               const StatusPill(
@@ -206,9 +208,9 @@ class _AccountSummary extends StatelessWidget {
           Text(
             QuantaraNumberFormat.marketValue(account.equity, unit: 'USDT'),
             textDirection: TextDirection.ltr,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -217,7 +219,9 @@ class _AccountSummary extends StatelessWidget {
             children: [
               _SmallMetric(
                 label: 'موجودی آزاد',
-                value: QuantaraNumberFormat.marketValue(account.availableBalance),
+                value: QuantaraNumberFormat.marketValue(
+                  account.availableBalance,
+                ),
                 ltr: true,
               ),
               _SmallMetric(
@@ -229,7 +233,9 @@ class _AccountSummary extends StatelessWidget {
               ),
               _SmallMetric(
                 label: 'موقعیت باز',
-                value: QuantaraNumberFormat.persianInteger(account.openPositions),
+                value: QuantaraNumberFormat.persianInteger(
+                  account.openPositions,
+                ),
               ),
             ],
           ),
@@ -239,9 +245,9 @@ class _AccountSummary extends StatelessWidget {
               Expanded(
                 child: Text(
                   'مصرف ریسک امروز',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               Text(
@@ -315,15 +321,12 @@ class _CompactMarketList extends StatelessWidget {
               Expanded(
                 child: Text(
                   'بازارهای منتخب',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
-              const StatusPill(
-                label: 'نمایشی',
-                color: QuantaraColors.warning,
-              ),
+              const StatusPill(label: 'نمایشی', color: QuantaraColors.warning),
             ],
           ),
           const SizedBox(height: 12),
