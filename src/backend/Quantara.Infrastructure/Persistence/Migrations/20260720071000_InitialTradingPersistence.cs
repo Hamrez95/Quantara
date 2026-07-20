@@ -8,6 +8,19 @@ namespace Quantara.Infrastructure.Persistence.Migrations;
 [Migration("20260720071000_InitialTradingPersistence")]
 public sealed class InitialTradingPersistence : Migration
 {
+    private static readonly string[] AuditAggregateIndexColumns =
+    [
+        "aggregate_type",
+        "aggregate_id",
+        "sequence"
+    ];
+
+    private static readonly string[] OrderEventIndexColumns =
+    [
+        "order_id",
+        "occurred_at"
+    ];
+
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         ArgumentNullException.ThrowIfNull(migrationBuilder);
@@ -173,21 +186,12 @@ public sealed class InitialTradingPersistence : Migration
         migrationBuilder.CreateIndex(
             name: "ix_audit_events_aggregate_sequence",
             table: "audit_events",
-            columns: new[]
-            {
-                "aggregate_type",
-                "aggregate_id",
-                "sequence"
-            });
+            columns: AuditAggregateIndexColumns);
 
         migrationBuilder.CreateIndex(
             name: "ix_order_events_order_occurred",
             table: "order_events",
-            columns: new[]
-            {
-                "order_id",
-                "occurred_at"
-            });
+            columns: OrderEventIndexColumns);
 
         migrationBuilder.CreateIndex(
             name: "ix_risk_evaluations_proposal_id",
