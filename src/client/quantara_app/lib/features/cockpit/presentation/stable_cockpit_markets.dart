@@ -24,14 +24,14 @@ class _MarketsViewState extends State<_MarketsView> {
   @override
   Widget build(BuildContext context) {
     if (widget.quotes.isEmpty) {
-      return const SectionCard(
-        child: Text('بازاری برای نمایش وجود ندارد.'),
-      );
+      return const SectionCard(child: Text('بازاری برای نمایش وجود ندارد.'));
     }
 
     final selected = widget.quotes[_selectedIndex];
     final positive = selected.changePercent >= 0;
-    final chartColor = positive ? QuantaraColors.success : QuantaraColors.danger;
+    final chartColor = positive
+        ? QuantaraColors.success
+        : QuantaraColors.danger;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,9 +50,8 @@ class _MarketsViewState extends State<_MarketsView> {
                         Text(
                           selected.symbol,
                           textDirection: TextDirection.ltr,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                         const SizedBox(height: 3),
                         Text(
@@ -61,9 +60,8 @@ class _MarketsViewState extends State<_MarketsView> {
                             unit: 'USDT',
                           ),
                           textDirection: TextDirection.ltr,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                       ],
                     ),

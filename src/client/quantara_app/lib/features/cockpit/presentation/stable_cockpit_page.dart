@@ -382,7 +382,11 @@ class _QuantaraMark extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [QuantaraColors.cyan, Color(0xFF3E86F5), QuantaraColors.violet],
+          colors: [
+            QuantaraColors.cyan,
+            Color(0xFF3E86F5),
+            QuantaraColors.violet,
+          ],
         ),
         borderRadius: BorderRadius.circular(size * 0.28),
       ),
@@ -441,11 +445,15 @@ class _QuoteRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final positive = quote.changePercent >= 0;
-    final changeColor = positive ? QuantaraColors.success : QuantaraColors.danger;
+    final changeColor = positive
+        ? QuantaraColors.success
+        : QuantaraColors.danger;
     final scheme = Theme.of(context).colorScheme;
 
     return Material(
-      color: selected ? scheme.primary.withValues(alpha: 0.08) : Colors.transparent,
+      color: selected
+          ? scheme.primary.withValues(alpha: 0.08)
+          : Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -580,9 +588,9 @@ class _RealMoneyLockCard extends StatelessWidget {
                   compact
                       ? 'فعلاً فقط مشاهده و آزمایش؛ هیچ سفارش واقعی ارسال نمی‌شود.'
                       : 'فعال‌سازی پول واقعی فقط پس از حساب کاغذی، حالت سایه، محدودیت زیان و کلید توقف امکان‌پذیر خواهد بود.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    height: 1.5,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(height: 1.5),
                 ),
               ],
             ),

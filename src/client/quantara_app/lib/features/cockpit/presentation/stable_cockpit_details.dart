@@ -21,9 +21,9 @@ class _AnalysisDetails extends StatelessWidget {
             children: [
               Text(
                 'تحلیل و دلیل تصمیم',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               StatusPill(
                 label: _decisionLabel(analysis.decision),
@@ -40,9 +40,9 @@ class _AnalysisDetails extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             'دلایل اصلی',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
           for (final factor in analysis.factors)
@@ -100,9 +100,9 @@ class _FactorTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     factor.detail,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      height: 1.5,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(height: 1.5),
                   ),
                 ],
               ),
@@ -148,9 +148,9 @@ class _ReconsiderationCard extends StatelessWidget {
                   const SizedBox(height: 5),
                   Text(
                     text,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      height: 1.55,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(height: 1.55),
                   ),
                 ],
               ),
@@ -181,9 +181,9 @@ class _PaperAccountDetails extends StatelessWidget {
             children: [
               Text(
                 'جزئیات حساب آزمایشی',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 18),
               _AccountLine(
@@ -196,7 +196,9 @@ class _PaperAccountDetails extends StatelessWidget {
               ),
               _AccountLine(
                 label: 'موقعیت‌های باز',
-                value: QuantaraNumberFormat.persianInteger(account.openPositions),
+                value: QuantaraNumberFormat.persianInteger(
+                  account.openPositions,
+                ),
               ),
               _AccountLine(
                 label: 'سقف ریسک روزانه',
@@ -215,7 +217,11 @@ class _PaperAccountDetails extends StatelessWidget {
 }
 
 class _AccountLine extends StatelessWidget {
-  const _AccountLine({required this.label, required this.value, this.ltr = false});
+  const _AccountLine({
+    required this.label,
+    required this.value,
+    this.ltr = false,
+  });
 
   final String label;
   final String value;
@@ -231,9 +237,9 @@ class _AccountLine extends StatelessWidget {
           Text(
             value,
             textDirection: ltr ? TextDirection.ltr : null,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
         ],
       ),

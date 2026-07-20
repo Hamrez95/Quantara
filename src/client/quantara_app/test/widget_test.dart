@@ -9,7 +9,9 @@ import 'package:quantara_app/features/cockpit/domain/cockpit_models.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('shows a concise and unmistakable demo dashboard', (tester) async {
+  testWidgets('shows a concise and unmistakable demo dashboard', (
+    tester,
+  ) async {
     _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(const QuantaraApp());
     await tester.pump(const Duration(milliseconds: 300));
