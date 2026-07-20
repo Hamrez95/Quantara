@@ -34,14 +34,17 @@ public sealed class ResearchEvidenceEventTimeTests
     [Fact]
     public void AcceptsFutureTimeForExplicitScheduledEvent()
     {
+        var eventAt = RetrievedAt + TimeSpan.FromHours(1);
         var result = Create(
             ResearchEvidenceKind.ScheduledEvent,
-            RetrievedAt + TimeSpan.FromHours(1));
+            eventAt,
+            eventAt + TimeSpan.FromMinutes(30));
 
         Assert.True(result.IsCreated);
         var envelope = Assert.IsType<ResearchEvidenceEnvelope>(result.Envelope);
         Assert.Equal(ResearchEvidenceKind.ScheduledEvent, envelope.Kind);
-        Assert.Equal(RetrievedAt + TimeSpan.FromHours(1), envelope.EventAt);
+        Assert.Equal(eventAt, envelope.EventAt);
+        Assert.Equal(eventAt + TimeSpan.FromMinutes(30), envelope.ExpiresAt);
     }
 
     [Fact]
@@ -49,7 +52,35 @@ public sealed class ResearchEvidenceEventTimeTests
     {
         var result = Create(
             ResearchEvidenceKind.ScheduledEvent,
-            RetrievedAt);
+            RetrievedAt,
+            RetrievedAt + TimeSpan.FromHours(1));
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchEvidenceCode.InvalidTimestamp,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsScheduledEventWithoutExpiry()
+    {
+        var result = Create(
+            ResearchEvidenceKind.ScheduledEvent,
+            RetrievedAt + TimeSpan.FromHours(1));
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchEvidenceCode.InvalidTimestamp,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsScheduledEventThatExpiresBeforeEventTime()
+    {
+        var result = Create(
+            ResearchEvidenceKind.ScheduledEvent,
+            RetrievedAt + TimeSpan.FromHours(2),
+            RetrievedAt + TimeSpan.FromHours(1));
 
         Assert.False(result.IsCreated);
         Assert.Contains(
@@ -59,7 +90,8 @@ public sealed class ResearchEvidenceEventTimeTests
 
     private static ResearchEvidenceBuildResult Create(
         ResearchEvidenceKind kind,
-        DateTimeOffset? eventAt)
+        DateTimeOffset? eventAt,
+        DateTimeOffset? expiresAt = null)
     {
         var registryResult = ResearchSourceRegistrySnapshotFactory.Create(
             "1.0.0",
@@ -91,6 +123,7 @@ public sealed class ResearchEvidenceEventTimeTests
             NormalizedHash,
             "event-v1",
             kind,
-            [BtcUsdt]);
+            [BtcUsdt],
+            expiresAt);
     }
 }
