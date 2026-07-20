@@ -8,7 +8,7 @@ namespace Quantara.Domain.Tests;
 public sealed class ResearchSourceRegistryLoaderTests
 {
     private const string PublisherProperty =
-        "              \"publisher\": \"Trade City Pro\",\n";
+        "\"publisher\": \"Trade City Pro\",";
 
     private static readonly Symbol BtcUsdt = new("BTCUSDT");
     private static readonly DateTimeOffset LoadedAt = new(
@@ -195,7 +195,7 @@ public sealed class ResearchSourceRegistryLoaderTests
                 "hypothesis_only")
             .Replace(
                 PublisherProperty,
-                PublisherProperty + "              \"unreviewed_override\": true,\n",
+                PublisherProperty + "\n      \"unreviewed_override\": true,",
                 StringComparison.Ordinal);
 
         var result = ResearchSourceRegistryLoader.Load(
