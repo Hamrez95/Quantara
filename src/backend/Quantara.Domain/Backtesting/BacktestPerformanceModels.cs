@@ -52,7 +52,7 @@ public sealed class BenchmarkEquitySeries
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(startingValue);
         ArgumentNullException.ThrowIfNull(points);
 
-        Name = name;
+        Name = name.Trim();
         StartingValue = startingValue;
         _points = Array.AsReadOnly(points
             .Select(point => point with
@@ -134,6 +134,7 @@ public sealed class BacktestPerformanceReport
     internal BacktestPerformanceReport(
         string reportVersion,
         string ledgerSha256,
+        string benchmarkSha256,
         string reportSha256,
         string experimentFingerprintSha256,
         string runFingerprintSha256,
@@ -151,6 +152,7 @@ public sealed class BacktestPerformanceReport
     {
         ReportVersion = reportVersion;
         LedgerSha256 = ledgerSha256;
+        BenchmarkSha256 = benchmarkSha256;
         ReportSha256 = reportSha256;
         ExperimentFingerprintSha256 = experimentFingerprintSha256;
         RunFingerprintSha256 = runFingerprintSha256;
@@ -170,6 +172,8 @@ public sealed class BacktestPerformanceReport
     public string ReportVersion { get; }
 
     public string LedgerSha256 { get; }
+
+    public string BenchmarkSha256 { get; }
 
     public string ReportSha256 { get; }
 
