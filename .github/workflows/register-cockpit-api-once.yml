@@ -1,0 +1,39 @@
+name: Register cockpit API once
+
+on:
+  push:
+    branches:
+      - feat/31-readonly-cockpit-api
+    paths:
+      - .github/workflows/register-cockpit-api-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/31-readonly-cockpit-api
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Register API project
+        run: dotnet sln Quantara.sln add src/backend/Quantara.Api/Quantara.Api.csproj
+      - name: Add the official HTTP client and refresh lock file
+        working-directory: src/client/quantara_app
+        run: flutter pub add http:^1.6.0
+      - name: Remove one-time workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/register-cockpit-api-once.yml
+          git add Quantara.sln src/client/quantara_app/pubspec.yaml src/client/quantara_app/pubspec.lock
+          git commit -m "chore: register cockpit API and HTTP client"
+          git push origin HEAD:feat/31-readonly-cockpit-api
