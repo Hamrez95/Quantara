@@ -57,16 +57,17 @@ Leverage changes required margin but never increases the monetary risk budget.
 
 ## Correlated exposure
 
+The versioned `RiskPolicy` owns the maximum correlated exposure percentage. A caller cannot weaken this cap through proposal metadata.
+
 An optional correlation context groups positions whose risks may move together, such as large-cap crypto assets or tokens sharing the same ecosystem. It contains:
 
 - a stable correlation-group identifier;
 - current gross exposure in that group;
-- the maximum group exposure as a percentage of account equity;
 - a conservative factor from `0` to `1` representing how much of the proposed notional contributes to the group.
 
-The engine adds proposed notional multiplied by this factor to current group exposure. It uses gross exposure and does not assume that a short position safely offsets a long position. This is intentionally conservative until a validated portfolio covariance model exists.
+The engine adds proposed notional multiplied by this factor to current group exposure and compares the result with the policy-owned limit. It uses gross exposure and does not assume that a short position safely offsets a long position. This is intentionally conservative until a validated portfolio covariance model exists.
 
-A malformed correlation context rejects opening risk. Absence of a correlation context preserves previous behavior. Reduce-only requests may proceed with a warning when correlation metadata is malformed because exposure reduction must not be blocked by unrelated opening-risk configuration.
+A malformed correlation context rejects opening risk. Invalid correlation output is sanitized so UI clients never receive negative or malformed exposure values. Absence of a correlation context preserves previous behavior. Reduce-only requests may proceed with a warning when correlation metadata is malformed because exposure reduction must not be blocked by unrelated opening-risk configuration.
 
 ## Emergency exposure reduction
 
