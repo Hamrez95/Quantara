@@ -152,7 +152,8 @@ public static class ResearchEvidenceEnvelopeFactory
         IReadOnlyList<Symbol>? symbols,
         ResearchEvidenceKind kind)
     {
-        if (symbols is null)
+        if (symbols is null
+            || symbols.Any(static symbol => ReferenceEquals(symbol, null)))
         {
             return false;
         }
