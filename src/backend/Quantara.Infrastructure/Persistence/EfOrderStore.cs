@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Quantara.Domain.Orders;
 using Quantara.Domain.Persistence;
@@ -78,11 +80,7 @@ public sealed class EfOrderStore : IOrderStore
     {
         ValidateIdentifier(orderId, nameof(orderId));
 
-        var order = await _dbContext.Orders
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                candidate => candidate.OrderId == orderId,
-                cancellationToken);
+        var order = await FindOrderAsync(orderId, cancellationToken);
         if (order is null)
         {
             return null;
@@ -99,7 +97,7 @@ public sealed class EfOrderStore : IOrderStore
             order.OrderId,
             order.State,
             order.Version,
-            new HashSet<string>(appliedEventIds, StringComparer.Ordinal),
+            appliedEventIds.ToFrozenSet(StringComparer.Ordinal),
             order.CreatedAt,
             order.UpdatedAt);
     }
@@ -114,6 +112,9 @@ public sealed class EfOrderStore : IOrderStore
         ArgumentOutOfRangeException.ThrowIfNegative(expectedVersion);
         ArgumentNullException.ThrowIfNull(orderEvent);
         ValidateIdentifier(orderEvent.EventId, nameof(orderEvent.EventId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            orderEvent.Reason,
+            nameof(orderEvent.Reason));
 
         if (orderEvent.Reason.Length > 1024)
         {
@@ -204,9 +205,11 @@ public sealed class EfOrderStore : IOrderStore
         catch (DbUpdateConcurrencyException)
         {
             _dbContext.ChangeTracker.Clear();
-            var currentState = await GetCurrentStateAsync(orderId, cancellationToken)
-                ?? result.PreviousState;
-            return CreateConcurrencyResult(currentState, expectedVersion, null);
+            var currentOrder = await FindOrderAsync(orderId, cancellationToken);
+            return CreateConcurrencyResult(
+                currentOrder?.State ?? result.PreviousState,
+                expectedVersion,
+                currentOrder?.Version);
         }
         catch (DbUpdateException)
         {
@@ -221,6 +224,17 @@ public sealed class EfOrderStore : IOrderStore
         }
     }
 
+    private async Task<PersistedOrderEntity?> FindOrderAsync(
+        string orderId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext.Orders
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                order => order.OrderId == orderId,
+                cancellationToken);
+    }
+
     private async Task<PersistedOrderEventEntity?> FindEventAsync(
         string eventId,
         CancellationToken cancellationToken)
@@ -230,17 +244,6 @@ public sealed class EfOrderStore : IOrderStore
             .SingleOrDefaultAsync(
                 orderEvent => orderEvent.EventId == eventId,
                 cancellationToken);
-    }
-
-    private async Task<OrderState?> GetCurrentStateAsync(
-        string orderId,
-        CancellationToken cancellationToken)
-    {
-        return await _dbContext.Orders
-            .AsNoTracking()
-            .Where(order => order.OrderId == orderId)
-            .Select(order => (OrderState?)order.State)
-            .SingleOrDefaultAsync(cancellationToken);
     }
 
     private static OrderEventApplicationResult CreateDuplicateResult(
@@ -258,14 +261,14 @@ public sealed class EfOrderStore : IOrderStore
         long expectedVersion,
         long? actualVersion)
     {
-        var actualVersionText = actualVersion?.ToString(
-            System.Globalization.CultureInfo.InvariantCulture)
+        var expectedVersionText = expectedVersion.ToString(CultureInfo.InvariantCulture);
+        var actualVersionText = actualVersion?.ToString(CultureInfo.InvariantCulture)
             ?? "unknown";
         return new OrderEventApplicationResult(
             OrderEventApplicationCode.ConcurrencyConflict,
             currentState,
             currentState,
-            $"Expected order version {expectedVersion}, but the current version is {actualVersionText}.");
+            $"Expected order version {expectedVersionText}, but the current version is {actualVersionText}.");
     }
 
     private static AuditEventEntity CreateAuditEvent<T>(
