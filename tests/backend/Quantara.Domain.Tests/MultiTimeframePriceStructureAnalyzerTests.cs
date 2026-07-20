@@ -43,7 +43,21 @@ public sealed class MultiTimeframePriceStructureAnalyzerTests
         Assert.NotNull(first.Analysis);
         Assert.NotNull(second.Analysis);
         Assert.Equal(first.Analysis.FingerprintSha256, second.Analysis.FingerprintSha256);
-        Assert.Equal(first.Analysis.Zones, second.Analysis.Zones);
+        Assert.Equal(first.Analysis.Zones.Count, second.Analysis.Zones.Count);
+        for (var index = 0; index < first.Analysis.Zones.Count; index++)
+        {
+            var expected = first.Analysis.Zones[index];
+            var actual = second.Analysis.Zones[index];
+            Assert.Equal(expected.Lower, actual.Lower);
+            Assert.Equal(expected.Upper, actual.Upper);
+            Assert.Equal(expected.Center, actual.Center);
+            Assert.Equal(expected.Role, actual.Role);
+            Assert.Equal(expected.TimeframeCount, actual.TimeframeCount);
+            Assert.Equal(expected.Timeframes, actual.Timeframes);
+            Assert.Equal(expected.Strength, actual.Strength);
+            Assert.Equal(expected.DistancePercent, actual.DistancePercent);
+            Assert.Equal(expected.Explanation, actual.Explanation);
+        }
     }
 
     [Fact]
