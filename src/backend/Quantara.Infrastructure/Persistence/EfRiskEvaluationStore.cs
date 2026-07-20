@@ -4,6 +4,10 @@ using Quantara.Domain.Risk;
 
 namespace Quantara.Infrastructure.Persistence;
 
+internal sealed record RiskEvaluationEnvelope(
+    string ProposalId,
+    RiskEvaluationResult Result);
+
 public sealed class EfRiskEvaluationStore : IRiskEvaluationStore
 {
     private readonly QuantaraDbContext _dbContext;
@@ -24,6 +28,9 @@ public sealed class EfRiskEvaluationStore : IRiskEvaluationStore
         ValidateIdentifier(evaluationId, nameof(evaluationId));
         ValidateIdentifier(proposalId, nameof(proposalId));
         ArgumentNullException.ThrowIfNull(result);
+        ValidateIdentifier(
+            result.RiskPolicyVersion,
+            nameof(result.RiskPolicyVersion));
 
         var envelope = new RiskEvaluationEnvelope(proposalId, result);
         var payloadJson = PersistenceJson.Serialize(envelope);
@@ -144,8 +151,4 @@ public sealed class EfRiskEvaluationStore : IRiskEvaluationStore
                 parameterName);
         }
     }
-
-    private sealed record RiskEvaluationEnvelope(
-        string ProposalId,
-        RiskEvaluationResult Result);
 }
