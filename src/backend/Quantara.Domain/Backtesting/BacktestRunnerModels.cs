@@ -1,4 +1,4 @@
-using System.Collections.Frozen;
+using System.Collections;
 using Quantara.Domain.Execution;
 using Quantara.Domain.Trading;
 
@@ -11,19 +11,28 @@ public sealed record BacktestTargetDecision(
 public sealed class BacktestStrategyContext
 {
     private readonly IReadOnlyList<Candle> _visibleCandles;
-    private readonly FrozenDictionary<string, string> _parameters;
+    private readonly IReadOnlyDictionary<string, string> _parameters;
 
     internal BacktestStrategyContext(
-        IReadOnlyList<Candle> visibleCandles,
+        IReadOnlyList<Candle> allCandles,
+        int visibleCandleCount,
         PositionSnapshot position,
         decimal equity,
         IReadOnlyDictionary<string, string> parameters,
         IDeterministicRandom random)
     {
-        _visibleCandles = Array.AsReadOnly(visibleCandles.ToArray());
+        ArgumentNullException.ThrowIfNull(allCandles);
+        ArgumentOutOfRangeException.ThrowIfLessThan(visibleCandleCount, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(
+            visibleCandleCount,
+            allCandles.Count);
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(random);
+
+        _visibleCandles = new CandlePrefixView(allCandles, visibleCandleCount);
         Position = position;
         Equity = equity;
-        _parameters = parameters.ToFrozenDictionary(StringComparer.Ordinal);
+        _parameters = parameters;
         Random = random;
     }
 
@@ -38,6 +47,36 @@ public sealed class BacktestStrategyContext
     public IReadOnlyDictionary<string, string> Parameters => _parameters;
 
     public IDeterministicRandom Random { get; }
+
+    private sealed class CandlePrefixView(
+        IReadOnlyList<Candle> candles,
+        int count) : IReadOnlyList<Candle>
+    {
+        public int Count { get; } = count;
+
+        public Candle this[int index]
+        {
+            get
+            {
+                ArgumentOutOfRangeException.ThrowIfNegative(index);
+                ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Count);
+                return candles[index];
+            }
+        }
+
+        public IEnumerator<Candle> GetEnumerator()
+        {
+            for (var index = 0; index < Count; index++)
+            {
+                yield return candles[index];
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+    }
 }
 
 public interface IBacktestStrategy
@@ -115,7 +154,6 @@ public enum BacktestRunCode
     StrategyIdentityMismatch,
     InvalidExecutionRules,
     InsufficientEvaluationCandles,
-    InvalidStrategyDecision,
     ExecutionRejected,
     Insolvent
 }
@@ -127,8 +165,7 @@ public enum BacktestDecisionCode
     NoChange,
     RejectedInvalidReason,
     RejectedTargetLimit,
-    RejectedLeverage,
-    NormalizedToFlat
+    RejectedLeverage
 }
 
 public sealed record BacktestDecisionRecord(
