@@ -49,7 +49,7 @@ public static class BacktestPerformanceReportBuilder
             rejections.Add(BacktestReportCode.BenchmarkTimestampMismatch);
         }
 
-        if (!IsValidFinalState(run, rules))
+        if (!IsValidFinalState(run, rules, costModel))
         {
             rejections.Add(BacktestReportCode.InvalidFinalState);
         }
@@ -136,7 +136,7 @@ public static class BacktestPerformanceReportBuilder
             && specification.PeriodsPerYear > 0d
             && double.IsFinite(specification.AnnualRiskFreeRate)
             && specification.AnnualRiskFreeRate > -1d
-            && specification.BootstrapSamples is >= 100 and <= 1_000_000
+            && specification.BootstrapSamples is >= 100 and <= 100_000
             && double.IsFinite(specification.BootstrapConfidenceLevel)
             && specification.BootstrapConfidenceLevel > 0.5d
             && specification.BootstrapConfidenceLevel < 1d
@@ -264,7 +264,8 @@ public static class BacktestPerformanceReportBuilder
 
     private static bool IsValidFinalState(
         BacktestRunResult run,
-        BacktestExecutionRules rules)
+        BacktestExecutionRules rules,
+        BacktestCostModel costModel)
     {
         if (run.FinalPosition is null
             || !IsValidPosition(run.FinalPosition, rules)
@@ -285,23 +286,68 @@ public static class BacktestPerformanceReportBuilder
                 && decision.EarliestExecutionAt >= decision.DecidedAt
                 && !string.IsNullOrWhiteSpace(decision.Reason))
             && run.Fills.All(fill =>
-                Enum.IsDefined(typeof(Trading.OrderSide), fill.Side)
-                && fill.ExecutionPrice > 0m
-                && fill.ReferencePrice > 0m
-                && fill.Quantity > 0m
-                && fill.Fee >= 0m
-                && fill.SpreadBps >= 0m
-                && fill.SlippageBps >= 0m
-                && fill.VolumeParticipation is >= 0m and <= 1m
-                && !string.IsNullOrWhiteSpace(fill.FillId)
+                IsValidFill(fill, rules, costModel)
                 && fillIds.Add(fill.FillId))
             && run.Funding.All(point =>
-                point.ReferencePrice > 0m
-                && !string.IsNullOrWhiteSpace(point.SettlementId)
+                IsValidFunding(point, rules)
                 && settlementIds.Add(point.SettlementId))
             && run.Warnings.All(warning =>
                 !string.IsNullOrWhiteSpace(warning.Code)
                 && !string.IsNullOrWhiteSpace(warning.Message));
+    }
+
+    private static bool IsValidFill(
+        BacktestFillRecord fill,
+        BacktestExecutionRules rules,
+        BacktestCostModel costModel)
+    {
+        if (!Enum.IsDefined(typeof(Trading.OrderSide), fill.Side)
+            || fill.ExecutionPrice <= 0m
+            || fill.ReferencePrice <= 0m
+            || fill.Quantity <= 0m
+            || fill.Fee < 0m
+            || fill.SpreadBps != costModel.HalfSpreadBps
+            || fill.SlippageBps < costModel.BaseSlippageBps
+            || fill.SlippageBps
+                > costModel.BaseSlippageBps
+                    + costModel.ImpactBpsAtMaximumParticipation
+            || fill.VolumeParticipation < 0m
+            || fill.VolumeParticipation > costModel.MaximumVolumeParticipation
+            || string.IsNullOrWhiteSpace(fill.FillId))
+        {
+            return false;
+        }
+
+        var direction = fill.Side == Trading.OrderSide.Buy ? 1m : -1m;
+        var expectedExecutionPrice = fill.ReferencePrice
+            * (1m + (direction
+                * (fill.SpreadBps + fill.SlippageBps)
+                / 10_000m));
+        var expectedFee = fill.ExecutionPrice
+            * fill.Quantity
+            * rules.ContractMultiplier
+            * costModel.TakerFeeBps
+            / 10_000m;
+
+        return fill.ExecutionPrice == expectedExecutionPrice
+            && fill.Fee == expectedFee;
+    }
+
+    private static bool IsValidFunding(
+        BacktestFundingRecord point,
+        BacktestExecutionRules rules)
+    {
+        if (point.ReferencePrice <= 0m
+            || string.IsNullOrWhiteSpace(point.SettlementId))
+        {
+            return false;
+        }
+
+        var expectedNetAmount = -point.SignedQuantity
+            * point.ReferencePrice
+            * rules.ContractMultiplier
+            * point.Rate;
+        return point.NetAmount == expectedNetAmount;
     }
 
     private static bool IsValidPosition(
