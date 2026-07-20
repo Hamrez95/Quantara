@@ -24,7 +24,7 @@ public sealed record ResearchSourceRegistryBuildResult(
 
 public sealed class ResearchSourceRegistrySnapshot
 {
-    private readonly IReadOnlyDictionary<string, RegisteredResearchSource> _sources;
+    private readonly Dictionary<string, RegisteredResearchSource> _sources;
 
     internal ResearchSourceRegistrySnapshot(
         string registryVersion,
