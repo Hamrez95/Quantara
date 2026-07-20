@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 import unittest
+from datetime import date
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -35,6 +36,17 @@ class SourceRegistryValidatorTests(unittest.TestCase):
 
     def test_valid_registry_passes(self) -> None:
         self.assertEqual([], VALIDATOR.validate_registry(self.registry))
+
+    def test_overdue_registry_is_rejected(self) -> None:
+        errors = VALIDATOR.validate_registry(
+            self.registry,
+            today=date(2026, 8, 21),
+        )
+
+        self.assertTrue(
+            any("Registry review is overdue" in error for error in errors),
+            msg=f"Expected overdue-review error, got: {errors}",
+        )
 
     def test_schema_contract_matches_validator(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
