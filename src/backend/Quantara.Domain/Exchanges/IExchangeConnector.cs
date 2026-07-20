@@ -6,7 +6,7 @@ public interface IExchangeConnector
 {
     Task<IReadOnlyList<Instrument>> GetInstrumentsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<Balance>> GetBalancesAsync(CancellationToken cancellationToken);
-    Task<IReadOnlyList<Candle>> GetCandlesAsync(Symbol symbol, TimeSpan timeframe, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Candle>> GetCandlesAsync(Symbol symbol, TimeSpan timeframe, DateTimeOffset startInclusive, DateTimeOffset endExclusive, CancellationToken cancellationToken);
     Task<Ticker> GetTickerAsync(Symbol symbol, CancellationToken cancellationToken);
     Task<OrderBook> GetOrderBookAsync(Symbol symbol, CancellationToken cancellationToken);
     Task<FundingRate> GetFundingRateAsync(Symbol symbol, CancellationToken cancellationToken);

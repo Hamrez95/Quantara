@@ -1,6 +1,9 @@
 namespace Quantara.Domain.Trading;
 
+#pragma warning disable CA1720 // Long and Short are canonical derivatives position directions, not primitive type references.
 public enum TradeDirection { Long, Short }
+#pragma warning restore CA1720
+
 public enum DecisionStatus { Rejected, AnalysisOnly, Proposed, Approved, Executed }
 public enum OrderSide { Buy, Sell }
 public enum OrderType { Market, Limit }
