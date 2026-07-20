@@ -6,6 +6,7 @@ namespace Quantara.Domain.Tests;
 public sealed class PositionAccountingAggregateTests
 {
     private static readonly Symbol BtcUsdt = new("BTCUSDT");
+    private static readonly string[] ExpectedRehydrationFillOrder = ["open", "reverse"];
     private static readonly DateTimeOffset Timestamp = new(
         2026,
         7,
@@ -190,7 +191,7 @@ public sealed class PositionAccountingAggregateTests
         Assert.Equal(ExecutionApplicationCode.Applied, source.ApplyFunding(settlement).Code);
 
         Assert.Equal(
-            new[] { "open", "reverse" },
+            ExpectedRehydrationFillOrder,
             source.ProcessedFills.Select(fill => fill.FillId));
         var rehydrated = PositionAccountingAggregate.Rehydrate(
             source.Snapshot,
