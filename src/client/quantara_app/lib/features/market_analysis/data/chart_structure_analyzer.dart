@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import '../domain/market_chart_models.dart';
 
 abstract final class ChartStructureAnalyzer {
-  static _ChartStructure analyze(List<ChartCandle> candles) {
+  static ChartStructureSnapshot analyze(List<ChartCandle> candles) {
     if (candles.length < 24 || candles.any((item) => !item.isValid)) {
       throw ArgumentError('A valid ordered candle window is required.');
     }
@@ -141,7 +141,7 @@ abstract final class ChartStructureAnalyzer {
         : normalized <= -0.5
         ? ChartDirection.bearish
         : ChartDirection.sideways;
-    return _ChartStructure(
+    return ChartStructureSnapshot(
       zones: zones.take(8).toList(growable: false),
       direction: direction,
       directionStrength: math.min(1, normalized.abs() / 2),
@@ -277,18 +277,4 @@ final class _PivotCluster {
     highCount += item.isHigh ? 1 : 0;
     lowCount += item.isHigh ? 0 : 1;
   }
-}
-
-final class _ChartStructure {
-  const _ChartStructure({
-    required this.zones,
-    required this.direction,
-    required this.directionStrength,
-    required this.volatilityPercent,
-  });
-
-  final List<ChartPriceZone> zones;
-  final ChartDirection direction;
-  final double directionStrength;
-  final double volatilityPercent;
 }
