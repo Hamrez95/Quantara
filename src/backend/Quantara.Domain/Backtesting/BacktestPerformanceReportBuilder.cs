@@ -202,29 +202,64 @@ public static class BacktestPerformanceReportBuilder
         BacktestRunResult run,
         BacktestExecutionRules rules)
     {
-        if (run.EquityCurve.Count < 2
-            || rules.StartingEquity <= 0m
-            || run.EquityCurve.Any(point =>
-                point.Timestamp <= manifest.EvaluationWindow.StartInclusive
-                || point.Timestamp > manifest.EvaluationWindow.EndExclusive
-                || point.Equity <= 0m
-                || point.MarkPrice <= 0m
-                || point.GrossExposure < 0m
-                || point.GrossLeverage < 0m))
+        if (rules.StartingEquity <= 0m
+            || manifest.Dataset.Timeframe <= TimeSpan.Zero)
         {
             return false;
         }
 
-        for (var index = 1; index < run.EquityCurve.Count; index++)
+        var startUtc = manifest.EvaluationWindow.StartInclusive.ToUniversalTime();
+        var endUtc = manifest.EvaluationWindow.EndExclusive.ToUniversalTime();
+        var timeframeTicks = manifest.Dataset.Timeframe.Ticks;
+        long windowTicks;
+        try
         {
-            if (run.EquityCurve[index].Timestamp
-                <= run.EquityCurve[index - 1].Timestamp)
-            {
-                return false;
-            }
+            windowTicks = checked(endUtc.Ticks - startUtc.Ticks);
+        }
+        catch (OverflowException)
+        {
+            return false;
         }
 
-        return run.EquityCurve[^1].Equity == run.FinalEquity;
+        if (windowTicks <= 0
+            || windowTicks % timeframeTicks != 0)
+        {
+            return false;
+        }
+
+        var expectedCount = windowTicks / timeframeTicks;
+        if (expectedCount < 2
+            || expectedCount > int.MaxValue
+            || run.EquityCurve.Count != expectedCount)
+        {
+            return false;
+        }
+
+        try
+        {
+            for (var index = 0; index < run.EquityCurve.Count; index++)
+            {
+                var expectedTimestampTicks = checked(
+                    startUtc.Ticks
+                    + checked(timeframeTicks * (index + 1L)));
+                var point = run.EquityCurve[index];
+                if (point.Timestamp.ToUniversalTime().Ticks != expectedTimestampTicks
+                    || point.Equity <= 0m
+                    || point.MarkPrice <= 0m
+                    || point.GrossExposure < 0m
+                    || point.GrossLeverage < 0m)
+                {
+                    return false;
+                }
+            }
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+
+        return run.EquityCurve[^1].Timestamp.ToUniversalTime() == endUtc
+            && run.EquityCurve[^1].Equity == run.FinalEquity;
     }
 
     private static bool IsValidBenchmark(BenchmarkEquitySeries benchmark)
@@ -318,6 +353,9 @@ public static class BacktestPerformanceReportBuilder
             return false;
         }
 
+        var expectedSlippageBps = BacktestCostModelMath.CalculateSlippageBps(
+            fill.VolumeParticipation,
+            costModel);
         var direction = fill.Side == Trading.OrderSide.Buy ? 1m : -1m;
         var expectedExecutionPrice = fill.ReferencePrice
             * (1m + (direction
@@ -329,7 +367,8 @@ public static class BacktestPerformanceReportBuilder
             * costModel.TakerFeeBps
             / 10_000m;
 
-        return fill.ExecutionPrice == expectedExecutionPrice
+        return fill.SlippageBps == expectedSlippageBps
+            && fill.ExecutionPrice == expectedExecutionPrice
             && fill.Fee == expectedFee;
     }
 
