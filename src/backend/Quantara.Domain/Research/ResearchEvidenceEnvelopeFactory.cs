@@ -38,9 +38,12 @@ public static class ResearchEvidenceEnvelopeFactory
 
         var retrievedAtUtc = retrievedAt.ToUniversalTime();
         var publishedAtUtc = publishedAt?.ToUniversalTime();
+        var eventAtUtc = eventAt?.ToUniversalTime();
         var expiresAtUtc = expiresAt?.ToUniversalTime();
-        if ((publishedAtUtc.HasValue && publishedAtUtc.Value > retrievedAtUtc)
-            || (expiresAtUtc.HasValue && expiresAtUtc.Value <= retrievedAtUtc))
+        if (retrievedAtUtc == default
+            || (publishedAtUtc.HasValue && publishedAtUtc.Value > retrievedAtUtc)
+            || (expiresAtUtc.HasValue && expiresAtUtc.Value <= retrievedAtUtc)
+            || !IsValidEventTimestamp(kind, eventAtUtc, retrievedAtUtc))
         {
             rejections.Add(ResearchEvidenceCode.InvalidTimestamp);
         }
@@ -113,7 +116,7 @@ public static class ResearchEvidenceEnvelopeFactory
                 providerItemId,
                 retrievedAtUtc,
                 publishedAtUtc,
-                eventAt?.ToUniversalTime(),
+                eventAtUtc,
                 rawSha256,
                 normalizedSha256,
                 schemaVersion,
@@ -122,6 +125,19 @@ public static class ResearchEvidenceEnvelopeFactory
                 expiresAtUtc,
                 extractionModelVersion,
                 promptVersion));
+    }
+
+    private static bool IsValidEventTimestamp(
+        ResearchEvidenceKind kind,
+        DateTimeOffset? eventAt,
+        DateTimeOffset retrievedAt)
+    {
+        if (kind == ResearchEvidenceKind.ScheduledEvent)
+        {
+            return eventAt.HasValue && eventAt.Value > retrievedAt;
+        }
+
+        return !eventAt.HasValue || eventAt.Value <= retrievedAt;
     }
 
     private static bool IsValidSymbols(
@@ -134,6 +150,7 @@ public static class ResearchEvidenceEnvelopeFactory
         }
 
         var requiresSymbol = kind is ResearchEvidenceKind.OfficialFact
+            or ResearchEvidenceKind.ScheduledEvent
             or ResearchEvidenceKind.FeatureObservation
             or ResearchEvidenceKind.CandidateHypothesis;
         if (requiresSymbol && symbols.Count == 0)
@@ -164,7 +181,8 @@ public static class ResearchEvidenceEnvelopeFactory
         return decisionRole switch
         {
             ResearchDecisionRole.DirectFact =>
-                kind == ResearchEvidenceKind.OfficialFact,
+                kind is ResearchEvidenceKind.OfficialFact
+                    or ResearchEvidenceKind.ScheduledEvent,
             ResearchDecisionRole.FeatureInput =>
                 kind == ResearchEvidenceKind.FeatureObservation,
             ResearchDecisionRole.ValidationMethod =>
