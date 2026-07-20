@@ -29,6 +29,11 @@ public sealed class DeterministicBacktestRunnerTests
             Assert.DoesNotContain(
                 strategy.VisibleSnapshots[observed],
                 candle => candle.OpenTime > observed));
+        Assert.NotNull(strategy.RetainedFirstContext);
+        Assert.Single(strategy.RetainedFirstContext.VisibleCandles);
+        Assert.Equal(
+            ResearchTestData.Start,
+            strategy.RetainedFirstContext.CurrentCandle.OpenTime);
         var fill = Assert.Single(result.Fills);
         Assert.Equal(ResearchTestData.Start + ResearchTestData.Hour, fill.OccurredAt);
         Assert.Equal(101m, fill.ReferencePrice);
@@ -87,7 +92,7 @@ public sealed class DeterministicBacktestRunnerTests
             Assert.Equal(8m + fixture.CostModel.BaseSlippageBps, fill.SlippageBps);
         });
         Assert.Equal(1.5m, result.FinalPosition?.SignedQuantity);
-        Assert.Equal(1.5m, result.PendingTargetSignedQuantity);
+        Assert.Equal(1.5m, result.EffectiveTargetSignedQuantity);
         Assert.DoesNotContain(
             result.Warnings,
             warning => string.Equals(
@@ -250,7 +255,7 @@ public sealed class DeterministicBacktestRunnerTests
     }
 
     [Fact]
-    public void LeavesLateSignalPendingAndReportsWarning()
+    public void LeavesLateSignalAsEffectiveTargetAndReportsWarning()
     {
         var fixture = CreateFixture(latencyBars: 2);
         var strategy = new SequenceTargetStrategy([0m, 0m, 0m, 0m, 0m, 1m]);
@@ -259,7 +264,7 @@ public sealed class DeterministicBacktestRunnerTests
 
         Assert.True(result.IsCompleted);
         Assert.Empty(result.Fills);
-        Assert.Equal(1m, result.PendingTargetSignedQuantity);
+        Assert.Equal(1m, result.EffectiveTargetSignedQuantity);
         Assert.Contains(
             result.Warnings,
             warning => warning.Code == "pending-target-at-end");
@@ -348,12 +353,15 @@ public sealed class DeterministicBacktestRunnerTests
 
         public Dictionary<DateTimeOffset, Candle[]> VisibleSnapshots { get; } = [];
 
+        public BacktestStrategyContext? RetainedFirstContext { get; private set; }
+
         public string Name => "moving-average-cross";
 
         public string Version => "1.0.0";
 
         public BacktestTargetDecision Evaluate(BacktestStrategyContext context)
         {
+            RetainedFirstContext ??= context;
             VisibleCounts.Add(context.VisibleCandles.Count);
             ObservedCurrentOpenTimes.Add(context.CurrentCandle.OpenTime);
             VisibleSnapshots.Add(
