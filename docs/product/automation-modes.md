@@ -47,6 +47,8 @@ The app asks plain-language questions, converts the answers to an explicit sessi
 
 The mobile stabilization slice implements the Observe experience and the visual boundary for dynamic market data. Assist and Paper Auto remain disabled until their service contracts and persistence gates are complete.
 
+Every operating mode must remain readable on a 360×800 phone at 1.3 text scale; this is a permanent regression gate, not a one-time visual check.
+
 ## Rollout order
 
 1. Observe
