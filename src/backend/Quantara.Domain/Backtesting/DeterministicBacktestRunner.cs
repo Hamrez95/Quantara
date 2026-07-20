@@ -424,11 +424,9 @@ public static class DeterministicBacktestRunner
         var volumeParticipation = candle.Volume > 0m
             ? fillQuantity / candle.Volume
             : 0m;
-        var liquidityUsage = maximumRawFill > 0m
-            ? fillQuantity / maximumRawFill
-            : 0m;
-        var slippageBps = costModel.BaseSlippageBps
-            + (costModel.ImpactBpsAtMaximumParticipation * liquidityUsage);
+        var slippageBps = BacktestCostModelMath.CalculateSlippageBps(
+            volumeParticipation,
+            costModel);
         var adverseBps = costModel.HalfSpreadBps + slippageBps;
         var direction = side == OrderSide.Buy ? 1m : -1m;
         var executionPrice = candle.Open
