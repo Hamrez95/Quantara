@@ -1,0 +1,83 @@
+name: Flutter client CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - 'feat/**'
+      - 'fix/**'
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/flutter-ci.yml'
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/flutter-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    name: Flutter format, analyze, test, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Display tool versions
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Restore packages
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Run widget tests
+        run: flutter test --reporter expanded
+
+      - name: Build web PWA
+        run: flutter build web --release
+
+      - name: Build Android debug package
+        run: flutter build apk --debug
+
+      - name: Upload web preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-web-preview
+          path: src/client/quantara_app/build/web
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Android debug package
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-android-debug
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
