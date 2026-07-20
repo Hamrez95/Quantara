@@ -27,7 +27,7 @@ internal static class ResearchTestData
                 return new Candle(
                     BtcUsdt,
                     Hour,
-                    Start + TimeSpan.FromTicks(Hour.Ticks * index),
+                    Start + TimeSpan.FromTicks(checked(Hour.Ticks * index)),
                     open,
                     open + 2m,
                     open - 2m,
@@ -47,11 +47,13 @@ internal static class ResearchTestData
     }
 
     public static DatasetProvenance CreateProvenance(
-        string sourceIdentifier = "fixture://btc-usdt/1h/v1")
+        string sourceIdentifier = "fixture://btc-usdt/1h/v1",
+        string provider = "fixture-provider",
+        string market = "linear-perpetual")
     {
         return new DatasetProvenance(
-            "fixture-provider",
-            "linear-perpetual",
+            provider,
+            market,
             sourceIdentifier,
             "ohlcv-funding-v1",
             new DateTimeOffset(2026, 7, 20, 8, 0, 0, TimeSpan.Zero));
