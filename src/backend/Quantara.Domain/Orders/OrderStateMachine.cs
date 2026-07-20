@@ -22,6 +22,7 @@ public enum OrderEventApplicationCode
 {
     Applied,
     DuplicateIgnored,
+    ConflictingDuplicate,
     InvalidTransition,
     ConcurrencyConflict,
     OrderNotFound
@@ -68,8 +69,6 @@ public sealed class OrderAggregate
     public OrderState State { get; private set; }
 
     public bool IsTerminal => OrderStateMachine.IsTerminal(State);
-
-    public IReadOnlySet<string> ProcessedEventIds => _processedEventIds;
 
     public static OrderAggregate Rehydrate(
         string orderId,
