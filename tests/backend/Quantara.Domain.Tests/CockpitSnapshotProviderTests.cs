@@ -14,6 +14,9 @@ public sealed class CockpitSnapshotProviderTests
         0,
         TimeSpan.Zero);
 
+    private static readonly JsonSerializerOptions WebJsonOptions = new(
+        JsonSerializerDefaults.Web);
+
     [Fact]
     public void CreatesVersionedSnapshot()
     {
@@ -59,9 +62,7 @@ public sealed class CockpitSnapshotProviderTests
     public void SerializesCamelCaseJsonContract()
     {
         var snapshot = new DeterministicCockpitSnapshotProvider().Create(Timestamp);
-        var json = JsonSerializer.Serialize(
-            snapshot,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var json = JsonSerializer.Serialize(snapshot, WebJsonOptions);
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
 
