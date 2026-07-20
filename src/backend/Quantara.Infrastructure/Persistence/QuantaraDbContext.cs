@@ -111,10 +111,10 @@ public sealed class QuantaraDbContext(DbContextOptions<QuantaraDbContext> option
             .HasForeignKey(orderEvent => orderEvent.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
         entity.HasIndex(orderEvent => new
-            {
-                orderEvent.OrderId,
-                orderEvent.OccurredAt
-            })
+        {
+            orderEvent.OrderId,
+            orderEvent.OccurredAt
+        })
             .HasDatabaseName("ix_order_events_order_occurred");
     }
 
@@ -175,11 +175,11 @@ public sealed class QuantaraDbContext(DbContextOptions<QuantaraDbContext> option
             .IsUnique()
             .HasDatabaseName("ux_audit_events_event_id");
         entity.HasIndex(auditEvent => new
-            {
-                auditEvent.AggregateType,
-                auditEvent.AggregateId,
-                auditEvent.Sequence
-            })
+        {
+            auditEvent.AggregateType,
+            auditEvent.AggregateId,
+            auditEvent.Sequence
+        })
             .HasDatabaseName("ix_audit_events_aggregate_sequence");
     }
 
