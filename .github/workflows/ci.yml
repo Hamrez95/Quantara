@@ -43,13 +43,7 @@ jobs:
         run: dotnet --info
 
       - name: Restore
-        shell: bash
-        run: |
-          set +e
-          dotnet restore Quantara.sln --verbosity minimal > restore.log 2>&1
-          status=$?
-          cat restore.log
-          exit $status
+        run: dotnet restore Quantara.sln
 
       - name: Verify whitespace formatting
         run: dotnet format whitespace Quantara.sln --verify-no-changes --no-restore
@@ -77,7 +71,6 @@ jobs:
         with:
           name: dotnet-diagnostics
           path: |
-            restore.log
             build.log
             TestResults/**/*.trx
           if-no-files-found: ignore
