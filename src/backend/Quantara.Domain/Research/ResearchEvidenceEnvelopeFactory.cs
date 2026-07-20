@@ -43,7 +43,11 @@ public static class ResearchEvidenceEnvelopeFactory
         if (retrievedAtUtc == default
             || (publishedAtUtc.HasValue && publishedAtUtc.Value > retrievedAtUtc)
             || (expiresAtUtc.HasValue && expiresAtUtc.Value <= retrievedAtUtc)
-            || !IsValidEventTimestamp(kind, eventAtUtc, retrievedAtUtc))
+            || !IsValidEventTimestamp(
+                kind,
+                eventAtUtc,
+                expiresAtUtc,
+                retrievedAtUtc))
         {
             rejections.Add(ResearchEvidenceCode.InvalidTimestamp);
         }
@@ -130,11 +134,15 @@ public static class ResearchEvidenceEnvelopeFactory
     private static bool IsValidEventTimestamp(
         ResearchEvidenceKind kind,
         DateTimeOffset? eventAt,
+        DateTimeOffset? expiresAt,
         DateTimeOffset retrievedAt)
     {
         if (kind == ResearchEvidenceKind.ScheduledEvent)
         {
-            return eventAt.HasValue && eventAt.Value > retrievedAt;
+            return eventAt.HasValue
+                && eventAt.Value > retrievedAt
+                && expiresAt.HasValue
+                && expiresAt.Value >= eventAt.Value;
         }
 
         return !eventAt.HasValue || eventAt.Value <= retrievedAt;
