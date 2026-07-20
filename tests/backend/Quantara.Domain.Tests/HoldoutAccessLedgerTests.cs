@@ -88,7 +88,7 @@ public sealed class HoldoutAccessLedgerTests
     }
 
     [Fact]
-    public void AllowsDifferentDatasetContentForSameResearchLineage()
+    public void ChangedContentCannotResetSameMarketCohortHoldout()
     {
         var firstDataset = ResearchTestData.CreateDataset(datasetId: "dataset-a");
         var changedCandles = ResearchTestData.CreateCandles();
@@ -110,6 +110,40 @@ public sealed class HoldoutAccessLedgerTests
             ResearchTestData.CreateSplit(secondDataset),
             ExperimentStage.Holdout,
             experimentId: "second-content");
+        var ledger = new HoldoutAccessLedger();
+        Assert.Equal(HoldoutAccessCode.Authorized, ledger.Authorize(first, first.CreatedAt).Code);
+
+        var blocked = ledger.Authorize(second, second.CreatedAt);
+
+        Assert.Equal(HoldoutAccessCode.HoldoutAlreadyConsumed, blocked.Code);
+        Assert.Single(ledger.Receipts);
+    }
+
+    [Fact]
+    public void AllowsDistinctContentAndMarketCohortForSameResearchLineage()
+    {
+        var firstDataset = ResearchTestData.CreateDataset(datasetId: "dataset-a");
+        var changedCandles = ResearchTestData.CreateCandles();
+        changedCandles[0] = changedCandles[0] with
+        {
+            Close = changedCandles[0].Close + 1m
+        };
+        var secondDataset = ResearchTestData.CreateDataset(
+            candles: changedCandles,
+            provenance: ResearchTestData.CreateProvenance(
+                "fixture://independent-source",
+                provider: "independent-provider"),
+            datasetId: "dataset-b");
+        var first = ResearchTestData.CreateExperiment(
+            firstDataset,
+            ResearchTestData.CreateSplit(firstDataset),
+            ExperimentStage.Holdout,
+            experimentId: "first-cohort");
+        var second = ResearchTestData.CreateExperiment(
+            secondDataset,
+            ResearchTestData.CreateSplit(secondDataset),
+            ExperimentStage.Holdout,
+            experimentId: "second-cohort");
         var ledger = new HoldoutAccessLedger();
 
         var firstResult = ledger.Authorize(first, first.CreatedAt);
