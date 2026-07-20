@@ -23,8 +23,9 @@ class _MarketsViewState extends State<_MarketsView> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
     if (widget.quotes.isEmpty) {
-      return const SectionCard(child: Text('بازاری برای نمایش وجود ندارد.'));
+      return SectionCard(child: Text('${strings.markets} برای نمایش وجود ندارد.'));
     }
 
     final selected = widget.quotes[_selectedIndex];
@@ -37,6 +38,7 @@ class _MarketsViewState extends State<_MarketsView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionCard(
+          semanticLabel: strings.markets,
           padding: const EdgeInsets.all(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
