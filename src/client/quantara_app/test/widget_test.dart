@@ -87,7 +87,10 @@ void main() {
     await tester.pump();
     expect(find.text('BTCUSDT'), findsWidgets);
 
-    await tester.tap(find.text('ETHUSDT').last);
+    final ethereum = find.text('ETHUSDT').last;
+    await tester.ensureVisible(ethereum);
+    await tester.pumpAndSettle();
+    await tester.tap(ethereum);
     await tester.pump();
     expect(find.text('ETHUSDT'), findsWidgets);
     expect(tester.takeException(), isNull);
