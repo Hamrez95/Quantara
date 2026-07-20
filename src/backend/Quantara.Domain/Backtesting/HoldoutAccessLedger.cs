@@ -179,7 +179,6 @@ public sealed class HoldoutAccessLedger
         return CanonicalResearchHash.Compute(builder =>
         {
             CanonicalResearchHash.Append(builder, "quantara-dataset-cohort-v1");
-            CanonicalResearchHash.Append(builder, dataset.Provenance.Provider);
             CanonicalResearchHash.Append(builder, dataset.Provenance.Market);
             CanonicalResearchHash.Append(builder, dataset.Symbol.Value);
             CanonicalResearchHash.Append(builder, dataset.Timeframe);
