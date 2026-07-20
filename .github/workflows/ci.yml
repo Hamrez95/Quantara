@@ -46,7 +46,13 @@ jobs:
         run: dotnet restore Quantara.sln
 
       - name: Verify whitespace formatting
-        run: dotnet format whitespace Quantara.sln --verify-no-changes --no-restore
+        shell: bash
+        run: |
+          set +e
+          mkdir -p TestResults
+          dotnet format whitespace Quantara.sln --no-restore
+          git diff -- . | tee TestResults/format.diff
+          test ! -s TestResults/format.diff
 
       - name: Build
         shell: bash
@@ -72,7 +78,7 @@ jobs:
           name: dotnet-diagnostics
           path: |
             build.log
-            TestResults/**/*.trx
+            TestResults/**/*
           if-no-files-found: ignore
           retention-days: 14
 
