@@ -184,16 +184,11 @@ class _DesktopNavigation extends StatelessWidget {
           label: Text(strings.paperAccount),
         ),
       ],
-      trailing: Expanded(
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 18),
-            child: Tooltip(
-              message: strings.lockedRealMoney,
-              child: Icon(Icons.lock_outline_rounded, color: scheme.error),
-            ),
-          ),
+      trailing: Padding(
+        padding: const EdgeInsets.only(top: 18),
+        child: Tooltip(
+          message: strings.lockedRealMoney,
+          child: Icon(Icons.lock_outline_rounded, color: scheme.error),
         ),
       ),
     );
@@ -335,7 +330,7 @@ class _LoadedView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _DemoBanner(snapshot: snapshot),
+                    const _DemoBanner(),
                     const SizedBox(height: 18),
                     _selectedContent(context),
                   ],
@@ -446,9 +441,7 @@ class _TopBar extends StatelessWidget {
 }
 
 class _DemoBanner extends StatelessWidget {
-  const _DemoBanner({required this.snapshot});
-
-  final CockpitSnapshot snapshot;
+  const _DemoBanner();
 
   @override
   Widget build(BuildContext context) {
@@ -915,7 +908,7 @@ class _MarketsSection extends StatelessWidget {
                 >= 720 => 2,
                 _ => 1,
               };
-              final ratio = crossAxisCount == 1 ? 2.45 : 1.45;
+              final ratio = crossAxisCount == 1 ? 1.75 : 1.45;
 
               return GridView.builder(
                 shrinkWrap: true,
