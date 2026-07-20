@@ -2,6 +2,45 @@ using Quantara.Domain.Trading;
 
 namespace Quantara.Domain.Research;
 
+public enum ResearchSourceClass
+{
+    OfficialEventData,
+    LiveMarketData,
+    ResearchEvidence,
+    EducationalHypothesis,
+    CompliancePolicy
+}
+
+public enum ResearchAuthorityTier
+{
+    OfficialPrimary,
+    ProfessionalStandard,
+    PeerReviewedOrScholarly,
+    PublisherReference,
+    VendorPrimary,
+    CreatorHypothesis,
+    ComplianceAuthority
+}
+
+public enum ResearchAccessClass
+{
+    PublicApiWithTerms,
+    PublicWebReference,
+    CommunityNoncommercial,
+    CopyrightedReference,
+    RestrictedPaid,
+    UserSuppliedLicensed
+}
+
+public enum ResearchIngestionMode
+{
+    Api,
+    YoutubeApiMetadata,
+    ManualMetadata,
+    CitationOnly,
+    NoIngestion
+}
+
 public enum ResearchDecisionRole
 {
     DirectFact,
@@ -51,17 +90,33 @@ public enum ResearchEvidenceCode
 
 public sealed class RegisteredResearchSource
 {
+    private readonly IReadOnlyList<Uri> _termsUris;
+
     internal RegisteredResearchSource(
         string sourceId,
         Uri canonicalUri,
+        IReadOnlyList<Uri> termsUris,
+        ResearchSourceClass sourceClass,
+        ResearchAuthorityTier authorityTier,
+        ResearchAccessClass accessClass,
+        ResearchIngestionMode ingestionMode,
         ResearchDecisionRole decisionRole,
         ResearchCommercialUseStatus commercialUseStatus,
+        bool attributionRequired,
+        bool automatedScrapingAllowed,
         bool isEnabled)
     {
         SourceId = sourceId;
         CanonicalUri = canonicalUri;
+        _termsUris = Array.AsReadOnly(termsUris.ToArray());
+        SourceClass = sourceClass;
+        AuthorityTier = authorityTier;
+        AccessClass = accessClass;
+        IngestionMode = ingestionMode;
         DecisionRole = decisionRole;
         CommercialUseStatus = commercialUseStatus;
+        AttributionRequired = attributionRequired;
+        AutomatedScrapingAllowed = automatedScrapingAllowed;
         IsEnabled = isEnabled;
     }
 
@@ -69,9 +124,23 @@ public sealed class RegisteredResearchSource
 
     public Uri CanonicalUri { get; }
 
+    public IReadOnlyList<Uri> TermsUris => _termsUris;
+
+    public ResearchSourceClass SourceClass { get; }
+
+    public ResearchAuthorityTier AuthorityTier { get; }
+
+    public ResearchAccessClass AccessClass { get; }
+
+    public ResearchIngestionMode IngestionMode { get; }
+
     public ResearchDecisionRole DecisionRole { get; }
 
     public ResearchCommercialUseStatus CommercialUseStatus { get; }
+
+    public bool AttributionRequired { get; }
+
+    public bool AutomatedScrapingAllowed { get; }
 
     public bool IsEnabled { get; }
 }
