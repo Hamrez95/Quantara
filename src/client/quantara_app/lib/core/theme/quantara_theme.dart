@@ -49,7 +49,7 @@ abstract final class QuantaraTheme {
         backgroundColor: QuantaraColors.deepNavy,
         indicatorColor: Color(0x3343D7C4),
         labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w600),
+          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
         ),
       ),
     );
@@ -80,16 +80,38 @@ abstract final class QuantaraTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: QuantaraColors.lightSurface,
         indicatorColor: scheme.primary.withValues(alpha: 0.12),
+        labelTextStyle: const WidgetStatePropertyAll(
+          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        ),
       ),
     );
   }
 
   static ThemeData _base(ColorScheme scheme) {
+    final baseText = ThemeData(
+      useMaterial3: true,
+      brightness: scheme.brightness,
+    ).textTheme;
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       visualDensity: VisualDensity.standard,
-      splashFactory: InkSparkle.splashFactory,
+      splashFactory: InkRipple.splashFactory,
+      textTheme: baseText.copyWith(
+        headlineSmall: baseText.headlineSmall?.copyWith(
+          fontSize: 25,
+          height: 1.35,
+        ),
+        titleLarge: baseText.titleLarge?.copyWith(fontSize: 21, height: 1.4),
+        titleMedium: baseText.titleMedium?.copyWith(fontSize: 17, height: 1.45),
+        titleSmall: baseText.titleSmall?.copyWith(fontSize: 15, height: 1.45),
+        bodyLarge: baseText.bodyLarge?.copyWith(fontSize: 17, height: 1.55),
+        bodyMedium: baseText.bodyMedium?.copyWith(fontSize: 15, height: 1.5),
+        bodySmall: baseText.bodySmall?.copyWith(fontSize: 13, height: 1.45),
+        labelLarge: baseText.labelLarge?.copyWith(fontSize: 14),
+        labelMedium: baseText.labelMedium?.copyWith(fontSize: 13),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surface,
