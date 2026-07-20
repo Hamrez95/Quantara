@@ -7,6 +7,9 @@ namespace Quantara.Domain.Tests;
 
 public sealed class ResearchSourceRegistryLoaderTests
 {
+    private const string PublisherProperty =
+        "              \"publisher\": \"Trade City Pro\",\n";
+
     private static readonly Symbol BtcUsdt = new("BTCUSDT");
     private static readonly DateTimeOffset LoadedAt = new(
         2026,
@@ -18,7 +21,13 @@ public sealed class ResearchSourceRegistryLoaderTests
         TimeSpan.Zero);
 
     [Fact]
-    public void LoadsPinnedDocumentAndPreservesCreatorHypothesisRole()
+    public void LoaderIsNotPublicToUntrustedCallers()
+    {
+        Assert.False(typeof(ResearchSourceRegistryLoader).IsPublic);
+    }
+
+    [Fact]
+    public void LoadsPinnedCompleteDocumentAndPreservesCreatorHypothesisRole()
     {
         var document = RegistryDocument(
             "none",
@@ -36,6 +45,10 @@ public sealed class ResearchSourceRegistryLoaderTests
             "tradecitypro-youtube-channel",
             out var source));
         Assert.Equal(ResearchDecisionRole.HypothesisOnly, source.DecisionRole);
+        Assert.Equal(ResearchAuthorityTier.CreatorHypothesis, source.AuthorityTier);
+        Assert.Equal(ResearchSourceClass.EducationalHypothesis, source.SourceClass);
+        Assert.Equal(ResearchIngestionMode.YoutubeApiMetadata, source.IngestionMode);
+        Assert.NotEmpty(source.TermsUris);
 
         var evidence = ResearchEvidenceEnvelopeFactory.Create(
             "creator-evidence-1",
@@ -57,7 +70,7 @@ public sealed class ResearchSourceRegistryLoaderTests
     }
 
     [Fact]
-    public void RejectsDocumentThatDoesNotMatchPinnedHash()
+    public void RejectsDocumentThatDoesNotMatchTrustedHash()
     {
         var document = RegistryDocument(
             "none",
@@ -134,6 +147,68 @@ public sealed class ResearchSourceRegistryLoaderTests
             result.RejectionReasons);
     }
 
+    [Fact]
+    public void RejectsSchemaIncompleteSource()
+    {
+        var document = RegistryDocument(
+                "none",
+                "2026-08-20",
+                "hypothesis_only")
+            .Replace(PublisherProperty, string.Empty, StringComparison.Ordinal);
+
+        var result = ResearchSourceRegistryLoader.Load(
+            document,
+            ComputeSha256(document),
+            LoadedAt);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchSourceRegistryCode.InvalidSources,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsCreatorPromotedToDirectFactInsidePinnedDocument()
+    {
+        var document = RegistryDocument(
+            "none",
+            "2026-08-20",
+            "direct_fact");
+
+        var result = ResearchSourceRegistryLoader.Load(
+            document,
+            ComputeSha256(document),
+            LoadedAt);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchSourceRegistryCode.InvalidSourcePolicy,
+            result.RejectionReasons);
+    }
+
+    [Fact]
+    public void RejectsUnknownSourceProperty()
+    {
+        var document = RegistryDocument(
+                "none",
+                "2026-08-20",
+                "hypothesis_only")
+            .Replace(
+                PublisherProperty,
+                PublisherProperty + "              \"unreviewed_override\": true,\n",
+                StringComparison.Ordinal);
+
+        var result = ResearchSourceRegistryLoader.Load(
+            document,
+            ComputeSha256(document),
+            LoadedAt);
+
+        Assert.False(result.IsCreated);
+        Assert.Contains(
+            ResearchSourceRegistryCode.InvalidSources,
+            result.RejectionReasons);
+    }
+
     private static string RegistryDocument(
         string executionAuthority,
         string reviewDueAt,
@@ -151,10 +226,29 @@ public sealed class ResearchSourceRegistryLoaderTests
           "sources": [
             {
               "id": "tradecitypro-youtube-channel",
+              "title": "Trade City Pro official YouTube channel",
+              "publisher": "Trade City Pro",
               "canonical_url": "https://www.youtube.com/c/tradecitypro",
+              "terms_urls": [
+                "https://developers.google.com/youtube/terms/developer-policies"
+              ],
+              "source_class": "educational_hypothesis",
+              "authority_tier": "creator_hypothesis",
+              "access_class": "public_web_reference",
+              "ingestion_mode": "youtube_api_metadata",
               "decision_role": "{{decisionRole}}",
               "commercial_use_status": "citation_only",
-              "enabled": true
+              "update_cadence": "human-selected videos",
+              "domains": ["technical analysis"],
+              "permitted_uses": ["store approved metadata"],
+              "prohibited_uses": ["store full transcripts"],
+              "validation_requirements": ["human approval"],
+              "attribution_required": true,
+              "automated_scraping_allowed": false,
+              "retention_policy": "Metadata and original Quantara notes only.",
+              "revision_policy": "Review monthly.",
+              "enabled": true,
+              "notes": "Hypothesis only."
             }
           ]
         }
