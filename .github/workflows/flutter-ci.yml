@@ -29,7 +29,7 @@ jobs:
   flutter:
     name: Flutter format, analyze, test, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: src/client/quantara_app
@@ -55,7 +55,22 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
-        run: flutter analyze --fatal-infos
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --fatal-infos > flutter-analyze.log 2>&1
+          status=$?
+          cat flutter-analyze.log
+          exit $status
+
+      - name: Upload Flutter diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-diagnostics
+          path: src/client/quantara_app/flutter-analyze.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Run widget tests
         run: flutter test --reporter expanded
@@ -63,8 +78,8 @@ jobs:
       - name: Build web PWA
         run: flutter build web --release
 
-      - name: Build Android debug package
-        run: flutter build apk --debug
+      - name: Build Android release package
+        run: flutter build apk --release
 
       - name: Upload web preview
         uses: actions/upload-artifact@v4
@@ -74,10 +89,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android debug package
+      - name: Upload Android release package
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-debug
-          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+          name: quantara-android-release
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 7
