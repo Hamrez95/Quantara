@@ -17,6 +17,8 @@ The source registry is not only documentation. Runtime evidence must be bound to
 
 A caller cannot turn Trade City Pro into an official fact by constructing a source object. Source constructors and snapshot factories are internal; production consumers load the pinned registry document.
 
+Regression tests alter registry fields by their semantic JSON property identity rather than relying on source-code indentation, so missing-field and unknown-field attacks remain effective even when raw-string formatting changes.
+
 ## Registry freshness
 
 The registry review deadline is enforced twice:
