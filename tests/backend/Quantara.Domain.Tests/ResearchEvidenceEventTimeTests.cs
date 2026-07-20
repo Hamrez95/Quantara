@@ -102,8 +102,15 @@ public sealed class ResearchEvidenceEventTimeTests
                 new RegisteredResearchSource(
                     "fred-alfred-api",
                     new Uri("https://fred.stlouisfed.org/docs/api/fred/overview.html"),
+                    [new Uri("https://fred.stlouisfed.org/docs/api/terms_of_use.html")],
+                    ResearchSourceClass.OfficialEventData,
+                    ResearchAuthorityTier.OfficialPrimary,
+                    ResearchAccessClass.PublicApiWithTerms,
+                    ResearchIngestionMode.Api,
                     ResearchDecisionRole.DirectFact,
                     ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+                    true,
+                    false,
                     true)
             ]);
         if (!registryResult.IsCreated || registryResult.Snapshot is null)
