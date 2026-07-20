@@ -118,8 +118,12 @@ public sealed class PostgreSqlPersistenceTests : IAsyncLifetime
     public async Task PersistsInvalidTransitionWithoutChangingOrderVersion()
     {
         const string orderId = "invalid-transition-order";
-        const string eventId = "invalid-transition-event";
         var timestamp = DateTimeOffset.UtcNow;
+        var invalidEvent = new OrderLifecycleEvent(
+            "invalid-transition-event",
+            OrderState.Filled,
+            timestamp,
+            "Cannot fill directly from created.");
 
         await using var context = CreateContext();
         var store = new EfOrderStore(context);
@@ -128,20 +132,12 @@ public sealed class PostgreSqlPersistenceTests : IAsyncLifetime
         var invalid = await store.ApplyAsync(
             orderId,
             0,
-            new OrderLifecycleEvent(
-                eventId,
-                OrderState.Filled,
-                timestamp,
-                "Cannot fill directly from created."),
+            invalidEvent,
             CancellationToken.None);
         var replay = await store.ApplyAsync(
             orderId,
             0,
-            new OrderLifecycleEvent(
-                eventId,
-                OrderState.Filled,
-                timestamp,
-                "Replay."),
+            invalidEvent,
             CancellationToken.None);
         var snapshot = await store.LoadAsync(orderId, CancellationToken.None);
         var auditCount = await context.AuditEvents
