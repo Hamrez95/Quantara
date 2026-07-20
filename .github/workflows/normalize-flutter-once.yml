@@ -1,0 +1,39 @@
+name: Normalize Flutter client once
+
+on:
+  push:
+    branches:
+      - feat/29-flutter-cockpit-foundation
+    paths:
+      - .github/workflows/normalize-flutter-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/29-flutter-cockpit-foundation
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Restore and format
+        working-directory: src/client/quantara_app
+        run: |
+          flutter pub get
+          dart format lib test
+      - name: Remove one-time workflow and commit normalized files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/normalize-flutter-once.yml
+          git add src/client/quantara_app/pubspec.lock src/client/quantara_app/lib src/client/quantara_app/test
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: normalize Flutter dependencies and formatting"
+          git push origin HEAD:feat/29-flutter-cockpit-foundation
