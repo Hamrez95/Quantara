@@ -38,17 +38,17 @@ public sealed class DeterministicPriceStructureAnalyzerTests
     }
 
     [Fact]
-    public void MoreConfirmedTouchesIncreaseZoneStrength()
+    public void MoreConfirmedTouchesIncreaseZoneStrengthBeforeSaturation()
     {
         var specification = PriceStructureSpecification.Conservative with
         {
             RecencyHalfLifeBars = 500
         };
         var shorter = Analyzer.Analyze(
-            PriceStructureTestData.CreateWaveCandles(48),
+            PriceStructureTestData.CreateWaveCandles(24),
             specification);
         var longer = Analyzer.Analyze(
-            PriceStructureTestData.CreateWaveCandles(120),
+            PriceStructureTestData.CreateWaveCandles(48),
             specification);
 
         Assert.NotNull(shorter.Analysis);
