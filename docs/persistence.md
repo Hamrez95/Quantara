@@ -23,7 +23,7 @@ The `order_events` table stores every new lifecycle event identifier, including 
 - exchange or application occurrence time;
 - persisted reason and timestamp.
 
-Event identifiers are globally unique. Replaying an existing identifier returns an idempotent duplicate result rather than mutating order state again.
+Event identifiers are globally unique. Replaying the same identifier with the same order ID, target state, occurrence time, and reason returns `DuplicateIgnored`. Reusing it for a different order or payload returns `ConflictingDuplicate`; it never mutates either order.
 
 Only successfully applied event identifiers are used when rehydrating the in-memory aggregate. Persisted invalid attempts remain auditable and duplicate-safe without becoming valid domain history.
 
