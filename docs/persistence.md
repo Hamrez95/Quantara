@@ -15,7 +15,7 @@ The `orders` table stores:
 
 ### Order lifecycle events
 
-The `order_events` table stores every new lifecycle event identifier, including invalid transition attempts. Each record contains:
+The `order_events` table stores every new lifecycle event identifier accepted for domain evaluation, including invalid transition attempts. Each record contains:
 
 - target state;
 - application result;
@@ -27,6 +27,8 @@ Event identifiers are globally unique. Replaying the same identifier with the sa
 
 Only successfully applied event identifiers are used when rehydrating the in-memory aggregate. Persisted invalid attempts remain auditable and duplicate-safe without becoming valid domain history.
 
+Duplicate replays, conflicting duplicate IDs, missing orders, and stale expected-version checks return before creating another domain event or duplicate audit record. Request-level auditing for these rejected preconditions belongs to the later application/API layer, where actor identity, correlation ID, and authorization context are available.
+
 ### Risk evaluations
 
 The `risk_evaluations` table stores an immutable JSON envelope containing the proposal identifier and complete structured `RiskEvaluationResult`.
@@ -35,7 +37,7 @@ The SHA-256 hash covers both the proposal identifier and the complete result. Re
 
 ### Audit events
 
-Every order creation, lifecycle event attempt, and risk-evaluation append creates an audit event in the same `SaveChanges` transaction as the domain change.
+Every order creation, newly persisted lifecycle event attempt, and newly appended risk evaluation creates an audit event in the same `SaveChanges` transaction as the domain change.
 
 Audit records include:
 
@@ -90,4 +92,4 @@ The migration is applied in integration tests against a real `postgres:16-alpine
 
 ## Current limitations
 
-This slice does not yet persist fills, positions, balances, funding, PnL, paper-account snapshots, or exchange reconciliation state. It also does not expose persistence directly to a public API. Those capabilities build on these durability guarantees in later slices.
+This slice does not yet persist fills, positions, balances, funding, PnL, paper-account snapshots, or exchange reconciliation state. It also does not expose persistence directly to a public API. Request-level audit records with authenticated actor and correlation context are deferred to that application layer. A generated EF Core model snapshot should be added before the next schema migration.
