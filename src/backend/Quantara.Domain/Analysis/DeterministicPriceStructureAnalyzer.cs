@@ -6,6 +6,7 @@ namespace Quantara.Domain.Analysis;
 public sealed class DeterministicPriceStructureAnalyzer
 {
     private const string SchemaVersion = "price-structure-v1";
+    private readonly string _schemaVersion = SchemaVersion;
 
     public PriceStructureBuildResult Analyze(
         IReadOnlyList<Candle> candles,
@@ -61,7 +62,7 @@ public sealed class DeterministicPriceStructureAnalyzer
             candidates,
             currentCandle,
             currentAtr,
-            normalizedCandles.Count,
+            normalizedCandles.Length,
             specification);
         var (direction, directionStrength) = CalculateDirection(
             normalizedCandles,
@@ -96,7 +97,7 @@ public sealed class DeterministicPriceStructureAnalyzer
             analysis);
     }
 
-    private static IReadOnlyList<PivotCandidate> DetectCandidates(
+    private static List<PivotCandidate> DetectCandidates(
         IReadOnlyList<Candle> candles,
         IReadOnlyList<decimal> averageTrueRanges,
         IReadOnlyList<decimal> averageVolumes,
@@ -132,7 +133,7 @@ public sealed class DeterministicPriceStructureAnalyzer
         return candidates;
     }
 
-    private static IReadOnlyList<PriceStructureZone> BuildZones(
+    private static PriceStructureZone[] BuildZones(
         IReadOnlyList<PivotCandidate> candidates,
         Candle currentCandle,
         decimal currentAtr,
@@ -315,7 +316,7 @@ public sealed class DeterministicPriceStructureAnalyzer
         return sum / count;
     }
 
-    private static IReadOnlyList<string> BuildWarnings(
+    private static List<string> BuildWarnings(
         IReadOnlyList<PriceStructureZone> zones,
         int candidateCount)
     {
@@ -351,7 +352,7 @@ public sealed class DeterministicPriceStructureAnalyzer
             $"{role}; {stateText}; {touchCount} confirmed touches; last reaction {barsSinceLastTouch} bars ago.");
     }
 
-    private static string ComputeFingerprint(
+    private string ComputeFingerprint(
         IReadOnlyList<Candle> candles,
         PriceStructureSpecification specification,
         MarketStructureDirection direction,
@@ -362,7 +363,7 @@ public sealed class DeterministicPriceStructureAnalyzer
     {
         return PriceStructureMath.ComputeHash(builder =>
         {
-            PriceStructureMath.Append(builder, SchemaVersion);
+            PriceStructureMath.Append(builder, _schemaVersion);
             PriceStructureMath.Append(builder, candles[0].Symbol.Value);
             PriceStructureMath.Append(builder, candles[0].Timeframe.Ticks);
             PriceStructureMath.Append(builder, specification.PivotRadius);

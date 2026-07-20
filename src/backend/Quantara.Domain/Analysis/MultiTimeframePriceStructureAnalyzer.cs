@@ -5,6 +5,7 @@ namespace Quantara.Domain.Analysis;
 public sealed class MultiTimeframePriceStructureAnalyzer
 {
     private const string SchemaVersion = "multi-timeframe-structure-v1";
+    private readonly string _schemaVersion = SchemaVersion;
 
     public MultiTimeframeBuildResult Analyze(
         IReadOnlyList<TimeframePriceStructureAnalysis> analyses,
@@ -88,7 +89,7 @@ public sealed class MultiTimeframePriceStructureAnalyzer
             result);
     }
 
-    private static IReadOnlyList<ConfluenceCluster> Cluster(
+    private static List<ConfluenceCluster> Cluster(
         IReadOnlyList<WeightedZone> candidates,
         decimal mergeToleranceBps)
     {
@@ -237,7 +238,7 @@ public sealed class MultiTimeframePriceStructureAnalyzer
             $"{timeframe.TotalMinutes:0}m");
     }
 
-    private static string ComputeFingerprint(
+    private string ComputeFingerprint(
         IReadOnlyList<TimeframePriceStructureAnalysis> analyses,
         decimal mergeToleranceBps,
         int maximumZones,
@@ -247,7 +248,7 @@ public sealed class MultiTimeframePriceStructureAnalyzer
     {
         return PriceStructureMath.ComputeHash(builder =>
         {
-            PriceStructureMath.Append(builder, SchemaVersion);
+            PriceStructureMath.Append(builder, _schemaVersion);
             PriceStructureMath.Append(builder, mergeToleranceBps);
             PriceStructureMath.Append(builder, maximumZones);
             foreach (var analysis in analyses)
