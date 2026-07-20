@@ -80,7 +80,8 @@ final class MockCockpitRepository implements CockpitRepository {
           ),
           AnalysisFactor(
             title: 'نوسان و اسپرد',
-            detail: 'نوسان لحظه‌ای بالا رفته و هزینه اجرای احتمالی بیشتر شده است.',
+            detail:
+                'نوسان لحظه‌ای بالا رفته و هزینه اجرای احتمالی بیشتر شده است.',
             impact: EvidenceImpact.caution,
           ),
         ],

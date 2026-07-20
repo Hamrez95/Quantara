@@ -16,11 +16,13 @@ final class AppStrings {
   String get research => _isPersian ? 'پژوهش' : 'Research';
   String get paperAccount => _isPersian ? 'حساب کاغذی' : 'Paper account';
   String get settings => _isPersian ? 'تنظیمات' : 'Settings';
-  String get demoEnvironment => _isPersian ? 'محیط آزمایشی' : 'Demo environment';
+  String get demoEnvironment =>
+      _isPersian ? 'محیط آزمایشی' : 'Demo environment';
   String get demoDescription => _isPersian
       ? 'تمام قیمت‌ها و نتایج این صفحه نمایشی هستند و هیچ سفارش واقعی ارسال نمی‌شود.'
       : 'All prices and results on this screen are simulated. No real order is sent.';
-  String get marketOverview => _isPersian ? 'نمای کلی بازار' : 'Market overview';
+  String get marketOverview =>
+      _isPersian ? 'نمای کلی بازار' : 'Market overview';
   String get explainableAnalysis =>
       _isPersian ? 'تحلیل قابل توضیح' : 'Explainable analysis';
   String get noTrade => _isPersian ? 'عدم معامله' : 'No trade';

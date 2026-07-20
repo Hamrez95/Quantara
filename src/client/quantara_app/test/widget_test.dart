@@ -23,7 +23,9 @@ void main() {
     expect(find.textContaining('هیچ سفارش واقعی'), findsOneWidget);
   });
 
-  testWidgets('uses bottom navigation on a phone-sized viewport', (tester) async {
+  testWidgets('uses bottom navigation on a phone-sized viewport', (
+    tester,
+  ) async {
     await _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(const QuantaraApp());
     await tester.pump(const Duration(milliseconds: 300));

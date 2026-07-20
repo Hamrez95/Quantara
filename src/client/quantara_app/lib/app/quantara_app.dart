@@ -37,10 +37,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
       title: 'Quantara',
       debugShowCheckedModeBanner: false,
       locale: const Locale('fa'),
-      supportedLocales: const [
-        Locale('fa'),
-        Locale('en'),
-      ],
+      supportedLocales: const [Locale('fa'), Locale('en')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

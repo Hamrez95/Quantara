@@ -37,11 +37,7 @@ class SectionCard extends StatelessWidget {
       return card;
     }
 
-    return Semantics(
-      container: true,
-      label: semanticLabel,
-      child: card,
-    );
+    return Semantics(container: true, label: semanticLabel, child: card);
   }
 }
 
@@ -79,9 +75,9 @@ class StatusPill extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ],
           ),
@@ -117,7 +113,9 @@ class MetricTile extends StatelessWidget {
           Text(
             label,
             style: textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.62),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.62),
             ),
           ),
           const SizedBox(height: 5),
@@ -134,7 +132,9 @@ class MetricTile extends StatelessWidget {
             Text(
               caption!,
               style: textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.52),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.52),
               ),
             ),
           ],
@@ -145,11 +145,7 @@ class MetricTile extends StatelessWidget {
 }
 
 class RiskProgress extends StatelessWidget {
-  const RiskProgress({
-    required this.current,
-    required this.maximum,
-    super.key,
-  });
+  const RiskProgress({required this.current, required this.maximum, super.key});
 
   final double current;
   final double maximum;
@@ -248,10 +244,7 @@ class _SparklinePainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          color.withValues(alpha: 0.22),
-          color.withValues(alpha: 0),
-        ],
+        colors: [color.withValues(alpha: 0.22), color.withValues(alpha: 0)],
       ).createShader(Offset.zero & size)
       ..style = PaintingStyle.fill;
     canvas.drawPath(fillPath, fill);

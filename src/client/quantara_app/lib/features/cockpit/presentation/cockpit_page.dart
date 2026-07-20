@@ -154,9 +154,9 @@ class _DesktopNavigation extends StatelessWidget {
               Text(
                 strings.appName,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.8,
-                    ),
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.8,
+                ),
               ),
             ],
           ],
@@ -352,10 +352,7 @@ class _LoadedView extends StatelessWidget {
     return switch (selectedDestination) {
       1 => _MarketsSection(quotes: snapshot.watchlist, expanded: true),
       2 => _AnalysisSection(analysis: snapshot.analysis, expanded: true),
-      3 => _PaperAccountSection(
-          account: snapshot.paperAccount,
-          expanded: true,
-        ),
+      3 => _PaperAccountSection(account: snapshot.paperAccount, expanded: true),
       _ => _Dashboard(snapshot: snapshot),
     };
   }
@@ -410,15 +407,15 @@ class _TopBar extends StatelessWidget {
                     Text(
                       strings.appName,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.8,
-                          ),
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.8,
+                      ),
                     ),
                     Text(
                       snapshot.marketStatus,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurface.withValues(alpha: 0.58),
-                          ),
+                        color: scheme.onSurface.withValues(alpha: 0.58),
+                      ),
                     ),
                   ],
                 ),
@@ -482,9 +479,9 @@ class _DemoBanner extends StatelessWidget {
                     Text(
                       strings.demoEnvironment,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: warning,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: warning,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -573,9 +570,9 @@ class _AnalysisSection extends StatelessWidget {
             children: [
               Text(
                 strings.explainableAnalysis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               StatusPill(
                 label: strings.noTrade,
@@ -617,16 +614,16 @@ class _AnalysisSection extends StatelessWidget {
           Text(
             analysis.summary,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  height: 1.65,
-                  fontWeight: FontWeight.w500,
-                ),
+              height: 1.65,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           const SizedBox(height: 24),
           Text(
             strings.whyThisDecision,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
           ...analysis.factors.map(
@@ -640,9 +637,7 @@ class _AnalysisSection extends StatelessWidget {
             decoration: BoxDecoration(
               color: scheme.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: scheme.primary.withValues(alpha: 0.22),
-              ),
+              border: Border.all(color: scheme.primary.withValues(alpha: 0.22)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(15),
@@ -657,16 +652,15 @@ class _AnalysisSection extends StatelessWidget {
                       children: [
                         Text(
                           strings.invalidation,
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           analysis.invalidation,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                height: 1.55,
-                              ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(height: 1.55),
                         ),
                       ],
                     ),
@@ -728,19 +722,18 @@ class _FactorRow extends StatelessWidget {
                   Text(
                     factor.title,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     factor.detail,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          height: 1.45,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.68),
-                        ),
+                      height: 1.45,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.68),
+                    ),
                   ),
                 ],
               ),
@@ -776,9 +769,9 @@ class _PaperAccountSection extends StatelessWidget {
               Expanded(
                 child: Text(
                   strings.paperAccount,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               StatusPill(
@@ -844,9 +837,9 @@ class _PaperAccountSection extends StatelessWidget {
               Expanded(
                 child: Text(
                   strings.dailyRisk,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               Text(
@@ -892,18 +885,17 @@ class _MarketsSection extends StatelessWidget {
                     Text(
                       strings.marketOverview,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       strings.watchlist,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.56),
-                          ),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.56),
+                      ),
                     ),
                   ],
                 ),
@@ -1002,14 +994,16 @@ class _QuoteCard extends StatelessWidget {
                           Text(
                             quote.symbol,
                             textDirection: TextDirection.ltr,
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w900),
                           ),
                           Text(
                             quote.displayName,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurface.withValues(alpha: 0.5),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: scheme.onSurface.withValues(
+                                    alpha: 0.5,
+                                  ),
                                 ),
                           ),
                         ],
@@ -1019,9 +1013,9 @@ class _QuoteCard extends StatelessWidget {
                       '${positive ? '+' : ''}${quote.changePercent.toStringAsFixed(2)}٪',
                       textDirection: TextDirection.ltr,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ],
                 ),
@@ -1030,23 +1024,20 @@ class _QuoteCard extends StatelessWidget {
                   _formatMoney(quote.price),
                   textDirection: TextDirection.ltr,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                      ),
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Expanded(
-                  child: SparklineChart(
-                    values: quote.sparkline,
-                    color: color,
-                  ),
+                  child: SparklineChart(values: quote.sparkline, color: color),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'اسپرد ${quote.spreadBps.toStringAsFixed(1)} bps · ${quote.freshness.inSeconds} ثانیه قبل',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurface.withValues(alpha: 0.52),
-                      ),
+                    color: scheme.onSurface.withValues(alpha: 0.52),
+                  ),
                 ),
               ],
             ),
@@ -1089,16 +1080,16 @@ class _RealMoneyLockCard extends StatelessWidget {
                 Text(
                   strings.lockedRealMoney,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   'تا زمانی که آزمایش‌های تاریخی، حساب کاغذی، حالت سایه و کنترل‌های ایمنی کامل نشوند، هیچ کلید یا دکمه‌ای برای ارسال سفارش واقعی نمایش داده نمی‌شود.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        height: 1.55,
-                        color: scheme.onSurface.withValues(alpha: 0.7),
-                      ),
+                    height: 1.55,
+                    color: scheme.onSurface.withValues(alpha: 0.7),
+                  ),
                 ),
               ],
             ),

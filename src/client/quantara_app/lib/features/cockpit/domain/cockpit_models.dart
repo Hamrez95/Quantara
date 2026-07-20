@@ -1,28 +1,10 @@
-enum AppEnvironment {
-  demo,
-  paper,
-  shadow,
-  realMoneyLocked,
-}
+enum AppEnvironment { demo, paper, shadow, realMoneyLocked }
 
-enum AnalysisDecision {
-  bullish,
-  bearish,
-  noTrade,
-}
+enum AnalysisDecision { bullish, bearish, noTrade }
 
-enum MarketRegime {
-  trending,
-  ranging,
-  volatile,
-  uncertain,
-}
+enum MarketRegime { trending, ranging, volatile, uncertain }
 
-enum EvidenceImpact {
-  supportive,
-  caution,
-  neutral,
-}
+enum EvidenceImpact { supportive, caution, neutral }
 
 final class MarketQuote {
   const MarketQuote({
