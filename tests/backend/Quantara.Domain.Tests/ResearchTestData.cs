@@ -26,8 +26,8 @@ internal static class ResearchTestData
                 var open = 100m + index;
                 return new Candle(
                     BtcUsdt,
-                    Hour,
                     Start + TimeSpan.FromTicks(checked(Hour.Ticks * index)),
+                    Hour,
                     open,
                     open + 2m,
                     open - 2m,
