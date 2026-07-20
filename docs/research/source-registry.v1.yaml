@@ -1,0 +1,525 @@
+{
+  "schema_version": "source-registry-v1",
+  "registry_version": "1.0.0",
+  "reviewed_at": "2026-07-20",
+  "review_due_at": "2026-08-20",
+  "execution_authority": "none",
+  "sources": [
+    {
+      "id": "tradecitypro-youtube-channel",
+      "title": "Trade City Pro official YouTube channel",
+      "publisher": "Trade City Pro",
+      "canonical_url": "https://www.youtube.com/c/tradecitypro",
+      "terms_urls": [
+        "https://developers.google.com/youtube/terms/api-services-terms-of-service",
+        "https://developers.google.com/youtube/terms/developer-policies"
+      ],
+      "source_class": "educational_hypothesis",
+      "authority_tier": "creator_hypothesis",
+      "access_class": "public_web_reference",
+      "ingestion_mode": "youtube_api_metadata",
+      "decision_role": "hypothesis_only",
+      "commercial_use_status": "citation_only",
+      "update_cadence": "product-owner-selected videos only",
+      "domains": [
+        "multi-timeframe technical analysis",
+        "crypto market scenarios",
+        "technical and macro narrative synthesis"
+      ],
+      "permitted_uses": [
+        "store channel, playlist, video identifiers, titles, timestamps, and evidence links through documented APIs",
+        "extract short paraphrased candidate rules after human selection",
+        "compare candidate rules with deterministic market features and backtests"
+      ],
+      "prohibited_uses": [
+        "scrape YouTube pages, audiovisual streams, subtitles, or transcripts",
+        "store or redistribute full transcripts or video content",
+        "treat creator statements as verified facts or execution authorization",
+        "automate engagement, views, likes, comments, or subscriptions"
+      ],
+      "validation_requirements": [
+        "human approval of each selected video",
+        "timestamped evidence links for every extracted claim",
+        "candidate rules must be measurable and pass unseen-data, paper, and shadow gates",
+        "YouTube API terms and retention requirements must be reviewed before ingestion"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Retain only approved metadata, evidence links, and original Quantara paraphrases; obey YouTube API retention and deletion rules.",
+      "revision_policy": "Re-review channel selection and platform policies monthly or after a policy revision notice.",
+      "enabled": true,
+      "notes": "Style and hypothesis input only; never a ground-truth or direct execution source."
+    },
+    {
+      "id": "cmt-learning-objectives",
+      "title": "CMT Program learning objectives and knowledge domains",
+      "publisher": "CMT Association",
+      "canonical_url": "https://cmtassociation.org/cmt-program/learning-objectives/",
+      "terms_urls": [
+        "https://cmtassociation.org/cmt-program/"
+      ],
+      "source_class": "research_evidence",
+      "authority_tier": "professional_standard",
+      "access_class": "restricted_paid",
+      "ingestion_mode": "citation_only",
+      "decision_role": "validation_method",
+      "commercial_use_status": "citation_only",
+      "update_cadence": "annual curriculum cycle",
+      "domains": [
+        "technical analysis taxonomy",
+        "risk management",
+        "professional ethics",
+        "cross-asset analysis"
+      ],
+      "permitted_uses": [
+        "use public learning objectives to identify coverage gaps",
+        "cite knowledge-domain names and public objectives",
+        "map Quantara feature tests to professional competency areas"
+      ],
+      "prohibited_uses": [
+        "copy or ingest restricted digital curriculum",
+        "redistribute exam content, questions, or paid learning materials",
+        "represent Quantara as CMT-certified or endorsed"
+      ],
+      "validation_requirements": [
+        "retain only bibliographic metadata and original coverage mappings",
+        "verify current public learning objectives before each annual review",
+        "legal review before any use beyond citation and taxonomy mapping"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Store public metadata and Quantara-authored mappings only; no curriculum corpus.",
+      "revision_policy": "Review when CMT publishes a new curriculum cycle or changes public objectives.",
+      "enabled": true
+    },
+    {
+      "id": "murphy-technical-analysis-book",
+      "title": "Technical Analysis of the Financial Markets",
+      "publisher": "New York Institute of Finance / Penguin",
+      "canonical_url": "https://www.penguinrandomhouse.com/books/341282/technical-analysis-of-the-financial-markets-by-john-j-murphy/",
+      "terms_urls": [],
+      "source_class": "educational_hypothesis",
+      "authority_tier": "publisher_reference",
+      "access_class": "copyrighted_reference",
+      "ingestion_mode": "citation_only",
+      "decision_role": "hypothesis_only",
+      "commercial_use_status": "citation_only",
+      "update_cadence": "static edition metadata",
+      "domains": [
+        "classical technical analysis",
+        "trend and chart patterns",
+        "intermarket analysis"
+      ],
+      "permitted_uses": [
+        "store title, author, edition, ISBN, and chapter-topic metadata",
+        "record original Quantara rule specifications derived from legally accessed reading",
+        "cite concepts for research hypotheses"
+      ],
+      "prohibited_uses": [
+        "store or distribute the book, chapter text, scans, or substantial excerpts",
+        "train or fine-tune a model on an unlicensed copy",
+        "activate a trading rule solely because it appears in the book"
+      ],
+      "validation_requirements": [
+        "confirm lawful access to the referenced edition",
+        "all derived rules require independent measurable definitions and backtests",
+        "keep quotations outside the repository unless separately approved"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Bibliographic metadata and original Quantara notes only.",
+      "revision_policy": "Review metadata when a new edition is selected.",
+      "enabled": true
+    },
+    {
+      "id": "lopez-de-prado-afml-book",
+      "title": "Advances in Financial Machine Learning",
+      "publisher": "John Wiley & Sons",
+      "canonical_url": "https://www.wiley-vch.de/de/fachgebiete/finanzen-wirtschaft-recht/advances-in-financial-machine-learning-978-1-119-48208-6",
+      "terms_urls": [],
+      "source_class": "research_evidence",
+      "authority_tier": "publisher_reference",
+      "access_class": "copyrighted_reference",
+      "ingestion_mode": "citation_only",
+      "decision_role": "validation_method",
+      "commercial_use_status": "citation_only",
+      "update_cadence": "static edition metadata",
+      "domains": [
+        "financial machine learning",
+        "cross-validation in finance",
+        "backtest overfitting",
+        "feature importance and bet sizing"
+      ],
+      "permitted_uses": [
+        "use bibliographic metadata and independently implemented validation ideas",
+        "create original tests for leakage, cross-validation, and overfitting controls",
+        "cite the source when documenting research methodology"
+      ],
+      "prohibited_uses": [
+        "commit book text, code listings, scans, or a digital copy",
+        "copy reference implementations without license review",
+        "treat any method as universally valid without independent replication"
+      ],
+      "validation_requirements": [
+        "independently derive and test every implemented method",
+        "compare against primary papers where available",
+        "document deviations from the referenced methodology"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Bibliographic metadata, citations, and original Quantara implementations only.",
+      "revision_policy": "Review when implementation scope changes or a newer authoritative edition is selected.",
+      "enabled": true
+    },
+    {
+      "id": "ohara-market-microstructure-book",
+      "title": "Market Microstructure Theory",
+      "publisher": "John Wiley & Sons",
+      "canonical_url": "https://www.wiley-vch.de/en/areas-interest/finance-economics-law/accounting-13ac/corporate-finance-13ac3/market-microstructure-theory-978-0-631-20761-0",
+      "terms_urls": [],
+      "source_class": "research_evidence",
+      "authority_tier": "publisher_reference",
+      "access_class": "copyrighted_reference",
+      "ingestion_mode": "citation_only",
+      "decision_role": "validation_method",
+      "commercial_use_status": "citation_only",
+      "update_cadence": "static edition metadata",
+      "domains": [
+        "liquidity",
+        "price discovery",
+        "inventory and information models",
+        "market stability"
+      ],
+      "permitted_uses": [
+        "use bibliographic metadata and original mathematical notes",
+        "derive testable microstructure hypotheses",
+        "inform execution-cost and liquidity model reviews"
+      ],
+      "prohibited_uses": [
+        "store book text, scans, or substantial excerpts",
+        "present theoretical assumptions as measured crypto-market facts",
+        "use the source as direct trade authorization"
+      ],
+      "validation_requirements": [
+        "state model assumptions explicitly",
+        "calibrate and validate on venue-specific data",
+        "stress results across liquidity regimes"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Bibliographic metadata and original Quantara analysis only.",
+      "revision_policy": "Review when execution models or market structure scope changes.",
+      "enabled": true
+    },
+    {
+      "id": "tradingview-strategy-guidance",
+      "title": "TradingView strategy, backtesting, and look-ahead guidance",
+      "publisher": "TradingView",
+      "canonical_url": "https://www.tradingview.com/support/solutions/43000562362-what-are-strategies-backtesting-and-forward-testing/",
+      "terms_urls": [
+        "https://www.tradingview.com/policies/"
+      ],
+      "source_class": "research_evidence",
+      "authority_tier": "vendor_primary",
+      "access_class": "public_web_reference",
+      "ingestion_mode": "citation_only",
+      "decision_role": "validation_method",
+      "commercial_use_status": "citation_only",
+      "update_cadence": "review quarterly",
+      "domains": [
+        "strategy simulation",
+        "forward testing",
+        "look-ahead bias",
+        "realistic commission assumptions"
+      ],
+      "permitted_uses": [
+        "cite public guidance when defining anti-look-ahead tests",
+        "compare exported user-owned strategy results with Quantara reports",
+        "use concepts as independent validation checklists"
+      ],
+      "prohibited_uses": [
+        "use undocumented TradingView endpoints",
+        "scrape chart data, private scripts, or paid content",
+        "copy proprietary Pine scripts without permission",
+        "treat TradingView simulated fills as exchange-confirmed execution"
+      ],
+      "validation_requirements": [
+        "official documented pages only",
+        "no data ingestion without an explicit licensed integration",
+        "reproduce every accepted strategy in Quantara's own cost-aware runner"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Store citations, user-owned exports, and Quantara-authored comparisons only.",
+      "revision_policy": "Review quarterly and whenever TradingView changes strategy behavior or policies.",
+      "enabled": true
+    },
+    {
+      "id": "fred-alfred-api",
+      "title": "FRED and ALFRED economic data API",
+      "publisher": "Federal Reserve Bank of St. Louis",
+      "canonical_url": "https://fred.stlouisfed.org/docs/api/fred/overview.html",
+      "terms_urls": [
+        "https://fred.stlouisfed.org/legal/terms/",
+        "https://fred.stlouisfed.org/docs/api/terms_of_use.html"
+      ],
+      "source_class": "official_event_data",
+      "authority_tier": "official_primary",
+      "access_class": "public_api_with_terms",
+      "ingestion_mode": "api",
+      "decision_role": "direct_fact",
+      "commercial_use_status": "approved_subject_to_terms",
+      "update_cadence": "per-series release and revision schedule",
+      "domains": [
+        "macroeconomic releases",
+        "rates and liquidity",
+        "inflation and employment",
+        "historical data vintages"
+      ],
+      "permitted_uses": [
+        "retrieve approved series through the documented API",
+        "store release and vintage timestamps with source-series metadata",
+        "build revision-aware macro event features",
+        "display required FRED attribution and non-endorsement notice"
+      ],
+      "prohibited_uses": [
+        "assume every series has identical redistribution rights",
+        "ignore third-party series restrictions",
+        "replace the essential FRED user experience",
+        "use revised values as if they were known at the historical decision time"
+      ],
+      "validation_requirements": [
+        "allowlist series individually with source-owner restrictions",
+        "use ALFRED or real-time periods for historical experiments",
+        "record retrieval timestamp, vintage date, release date, and content hash",
+        "review required attribution before production display"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Retain only allowlisted API results and provenance according to each series owner's restrictions.",
+      "revision_policy": "Track vintages; never silently overwrite a historically consumed value.",
+      "enabled": true
+    },
+    {
+      "id": "cftc-cot-public-data",
+      "title": "Commitments of Traders reports and public reporting API",
+      "publisher": "U.S. Commodity Futures Trading Commission",
+      "canonical_url": "https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm",
+      "terms_urls": [
+        "https://www.cftc.gov/WebPolicy/index.htm"
+      ],
+      "source_class": "official_event_data",
+      "authority_tier": "official_primary",
+      "access_class": "public_api_with_terms",
+      "ingestion_mode": "api",
+      "decision_role": "feature_input",
+      "commercial_use_status": "approved_subject_to_terms",
+      "update_cadence": "weekly, normally Friday for Tuesday positions",
+      "domains": [
+        "futures positioning",
+        "open interest",
+        "leveraged funds and asset managers",
+        "cross-asset positioning regimes"
+      ],
+      "permitted_uses": [
+        "retrieve official current and historical aggregate reports",
+        "derive lag-aware positioning features",
+        "store report date separately from release and retrieval time"
+      ],
+      "prohibited_uses": [
+        "infer individual trader identities",
+        "treat category labels as exact trade motivations",
+        "use report-date data before its actual publication time",
+        "silently interpolate missing holiday-delayed releases"
+      ],
+      "validation_requirements": [
+        "preserve report date, release time, contract identity, and report type",
+        "apply publication lag during backtests",
+        "detect revisions and schema changes",
+        "treat classification limitations as model uncertainty"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Retain official aggregate data, provenance, and normalized features; no inferred individual records.",
+      "revision_policy": "Append corrected versions and preserve prior consumed snapshots.",
+      "enabled": true
+    },
+    {
+      "id": "sec-edgar-data-api",
+      "title": "SEC EDGAR submissions and XBRL data APIs",
+      "publisher": "U.S. Securities and Exchange Commission",
+      "canonical_url": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+      "terms_urls": [
+        "https://www.sec.gov/privacy.htm"
+      ],
+      "source_class": "official_event_data",
+      "authority_tier": "official_primary",
+      "access_class": "public_api_with_terms",
+      "ingestion_mode": "api",
+      "decision_role": "direct_fact",
+      "commercial_use_status": "approved_subject_to_terms",
+      "update_cadence": "real-time filings plus nightly bulk archives",
+      "domains": [
+        "public company filings",
+        "XBRL fundamentals",
+        "crypto-related issuer and ETF disclosures",
+        "regulatory events"
+      ],
+      "permitted_uses": [
+        "retrieve documented JSON APIs and bulk archives",
+        "store accession numbers, filing timestamps, form types, and XBRL provenance",
+        "derive time-aware event features from public filings"
+      ],
+      "prohibited_uses": [
+        "exceed SEC fair-access limits",
+        "omit an identifying user agent",
+        "treat a filing as investment advice or a verified market outcome",
+        "use later amendments before their publication time"
+      ],
+      "validation_requirements": [
+        "identify Quantara requests with a compliant user agent",
+        "record accession number and accepted timestamp",
+        "deduplicate amendments without deleting prior versions",
+        "validate XBRL units, periods, taxonomy, and filing context"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Retain public filing metadata and normalized facts with immutable accession provenance.",
+      "revision_policy": "Append amendments and preserve the originally observed filing state.",
+      "enabled": true
+    },
+    {
+      "id": "coinmetrics-community-api",
+      "title": "Coin Metrics Community API",
+      "publisher": "Coin Metrics",
+      "canonical_url": "https://docs.coinmetrics.io/api",
+      "terms_urls": [
+        "https://coinmetrics.io/terms-of-use/"
+      ],
+      "source_class": "live_market_data",
+      "authority_tier": "vendor_primary",
+      "access_class": "community_noncommercial",
+      "ingestion_mode": "api",
+      "decision_role": "feature_input",
+      "commercial_use_status": "blocked_pending_license",
+      "update_cadence": "endpoint-specific",
+      "domains": [
+        "crypto market data",
+        "network and on-chain metrics",
+        "reference rates",
+        "exchange metrics"
+      ],
+      "permitted_uses": [
+        "evaluate the Community API in non-commercial research environments subject to current terms",
+        "store catalog metadata and test fixtures where permitted",
+        "design provider-neutral ingestion contracts"
+      ],
+      "prohibited_uses": [
+        "ship Community data in a commercial Quantara release without license approval",
+        "bypass rate limits or access controls",
+        "assume experimental metrics are production quality",
+        "mix Community and Pro entitlements without provenance"
+      ],
+      "validation_requirements": [
+        "commercial license review before production enablement",
+        "record endpoint, metric definition, frequency, experimental flag, and retrieval time",
+        "respect documented rate limits and pagination",
+        "cross-check critical market values against an independent venue source"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Disabled for commercial production until licensing is approved; retain only permitted research artifacts.",
+      "revision_policy": "Review terms and metric definitions before every production release.",
+      "enabled": false,
+      "notes": "The registry blocks commercial use by default because Community access is described as non-commercial."
+    },
+    {
+      "id": "bitunix-official-futures-api",
+      "title": "Bitunix official futures REST and WebSocket API",
+      "publisher": "Bitunix",
+      "canonical_url": "https://www.bitunix.com/api-docs/futures/common/introduction.html",
+      "terms_urls": [
+        "https://www.bitunix.com/terms"
+      ],
+      "source_class": "live_market_data",
+      "authority_tier": "vendor_primary",
+      "access_class": "public_api_with_terms",
+      "ingestion_mode": "api",
+      "decision_role": "feature_input",
+      "commercial_use_status": "approved_subject_to_terms",
+      "update_cadence": "real-time streams and endpoint-specific polling",
+      "domains": [
+        "futures instruments",
+        "candles and order book",
+        "funding and market data",
+        "account and order reconciliation"
+      ],
+      "permitted_uses": [
+        "use unauthenticated public endpoints for market data after connector tests",
+        "use read-only authenticated endpoints only after a separate credential-security gate",
+        "record REST and WebSocket sequence, timestamps, and source payload hashes",
+        "treat WebSocket order state as reconciliation evidence according to official documentation"
+      ],
+      "prohibited_uses": [
+        "enable private trading endpoints in this registry milestone",
+        "store API secrets in source control, logs, prompts, or analytics",
+        "treat an HTTP success response as a confirmed fill",
+        "enable withdrawal permissions or endpoints"
+      ],
+      "validation_requirements": [
+        "contract tests against documented public schemas",
+        "rate-limit, reconnect, gap, duplicate, and out-of-order stream tests",
+        "REST and WebSocket reconciliation before any paper-to-live decision",
+        "separate read-only, paper, shadow, and restricted-live configurations"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Retain normalized market data and immutable connector evidence according to exchange terms; never retain secrets.",
+      "revision_policy": "Pin observed API schema versions and fail closed on undocumented changes.",
+      "enabled": true
+    },
+    {
+      "id": "youtube-api-developer-policy",
+      "title": "YouTube API Services developer policies",
+      "publisher": "Google / YouTube",
+      "canonical_url": "https://developers.google.com/youtube/terms/developer-policies",
+      "terms_urls": [
+        "https://developers.google.com/youtube/terms/api-services-terms-of-service",
+        "https://developers.google.com/youtube/terms/revision-history"
+      ],
+      "source_class": "compliance_policy",
+      "authority_tier": "compliance_authority",
+      "access_class": "public_web_reference",
+      "ingestion_mode": "no_ingestion",
+      "decision_role": "compliance_only",
+      "commercial_use_status": "not_applicable",
+      "update_cadence": "monitor revision history monthly",
+      "domains": [
+        "YouTube API compliance",
+        "data retention",
+        "privacy and attribution",
+        "anti-scraping controls"
+      ],
+      "permitted_uses": [
+        "define connector and metadata-retention controls",
+        "monitor policy revision history",
+        "validate product attribution and privacy requirements"
+      ],
+      "prohibited_uses": [
+        "use the policy text as trading knowledge",
+        "scrape YouTube applications or obtain scraped content",
+        "store YouTube credentials or user data without disclosed need and consent"
+      ],
+      "validation_requirements": [
+        "legal and security review before YouTube API production use",
+        "document every retained API field and deletion rule",
+        "disable ingestion if current policy cannot be verified"
+      ],
+      "attribution_required": true,
+      "automated_scraping_allowed": false,
+      "retention_policy": "Store policy metadata and compliance decisions; follow current API data retention rules.",
+      "revision_policy": "A policy revision creates a blocking compliance review before the next release.",
+      "enabled": true
+    }
+  ]
+}
