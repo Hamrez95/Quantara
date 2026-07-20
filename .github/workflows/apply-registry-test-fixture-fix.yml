@@ -1,0 +1,30 @@
+name: Apply registry test fixture fix
+
+on:
+  push:
+    branches:
+      - feat/18-source-governance-registry
+    paths:
+      - scripts/fix_registry_loader_test_fixture.py
+      - .github/workflows/apply-registry-test-fixture-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/18-source-governance-registry
+      - name: Apply focused patch
+        run: python3 scripts/fix_registry_loader_test_fixture.py
+      - name: Remove one-time tooling and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/fix_registry_loader_test_fixture.py .github/workflows/apply-registry-test-fixture-fix.yml
+          git add tests/backend/Quantara.Domain.Tests/ResearchSourceRegistryLoaderTests.cs
+          git commit -m "test: make registry mutation fixtures whitespace-independent"
+          git push origin HEAD:feat/18-source-governance-registry
