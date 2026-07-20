@@ -126,7 +126,7 @@ public sealed class EfOrderStore : IOrderStore
         var existingEvent = await FindEventAsync(orderEvent.EventId, cancellationToken);
         if (existingEvent is not null)
         {
-            return CreateDuplicateResult(existingEvent);
+            return CreateDuplicateResult(existingEvent, orderId, orderEvent);
         }
 
         var order = await _dbContext.Orders
@@ -217,7 +217,7 @@ public sealed class EfOrderStore : IOrderStore
             existingEvent = await FindEventAsync(orderEvent.EventId, cancellationToken);
             if (existingEvent is not null)
             {
-                return CreateDuplicateResult(existingEvent);
+                return CreateDuplicateResult(existingEvent, orderId, orderEvent);
             }
 
             throw;
@@ -247,13 +247,30 @@ public sealed class EfOrderStore : IOrderStore
     }
 
     private static OrderEventApplicationResult CreateDuplicateResult(
-        PersistedOrderEventEntity existingEvent)
+        PersistedOrderEventEntity existingEvent,
+        string requestedOrderId,
+        OrderLifecycleEvent requestedEvent)
     {
+        var isIdenticalReplay = string.Equals(
+                existingEvent.OrderId,
+                requestedOrderId,
+                StringComparison.Ordinal)
+            && existingEvent.TargetState == requestedEvent.TargetState
+            && existingEvent.OccurredAt == requestedEvent.OccurredAt.ToUniversalTime()
+            && string.Equals(
+                existingEvent.Reason,
+                requestedEvent.Reason,
+                StringComparison.Ordinal);
+
         return new OrderEventApplicationResult(
-            OrderEventApplicationCode.DuplicateIgnored,
+            isIdenticalReplay
+                ? OrderEventApplicationCode.DuplicateIgnored
+                : OrderEventApplicationCode.ConflictingDuplicate,
             existingEvent.PreviousState,
             existingEvent.CurrentState,
-            "The event identifier already exists and was ignored idempotently.");
+            isIdenticalReplay
+                ? "The identical event was already persisted and was ignored idempotently."
+                : "The event identifier is already bound to a different order lifecycle payload.");
     }
 
     private static OrderEventApplicationResult CreateConcurrencyResult(
