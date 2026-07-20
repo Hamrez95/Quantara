@@ -80,7 +80,7 @@ public static class ConservativePriceNormalizer
             .ToString(CultureInfo.InvariantCulture)
             .TrimEnd('0')
             .TrimEnd('.');
-        var decimalSeparatorIndex = text.IndexOf('.', StringComparison.Ordinal);
+        var decimalSeparatorIndex = text.IndexOf('.');
         var effectiveScale = decimalSeparatorIndex < 0
             ? 0
             : text.Length - decimalSeparatorIndex - 1;
