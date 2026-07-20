@@ -23,7 +23,8 @@ public enum OrderEventApplicationCode
     Applied,
     DuplicateIgnored,
     InvalidTransition,
-    ConcurrencyConflict
+    ConcurrencyConflict,
+    OrderNotFound
 }
 
 public sealed record OrderLifecycleEvent(
