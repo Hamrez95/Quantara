@@ -62,6 +62,20 @@ final class ChartPriceZone {
   double get center => (lower + upper) / 2;
 }
 
+final class ChartStructureSnapshot {
+  ChartStructureSnapshot({
+    required Iterable<ChartPriceZone> zones,
+    required this.direction,
+    required this.directionStrength,
+    required this.volatilityPercent,
+  }) : zones = UnmodifiableListView(zones.toList(growable: false));
+
+  final UnmodifiableListView<ChartPriceZone> zones;
+  final ChartDirection direction;
+  final double directionStrength;
+  final double volatilityPercent;
+}
+
 final class TimeframeChartAnalysis {
   TimeframeChartAnalysis({
     required this.symbol,
@@ -79,11 +93,14 @@ final class TimeframeChartAnalysis {
     if (symbol.trim().isEmpty || timeframe.trim().isEmpty) {
       throw ArgumentError('Symbol and timeframe are required.');
     }
-    if (this.candles.length < 20 || this.candles.any((candle) => !candle.isValid)) {
+    if (this.candles.length < 20 ||
+        this.candles.any((candle) => !candle.isValid)) {
       throw ArgumentError('At least 20 valid UTC candles are required.');
     }
     for (var index = 1; index < this.candles.length; index++) {
-      if (!this.candles[index].openTime.isAfter(this.candles[index - 1].openTime)) {
+      if (!this.candles[index].openTime.isAfter(
+        this.candles[index - 1].openTime,
+      )) {
         throw ArgumentError('Candles must be strictly ordered.');
       }
     }
