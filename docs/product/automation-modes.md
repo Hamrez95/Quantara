@@ -43,6 +43,10 @@ Extending time or capital creates a new confirmation. A disconnected, expired or
 
 The app asks plain-language questions, converts the answers to an explicit session contract, and displays the worst-case loss before confirmation. While running, the user always sees allocated capital, current exposure, remaining loss budget, expiry and the stop control.
 
+## Current implementation status
+
+The mobile stabilization slice implements the Observe experience and the visual boundary for dynamic market data. Assist and Paper Auto remain disabled until their service contracts and persistence gates are complete.
+
 ## Rollout order
 
 1. Observe
