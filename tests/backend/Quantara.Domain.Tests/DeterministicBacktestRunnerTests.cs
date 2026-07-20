@@ -5,6 +5,7 @@ namespace Quantara.Domain.Tests;
 
 public sealed class DeterministicBacktestRunnerTests
 {
+    private static readonly int[] ExpectedVisibleCounts = [1, 2, 3, 4, 5, 6];
     private static readonly BacktestExecutionRules DefaultRules = new(
         10_000m,
         1m,
@@ -23,7 +24,7 @@ public sealed class DeterministicBacktestRunnerTests
 
         Assert.True(result.IsCompleted);
         Assert.Equal(6, strategy.VisibleCounts.Count);
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, strategy.VisibleCounts);
+        Assert.Equal(ExpectedVisibleCounts, strategy.VisibleCounts);
         Assert.All(strategy.ObservedCurrentOpenTimes, observed =>
             Assert.DoesNotContain(
                 strategy.VisibleSnapshots[observed],
@@ -227,6 +228,24 @@ public sealed class DeterministicBacktestRunnerTests
         Assert.Contains(
             targetLimit.Warnings,
             warning => warning.Code == "no-fills");
+    }
+
+    [Fact]
+    public void ReportsSubMinimumNonzeroTargetAsNormalizedToFlat()
+    {
+        var fixture = CreateFixture();
+
+        var result = Run(fixture, new ConstantTargetStrategy(0.05m));
+
+        Assert.True(result.IsCompleted);
+        Assert.Empty(result.Fills);
+        Assert.All(result.Decisions, decision =>
+        {
+            Assert.Equal(0.05m, decision.RequestedTargetSignedQuantity);
+            Assert.Equal(0m, decision.NormalizedTargetSignedQuantity);
+            Assert.Equal(BacktestDecisionCode.NormalizedToFlat, decision.Code);
+        });
+        Assert.Equal(0m, result.FinalPosition?.SignedQuantity);
     }
 
     [Fact]
