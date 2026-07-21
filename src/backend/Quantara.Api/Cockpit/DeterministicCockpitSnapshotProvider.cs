@@ -114,4 +114,3 @@ public sealed class DeterministicCockpitSnapshotProvider : ICockpitSnapshotProvi
             Array.AsReadOnly(sparkline));
     }
 }
-
