@@ -5,6 +5,9 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../domain/cockpit_models.dart';
+import '../../market_analysis/data/demo_market_chart_factory.dart';
+import '../../market_analysis/domain/market_chart_models.dart';
+import '../../market_analysis/presentation/quantara_candlestick_chart.dart';
 
 part 'stable_cockpit_dashboard.dart';
 part 'stable_cockpit_markets.dart';
