@@ -4,8 +4,8 @@ import '../domain/owner_alpha_models.dart';
 
 final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
   const PlatformOwnerAlphaSettingsStore({
-    MethodChannel channel = const MethodChannel('quantara/settings'),
-  }) : _channel = channel;
+    this._channel = const MethodChannel('quantara/settings'),
+  });
 
   final MethodChannel _channel;
 

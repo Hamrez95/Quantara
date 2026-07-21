@@ -16,8 +16,8 @@ abstract interface class AppPreferencesStore {
 
 final class PlatformAppPreferencesStore implements AppPreferencesStore {
   const PlatformAppPreferencesStore({
-    MethodChannel channel = const MethodChannel('quantara/settings'),
-  }) : _channel = channel;
+    this._channel = const MethodChannel('quantara/settings'),
+  });
 
   final MethodChannel _channel;
 

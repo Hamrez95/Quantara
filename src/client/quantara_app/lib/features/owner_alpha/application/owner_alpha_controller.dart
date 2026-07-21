@@ -16,14 +16,11 @@ enum OwnerAlphaConnectionState {
 
 final class OwnerAlphaController extends ChangeNotifier {
   OwnerAlphaController({
-    required OwnerAlphaRepository repository,
-    required OwnerAlphaSettingsStore settingsStore,
+    required this._repository,
+    required this._settingsStore,
     Duration scanInterval = const Duration(seconds: 60),
-    String languageCode = 'fa',
-  }) : _repository = repository,
-       _settingsStore = settingsStore,
-       _scanInterval = scanInterval,
-       _languageCode = languageCode {
+    this._languageCode = 'fa',
+  }) : _scanInterval = scanInterval {
     if (scanInterval < const Duration(seconds: 30)) {
       throw ArgumentError.value(scanInterval, 'scanInterval');
     }

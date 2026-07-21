@@ -23,12 +23,11 @@ final class OwnerAlphaDataException implements Exception {
 
 final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
   BitunixOwnerAlphaRepository({
-    required http.Client client,
+    required this._client,
     Duration timeout = const Duration(seconds: 10),
     Duration requestSpacing = const Duration(milliseconds: 120),
     DateTime Function()? now,
-  }) : _client = client,
-       _timeout = timeout,
+  }) : _timeout = timeout,
        _requestSpacing = requestSpacing,
        _now = now ?? DateTime.now {
     if (timeout <= Duration.zero || timeout > const Duration(seconds: 30)) {
