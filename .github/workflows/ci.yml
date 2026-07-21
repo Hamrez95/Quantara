@@ -65,6 +65,9 @@ jobs:
           --logger "trx;LogFileName=quantara-tests.trx"
           --results-directory TestResults
 
+      - name: Validate read-only cockpit API over HTTP
+        run: python3 scripts/run_cockpit_api_smoke.py
+
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -72,6 +75,7 @@ jobs:
           name: dotnet-diagnostics
           path: |
             build.log
+            api.log
             TestResults/**/*.trx
           if-no-files-found: ignore
           retention-days: 14

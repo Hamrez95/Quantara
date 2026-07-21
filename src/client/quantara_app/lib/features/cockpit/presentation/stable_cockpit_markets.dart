@@ -200,7 +200,7 @@ class _StructureSummary extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'تحلیل فعلی قطعی و نمایشی است؛ اتصال داده بیرونی در مرحله بعد انجام می‌شود.',
+              'این تحلیل از داده‌ی قطعی نسخه‌ی نمایشی ساخته شده و به‌عنوان سیگنال معامله نیست.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

@@ -10,6 +10,7 @@
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
     <PackageReference Include="xunit" Version="2.8.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.1" />
+    <ProjectReference Include="../../../src/backend/Quantara.Api/Quantara.Api.csproj" />
     <ProjectReference Include="../../../src/backend/Quantara.Domain/Quantara.Domain.csproj" />
     <ProjectReference Include="../../../src/backend/Quantara.Infrastructure/Quantara.Infrastructure.csproj" />
   </ItemGroup>
