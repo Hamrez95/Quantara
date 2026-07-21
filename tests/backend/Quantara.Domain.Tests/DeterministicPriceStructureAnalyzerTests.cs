@@ -146,3 +146,4 @@ public sealed class DeterministicPriceStructureAnalyzerTests
             .First();
     }
 }
+

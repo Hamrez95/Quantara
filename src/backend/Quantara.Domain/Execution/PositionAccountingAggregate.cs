@@ -322,3 +322,4 @@ public sealed class PositionAccountingAggregate
         return settlement with { OccurredAt = settlement.OccurredAt.ToUniversalTime() };
     }
 }
+

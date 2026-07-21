@@ -175,3 +175,4 @@ internal static class PriceStructureMath
     public static decimal RoundScore(decimal value) =>
         decimal.Round(value, 6, MidpointRounding.ToEven);
 }
+

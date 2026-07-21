@@ -8,3 +8,4 @@ Use a monorepo with a modular ASP.NET Core backend, Python/FastAPI analytics app
 
 ## Consequences
 The first release avoids premature microservices while preserving boundaries that can later be split into independently deployed services.
+

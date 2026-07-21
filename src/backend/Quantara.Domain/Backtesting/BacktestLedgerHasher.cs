@@ -145,3 +145,4 @@ public static class BacktestLedgerHasher
         CanonicalResearchHash.Append(builder, position.NetRealizedPnl);
     }
 }
+

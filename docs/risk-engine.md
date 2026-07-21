@@ -78,3 +78,4 @@ Execution connectivity and exchange acknowledgement remain responsibilities of t
 ## Prohibited behavior
 
 Martingale, unlimited averaging down, loss chasing, LLM-controlled order execution, and withdrawal functionality remain prohibited. Opening orders are blocked during unsafe states, while tested reduce-only paths remain available for exposure reduction.
+

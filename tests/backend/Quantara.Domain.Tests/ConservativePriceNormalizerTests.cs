@@ -240,3 +240,4 @@ public sealed class ConservativePriceNormalizerTests
             new DateTimeOffset(2026, 7, 20, 9, 0, 0, TimeSpan.Zero));
     }
 }
+

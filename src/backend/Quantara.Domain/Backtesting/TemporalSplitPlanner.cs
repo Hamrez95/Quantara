@@ -199,3 +199,4 @@ public static class TemporalSplitPlanner
         CanonicalResearchHash.Append(builder, window.EndExclusive);
     }
 }
+

@@ -279,3 +279,4 @@ public sealed class ResearchSourceRegistrySnapshotFactoryTests
             isEnabled);
     }
 }
+

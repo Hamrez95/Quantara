@@ -93,3 +93,4 @@ The existing backend CI remains mandatory on the same pull request.
 - Golden screenshots across themes and locales.
 - Real-time WebSocket updates.
 - Any real-money control.
+

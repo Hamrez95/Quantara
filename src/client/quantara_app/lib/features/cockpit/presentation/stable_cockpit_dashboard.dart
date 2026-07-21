@@ -339,3 +339,4 @@ class _CompactMarketList extends StatelessWidget {
     );
   }
 }
+

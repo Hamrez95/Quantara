@@ -99,3 +99,4 @@ final class MockCockpitRepository implements CockpitRepository {
     return demoSnapshot;
   }
 }
+

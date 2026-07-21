@@ -1,0 +1,162 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quantara_app/features/owner_alpha/application/owner_alpha_controller.dart';
+import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
+
+import 'support/owner_alpha_test_fakes.dart';
+
+void main() {
+  test(
+    'risk changes reprice the cached plan without a market request',
+    () async {
+      final repository = _SwitchableRepository();
+      final controller = OwnerAlphaController(
+        repository: repository,
+        settingsStore: MemoryOwnerAlphaSettingsStore(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final requestsBefore = repository.requests;
+
+      await controller.updateRiskSettings(capital: 20000, riskPercent: 2);
+
+      expect(repository.requests, requestsBefore);
+      expect(controller.snapshot!.selectedIdea.maximumLoss, 400);
+    },
+  );
+
+  test('failed timeframe refresh restores the previous selection', () async {
+    final repository = _SwitchableRepository();
+    final controller = OwnerAlphaController(
+      repository: repository,
+      settingsStore: MemoryOwnerAlphaSettingsStore(),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    repository.fail = true;
+
+    await controller.selectTimeframe('4h');
+
+    expect(controller.selectedTimeframe, '1h');
+    expect(controller.snapshot!.selectedTimeframe, '1h');
+    expect(controller.error, isNotNull);
+  });
+
+  test(
+    'a user selection waits for an active scan and commits atomically',
+    () async {
+      final repository = _ControlledRepository();
+      final controller = OwnerAlphaController(
+        repository: repository,
+        settingsStore: MemoryOwnerAlphaSettingsStore(),
+      );
+      addTearDown(controller.dispose);
+
+      final initialization = controller.initialize();
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.gates, hasLength(1));
+
+      final selection = controller.selectSymbol('ETHUSDT');
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.gates, hasLength(1));
+      expect(controller.selectedSymbol, 'BTCUSDT');
+
+      repository.gates.first.complete();
+      await initialization;
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.gates, hasLength(2));
+      expect(controller.selectedSymbol, 'BTCUSDT');
+      expect(controller.snapshot!.selectedSymbol, 'BTCUSDT');
+
+      repository.gates.last.complete();
+      await selection;
+      expect(controller.selectedSymbol, 'ETHUSDT');
+      expect(controller.snapshot!.selectedSymbol, 'ETHUSDT');
+    },
+  );
+
+  test(
+    'language changes retranslate cached ideas without a market request',
+    () async {
+      final repository = _SwitchableRepository();
+      final controller = OwnerAlphaController(
+        repository: repository,
+        settingsStore: MemoryOwnerAlphaSettingsStore(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final requestsBefore = repository.requests;
+
+      controller.setLanguage('en');
+
+      expect(repository.requests, requestsBefore);
+      expect(controller.languageCode, 'en');
+      expect(
+        controller.snapshot!.selectedIdea.summary,
+        isNot(contains('ساختار')),
+      );
+      expect(
+        controller.snapshot!.selectedIdea.summary,
+        isNot(contains('سناریو')),
+      );
+      expect(controller.selectedSymbol, 'BTCUSDT');
+    },
+  );
+}
+
+final class _SwitchableRepository implements OwnerAlphaRepository {
+  var requests = 0;
+  var fail = false;
+  final _delegate = const FakeOwnerAlphaRepository();
+
+  @override
+  Future<OwnerAlphaSnapshot> scan({
+    required List<String> symbols,
+    required String selectedSymbol,
+    required String selectedTimeframe,
+    required double capital,
+    required double riskPercent,
+    required String languageCode,
+  }) {
+    requests++;
+    if (fail) {
+      throw const FormatException('network unavailable');
+    }
+    return _delegate.scan(
+      symbols: symbols,
+      selectedSymbol: selectedSymbol,
+      selectedTimeframe: selectedTimeframe,
+      capital: capital,
+      riskPercent: riskPercent,
+      languageCode: languageCode,
+    );
+  }
+}
+
+final class _ControlledRepository implements OwnerAlphaRepository {
+  final gates = <Completer<void>>[];
+  final _delegate = const FakeOwnerAlphaRepository();
+
+  @override
+  Future<OwnerAlphaSnapshot> scan({
+    required List<String> symbols,
+    required String selectedSymbol,
+    required String selectedTimeframe,
+    required double capital,
+    required double riskPercent,
+    required String languageCode,
+  }) async {
+    final gate = Completer<void>();
+    gates.add(gate);
+    await gate.future;
+    return _delegate.scan(
+      symbols: symbols,
+      selectedSymbol: selectedSymbol,
+      selectedTimeframe: selectedTimeframe,
+      capital: capital,
+      riskPercent: riskPercent,
+      languageCode: languageCode,
+    );
+  }
+}

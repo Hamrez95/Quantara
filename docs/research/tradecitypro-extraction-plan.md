@@ -143,3 +143,4 @@ The creator's name must never be used to imply endorsement, partnership, or guar
 ## Initial curation request
 
 The product owner can later provide a short list of preferred videos or playlists. Until then, Quantara records the official channel as an approved discovery source but does not bulk-ingest its catalog.
+

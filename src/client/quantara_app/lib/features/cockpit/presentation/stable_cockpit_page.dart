@@ -641,3 +641,4 @@ IconData _impactIcon(EvidenceImpact impact) {
     EvidenceImpact.neutral => Icons.remove_rounded,
   };
 }
+

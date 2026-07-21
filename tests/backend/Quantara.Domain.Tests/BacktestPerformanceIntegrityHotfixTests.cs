@@ -224,3 +224,4 @@ public sealed class BacktestPerformanceIntegrityHotfixTests
         }
     }
 }
+

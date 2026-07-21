@@ -90,3 +90,4 @@ This slice establishes the trust contract but does not yet provide:
 - strategy promotion or execution authority.
 
 Those features must preserve this trust chain and add their own issue, tests, audit records, and release gates.
+

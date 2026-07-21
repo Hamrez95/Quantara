@@ -104,3 +104,4 @@ abstract final class DemoMarketChartFactory {
     return hash.toRadixString(16).padLeft(8, '0');
   }
 }
+

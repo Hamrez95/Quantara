@@ -318,3 +318,4 @@ final class _CandlestickPainter extends CustomPainter {
         oldDelegate.colorScheme != colorScheme;
   }
 }
+

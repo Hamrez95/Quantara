@@ -262,3 +262,4 @@ public sealed class ResearchSourceRegistryLoaderTests
             .ToLowerInvariant();
     }
 }
+

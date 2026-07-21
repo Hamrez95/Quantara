@@ -55,3 +55,4 @@ public sealed record TradeDecision(
     decimal EstimatedSlippage,
     DateTimeOffset ExpiresAt,
     DecisionStatus Status);
+

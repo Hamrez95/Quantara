@@ -246,3 +246,4 @@ class _AccountLine extends StatelessWidget {
     );
   }
 }
+

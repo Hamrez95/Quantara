@@ -90,3 +90,4 @@ internal static class CanonicalResearchHash
             or >= 'A' and <= 'F';
     }
 }
+

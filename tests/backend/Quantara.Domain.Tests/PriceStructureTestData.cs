@@ -156,3 +156,4 @@ internal static class PriceStructureTestData
             volume);
     }
 }
+

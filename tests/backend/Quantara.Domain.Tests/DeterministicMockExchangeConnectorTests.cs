@@ -28,3 +28,4 @@ public sealed class DeterministicMockExchangeConnectorTests
         Assert.Equal("DuplicateIgnored", second.State);
     }
 }
+

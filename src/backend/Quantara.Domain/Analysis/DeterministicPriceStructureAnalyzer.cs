@@ -419,3 +419,4 @@ public sealed class DeterministicPriceStructureAnalyzer
         return new PriceStructureBuildResult(code, message, null);
     }
 }
+

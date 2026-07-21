@@ -81,3 +81,4 @@ public sealed class BacktestCostModelFactoryTests
             latencyBars);
     }
 }
+

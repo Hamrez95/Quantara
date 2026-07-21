@@ -48,3 +48,4 @@ A release pull request from `dev` to `main` requires:
 ## Emergency changes
 
 Emergency fixes must still receive an issue, a focused branch, tests, and a pull request. If an urgent safety response requires disabling functionality, prefer fail-closed behavior, kill switches, and removal of opening-order capability while preserving safe reduce-only exits.
+

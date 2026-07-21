@@ -225,3 +225,4 @@ public sealed record ResearchEvidenceBuildResult(
     bool IsCreated,
     IReadOnlyList<ResearchEvidenceCode> RejectionReasons,
     ResearchEvidenceEnvelope? Envelope);
+

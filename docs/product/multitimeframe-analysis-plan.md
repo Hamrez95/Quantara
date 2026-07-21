@@ -118,3 +118,4 @@ Before external-feed release:
 - multiple providers or a verified raw archive must reproduce the same normalized candles;
 - out-of-sample evidence must measure bounce calibration, false breaks and regime sensitivity;
 - the chart must pass Android device tests in dark/light mode and degraded connectivity states.
+

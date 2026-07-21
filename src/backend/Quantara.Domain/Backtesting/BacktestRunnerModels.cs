@@ -282,3 +282,4 @@ public sealed class BacktestRunResult
 
     public bool IsCompleted => Code == BacktestRunCode.Completed;
 }
+

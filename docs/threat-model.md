@@ -23,3 +23,4 @@
 - Redact secrets from logs and traces.
 - Block opening orders when kill switch, stale data, disconnects, circuit breakers, or risk violations are active.
 - No withdrawal functionality.
+

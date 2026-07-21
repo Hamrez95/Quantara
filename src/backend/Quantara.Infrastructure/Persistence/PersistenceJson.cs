@@ -42,3 +42,4 @@ internal static class PersistenceJson
         return options;
     }
 }
+

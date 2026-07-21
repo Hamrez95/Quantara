@@ -22,3 +22,4 @@ internal static class BacktestCostModelMath
                 * (volumeParticipation / costModel.MaximumVolumeParticipation));
     }
 }
+

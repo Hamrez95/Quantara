@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; connect-src 'none';" />
+    <style>
+      html, body, #chart { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { font-family: sans-serif; }
+      #chart { position: relative; }
+      #zones { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+      .zone { position: absolute; left: 0; right: 68px; border-top: 1px solid; border-bottom: 1px solid; }
+      #attribution { position: absolute; left: 8px; bottom: 5px; z-index: 7; font-size: 10px; text-decoration: none; opacity: .72; }
+    </style>
+  </head>
+  <body>
+    <div id="chart"><div id="zones"></div></div>
+    <a id="attribution" href="https://www.tradingview.com">Charts by TradingView</a>
+    <script src="lightweight-charts.standalone.production.js"></script>
+    <script src="quantara-chart.js"></script>
+  </body>
+</html>

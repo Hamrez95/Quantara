@@ -18,3 +18,4 @@ public sealed class PositionSizerTests
         Assert.Equal(0m, quantity.Value);
     }
 }
+

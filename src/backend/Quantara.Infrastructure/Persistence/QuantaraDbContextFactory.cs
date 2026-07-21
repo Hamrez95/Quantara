@@ -19,3 +19,4 @@ public sealed class QuantaraDbContextFactory
         return new QuantaraDbContext(optionsBuilder.Options);
     }
 }
+

@@ -196,3 +196,4 @@ public sealed class QuantaraDbContext(DbContextOptions<QuantaraDbContext> option
         }
     }
 }
+

@@ -119,3 +119,4 @@ This slice does not yet:
 - enforce research-lineage ownership through authentication.
 
 Those capabilities build on this trust boundary. No backtest or holdout result enables paper or live trading by itself, and live trading remains unavailable.
+

@@ -23,3 +23,4 @@ Quantara receives real-time and historical crypto market data, performs multi-ti
 - Bitunix live order placement.
 - LLM execution of orders.
 - Withdrawal functionality.
+

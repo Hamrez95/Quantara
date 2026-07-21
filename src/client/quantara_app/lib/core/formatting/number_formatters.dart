@@ -67,3 +67,4 @@ abstract final class QuantaraNumberFormat {
     return buffer.toString();
   }
 }
+

@@ -89,3 +89,4 @@ This slice does not yet:
 - promote a strategy to paper trading.
 
 An open position is marked to the final close, and a late target remains explicitly pending with a warning. These states are not silently converted into a favorable terminal fill.
+

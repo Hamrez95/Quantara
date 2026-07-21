@@ -19,3 +19,4 @@ Every environment defaults to paper trading through `TRADING_MODE=PAPER`. Live t
 
 ## Observability and Data Types
 Production services will use OpenTelemetry-compatible structured logs and traces. Money, price, quantity, fees, margin, and risk use `decimal` in .NET domain models.
+

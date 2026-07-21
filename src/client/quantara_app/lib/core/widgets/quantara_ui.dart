@@ -57,29 +57,31 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: label,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 15, color: color),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 15, color: color),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -108,35 +110,37 @@ class MetricTile extends StatelessWidget {
 
     return Semantics(
       label: '$label: $value',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: textTheme.labelMedium?.copyWith(
-              color: onSurface.withValues(alpha: 0.62),
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: textTheme.titleLarge?.copyWith(
-              color: valueColor,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-            ),
-          ),
-          if (caption != null) ...[
-            const SizedBox(height: 4),
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
             Text(
-              caption!,
-              style: textTheme.bodySmall?.copyWith(
-                color: onSurface.withValues(alpha: 0.52),
+              label,
+              style: textTheme.labelMedium?.copyWith(
+                color: onSurface.withValues(alpha: 0.62),
               ),
             ),
+            const SizedBox(height: 5),
+            Text(
+              value,
+              style: textTheme.titleLarge?.copyWith(
+                color: valueColor,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+            ),
+            if (caption != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                caption!,
+                style: textTheme.bodySmall?.copyWith(
+                  color: onSurface.withValues(alpha: 0.52),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

@@ -79,3 +79,4 @@ internal static class ResearchIdentityRules
             && string.IsNullOrEmpty(uri.UserInfo);
     }
 }
+

@@ -1,0 +1,58 @@
+name: Quantara Android Preview
+
+on:
+  push:
+    branches:
+      - 'alpha/**'
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/android-alpha.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-alpha-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-alpha:
+    name: Test and build Quantara Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test --reporter expanded
+
+      - name: Build Android release APK
+        run: flutter build apk --release
+
+      - name: Upload Quantara Android preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-0.4.0-android-preview
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

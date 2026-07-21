@@ -147,3 +147,4 @@ Prohibited:
 - scraped TradingView data or private scripts;
 - credentials or personal account exports;
 - a source field named or functioning as an embedded corpus.
+
