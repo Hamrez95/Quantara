@@ -1,0 +1,105 @@
+name: Deploy stable PWA
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/pages.yml'
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-build:
+    name: Validate and build PWA
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Build repository-scoped PWA
+        run: flutter build web --release --base-href "/Quantara/"
+
+      - name: Verify Pages release bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/web/index.html
+          test -s build/web/manifest.json
+          test -s build/web/flutter_service_worker.js
+          test -s build/web/main.dart.js
+          test -s build/web/icons/Icon-maskable-512.png
+          grep -F '<base href="/Quantara/">' build/web/index.html
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("build/web/manifest.json").read_text())
+          assert manifest["display"] == "standalone"
+          assert manifest["start_url"] == "."
+          assert manifest["scope"] == "."
+          assert any("maskable" in icon.get("purpose", "") for icon in manifest["icons"])
+          PY
+
+      - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: src/client/quantara_app/build/web
+
+  deploy:
+    name: Deploy PWA
+    if: github.event_name != 'pull_request'
+    needs: validate-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
