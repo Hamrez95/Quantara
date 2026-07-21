@@ -91,6 +91,9 @@ void main() {
       TextDirection.ltr,
     );
     expect(preferences.value?.languageCode, 'en');
+
+    await tester.tap(find.text('Radar').last);
+    await tester.pumpAndSettle();
     expect(find.text('BTCUSDT'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
