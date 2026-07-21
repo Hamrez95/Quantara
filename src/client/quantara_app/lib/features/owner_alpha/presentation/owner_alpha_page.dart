@@ -73,60 +73,10 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
 
   Future<void> _showAddSymbolDialog() async {
     final strings = AppStrings.of(context);
-    final textController = TextEditingController();
-    String? validation;
     final value = await showDialog<String>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(strings.addSymbolTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(strings.addSymbolDescription),
-              const SizedBox(height: 14),
-              TextField(
-                controller: textController,
-                autofocus: true,
-                textCapitalization: TextCapitalization.characters,
-                textDirection: TextDirection.ltr,
-                decoration: InputDecoration(
-                  labelText: 'Symbol',
-                  hintText: 'XRPUSDT',
-                  errorText: validation,
-                ),
-                onSubmitted: (value) {
-                  if (value.trim().isEmpty) {
-                    setDialogState(() => validation = strings.symbolRequired);
-                  } else {
-                    Navigator.pop(context, value);
-                  }
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(strings.cancel),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = textController.text.trim();
-                if (value.isEmpty) {
-                  setDialogState(() => validation = strings.symbolRequired);
-                } else {
-                  Navigator.pop(context, value);
-                }
-              },
-              child: Text(strings.verifyAndAdd),
-            ),
-          ],
-        ),
-      ),
+      builder: (context) => _AddSymbolDialog(strings: strings),
     );
-    textController.dispose();
     if (value == null || !mounted) {
       return;
     }
@@ -215,6 +165,72 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AddSymbolDialog extends StatefulWidget {
+  const _AddSymbolDialog({required this.strings});
+
+  final AppStrings strings;
+
+  @override
+  State<_AddSymbolDialog> createState() => _AddSymbolDialogState();
+}
+
+class _AddSymbolDialogState extends State<_AddSymbolDialog> {
+  final TextEditingController _textController = TextEditingController();
+  String? _validation;
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _textController.text.trim();
+    if (value.isEmpty) {
+      setState(() => _validation = widget.strings.symbolRequired);
+      return;
+    }
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = widget.strings;
+    return AlertDialog(
+      title: Text(strings.addSymbolTitle),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(strings.addSymbolDescription),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _textController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: 'Symbol',
+                hintText: 'XRPUSDT',
+                errorText: _validation,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
+        ),
+        FilledButton(onPressed: _submit, child: Text(strings.verifyAndAdd)),
+      ],
     );
   }
 }
