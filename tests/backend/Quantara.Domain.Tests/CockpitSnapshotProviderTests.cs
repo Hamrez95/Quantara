@@ -76,4 +76,3 @@ public sealed class CockpitSnapshotProviderTests
             root.GetProperty("analysis").GetProperty("decision").GetString());
     }
 }
-

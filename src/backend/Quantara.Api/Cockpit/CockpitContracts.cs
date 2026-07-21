@@ -61,4 +61,3 @@ public sealed record HealthResponseContract(
     DateTimeOffset GeneratedAt,
     string ExecutionAuthority,
     bool RealMoneyEnabled);
-
