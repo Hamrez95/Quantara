@@ -29,7 +29,7 @@ jobs:
   flutter:
     name: Flutter format, analyze, test, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: src/client/quantara_app
@@ -83,10 +83,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Build web PWA
+      - name: Compile API-configured web PWA
+        run: >-
+          flutter build web --release
+          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
+
+      - name: Compile API-configured Android release package
+        run: >-
+          flutter build apk --release
+          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
+
+      - name: Build stable offline-first web PWA
         run: flutter build web --release
 
-      - name: Build Android release package
+      - name: Build stable offline-first Android release package
         run: flutter build apk --release
 
       - name: Upload web preview

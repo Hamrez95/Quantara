@@ -2,7 +2,7 @@
 
 The Quantara client is a shared Flutter application for Android, iOS, and web/PWA.
 
-This first product slice is intentionally backed by deterministic demo data. It proves the visual system, responsive layout, accessibility states, and client-facing contracts before read-only market and durable paper-account APIs are connected.
+Version 0.2.0 is an offline-first stable demo/read-only cockpit. It uses deterministic demo data by default and can consume the versioned Quantara cockpit API when an origin is provided at build time.
 
 ## Current experience
 
@@ -11,6 +11,9 @@ This first product slice is intentionally backed by deterministic demo data. It 
 - Phone bottom navigation and desktop side navigation.
 - Clearly labelled demo environment.
 - Market watchlist with simulated freshness and spread values.
+- Deterministic candlestick charts and explainable price zones for four intervals.
+- Strict read-only API parsing with timeout, freshness, schema, numeric, and safety validation.
+- Explicit deterministic fallback for unavailable API transport.
 - Explainable analysis with a first-class `NO_TRADE` outcome.
 - Paper-account summary and daily-risk usage.
 - Explicitly locked real-money capability.
@@ -33,6 +36,15 @@ flutter devices
 flutter run -d <device-id>
 ```
 
+To connect the read-only API during development:
+
+```bash
+flutter run -d chrome \
+  --dart-define=QUANTARA_API_BASE_URL=http://localhost:5081
+```
+
+Release builds accept HTTPS API origins only. Android permits cleartext traffic solely in the debug manifest for loopback and emulator development.
+
 ## Quality checks
 
 ```bash
@@ -40,13 +52,13 @@ dart format --output=none --set-exit-if-changed lib test
 flutter analyze --fatal-infos
 flutter test
 flutter build web --release
-flutter build apk --debug
+flutter build apk --release
 ```
 
 GitHub Actions runs these checks for every relevant pull request. The repository's existing backend checks run independently on the same change.
 
 ## Architecture boundary
 
-Presentation code depends on `CockpitRepository`. `MockCockpitRepository` is the current deterministic implementation. Future API-backed repositories must preserve the same safety distinctions between demo, paper, shadow, and real-money-locked states.
+Presentation code depends on `CockpitRepository`. `MockCockpitRepository` is the deterministic offline implementation; `ApiCockpitRepository` validates the read-only HTTP contract. `FallbackCockpitRepository` falls back only for transport/service failures and never hides malformed or unsafe API data.
 
 See `docs/product/flutter-cockpit-foundation.md` for the cross-functional product and engineering decisions.

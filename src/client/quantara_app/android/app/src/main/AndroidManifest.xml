@@ -1,9 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Quantara"
         android:name="${applicationName}"
         android:icon="@drawable/ic_quantara_launcher"
-        android:roundIcon="@drawable/ic_quantara_launcher">
+        android:roundIcon="@drawable/ic_quantara_launcher"
+        android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
