@@ -39,4 +39,3 @@ public sealed record ProtectionRequest(Symbol Symbol, decimal StopLoss, IReadOnl
 public sealed record ClosePositionRequest(Symbol Symbol, decimal Quantity, bool ReduceOnly);
 public sealed record OrderSubmissionResult(string ClientOrderId, string ExchangeOrderId, string State);
 public sealed record ReconciliationReport(DateTimeOffset ReconciledAt, int LocalOrderCount, int RemoteOrderCount, IReadOnlyList<string> Differences);
-

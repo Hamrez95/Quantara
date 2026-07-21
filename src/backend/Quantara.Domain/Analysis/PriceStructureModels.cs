@@ -184,4 +184,3 @@ public sealed record MultiTimeframeBuildResult(
 {
     public bool IsCreated => Code == MultiTimeframeBuildCode.Created;
 }
-

@@ -152,4 +152,3 @@ public sealed class EfRiskEvaluationStore : IRiskEvaluationStore
         }
     }
 }
-

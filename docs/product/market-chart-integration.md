@@ -50,4 +50,3 @@ The adapter supports:
 ## Safety
 
 A chart is visualization only. It cannot grant execution authority, place orders or hide stale data. Live-looking animations stop when the feed is disconnected or stale.
-

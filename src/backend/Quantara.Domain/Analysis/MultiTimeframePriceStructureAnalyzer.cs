@@ -321,4 +321,3 @@ public sealed class MultiTimeframePriceStructureAnalyzer
         }
     }
 }
-

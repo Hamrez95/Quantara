@@ -93,4 +93,3 @@ The migration is applied in integration tests against a real `postgres:16-alpine
 ## Current limitations
 
 This slice does not yet persist fills, positions, balances, funding, PnL, paper-account snapshots, or exchange reconciliation state. It also does not expose persistence directly to a public API. Request-level audit records with authenticated actor and correlation context are deferred to that application layer. A generated EF Core model snapshot should be added before the next schema migration.
-

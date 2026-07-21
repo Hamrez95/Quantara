@@ -343,4 +343,3 @@ public sealed class BacktestPerformanceReportBuilderTests
         }
     }
 }
-

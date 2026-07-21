@@ -203,4 +203,3 @@ public sealed class BacktestPerformanceReport
 
     public IReadOnlyList<BacktestRunWarning> Warnings { get; }
 }
-

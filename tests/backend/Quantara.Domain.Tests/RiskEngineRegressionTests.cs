@@ -110,4 +110,3 @@ public sealed class RiskEngineRegressionTests
             new DateTimeOffset(2026, 7, 20, 8, 0, 0, TimeSpan.Zero));
     }
 }
-

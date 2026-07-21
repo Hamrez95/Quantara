@@ -8,4 +8,3 @@ Default all environments to paper trading. Live trading requires every documente
 
 ## Consequences
 Development and tests cannot accidentally place real orders. Live execution work is blocked until mock, paper, risk, state-machine, and reconciliation tests exist.
-

@@ -231,4 +231,3 @@ public sealed class InitialTradingPersistence : Migration
         migrationBuilder.DropTable(name: "orders");
     }
 }
-

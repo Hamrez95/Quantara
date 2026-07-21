@@ -71,4 +71,3 @@ Before live trading is considered:
 Live trading remains unavailable until a separate release decision verifies all safety dependencies. It must require independent server-side and user-level gates, strict allocation and loss limits, trade-only credentials, tested protection orders, healthy data streams, full auditability, and rollback/incident runbooks.
 
 No quality gate can guarantee profit. The goal is to reduce avoidable technical, statistical, and operational risk while making uncertainty visible.
-

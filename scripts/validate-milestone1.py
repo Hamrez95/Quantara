@@ -22,4 +22,3 @@ mock = Path("src/backend/Quantara.Infrastructure/Exchanges/DeterministicMockExch
 assert "DeterministicMockExchangeConnector" in mock
 assert "DuplicateIgnored" in mock
 print("Milestone 1 repository validation passed")
-

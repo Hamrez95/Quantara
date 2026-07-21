@@ -431,4 +431,3 @@ public sealed class DeterministicBacktestRunnerTests
         }
     }
 }
-

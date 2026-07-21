@@ -210,4 +210,3 @@ public static class OrderStateMachine
         return new HashSet<OrderState>(states);
     }
 }
-

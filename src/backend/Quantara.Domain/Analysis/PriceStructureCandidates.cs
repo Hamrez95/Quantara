@@ -111,4 +111,3 @@ internal sealed class PivotCluster
             relativeVolume);
     }
 }
-

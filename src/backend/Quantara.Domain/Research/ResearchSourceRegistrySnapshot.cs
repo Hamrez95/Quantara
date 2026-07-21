@@ -239,4 +239,3 @@ internal static class ResearchSourceRegistrySnapshotFactory
             || !source.IsEnabled;
     }
 }
-

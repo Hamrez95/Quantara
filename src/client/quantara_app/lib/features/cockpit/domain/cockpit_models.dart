@@ -99,4 +99,3 @@ final class CockpitSnapshot {
 abstract interface class CockpitRepository {
   Future<CockpitSnapshot> load();
 }
-

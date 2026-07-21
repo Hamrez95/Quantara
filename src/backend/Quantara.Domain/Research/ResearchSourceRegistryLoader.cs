@@ -501,4 +501,71 @@ internal static class ResearchSourceRegistryLoader
 
     private static bool TryParseIngestionMode(
         string value,
-        out ResearchIngestionMode ingesti
+        out ResearchIngestionMode ingestionMode)
+    {
+        ingestionMode = value switch
+        {
+            "api" => ResearchIngestionMode.Api,
+            "youtube_api_metadata" =>
+                ResearchIngestionMode.YoutubeApiMetadata,
+            "manual_metadata" => ResearchIngestionMode.ManualMetadata,
+            "citation_only" => ResearchIngestionMode.CitationOnly,
+            "no_ingestion" => ResearchIngestionMode.NoIngestion,
+            _ => default
+        };
+        return value is "api"
+            or "youtube_api_metadata"
+            or "manual_metadata"
+            or "citation_only"
+            or "no_ingestion";
+    }
+
+    private static bool TryParseDecisionRole(
+        string value,
+        out ResearchDecisionRole role)
+    {
+        role = value switch
+        {
+            "direct_fact" => ResearchDecisionRole.DirectFact,
+            "feature_input" => ResearchDecisionRole.FeatureInput,
+            "validation_method" => ResearchDecisionRole.ValidationMethod,
+            "hypothesis_only" => ResearchDecisionRole.HypothesisOnly,
+            "compliance_only" => ResearchDecisionRole.ComplianceOnly,
+            _ => default
+        };
+        return value is "direct_fact"
+            or "feature_input"
+            or "validation_method"
+            or "hypothesis_only"
+            or "compliance_only";
+    }
+
+    private static bool TryParseCommercialUseStatus(
+        string value,
+        out ResearchCommercialUseStatus status)
+    {
+        status = value switch
+        {
+            "approved_subject_to_terms" =>
+                ResearchCommercialUseStatus.ApprovedSubjectToTerms,
+            "blocked_pending_license" =>
+                ResearchCommercialUseStatus.BlockedPendingLicense,
+            "citation_only" => ResearchCommercialUseStatus.CitationOnly,
+            "not_applicable" => ResearchCommercialUseStatus.NotApplicable,
+            _ => default
+        };
+        return value is "approved_subject_to_terms"
+            or "blocked_pending_license"
+            or "citation_only"
+            or "not_applicable";
+    }
+
+    private static ResearchSourceRegistryBuildResult Rejected(
+        ResearchSourceRegistryCode code)
+    {
+        return new ResearchSourceRegistryBuildResult(
+            false,
+            Array.AsReadOnly([code]),
+            null);
+    }
+}

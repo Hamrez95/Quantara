@@ -61,4 +61,3 @@ public interface IRiskEvaluationStore
         string evaluationId,
         CancellationToken cancellationToken);
 }
-

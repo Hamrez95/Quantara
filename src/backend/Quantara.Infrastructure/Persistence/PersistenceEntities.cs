@@ -74,4 +74,3 @@ public sealed class AuditEventEntity
 
     public DateTimeOffset OccurredAt { get; set; }
 }
-

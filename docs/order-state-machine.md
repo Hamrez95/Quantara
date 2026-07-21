@@ -49,4 +49,3 @@ Invalid events are not silently accepted. They return `InvalidTransition` and mu
 - Protection-order failure for a live position must invoke a separately tested emergency policy.
 
 Persistence, audit storage, exchange reconciliation, and restart recovery are follow-up slices built on this domain state machine.
-

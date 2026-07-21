@@ -61,4 +61,3 @@ This slice does not yet provide:
 - any paper or real order endpoint.
 
 Those remain separate acceptance gates under the research and paper-trading milestones.
-

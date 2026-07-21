@@ -144,4 +144,3 @@ final class TimeframeChartAnalysis {
     return copy.take(4).toList(growable: false);
   }
 }
-

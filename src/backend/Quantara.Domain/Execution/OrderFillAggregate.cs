@@ -200,4 +200,3 @@ public sealed class OrderFillAggregate
         return fill with { OccurredAt = fill.OccurredAt.ToUniversalTime() };
     }
 }
-

@@ -105,4 +105,3 @@ public sealed class OrderStateMachineTests
             $"Move to {targetState}.");
     }
 }
-

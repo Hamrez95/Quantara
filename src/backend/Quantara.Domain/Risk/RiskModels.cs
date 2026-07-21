@@ -148,4 +148,3 @@ public static class PositionSizer
         return new Quantity(decimal.Round(riskBudget / perUnitRisk, 8, MidpointRounding.ToZero));
     }
 }
-

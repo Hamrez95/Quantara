@@ -200,4 +200,3 @@ public sealed class DeterministicRiskEngineTests
             new DateTimeOffset(2026, 7, 20, 8, 0, 0, TimeSpan.Zero));
     }
 }
-

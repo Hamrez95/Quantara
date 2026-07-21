@@ -57,4 +57,3 @@ Every operating mode must remain readable on a 360×800 phone at 1.3 text scale;
 4. Bounded Live Session
 
 The unlimited instruction “continue forever until I manually stop it” is not supported.
-

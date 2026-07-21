@@ -807,4 +807,3 @@ public static class DeterministicBacktestRunner
         }
     }
 }
-

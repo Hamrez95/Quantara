@@ -170,4 +170,3 @@ public sealed class BacktestPerformanceEvidenceValidationTests
         }
     }
 }
-

@@ -152,4 +152,3 @@ internal static class ResearchTestData
         return TimeSpan.FromTicks(checked(value.Ticks * multiplier));
     }
 }
-

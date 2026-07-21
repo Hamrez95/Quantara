@@ -12,4 +12,3 @@ internal static class PostgreSqlTimestamp
         return new DateTimeOffset(normalizedTicks, TimeSpan.Zero);
     }
 }
-

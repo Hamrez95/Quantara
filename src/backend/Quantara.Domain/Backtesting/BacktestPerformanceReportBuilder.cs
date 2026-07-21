@@ -933,4 +933,3 @@ public static class BacktestPerformanceReportBuilder
         double MaximumDrawdown,
         TimeSpan MaximumDuration);
 }
-

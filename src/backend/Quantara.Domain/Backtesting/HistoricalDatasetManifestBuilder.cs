@@ -318,4 +318,3 @@ public static class HistoricalDatasetManifestBuilder
         CanonicalResearchHash.Append(builder, fundingPoint.Rate);
     }
 }
-

@@ -229,4 +229,3 @@ public sealed class PositionAccountingAggregateTests
             isReduceOnly);
     }
 }
-

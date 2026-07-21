@@ -156,4 +156,3 @@ abstract final class QuantaraTheme {
     );
   }
 }
-

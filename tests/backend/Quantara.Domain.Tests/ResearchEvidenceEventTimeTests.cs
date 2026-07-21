@@ -134,4 +134,3 @@ public sealed class ResearchEvidenceEventTimeTests
             expiresAt);
     }
 }
-

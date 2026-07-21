@@ -18,4 +18,3 @@
     <ProjectReference Include="../Quantara.Domain/Quantara.Domain.csproj" />
   </ItemGroup>
 </Project>
-

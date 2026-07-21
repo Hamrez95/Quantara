@@ -88,4 +88,3 @@ public static class ConservativePriceNormalizer
         return effectiveScale <= precision;
     }
 }
-

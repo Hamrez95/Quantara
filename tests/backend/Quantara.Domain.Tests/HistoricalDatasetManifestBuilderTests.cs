@@ -132,4 +132,3 @@ public sealed class HistoricalDatasetManifestBuilderTests
         Assert.Contains(DatasetBuildCode.FundingOutsideCoverage, result.RejectionReasons);
     }
 }
-

@@ -523,4 +523,3 @@ public static class DeterministicRiskEngine
         }
     }
 }
-

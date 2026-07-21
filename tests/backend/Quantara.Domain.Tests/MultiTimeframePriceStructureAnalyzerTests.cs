@@ -80,4 +80,3 @@ public sealed class MultiTimeframePriceStructureAnalyzerTests
         return Assert.IsType<TimeframePriceStructureAnalysis>(result.Analysis);
     }
 }
-
