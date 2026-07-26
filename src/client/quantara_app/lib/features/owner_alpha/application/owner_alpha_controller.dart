@@ -35,8 +35,8 @@ final class OwnerAlphaController extends ChangeNotifier {
     this._scanInterval,
     this._languageCode,
   ) {
-    if (scanInterval < const Duration(seconds: 30)) {
-      throw ArgumentError.value(scanInterval, 'scanInterval');
+    if (_scanInterval < const Duration(seconds: 30)) {
+      throw ArgumentError.value(_scanInterval, 'scanInterval');
     }
   }
 
