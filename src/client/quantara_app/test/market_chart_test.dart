@@ -113,6 +113,9 @@ Widget _testApp() {
   return QuantaraApp(
     repository: const FakeOwnerAlphaRepository(),
     settingsStore: MemoryOwnerAlphaSettingsStore(),
+    preferencesStore: MemoryAppPreferencesStore(),
+    opportunityStateStore: MemoryOpportunityStateStore(),
+    notificationGateway: RecordingSetupNotificationGateway(),
   );
 }
 

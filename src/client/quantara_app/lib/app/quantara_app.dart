@@ -18,6 +18,8 @@ class QuantaraApp extends StatefulWidget {
     this.repository,
     this.settingsStore,
     this.preferencesStore,
+    this.opportunityStateStore,
+    this.notificationGateway,
     this.initialThemeMode = ThemeMode.dark,
     this.initialLocale = const Locale('fa'),
   });
@@ -25,6 +27,8 @@ class QuantaraApp extends StatefulWidget {
   final OwnerAlphaRepository? repository;
   final OwnerAlphaSettingsStore? settingsStore;
   final AppPreferencesStore? preferencesStore;
+  final OpportunityStateStore? opportunityStateStore;
+  final SetupNotificationGateway? notificationGateway;
   final ThemeMode initialThemeMode;
   final Locale initialLocale;
 
@@ -121,8 +125,12 @@ class _QuantaraAppState extends State<QuantaraApp> {
       home: OwnerAlphaPage(
         repository: _repository,
         settingsStore: _settingsStore,
-        opportunityStateStore: const PlatformOpportunityStateStore(),
-        notificationGateway: const PlatformSetupNotificationGateway(),
+        opportunityStateStore:
+            widget.opportunityStateStore ??
+            const PlatformOpportunityStateStore(),
+        notificationGateway:
+            widget.notificationGateway ??
+            const PlatformSetupNotificationGateway(),
         themeMode: _themeMode,
         locale: _locale,
         onToggleTheme: _toggleTheme,

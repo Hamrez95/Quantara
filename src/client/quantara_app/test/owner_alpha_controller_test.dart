@@ -105,7 +105,7 @@ void main() {
   );
 
   test('persists taken setups and deduplicates local notifications', () async {
-    final repository = _SwitchableRepository();
+    final repository = _ActionableRepository();
     final stateStore = MemoryOpportunityStateStore();
     final notifications = RecordingSetupNotificationGateway();
     final controller = OwnerAlphaController(
@@ -129,6 +129,69 @@ void main() {
     expect(firstNotificationCount, greaterThan(0));
     expect(notifications.shown, hasLength(firstNotificationCount));
   });
+}
+
+final class _ActionableRepository implements OwnerAlphaRepository {
+  final _delegate = const FakeOwnerAlphaRepository();
+
+  @override
+  Future<OwnerAlphaSnapshot> scan({
+    required List<String> symbols,
+    required String selectedSymbol,
+    required String selectedTimeframe,
+    required double capital,
+    required double riskPercent,
+    required String languageCode,
+  }) async {
+    final base = await _delegate.scan(
+      symbols: symbols,
+      selectedSymbol: selectedSymbol,
+      selectedTimeframe: selectedTimeframe,
+      capital: capital,
+      riskPercent: riskPercent,
+      languageCode: languageCode,
+    );
+    final result = base.radar.first;
+    final analysis = result.analysis;
+    final idea = TradeIdea(
+      symbol: result.quote.symbol,
+      timeframe: '1h',
+      direction: TradeDirection.long,
+      confidencePercent: 80,
+      entryLower: 100,
+      entryUpper: 101,
+      stopLoss: 95,
+      targets: const [110, 120, 130],
+      riskReward: 2,
+      maximumLoss: 100,
+      positionSize: 10,
+      notionalValue: 1000,
+      recommendedLeverage: 2,
+      requiredMargin: 500,
+      estimatedRoundTripCosts: 2,
+      setupId: 'BTCUSDT|1h|long|fixed-closed-candle',
+      candleClosedAt: DateTime.utc(2026, 7, 26, 9),
+      summary: 'actionable',
+      invalidation: 'stop',
+      reasons: const ['test'],
+    );
+    final actionable = SymbolRadarResult(
+      quote: result.quote,
+      analysis: analysis,
+      idea: idea,
+      analysesByTimeframe: {'1h': analysis},
+      ideasByTimeframe: {'1h': idea},
+    );
+    return OwnerAlphaSnapshot(
+      radar: [actionable, ...base.radar.skip(1)],
+      selectedSymbol: actionable.quote.symbol,
+      selectedTimeframe: '1h',
+      selectedAnalysis: analysis,
+      selectedIdea: idea,
+      timeframeDirections: {'1h': analysis.direction},
+      generatedAt: base.generatedAt,
+    );
+  }
 }
 
 final class _SwitchableRepository implements OwnerAlphaRepository {

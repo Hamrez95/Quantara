@@ -159,6 +159,8 @@ void main() {
         repository: const _FailingRepository(),
         settingsStore: MemoryOwnerAlphaSettingsStore(),
         preferencesStore: MemoryAppPreferencesStore(),
+        opportunityStateStore: MemoryOpportunityStateStore(),
+        notificationGateway: RecordingSetupNotificationGateway(),
       ),
     );
     await tester.pumpAndSettle();
@@ -176,7 +178,9 @@ Widget _testApp({MemoryAppPreferencesStore? preferencesStore}) {
   return QuantaraApp(
     repository: const FakeOwnerAlphaRepository(),
     settingsStore: MemoryOwnerAlphaSettingsStore(),
-    preferencesStore: preferencesStore,
+    preferencesStore: preferencesStore ?? MemoryAppPreferencesStore(),
+    opportunityStateStore: MemoryOpportunityStateStore(),
+    notificationGateway: RecordingSetupNotificationGateway(),
   );
 }
 
