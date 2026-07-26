@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../market_analysis/domain/market_chart_models.dart';
 import '../data/bitunix_owner_alpha_repository.dart';
 import '../data/trade_idea_factory.dart';
 import '../domain/owner_alpha_models.dart';
@@ -116,7 +117,7 @@ final class OwnerAlphaController extends ChangeNotifier {
     }
     _initialized = true;
     if (_opportunityStateStore != null) {
-      _opportunityState = await _opportunityStateStore!.load();
+      _opportunityState = await _opportunityStateStore.load();
     }
     final saved = await _settingsStore.load();
     if (saved != null) {
