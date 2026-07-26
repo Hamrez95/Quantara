@@ -17,18 +17,14 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final card = DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface,
+    final card = Material(
+      color: scheme.surface,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.18),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.72)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        side: BorderSide(color: scheme.outline.withValues(alpha: 0.72)),
       ),
       child: Padding(padding: padding, child: child),
     );
@@ -57,29 +53,34 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: label,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 15, color: color),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 15, color: color),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    softWrap: true,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -108,35 +109,37 @@ class MetricTile extends StatelessWidget {
 
     return Semantics(
       label: '$label: $value',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: textTheme.labelMedium?.copyWith(
-              color: onSurface.withValues(alpha: 0.62),
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: textTheme.titleLarge?.copyWith(
-              color: valueColor,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-            ),
-          ),
-          if (caption != null) ...[
-            const SizedBox(height: 4),
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
             Text(
-              caption!,
-              style: textTheme.bodySmall?.copyWith(
-                color: onSurface.withValues(alpha: 0.52),
+              label,
+              style: textTheme.labelMedium?.copyWith(
+                color: onSurface.withValues(alpha: 0.62),
               ),
             ),
+            const SizedBox(height: 5),
+            Text(
+              value,
+              style: textTheme.titleLarge?.copyWith(
+                color: valueColor,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+            ),
+            if (caption != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                caption!,
+                style: textTheme.bodySmall?.copyWith(
+                  color: onSurface.withValues(alpha: 0.52),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

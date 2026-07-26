@@ -4,7 +4,9 @@ Quantara is a safety-first crypto trading analysis and automation platform. The 
 
 ## Current status
 
-Version 0.2.0 provides a stable Persian RTL Flutter cockpit, deterministic multi-timeframe candlestick analysis, support/resistance zones, a read-only ASP.NET cockpit API, and an explicit offline demo fallback. Active development is integrated into `dev`; `main` contains reviewed stable releases.
+Android preview 0.9.0 uses real public Bitunix Futures prices and closed candles for periodic multi-timeframe analysis, support/resistance zones and explainable risk scenarios. It scans every watchlist symbol on 15m, 1h and 4h, caches analysis until the next candle close, changes cached symbol/timeframe views without a new market scan, and reports scan timing, cache use and explicit wait reasons. It provides three targets and leverage-aware risk sizing, and includes an opt-in local setup journal and Android alerts. The Strategy Lab adds independent strategy/symbol/timeframe historical replay, persistent forward-paper sessions, market-regime context, partial TP simulation, and cost-aware validation metrics. It defaults to Persian and supports instant Persian/English RTL/LTR switching with device-local preferences. The active Android route does not fall back to simulated market data.
+
+Market data currently refreshes every 60 seconds only while the app is open. It is not a WebSocket stream or a 24-hour background monitor. TradingView Lightweight Charts renders Quantara/Bitunix candles; TradingView is not the market-data feed. Android is the current product priority and PWA work is deferred.
 
 Default trading mode is paper-only. Live Bitunix order placement, autonomous LLM order execution, and withdrawal functionality are intentionally unavailable.
 
@@ -21,6 +23,10 @@ See:
 - [`docs/risk-engine.md`](docs/risk-engine.md)
 - [`docs/order-state-machine.md`](docs/order-state-machine.md)
 - [`docs/threat-model.md`](docs/threat-model.md)
+- [`docs/releases/v0.5.0-local-setups-preview.md`](docs/releases/v0.5.0-local-setups-preview.md)
+- [`docs/releases/v0.5.1-performance-diagnostics.md`](docs/releases/v0.5.1-performance-diagnostics.md)
+- [`docs/releases/v0.9.0-strategy-validation-preview.md`](docs/releases/v0.9.0-strategy-validation-preview.md)
+- [`docs/releases/local-release-builder.md`](docs/releases/local-release-builder.md)
 
 ## Local validation
 
@@ -42,10 +48,9 @@ flutter pub get
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze --fatal-infos
 flutter test
-flutter build web --release
 flutter build apk --release
 ```
 
-Set `QUANTARA_API_BASE_URL` with `--dart-define` to use the read-only API. Release builds require HTTPS. When no API origin is configured, or a configured API is temporarily unreachable, the app remains usable with clearly labelled deterministic demo data. Unsafe or malformed API responses fail closed and are never hidden by the demo fallback.
+The Android preview reads only documented HTTPS public endpoints and requires no API key. A malformed, stale or unavailable market response fails closed and the interface identifies old snapshots instead of presenting them as fresh. Exchange credentials, real orders and withdrawals are absent.
 
 Every implementation should begin with a GitHub issue, use a short-lived branch from `dev`, include tests and limitations, and enter `dev` through a reviewed pull request.
