@@ -1,8 +1,8 @@
 name: Temporary Dart format probe
 on:
-  push:
+  pull_request:
     branches:
-      - alpha/0.4.0-android-preview
+      - dev
   workflow_dispatch:
 
 permissions:
