@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
@@ -22,14 +23,26 @@ final class OwnerAlphaDataException implements Exception {
 }
 
 final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
-  BitunixOwnerAlphaRepository({
-    required this._client,
+  factory BitunixOwnerAlphaRepository({
+    required http.Client client,
     Duration timeout = const Duration(seconds: 10),
     Duration requestSpacing = const Duration(milliseconds: 120),
     DateTime Function()? now,
-  }) : _timeout = timeout,
-       _requestSpacing = requestSpacing,
-       _now = now ?? DateTime.now {
+  }) {
+    return BitunixOwnerAlphaRepository._(
+      client,
+      timeout,
+      requestSpacing,
+      now ?? DateTime.now,
+    );
+  }
+
+  BitunixOwnerAlphaRepository._(
+    this._client,
+    this._timeout,
+    this._requestSpacing,
+    this._now,
+  ) {
     if (timeout <= Duration.zero || timeout > const Duration(seconds: 30)) {
       throw ArgumentError.value(timeout, 'timeout');
     }
@@ -236,12 +249,23 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
           openTime.isAfter(now.add(const Duration(days: 1)))) {
         throw FormatException('Invalid candle time for $symbol/$timeframe.');
       }
+      final open = _positiveNumber(item['open']);
+      final rawHigh = _positiveNumber(item['high']);
+      final rawLow = _positiveNumber(item['low']);
+      final close = _positiveNumber(item['close']);
+      final bodyHigh = math.max(open, close);
+      final bodyLow = math.min(open, close);
+      final roundingTolerance = bodyHigh * 0.0001;
+      if (bodyHigh - rawHigh > roundingTolerance ||
+          rawLow - bodyLow > roundingTolerance) {
+        throw FormatException('Invalid candle range for $symbol/$timeframe.');
+      }
       final candle = ChartCandle(
         openTime: openTime,
-        open: _positiveNumber(item['open']),
-        high: _positiveNumber(item['high']),
-        low: _positiveNumber(item['low']),
-        close: _positiveNumber(item['close']),
+        open: open,
+        high: math.max(rawHigh, bodyHigh),
+        low: math.min(rawLow, bodyLow),
+        close: close,
         volume: _nonNegativeNumber(item['baseVol'] ?? item['quoteVol']),
       );
       if (!candle.isValid) {
