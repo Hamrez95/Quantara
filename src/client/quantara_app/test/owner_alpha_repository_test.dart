@@ -8,6 +8,7 @@ import 'package:quantara_app/features/owner_alpha/data/bitunix_owner_alpha_repos
 void main() {
   test('loads a bounded live radar and four selected timeframes', () async {
     var requestCount = 0;
+    var now = DateTime.utc(2026, 7, 21, 8);
     final client = MockClient((request) async {
       requestCount++;
       if (request.url.path.endsWith('/tickers')) {
@@ -28,7 +29,7 @@ void main() {
     final repository = BitunixOwnerAlphaRepository(
       client: client,
       requestSpacing: Duration.zero,
-      now: () => DateTime.utc(2026, 7, 21, 8),
+      now: () => now,
     );
 
     final snapshot = await repository.scan(
@@ -53,6 +54,36 @@ void main() {
     expect(snapshot.selectedAnalysis.timeframe, '4h');
     expect(snapshot.selectedAnalysis.candles, hasLength(60));
     expect(snapshot.generatedAt.isUtc, isTrue);
+    expect(snapshot.diagnostics.networkRequests, 8);
+    expect(snapshot.diagnostics.cacheHits, 0);
+    expect(snapshot.diagnostics.requestedAnalyses, 7);
+
+    final secondSnapshot = await repository.scan(
+      symbols: const ['BTCUSDT', 'ETHUSDT'],
+      selectedSymbol: 'BTCUSDT',
+      selectedTimeframe: '1h',
+      capital: 10000,
+      riskPercent: 1,
+      languageCode: 'fa',
+    );
+
+    expect(requestCount, 9);
+    expect(secondSnapshot.diagnostics.networkRequests, 1);
+    expect(secondSnapshot.diagnostics.cacheHits, 7);
+
+    now = DateTime.utc(2026, 7, 21, 9);
+    final expiredSnapshot = await repository.scan(
+      symbols: const ['BTCUSDT', 'ETHUSDT'],
+      selectedSymbol: 'BTCUSDT',
+      selectedTimeframe: '1h',
+      capital: 10000,
+      riskPercent: 1,
+      languageCode: 'fa',
+    );
+
+    expect(requestCount, 14);
+    expect(expiredSnapshot.diagnostics.networkRequests, 5);
+    expect(expiredSnapshot.diagnostics.cacheHits, 3);
   });
 
   test(

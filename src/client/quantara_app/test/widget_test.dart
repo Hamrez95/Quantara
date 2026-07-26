@@ -37,6 +37,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('runs a symbol-specific paper strategy report', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تحلیل'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تست این تحلیل در آزمایشگاه'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('آزمایشگاه'), findsOneWidget);
+    expect(find.text('BTCUSDT'), findsWidgets);
+    expect(find.text('پیپر / تحقیق'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('اجرای تست استراتژی'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('کارنامه تست'), findsOneWidget);
+    expect(find.text('وین‌ریت'), findsOneWidget);
+    expect(find.text('SL'), findsOneWidget);
+    expect(find.text('TP1 / TP2 / TP3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('adds a verified symbol to the watchlist', (tester) async {
     _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(_testApp());

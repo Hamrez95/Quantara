@@ -72,6 +72,7 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
   final Duration _timeout;
   final Duration _requestSpacing;
   final DateTime Function() _now;
+  final Map<String, TimeframeChartAnalysis> _analysisCache = {};
 
   @override
   Future<OwnerAlphaSnapshot> scan({
@@ -82,6 +83,7 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
     required double riskPercent,
     required String languageCode,
   }) async {
+    final stopwatch = Stopwatch()..start();
     final normalized = _normalizeSymbols(symbols);
     final selected = selectedSymbol.trim().toUpperCase();
     if (!normalized.contains(selected)) {
@@ -106,9 +108,20 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
       ];
       final analysesBySymbol = <String, Map<String, TimeframeChartAnalysis>>{};
       final failures = <String, String>{};
-      for (var offset = 0; offset < requests.length; offset += 4) {
-        final end = math.min(offset + 4, requests.length);
-        final batch = requests.sublist(offset, end);
+      final pendingRequests = <(String, String)>[];
+      var cacheHits = 0;
+      for (final request in requests) {
+        final cached = _freshCachedAnalysis(request.$1, request.$2);
+        if (cached == null) {
+          pendingRequests.add(request);
+        } else {
+          cacheHits++;
+          (analysesBySymbol[request.$1] ??= {})[request.$2] = cached;
+        }
+      }
+      for (var offset = 0; offset < pendingRequests.length; offset += 4) {
+        final end = math.min(offset + 4, pendingRequests.length);
+        final batch = pendingRequests.sublist(offset, end);
         final results = await Future.wait(
           batch.map(
             (request) => _tryLoadAnalysis(request.$1, request.$2, languageCode),
@@ -117,6 +130,8 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         for (final result in results) {
           final analysis = result.analysis;
           if (analysis != null) {
+            _analysisCache[_cacheKey(result.symbol, result.timeframe)] =
+                analysis;
             (analysesBySymbol[result.symbol] ??= {})[result.timeframe] =
                 analysis;
           } else {
@@ -191,6 +206,22 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         for (final entry in selectedResult.analysesByTimeframe.entries)
           entry.key: entry.value.direction,
       };
+      final rejections = <SetupRejectionReason, int>{};
+      for (final result in radar) {
+        for (final idea in result.ideasByTimeframe.values) {
+          if (idea.rejectionReason != SetupRejectionReason.none) {
+            rejections.update(
+              idea.rejectionReason,
+              (count) => count + 1,
+              ifAbsent: () => 1,
+            );
+          }
+        }
+      }
+      if (failures.isNotEmpty) {
+        rejections[SetupRejectionReason.dataUnavailable] = failures.length;
+      }
+      stopwatch.stop();
       return OwnerAlphaSnapshot(
         radar: radar,
         selectedSymbol: effectiveSelected,
@@ -205,6 +236,13 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         ),
         timeframeDirections: directions,
         scanFailures: failures,
+        diagnostics: ScanDiagnostics(
+          elapsed: stopwatch.elapsed,
+          networkRequests: pendingRequests.length + 1,
+          cacheHits: cacheHits,
+          requestedAnalyses: requests.length,
+          rejections: rejections,
+        ),
         generatedAt: _now().toUtc(),
       );
     } on OwnerAlphaDataException {
@@ -226,6 +264,27 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
       );
     }
   }
+
+  TimeframeChartAnalysis? _freshCachedAnalysis(
+    String symbol,
+    String timeframe,
+  ) {
+    final cached = _analysisCache[_cacheKey(symbol, timeframe)];
+    if (cached == null) {
+      return null;
+    }
+    final nextClosedCandleAt = cached.latestCandle.openTime.add(
+      _durationFor(timeframe) * 2,
+    );
+    if (!_now().toUtc().isBefore(nextClosedCandleAt)) {
+      _analysisCache.remove(_cacheKey(symbol, timeframe));
+      return null;
+    }
+    return cached;
+  }
+
+  static String _cacheKey(String symbol, String timeframe) =>
+      '$symbol/$timeframe';
 
   Future<_AnalysisLoadResult> _tryLoadAnalysis(
     String symbol,

@@ -132,7 +132,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         _selectedSymbol = normalized.first;
       }
       _capital = saved.capital.clamp(100, 100000000).toDouble();
-      _riskPercent = saved.riskPercent.clamp(0.1, 5).toDouble();
+      _riskPercent = saved.riskPercent.clamp(0.1, 2).toDouble();
     }
     await refresh();
     if (!_disposed) {
@@ -264,6 +264,9 @@ final class OwnerAlphaController extends ChangeNotifier {
     if (!_symbols.contains(symbol) || symbol == _selectedSymbol) {
       return;
     }
+    if (_selectFromSnapshot(symbol, _selectedTimeframe)) {
+      return;
+    }
     await _requestScan(selectedSymbol: symbol);
   }
 
@@ -271,7 +274,55 @@ final class OwnerAlphaController extends ChangeNotifier {
     if (!timeframes.contains(timeframe) || timeframe == _selectedTimeframe) {
       return;
     }
+    if (_selectFromSnapshot(_selectedSymbol, timeframe)) {
+      return;
+    }
     await _requestScan(selectedTimeframe: timeframe);
+  }
+
+  bool _selectFromSnapshot(String symbol, String timeframe) {
+    final current = _snapshot;
+    if (current == null) {
+      return false;
+    }
+    SymbolRadarResult? result;
+    for (final item in current.radar) {
+      if (item.quote.symbol == symbol) {
+        result = item;
+        break;
+      }
+    }
+    final analysis = result?.analysesByTimeframe[timeframe];
+    if (result == null || analysis == null) {
+      return false;
+    }
+    final directions = <String, ChartDirection>{
+      for (final entry in result.analysesByTimeframe.entries)
+        entry.key: entry.value.direction,
+    };
+    _selectedSymbol = symbol;
+    _selectedTimeframe = timeframe;
+    _snapshot = OwnerAlphaSnapshot(
+      radar: current.radar,
+      selectedSymbol: symbol,
+      selectedTimeframe: timeframe,
+      selectedAnalysis: analysis,
+      selectedIdea:
+          result.ideasByTimeframe[timeframe] ??
+          TradeIdeaFactory.create(
+            analysis: analysis,
+            capital: _capital,
+            riskPercent: _riskPercent,
+            languageCode: _languageCode,
+            confluence: directions,
+          ),
+      timeframeDirections: directions,
+      scanFailures: current.scanFailures,
+      diagnostics: current.diagnostics,
+      generatedAt: current.generatedAt,
+    );
+    notifyListeners();
+    return true;
   }
 
   Future<String?> addSymbol(String rawValue) async {
@@ -326,7 +377,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       return;
     }
     final safeCapital = capital.clamp(100, 100000000).toDouble();
-    final safeRisk = riskPercent.clamp(0.1, 5).toDouble();
+    final safeRisk = riskPercent.clamp(0.1, 2).toDouble();
     if (_capital == safeCapital && _riskPercent == safeRisk) {
       return;
     }
@@ -367,6 +418,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         ),
         timeframeDirections: directions,
         scanFailures: current.scanFailures,
+        diagnostics: current.diagnostics,
         generatedAt: current.generatedAt,
       );
     }
@@ -432,6 +484,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         ),
         timeframeDirections: directions,
         scanFailures: current.scanFailures,
+        diagnostics: current.diagnostics,
         generatedAt: current.generatedAt,
       );
     }

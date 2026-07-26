@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -8,6 +9,9 @@ import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
+import '../../strategy_lab/data/strategy_lab_runner.dart';
+import '../../strategy_lab/data/platform_strategy_lab_session_store.dart';
+import '../../strategy_lab/domain/strategy_lab_models.dart';
 import '../application/owner_alpha_controller.dart';
 import '../domain/owner_alpha_models.dart';
 
@@ -16,6 +20,7 @@ part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
+part 'owner_alpha_strategy_lab.dart';
 
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
@@ -112,6 +117,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onLocaleChanged: widget.onLocaleChanged,
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
+            onOpenStrategyLab: () => setState(() => _destination = 3),
           ),
         );
         if (desktop) {
@@ -152,19 +158,21 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           bottomNavigationBar: SafeArea(
             top: false,
             child: NavigationBar(
-              selectedIndex: _destination,
+              selectedIndex: _destination == 3
+                  ? 2
+                  : _mobileDestinationIndexes.indexOf(_destination),
               labelBehavior: constraints.maxWidth < 380
                   ? NavigationDestinationLabelBehavior.onlyShowSelected
                   : NavigationDestinationLabelBehavior.alwaysShow,
               onDestinationSelected: (value) {
-                setState(() => _destination = value);
+                setState(() => _destination = _mobileDestinationIndexes[value]);
               },
-              destinations: _destinations.indexed
+              destinations: _mobileDestinationIndexes
                   .map(
-                    (item) => NavigationDestination(
-                      icon: Icon(item.$2.icon),
-                      selectedIcon: Icon(item.$2.selectedIcon),
-                      label: _destinationLabel(strings, item.$1),
+                    (index) => NavigationDestination(
+                      icon: Icon(_destinations[index].icon),
+                      selectedIcon: Icon(_destinations[index].selectedIcon),
+                      label: _destinationLabel(strings, index),
                     ),
                   )
                   .toList(growable: false),
@@ -249,13 +257,16 @@ const _destinations = [
     Icons.candlestick_chart_outlined,
     Icons.candlestick_chart_rounded,
   ),
+  _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
+const _mobileDestinationIndexes = [0, 1, 2, 4];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.watchlist,
   2 => strings.analysis,
-  3 => strings.profile,
+  3 => strings.strategyLab,
+  4 => strings.profile,
   _ => strings.radar,
 };
 
@@ -276,6 +287,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.onLocaleChanged,
     required this.onOpenAnalysis,
     required this.onAddSymbol,
+    required this.onOpenStrategyLab,
   });
 
   final OwnerAlphaController controller;
@@ -286,6 +298,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   final ValueChanged<Locale> onLocaleChanged;
   final ValueChanged<String> onOpenAnalysis;
   final VoidCallback onAddSymbol;
+  final VoidCallback onOpenStrategyLab;
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +332,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  if (destination == 3)
+                  if (destination == 4)
                     _ProfileView(
                       controller: controller,
                       themeMode: themeMode,
@@ -337,7 +350,22 @@ class _OwnerAlphaBody extends StatelessWidget {
                         onOpenAnalysis: onOpenAnalysis,
                         onAddSymbol: onAddSymbol,
                       ),
-                      2 => _AlphaAnalysisView(
+                      2 => Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: onOpenStrategyLab,
+                            icon: const Icon(Icons.science_outlined),
+                            label: Text(AppStrings.of(context).openStrategyLab),
+                          ),
+                          const SizedBox(height: 14),
+                          _AlphaAnalysisView(
+                            controller: controller,
+                            snapshot: controller.snapshot!,
+                          ),
+                        ],
+                      ),
+                      3 => _StrategyLabView(
                         controller: controller,
                         snapshot: controller.snapshot!,
                       ),

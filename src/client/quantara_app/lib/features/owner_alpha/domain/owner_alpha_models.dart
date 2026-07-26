@@ -2,6 +2,34 @@ import '../../market_analysis/domain/market_chart_models.dart';
 
 enum TradeDirection { long, short, wait }
 
+enum SetupRejectionReason {
+  none,
+  weakDirection,
+  invalidZones,
+  insufficientRiskReward,
+  dataUnavailable,
+}
+
+final class ScanDiagnostics {
+  const ScanDiagnostics({
+    this.elapsed = Duration.zero,
+    this.networkRequests = 0,
+    this.cacheHits = 0,
+    this.requestedAnalyses = 0,
+    this.rejections = const {},
+  });
+
+  final Duration elapsed;
+  final int networkRequests;
+  final int cacheHits;
+  final int requestedAnalyses;
+  final Map<SetupRejectionReason, int> rejections;
+
+  int get completedAnalyses =>
+      requestedAnalyses -
+      (rejections[SetupRejectionReason.dataUnavailable] ?? 0);
+}
+
 final class AlphaMarketQuote {
   const AlphaMarketQuote({
     required this.symbol,
@@ -44,6 +72,7 @@ final class TradeIdea {
     required this.summary,
     required this.invalidation,
     required this.reasons,
+    this.rejectionReason = SetupRejectionReason.none,
   });
 
   final String symbol;
@@ -66,6 +95,7 @@ final class TradeIdea {
   final String summary;
   final String invalidation;
   final List<String> reasons;
+  final SetupRejectionReason rejectionReason;
 
   bool get isActionable => direction != TradeDirection.wait;
 
@@ -77,6 +107,7 @@ final class TradeIdea {
     required String summary,
     required String invalidation,
     required List<String> reasons,
+    required SetupRejectionReason rejectionReason,
   }) {
     return TradeIdea(
       symbol: symbol,
@@ -99,6 +130,7 @@ final class TradeIdea {
       summary: summary,
       invalidation: invalidation,
       reasons: List.unmodifiable(reasons),
+      rejectionReason: rejectionReason,
     );
   }
 }
@@ -133,10 +165,18 @@ final class OwnerAlphaSnapshot {
     required this.selectedIdea,
     required Map<String, ChartDirection> timeframeDirections,
     Map<String, String> scanFailures = const {},
+    ScanDiagnostics diagnostics = const ScanDiagnostics(),
     required this.generatedAt,
   }) : radar = List.unmodifiable(radar),
        timeframeDirections = Map.unmodifiable(timeframeDirections),
-       scanFailures = Map.unmodifiable(scanFailures) {
+       scanFailures = Map.unmodifiable(scanFailures),
+       diagnostics = ScanDiagnostics(
+         elapsed: diagnostics.elapsed,
+         networkRequests: diagnostics.networkRequests,
+         cacheHits: diagnostics.cacheHits,
+         requestedAnalyses: diagnostics.requestedAnalyses,
+         rejections: Map.unmodifiable(diagnostics.rejections),
+       ) {
     if (this.radar.isEmpty) {
       throw ArgumentError('Radar results must not be empty.');
     }
@@ -152,6 +192,7 @@ final class OwnerAlphaSnapshot {
   final TradeIdea selectedIdea;
   final Map<String, ChartDirection> timeframeDirections;
   final Map<String, String> scanFailures;
+  final ScanDiagnostics diagnostics;
   final DateTime generatedAt;
 
   List<TradeIdea> get opportunities {

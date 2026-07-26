@@ -80,6 +80,8 @@ class _RadarDashboard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
+        _ScanDiagnosticsCard(snapshot: snapshot),
+        const SizedBox(height: 16),
         if (opportunities.isEmpty)
           _NoTradeCard(snapshot: snapshot)
         else
@@ -98,6 +100,64 @@ class _RadarDashboard extends StatelessWidget {
         const SizedBox(height: 16),
         const _AlphaSafetyCard(),
       ],
+    );
+  }
+}
+
+class _ScanDiagnosticsCard extends StatelessWidget {
+  const _ScanDiagnosticsCard({required this.snapshot});
+
+  final OwnerAlphaSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final diagnostics = snapshot.diagnostics;
+    final rejectionEntries = diagnostics.rejections.entries
+        .where((entry) => entry.value > 0)
+        .toList(growable: false);
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.scanReport,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            strings.scanCoverage(
+              diagnostics.completedAnalyses,
+              diagnostics.requestedAnalyses,
+            ),
+          ),
+          Text(strings.scanElapsed(diagnostics.elapsed.inMilliseconds)),
+          Text(
+            strings.scanEfficiency(
+              diagnostics.cacheHits,
+              diagnostics.networkRequests,
+            ),
+          ),
+          if (rejectionEntries.isNotEmpty) ...[
+            const Divider(height: 24),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in rejectionEntries)
+                  StatusPill(
+                    label: strings.rejectionReason(entry.key.name, entry.value),
+                    color: entry.key == SetupRejectionReason.dataUnavailable
+                        ? QuantaraColors.danger
+                        : QuantaraColors.warning,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

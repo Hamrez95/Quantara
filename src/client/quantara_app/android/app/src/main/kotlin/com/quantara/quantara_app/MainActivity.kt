@@ -111,7 +111,7 @@ class MainActivity : FlutterActivity() {
                         capital !in 100.0..100_000_000.0 ||
                         riskPercent == null ||
                         !riskPercent.isFinite() ||
-                        riskPercent !in 0.1..5.0
+                        riskPercent !in 0.1..2.0
                     ) {
                         result.error("invalid_settings", "Owner Alpha settings are invalid.", null)
                     } else {
@@ -123,6 +123,97 @@ class MainActivity : FlutterActivity() {
                             .remove("riskPercent")
                             .apply()
                         result.success(null)
+                    }
+                }
+                "loadStrategyLabSession" -> {
+                    if (!preferences.contains("labStrategy")) {
+                        result.success(null)
+                    } else {
+                        result.success(
+                            mapOf(
+                                "strategy" to preferences.getString("labStrategy", ""),
+                                "symbol" to preferences.getString("labSymbol", ""),
+                                "timeframe" to preferences.getString("labTimeframe", ""),
+                                "windowMinutes" to preferences.getInt("labWindowMinutes", 0),
+                                "initialCapital" to preferences.readExactDouble(
+                                    key = "labCapitalBits",
+                                    legacyKey = "unusedLabCapital",
+                                    defaultValue = 0.0,
+                                ),
+                                "riskPercent" to preferences.readExactDouble(
+                                    key = "labRiskBits",
+                                    legacyKey = "unusedLabRisk",
+                                    defaultValue = 0.0,
+                                ),
+                                "startedAtMs" to preferences.getLong("labStartedAtMs", 0L),
+                                "endsAtMs" to preferences.getLong("labEndsAtMs", 0L),
+                            ),
+                        )
+                    }
+                }
+                "saveStrategyLabSession" -> {
+                    val arguments = call.arguments as? Map<*, *>
+                    if (arguments.isNullOrEmpty()) {
+                        preferences.edit()
+                            .remove("labStrategy")
+                            .remove("labSymbol")
+                            .remove("labTimeframe")
+                            .remove("labWindowMinutes")
+                            .remove("labCapitalBits")
+                            .remove("labRiskBits")
+                            .remove("labStartedAtMs")
+                            .remove("labEndsAtMs")
+                            .apply()
+                        result.success(null)
+                    } else {
+                        val strategy = arguments["strategy"] as? String
+                        val symbol = arguments["symbol"] as? String
+                        val timeframe = arguments["timeframe"] as? String
+                        val windowMinutes = (arguments["windowMinutes"] as? Number)?.toInt()
+                        val capital = (arguments["initialCapital"] as? Number)?.toDouble()
+                        val risk = (arguments["riskPercent"] as? Number)?.toDouble()
+                        val startedAtMs = (arguments["startedAtMs"] as? Number)?.toLong()
+                        val endsAtMs = (arguments["endsAtMs"] as? Number)?.toLong()
+                        if (
+                            strategy !in setOf(
+                                "structureZones",
+                                "trendCandle",
+                                "dowContinuation",
+                                "kbsmResearch",
+                            ) ||
+                            symbol == null ||
+                            !symbol.matches(Regex("^[A-Z0-9]{5,24}$")) ||
+                            timeframe !in setOf("15m", "1h", "4h", "1D") ||
+                            windowMinutes == null ||
+                            windowMinutes !in 1..43_200 ||
+                            capital == null ||
+                            !capital.isFinite() ||
+                            capital <= 0 ||
+                            risk == null ||
+                            !risk.isFinite() ||
+                            risk !in 0.1..1.0 ||
+                            startedAtMs == null ||
+                            endsAtMs == null ||
+                            endsAtMs <= startedAtMs
+                        ) {
+                            result.error(
+                                "invalid_strategy_lab_session",
+                                "Strategy Lab session is invalid.",
+                                null,
+                            )
+                        } else {
+                            preferences.edit()
+                                .putString("labStrategy", strategy)
+                                .putString("labSymbol", symbol)
+                                .putString("labTimeframe", timeframe)
+                                .putInt("labWindowMinutes", windowMinutes)
+                                .putLong("labCapitalBits", capital.toBits())
+                                .putLong("labRiskBits", risk.toBits())
+                                .putLong("labStartedAtMs", startedAtMs)
+                                .putLong("labEndsAtMs", endsAtMs)
+                                .apply()
+                            result.success(null)
+                        }
                     }
                 }
                 else -> result.notImplemented()

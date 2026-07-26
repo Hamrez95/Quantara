@@ -317,8 +317,8 @@ class _ProfileViewState extends State<_ProfileView> {
               Slider(
                 value: _draftRisk ?? controller.riskPercent,
                 min: 0.1,
-                max: 3,
-                divisions: 29,
+                max: 2,
+                divisions: 19,
                 label:
                     '${(_draftRisk ?? controller.riskPercent).toStringAsFixed(1)}%',
                 onChanged: controller.isLoading

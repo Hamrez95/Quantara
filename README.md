@@ -4,7 +4,7 @@ Quantara is a safety-first crypto trading analysis and automation platform. The 
 
 ## Current status
 
-Android preview 0.5.0 uses real public Bitunix Futures prices and closed candles for periodic multi-timeframe analysis, support/resistance zones and explainable risk scenarios. It scans every watchlist symbol on 15m, 1h and 4h, provides three targets and leverage-aware risk sizing, and includes an opt-in local setup journal and Android alerts. It defaults to Persian and supports instant Persian/English RTL/LTR switching with device-local preferences. The active Android route does not fall back to simulated market data.
+Android preview 0.9.0 uses real public Bitunix Futures prices and closed candles for periodic multi-timeframe analysis, support/resistance zones and explainable risk scenarios. It scans every watchlist symbol on 15m, 1h and 4h, caches analysis until the next candle close, changes cached symbol/timeframe views without a new market scan, and reports scan timing, cache use and explicit wait reasons. It provides three targets and leverage-aware risk sizing, and includes an opt-in local setup journal and Android alerts. The Strategy Lab adds independent strategy/symbol/timeframe historical replay, persistent forward-paper sessions, market-regime context, partial TP simulation, and cost-aware validation metrics. It defaults to Persian and supports instant Persian/English RTL/LTR switching with device-local preferences. The active Android route does not fall back to simulated market data.
 
 Market data currently refreshes every 60 seconds only while the app is open. It is not a WebSocket stream or a 24-hour background monitor. TradingView Lightweight Charts renders Quantara/Bitunix candles; TradingView is not the market-data feed. Android is the current product priority and PWA work is deferred.
 
@@ -24,6 +24,8 @@ See:
 - [`docs/order-state-machine.md`](docs/order-state-machine.md)
 - [`docs/threat-model.md`](docs/threat-model.md)
 - [`docs/releases/v0.5.0-local-setups-preview.md`](docs/releases/v0.5.0-local-setups-preview.md)
+- [`docs/releases/v0.5.1-performance-diagnostics.md`](docs/releases/v0.5.1-performance-diagnostics.md)
+- [`docs/releases/v0.9.0-strategy-validation-preview.md`](docs/releases/v0.9.0-strategy-validation-preview.md)
 - [`docs/releases/local-release-builder.md`](docs/releases/local-release-builder.md)
 
 ## Local validation

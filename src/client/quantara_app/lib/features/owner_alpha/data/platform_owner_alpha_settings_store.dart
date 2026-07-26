@@ -30,7 +30,7 @@ final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
       if (symbols.isEmpty ||
           capital <= 0 ||
           riskPercent <= 0 ||
-          riskPercent > 5) {
+          riskPercent > 2) {
         return null;
       }
       return OwnerAlphaSettings(

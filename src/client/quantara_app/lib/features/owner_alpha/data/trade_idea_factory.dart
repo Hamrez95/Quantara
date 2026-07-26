@@ -16,7 +16,7 @@ abstract final class TradeIdeaFactory {
     if (!capital.isFinite || capital <= 0) {
       throw ArgumentError.value(capital, 'capital');
     }
-    if (!riskPercent.isFinite || riskPercent <= 0 || riskPercent > 5) {
+    if (!riskPercent.isFinite || riskPercent <= 0 || riskPercent > 2) {
       throw ArgumentError.value(riskPercent, 'riskPercent');
     }
 
@@ -66,6 +66,7 @@ abstract final class TradeIdeaFactory {
                 'Trend strength is still low.',
                 'Waiting here is part of risk management.',
               ],
+        rejectionReason: SetupRejectionReason.weakDirection,
       );
     }
 
@@ -92,6 +93,7 @@ abstract final class TradeIdeaFactory {
                 'Position sizing is unreliable without a clear invalidation boundary.',
                 'An incomplete signal is not promoted to a trade setup.',
               ],
+        rejectionReason: SetupRejectionReason.invalidZones,
       );
     }
 
@@ -147,6 +149,7 @@ abstract final class TradeIdeaFactory {
                 'The minimum acceptable ratio is 1.6.',
                 'The current ratio is ${riskReward.toStringAsFixed(2)}.',
               ],
+        rejectionReason: SetupRejectionReason.insufficientRiskReward,
       );
     }
 

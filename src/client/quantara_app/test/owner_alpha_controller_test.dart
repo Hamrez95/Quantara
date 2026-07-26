@@ -36,12 +36,35 @@ void main() {
     await controller.initialize();
     repository.fail = true;
 
-    await controller.selectTimeframe('4h');
+    await controller.selectTimeframe('1D');
 
     expect(controller.selectedTimeframe, '1h');
     expect(controller.snapshot!.selectedTimeframe, '1h');
     expect(controller.error, isNotNull);
   });
+
+  test(
+    'cached symbol and timeframe selections make no market request',
+    () async {
+      final repository = _SwitchableRepository();
+      final controller = OwnerAlphaController(
+        repository: repository,
+        settingsStore: MemoryOwnerAlphaSettingsStore(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final requestsBefore = repository.requests;
+
+      await controller.selectSymbol('ETHUSDT');
+      await controller.selectTimeframe('4h');
+
+      expect(repository.requests, requestsBefore);
+      expect(controller.selectedSymbol, 'ETHUSDT');
+      expect(controller.selectedTimeframe, '4h');
+      expect(controller.snapshot!.selectedAnalysis.symbol, 'ETHUSDT');
+      expect(controller.snapshot!.selectedAnalysis.timeframe, '4h');
+    },
+  );
 
   test(
     'a user selection waits for an active scan and commits atomically',

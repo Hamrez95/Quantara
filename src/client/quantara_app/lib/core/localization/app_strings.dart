@@ -274,6 +274,38 @@ final class AppStrings {
     '${integer(count)} تایم‌فریم موقتاً دریافت نشد؛ نتایج سالم همچنان نمایش داده می‌شوند.',
     '$count timeframes were temporarily unavailable; healthy results remain visible.',
   );
+  String get scanReport => t('گزارش شکار موقعیت', 'Setup scan report');
+  String scanCoverage(int completed, int total) => t(
+    '${integer(completed)} از ${integer(total)} چارت بررسی شد',
+    '$completed of $total charts analyzed',
+  );
+  String scanElapsed(int milliseconds) => t(
+    'زمان اسکن ${integer(milliseconds)} میلی‌ثانیه',
+    'Scan time ${milliseconds}ms',
+  );
+  String scanEfficiency(int cacheHits, int networkRequests) => t(
+    '${integer(cacheHits)} از کش · ${integer(networkRequests)} درخواست بازار',
+    '$cacheHits cached · $networkRequests market requests',
+  );
+  String rejectionReason(String reason, int count) {
+    final label = switch (reason) {
+      'weakDirection' => t(
+        'مومنتوم و جهت ناکافی',
+        'Weak direction or momentum',
+      ),
+      'invalidZones' => t(
+        'ناحیه ورود/ابطال ناقص',
+        'Incomplete entry/invalidation zones',
+      ),
+      'insufficientRiskReward' => t(
+        'ریسک‌به‌ریوارد پایین',
+        'Insufficient reward-to-risk',
+      ),
+      _ => t('خطای داده بازار', 'Market data issue'),
+    };
+    return '$label · ${integer(count)}';
+  }
+
   String get strategies => t('استراتژی‌های تحلیلی', 'Analysis strategies');
   String get strategyVersion => 'Structure Zones v1.1';
   String get strategyDescription => t(
@@ -286,6 +318,95 @@ final class AppStrings {
   );
   String get howItWorks => t('روش محاسبه', 'How it works');
   String get info => t('راهنما', 'Info');
+
+  String get strategyLab => t('آزمایشگاه', 'Strategy Lab');
+  String get openStrategyLab =>
+      t('تست این تحلیل در آزمایشگاه', 'Test this analysis in Strategy Lab');
+  String get paperResearch => t('پیپر / تحقیق', 'Paper / Research');
+  String get strategyLabDescription => t(
+    'استراتژی و نماد را انتخاب کن؛ Quantara روی کندل‌های بسته‌شده، ورود و خروج را بدون پول واقعی شبیه‌سازی و کارنامه را با هزینه و لغزش تخمینی محاسبه می‌کند.',
+    'Choose a strategy and symbol. Quantara simulates entries and exits on closed candles without real money, including estimated costs and slippage.',
+  );
+  String get strategy => t('استراتژی', 'Strategy');
+  String strategyName(String name) => switch (name) {
+    'trendCandle' => t('کندل‌ستاپ ادامه‌روند', 'Trend candle continuation'),
+    'dowContinuation' => t('ادامه سوئینگ داو', 'Dow swing continuation'),
+    'kbsmResearch' => t('KBSM شدو هفتگی', 'KBSM weekly shadow'),
+    _ => t('زون ساختاری', 'Structure zones'),
+  };
+  String strategyMaturity(String name) => switch (name) {
+    'validatedCandidate' => t('کاندید معتبرسازی', 'Validation candidate'),
+    'experimental' => t('آزمایشی', 'Experimental'),
+    _ => t('فقط تحقیق', 'Research only'),
+  };
+  String get testWindow => t('بازه تست', 'Test window');
+  String get oneDay => t('۱ روز', '1 day');
+  String get threeDays => t('۳ روز', '3 days');
+  String get sevenDays => t('۷ روز', '7 days');
+  String get runSimulation => t('اجرای تست استراتژی', 'Run strategy test');
+  String get startForwardTest =>
+      t('شروع تست زنده پیپر', 'Start forward paper test');
+  String get forwardTestRunning =>
+      t('تست پیپر در حال اجراست', 'Forward paper test is running');
+  String get forwardTestComplete =>
+      t('تست پیپر کامل شد', 'Forward paper test completed');
+  String forwardRemaining(Duration value) {
+    final safe = value.isNegative ? Duration.zero : value;
+    return t(
+      '${integer(safe.inHours)} ساعت تا آماده‌شدن کارنامه',
+      '${safe.inHours} hours until the report is ready',
+    );
+  }
+
+  String get forwardReady => t(
+    'کندل‌های این بازه آماده‌اند؛ کارنامه نهایی را بساز.',
+    'The session window is complete. Build its final report.',
+  );
+  String get buildForwardReport =>
+      t('ساخت کارنامه نهایی', 'Build final report');
+  String get clearForwardTest => t('پاک‌کردن تست', 'Clear test');
+  String get forwardWindowTooLong => t(
+    'برای اینکه همه کندل‌ها بعداً قابل بازیابی باشند: تست ۱۵دقیقه حداکثر ۱ روز، ۱ساعت حداکثر ۳ روز و ۴ساعت حداکثر ۷ روز است.',
+    'To keep every candle recoverable: 15m tests are limited to 1 day, 1h to 3 days and 4h to 7 days.',
+  );
+  String get strategyLabDataError => t(
+    'برای این استراتژی/تایم‌فریم هنوز کندل کافی در حافظه نیست؛ تایم‌فریم دیگری را انتخاب یا بازار را تازه‌سازی کن.',
+    'There are not enough cached candles for this strategy/timeframe. Select another timeframe or refresh the market.',
+  );
+  String get strategyLabReport => t('کارنامه تست', 'Validation report');
+  String get netPnl => t('سود و زیان خالص', 'Net P&L');
+  String get totalTrades => t('تعداد معاملات', 'Trades');
+  String get winRate => t('وین‌ریت', 'Win rate');
+  String get expectancy => t('امید ریاضی', 'Expectancy');
+  String get profitFactor => t('پرافیت فکتور', 'Profit factor');
+  String get maxDrawdown => t('بیشترین افت', 'Max drawdown');
+  String get validationWarnings => t('کنترل اعتبار نتیجه', 'Result validity');
+  String regimeName(String name) => switch (name) {
+    'accumulation' => t('فاز بازار: انباشت', 'Regime: Accumulation'),
+    'markup' => t('فاز بازار: روند صعودی', 'Regime: Markup'),
+    'distribution' => t('فاز بازار: توزیع', 'Regime: Distribution'),
+    'markdown' => t('فاز بازار: روند نزولی', 'Regime: Markdown'),
+    'range' => t('فاز بازار: رنج', 'Regime: Range'),
+    _ => t('فاز بازار: گذار / نامطمئن', 'Regime: Transition / uncertain'),
+  };
+  String labWarning(String warning) {
+    if (!isPersian) {
+      return warning;
+    }
+    return switch (warning) {
+      'Intrabar SL/TP ambiguity is resolved conservatively: stop first.' =>
+        'اگر SL و TP داخل یک کندل لمس شوند، نتیجه محافظه‌کارانه و استاپ‌اول ثبت می‌شود.',
+      'Funding, liquidation tiers and partial-fill liquidity are unavailable in this device-only preview.' =>
+        'Funding، رده‌های لیکویید و نقدشوندگی اجرای جزئی در این پیش‌نمایش دستگاهی موجود نیست.',
+      'Small sample: do not promote this strategy from this result.' =>
+        'نمونه کوچک است؛ این نتیجه به‌تنهایی مجوز تأیید استراتژی نیست.',
+      'This strategy is experimental and remains in research/paper mode.' =>
+        'این استراتژی آزمایشی است و فقط در حالت تحقیق/پیپر باقی می‌ماند.',
+      'The requested window exceeded cached history; the report uses the available closed candles only.' =>
+        'تاریخچه کش‌شده از بازه درخواستی کوتاه‌تر بود؛ گزارش فقط از کندل‌های بسته‌شده موجود استفاده می‌کند.',
+      _ => warning,
+    };
+  }
 
   String get riskSettings =>
       t('تنظیمات مدیریت سرمایه', 'Risk management settings');
@@ -320,7 +441,7 @@ final class AppStrings {
     'The app contains no API key or trading permission. This version of Quantara only observes and analyzes.',
   );
   String get about => t('درباره اپ', 'About');
-  String get version => t('نسخه ۰٫۵٫۰ اندروید', 'Android version 0.5.0');
+  String get version => t('نسخه ۰٫۹٫۰ آزمایشی', 'Experimental version 0.9.0');
 
   // Legacy cockpit strings remain available while its unused routes are retained.
   String get cockpit => t('مرکز کنترل', 'Cockpit');
