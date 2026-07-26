@@ -96,10 +96,7 @@ void main() {
           'data': [_ticker('BTCUSDT', 60000)],
         });
       }
-      final candles = _candles(
-        60000,
-        request.url.queryParameters['interval']!,
-      );
+      final candles = _candles(60000, request.url.queryParameters['interval']!);
       final open = double.parse(candles[1]['open']! as String);
       candles[1]['high'] = (open * 0.99995).toString();
       return _jsonResponse({
@@ -137,10 +134,7 @@ void main() {
           'data': [_ticker('BTCUSDT', 60000)],
         });
       }
-      final candles = _candles(
-        60000,
-        request.url.queryParameters['interval']!,
-      );
+      final candles = _candles(60000, request.url.queryParameters['interval']!);
       final open = double.parse(candles[1]['open']! as String);
       candles[1]['high'] = (open * 0.99).toString();
       return _jsonResponse({
