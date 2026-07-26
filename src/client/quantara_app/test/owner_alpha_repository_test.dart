@@ -99,11 +99,7 @@ void main() {
       final candles = _candles(60000, request.url.queryParameters['interval']!);
       final open = double.parse(candles[1]['open']! as String);
       candles[1]['high'] = (open * 0.99995).toString();
-      return _jsonResponse({
-        'code': 0,
-        'msg': 'Success',
-        'data': candles,
-      });
+      return _jsonResponse({'code': 0, 'msg': 'Success', 'data': candles});
     });
     final repository = BitunixOwnerAlphaRepository(
       client: client,
@@ -137,11 +133,7 @@ void main() {
       final candles = _candles(60000, request.url.queryParameters['interval']!);
       final open = double.parse(candles[1]['open']! as String);
       candles[1]['high'] = (open * 0.99).toString();
-      return _jsonResponse({
-        'code': 0,
-        'msg': 'Success',
-        'data': candles,
-      });
+      return _jsonResponse({'code': 0, 'msg': 'Success', 'data': candles});
     });
     final repository = BitunixOwnerAlphaRepository(
       client: client,
