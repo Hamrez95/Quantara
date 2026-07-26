@@ -154,11 +154,11 @@ abstract final class TradeIdeaFactory {
     final riskSizedNotional = riskSizedUnits * conservativeEntry;
     final stopDistancePercent = stopDistancePerUnit / conservativeEntry;
     final volatilityRate = analysis.volatilityPercent / 100;
-    final liquidationCushionCap = (0.45 /
-            math.max(0.005, stopDistancePercent + volatilityRate * 0.75))
-        .floor()
-        .clamp(1, 10)
-        .toInt();
+    final liquidationCushionCap =
+        (0.45 / math.max(0.005, stopDistancePercent + volatilityRate * 0.75))
+            .floor()
+            .clamp(1, 10)
+            .toInt();
     final confidenceCap = confidenceLeverageCap(
       analysis.directionStrength,
       protectiveZone.strength,
@@ -168,10 +168,7 @@ abstract final class TradeIdeaFactory {
         .ceil()
         .clamp(1, 100)
         .toInt();
-    final recommendedLeverage = math.min(
-      safeLeverage,
-      fundingLeverage,
-    ).toInt();
+    final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
     final fundedUnits = capital * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     final notionalValue = positionSize * conservativeEntry;

@@ -125,42 +125,45 @@ void main() {
     expect(repaired.isValid, isTrue);
   });
 
-  test('uses quoted price precision for one-tick AVAX rounding drift', () async {
-    final client = MockClient((request) async {
-      if (request.url.path.endsWith('/tickers')) {
-        return _jsonResponse({
-          'code': 0,
-          'msg': 'Success',
-          'data': [_ticker('AVAXUSDT', 6.46)],
-        });
-      }
-      final candles = _candles(
-        6.46,
-        request.url.queryParameters['interval']!,
+  test(
+    'uses quoted price precision for one-tick AVAX rounding drift',
+    () async {
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/tickers')) {
+          return _jsonResponse({
+            'code': 0,
+            'msg': 'Success',
+            'data': [_ticker('AVAXUSDT', 6.46)],
+          });
+        }
+        final candles = _candles(
+          6.46,
+          request.url.queryParameters['interval']!,
+        );
+        candles[1]['open'] = '6.460';
+        candles[1]['close'] = '6.459';
+        candles[1]['high'] = '6.459';
+        return _jsonResponse({'code': 0, 'msg': 'Success', 'data': candles});
+      });
+      final repository = BitunixOwnerAlphaRepository(
+        client: client,
+        requestSpacing: Duration.zero,
+        now: () => DateTime.utc(2026, 7, 21, 8),
       );
-      candles[1]['open'] = '6.460';
-      candles[1]['close'] = '6.459';
-      candles[1]['high'] = '6.459';
-      return _jsonResponse({'code': 0, 'msg': 'Success', 'data': candles});
-    });
-    final repository = BitunixOwnerAlphaRepository(
-      client: client,
-      requestSpacing: Duration.zero,
-      now: () => DateTime.utc(2026, 7, 21, 8),
-    );
 
-    final snapshot = await repository.scan(
-      symbols: const ['AVAXUSDT'],
-      selectedSymbol: 'AVAXUSDT',
-      selectedTimeframe: '1h',
-      capital: 10000,
-      riskPercent: 1,
-      languageCode: 'fa',
-    );
+      final snapshot = await repository.scan(
+        symbols: const ['AVAXUSDT'],
+        selectedSymbol: 'AVAXUSDT',
+        selectedTimeframe: '1h',
+        capital: 10000,
+        riskPercent: 1,
+        languageCode: 'fa',
+      );
 
-    expect(snapshot.selectedAnalysis.candles[1].high, 6.46);
-    expect(snapshot.scanFailures, isEmpty);
-  });
+      expect(snapshot.selectedAnalysis.candles[1].high, 6.46);
+      expect(snapshot.scanFailures, isEmpty);
+    },
+  );
 
   test('keeps healthy timeframes when one timeframe is malformed', () async {
     final client = MockClient((request) async {

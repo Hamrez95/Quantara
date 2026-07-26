@@ -189,9 +189,9 @@ class _TradePlanCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   strings.riskPlan,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               _InfoButton(

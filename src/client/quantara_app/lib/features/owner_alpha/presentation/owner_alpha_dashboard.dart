@@ -87,10 +87,8 @@ class _RadarDashboard extends StatelessWidget {
             _OpportunityCard(
               idea: opportunities[index],
               taken: controller.isTaken(opportunities[index].setupId),
-              onTakenChanged: (value) => controller.setTaken(
-                opportunities[index].setupId,
-                value,
-              ),
+              onTakenChanged: (value) =>
+                  controller.setTaken(opportunities[index].setupId, value),
               onTap: () => onOpenAnalysis(opportunities[index].symbol),
             ),
             if (index != opportunities.length - 1) const SizedBox(height: 12),
@@ -234,9 +232,7 @@ class _OpportunityCard extends StatelessWidget {
               for (var index = 0; index < idea.targets.length; index++)
                 MetricTile(
                   label: strings.target(index + 1),
-                  value: QuantaraNumberFormat.marketValue(
-                    idea.targets[index],
-                  ),
+                  value: QuantaraNumberFormat.marketValue(idea.targets[index]),
                   valueColor: QuantaraColors.success,
                 ),
               MetricTile(

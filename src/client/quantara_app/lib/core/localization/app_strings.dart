@@ -172,8 +172,7 @@ final class AppStrings {
   String get unitsNoLeverage =>
       t('تعداد واحد دارایی با سقف ریسک', 'Risk-capped asset units');
   String get notionalValue => t('ارزش پوزیشن', 'Position notional');
-  String get recommendedLeverage =>
-      t('اهرم پیشنهادی', 'Suggested leverage');
+  String get recommendedLeverage => t('اهرم پیشنهادی', 'Suggested leverage');
   String get requiredMargin => t('مبلغ ورود', 'Entry margin');
   String get leverageCaption => t(
     'حداقل اهرم لازم؛ افزایش آن حجم پیشنهادی را بیشتر نمی‌کند',

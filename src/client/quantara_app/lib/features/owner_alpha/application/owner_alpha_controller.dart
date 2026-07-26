@@ -460,8 +460,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       capital: _capital,
       riskPercent: _riskPercent,
       confluence: {
-        for (final entry in analyses.entries)
-          entry.key: entry.value.direction,
+        for (final entry in analyses.entries) entry.key: entry.value.direction,
       },
       languageCode: _languageCode,
     );
@@ -504,9 +503,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       final bounded = notified.length <= 250
           ? notified
           : notified.skip(notified.length - 250).toSet();
-      _opportunityState = _opportunityState.copyWith(
-        notifiedSetupIds: bounded,
-      );
+      _opportunityState = _opportunityState.copyWith(notifiedSetupIds: bounded);
       await _persistOpportunityState();
     }
   }

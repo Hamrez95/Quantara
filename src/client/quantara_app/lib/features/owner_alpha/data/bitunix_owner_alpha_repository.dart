@@ -104,19 +104,14 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
           for (final timeframe in opportunityTimeframes) (symbol, timeframe),
         (selected, '1D'),
       ];
-      final analysesBySymbol =
-          <String, Map<String, TimeframeChartAnalysis>>{};
+      final analysesBySymbol = <String, Map<String, TimeframeChartAnalysis>>{};
       final failures = <String, String>{};
       for (var offset = 0; offset < requests.length; offset += 4) {
         final end = math.min(offset + 4, requests.length);
         final batch = requests.sublist(offset, end);
         final results = await Future.wait(
           batch.map(
-            (request) => _tryLoadAnalysis(
-              request.$1,
-              request.$2,
-              languageCode,
-            ),
+            (request) => _tryLoadAnalysis(request.$1, request.$2, languageCode),
           ),
         );
         for (final result in results) {
@@ -182,9 +177,8 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
           'None of the symbols had enough valid data for analysis.',
         );
       }
-      final effectiveSelected = radar.any(
-        (result) => result.quote.symbol == selected,
-      )
+      final effectiveSelected =
+          radar.any((result) => result.quote.symbol == selected)
           ? selected
           : radar.first.quote.symbol;
       final selectedResult = radar.firstWhere(

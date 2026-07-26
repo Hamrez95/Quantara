@@ -217,8 +217,7 @@ final class OpportunityState {
     Set<String>? notifiedSetupIds,
   }) {
     return OpportunityState(
-      notificationsEnabled:
-          notificationsEnabled ?? this.notificationsEnabled,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       takenSetupIds: takenSetupIds ?? this.takenSetupIds,
       notifiedSetupIds: notifiedSetupIds ?? this.notifiedSetupIds,
     );

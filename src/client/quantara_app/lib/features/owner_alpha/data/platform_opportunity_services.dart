@@ -68,7 +68,9 @@ final class PlatformSetupNotificationGateway
   @override
   Future<bool> requestPermission() async {
     try {
-      return await _channel.invokeMethod<bool>('requestNotificationPermission') ??
+      return await _channel.invokeMethod<bool>(
+            'requestNotificationPermission',
+          ) ??
           false;
     } on PlatformException {
       return false;
@@ -78,10 +80,7 @@ final class PlatformSetupNotificationGateway
   }
 
   @override
-  Future<void> show(
-    TradeIdea idea, {
-    required String languageCode,
-  }) async {
+  Future<void> show(TradeIdea idea, {required String languageCode}) async {
     if (!idea.isActionable || idea.targets.length != 3) {
       return;
     }
