@@ -8,6 +8,7 @@ import '../core/settings/app_preferences.dart';
 import '../core/theme/quantara_theme.dart';
 import '../features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../features/owner_alpha/data/platform_owner_alpha_settings_store.dart';
+import '../features/owner_alpha/data/platform_opportunity_services.dart';
 import '../features/owner_alpha/domain/owner_alpha_models.dart';
 import '../features/owner_alpha/presentation/owner_alpha_page.dart';
 
@@ -120,6 +121,8 @@ class _QuantaraAppState extends State<QuantaraApp> {
       home: OwnerAlphaPage(
         repository: _repository,
         settingsStore: _settingsStore,
+        opportunityStateStore: const PlatformOpportunityStateStore(),
+        notificationGateway: const PlatformSetupNotificationGateway(),
         themeMode: _themeMode,
         locale: _locale,
         onToggleTheme: _toggleTheme,

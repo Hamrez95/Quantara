@@ -35,7 +35,12 @@ final class TradeIdea {
     required this.riskReward,
     required this.maximumLoss,
     required this.positionSize,
+    required this.notionalValue,
+    required this.recommendedLeverage,
+    required this.requiredMargin,
     required this.estimatedRoundTripCosts,
+    required this.setupId,
+    required this.candleClosedAt,
     required this.summary,
     required this.invalidation,
     required this.reasons,
@@ -52,7 +57,12 @@ final class TradeIdea {
   final double? riskReward;
   final double maximumLoss;
   final double? positionSize;
+  final double? notionalValue;
+  final int? recommendedLeverage;
+  final double? requiredMargin;
   final double estimatedRoundTripCosts;
+  final String setupId;
+  final DateTime candleClosedAt;
   final String summary;
   final String invalidation;
   final List<String> reasons;
@@ -80,7 +90,12 @@ final class TradeIdea {
       riskReward: null,
       maximumLoss: maximumLoss,
       positionSize: null,
+      notionalValue: null,
+      recommendedLeverage: null,
+      requiredMargin: null,
       estimatedRoundTripCosts: 0,
+      setupId: '$symbol|$timeframe|wait',
+      candleClosedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       summary: summary,
       invalidation: invalidation,
       reasons: List.unmodifiable(reasons),
@@ -89,15 +104,24 @@ final class TradeIdea {
 }
 
 final class SymbolRadarResult {
-  const SymbolRadarResult({
+  SymbolRadarResult({
     required this.quote,
     required this.idea,
     required this.analysis,
-  });
+    Map<String, TradeIdea>? ideasByTimeframe,
+    Map<String, TimeframeChartAnalysis>? analysesByTimeframe,
+  }) : ideasByTimeframe = Map.unmodifiable(
+         ideasByTimeframe ?? {idea.timeframe: idea},
+       ),
+       analysesByTimeframe = Map.unmodifiable(
+         analysesByTimeframe ?? {analysis.timeframe: analysis},
+       );
 
   final AlphaMarketQuote quote;
   final TradeIdea idea;
   final TimeframeChartAnalysis analysis;
+  final Map<String, TradeIdea> ideasByTimeframe;
+  final Map<String, TimeframeChartAnalysis> analysesByTimeframe;
 }
 
 final class OwnerAlphaSnapshot {
@@ -108,9 +132,11 @@ final class OwnerAlphaSnapshot {
     required this.selectedAnalysis,
     required this.selectedIdea,
     required Map<String, ChartDirection> timeframeDirections,
+    Map<String, String> scanFailures = const {},
     required this.generatedAt,
   }) : radar = List.unmodifiable(radar),
-       timeframeDirections = Map.unmodifiable(timeframeDirections) {
+       timeframeDirections = Map.unmodifiable(timeframeDirections),
+       scanFailures = Map.unmodifiable(scanFailures) {
     if (this.radar.isEmpty) {
       throw ArgumentError('Radar results must not be empty.');
     }
@@ -125,11 +151,12 @@ final class OwnerAlphaSnapshot {
   final TimeframeChartAnalysis selectedAnalysis;
   final TradeIdea selectedIdea;
   final Map<String, ChartDirection> timeframeDirections;
+  final Map<String, String> scanFailures;
   final DateTime generatedAt;
 
   List<TradeIdea> get opportunities {
     final result = radar
-        .map((item) => item.idea)
+        .expand((item) => item.ideasByTimeframe.values)
         .where((idea) => idea.isActionable)
         .toList(growable: false);
     result.sort(
@@ -171,4 +198,51 @@ abstract interface class OwnerAlphaSettingsStore {
   Future<OwnerAlphaSettings?> load();
 
   Future<void> save(OwnerAlphaSettings settings);
+}
+
+final class OpportunityState {
+  const OpportunityState({
+    this.notificationsEnabled = false,
+    this.takenSetupIds = const {},
+    this.notifiedSetupIds = const {},
+  });
+
+  final bool notificationsEnabled;
+  final Set<String> takenSetupIds;
+  final Set<String> notifiedSetupIds;
+
+  OpportunityState copyWith({
+    bool? notificationsEnabled,
+    Set<String>? takenSetupIds,
+    Set<String>? notifiedSetupIds,
+  }) {
+    return OpportunityState(
+      notificationsEnabled:
+          notificationsEnabled ?? this.notificationsEnabled,
+      takenSetupIds: takenSetupIds ?? this.takenSetupIds,
+      notifiedSetupIds: notifiedSetupIds ?? this.notifiedSetupIds,
+    );
+  }
+}
+
+abstract interface class OpportunityStateStore {
+  Future<OpportunityState> load();
+
+  Future<void> save(OpportunityState state);
+}
+
+abstract interface class SetupNotificationGateway {
+  Future<bool> requestPermission();
+
+  Future<void> show(TradeIdea idea, {required String languageCode});
+}
+
+final class NoopSetupNotificationGateway implements SetupNotificationGateway {
+  const NoopSetupNotificationGateway();
+
+  @override
+  Future<bool> requestPermission() async => false;
+
+  @override
+  Future<void> show(TradeIdea idea, {required String languageCode}) async {}
 }

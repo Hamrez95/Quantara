@@ -36,6 +36,17 @@ final class FakeOwnerAlphaRepository implements OwnerAlphaRepository {
         quote: legacy,
         timeframe: '1h',
       );
+      final symbolAnalyses = <String, TimeframeChartAnalysis>{
+        for (final timeframe in const ['15m', '1h', '4h'])
+          timeframe: DemoMarketChartFactory.create(
+            quote: legacy,
+            timeframe: timeframe,
+          ),
+      };
+      final symbolDirections = <String, ChartDirection>{
+        for (final entry in symbolAnalyses.entries)
+          entry.key: entry.value.direction,
+      };
       radar.add(
         SymbolRadarResult(
           quote: AlphaMarketQuote(
@@ -53,7 +64,19 @@ final class FakeOwnerAlphaRepository implements OwnerAlphaRepository {
             capital: capital,
             riskPercent: riskPercent,
             languageCode: languageCode,
+            confluence: symbolDirections,
           ),
+          analysesByTimeframe: symbolAnalyses,
+          ideasByTimeframe: {
+            for (final entry in symbolAnalyses.entries)
+              entry.key: TradeIdeaFactory.create(
+                analysis: entry.value,
+                capital: capital,
+                riskPercent: riskPercent,
+                languageCode: languageCode,
+                confluence: symbolDirections,
+              ),
+          },
         ),
       );
     }
@@ -122,5 +145,34 @@ final class MemoryAppPreferencesStore implements AppPreferencesStore {
   @override
   Future<void> save(AppPreferences preferences) async {
     value = preferences;
+  }
+}
+
+final class MemoryOpportunityStateStore implements OpportunityStateStore {
+  OpportunityState value = const OpportunityState();
+
+  @override
+  Future<OpportunityState> load() async => value;
+
+  @override
+  Future<void> save(OpportunityState state) async {
+    value = state;
+  }
+}
+
+final class RecordingSetupNotificationGateway
+    implements SetupNotificationGateway {
+  bool permissionGranted = true;
+  final shown = <String>[];
+
+  @override
+  Future<bool> requestPermission() async => permissionGranted;
+
+  @override
+  Future<void> show(
+    TradeIdea idea, {
+    required String languageCode,
+  }) async {
+    shown.add(idea.setupId);
   }
 }

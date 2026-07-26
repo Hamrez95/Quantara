@@ -103,6 +103,32 @@ void main() {
       expect(controller.selectedSymbol, 'BTCUSDT');
     },
   );
+
+  test('persists taken setups and deduplicates local notifications', () async {
+    final repository = _SwitchableRepository();
+    final stateStore = MemoryOpportunityStateStore();
+    final notifications = RecordingSetupNotificationGateway();
+    final controller = OwnerAlphaController(
+      repository: repository,
+      settingsStore: MemoryOwnerAlphaSettingsStore(),
+      opportunityStateStore: stateStore,
+      notificationGateway: notifications,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    final idea = controller.snapshot!.opportunities.first;
+
+    expect(await controller.setNotificationsEnabled(true), isTrue);
+    await controller.setTaken(idea.setupId, true);
+    await controller.refresh();
+    final firstNotificationCount = notifications.shown.length;
+    await controller.refresh();
+
+    expect(controller.isTaken(idea.setupId), isTrue);
+    expect(stateStore.value.takenSetupIds, contains(idea.setupId));
+    expect(firstNotificationCount, greaterThan(0));
+    expect(notifications.shown, hasLength(firstNotificationCount));
+  });
 }
 
 final class _SwitchableRepository implements OwnerAlphaRepository {

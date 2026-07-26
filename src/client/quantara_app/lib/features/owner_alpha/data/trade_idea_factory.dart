@@ -150,11 +150,39 @@ abstract final class TradeIdeaFactory {
       );
     }
 
-    final positionSize = maximumLoss / riskPerUnit;
+    final riskSizedUnits = maximumLoss / riskPerUnit;
+    final riskSizedNotional = riskSizedUnits * conservativeEntry;
+    final stopDistancePercent = stopDistancePerUnit / conservativeEntry;
+    final volatilityRate = analysis.volatilityPercent / 100;
+    final liquidationCushionCap = (0.45 /
+            math.max(0.005, stopDistancePercent + volatilityRate * 0.75))
+        .floor()
+        .clamp(1, 10)
+        .toInt();
+    final confidenceCap = confidenceLeverageCap(
+      analysis.directionStrength,
+      protectiveZone.strength,
+    );
+    final safeLeverage = math.min(liquidationCushionCap, confidenceCap);
+    final fundingLeverage = (riskSizedNotional / capital)
+        .ceil()
+        .clamp(1, 100)
+        .toInt();
+    final recommendedLeverage = math.min(
+      safeLeverage,
+      fundingLeverage,
+    ).toInt();
+    final fundedUnits = capital * recommendedLeverage / conservativeEntry;
+    final positionSize = math.min(riskSizedUnits, fundedUnits);
+    final notionalValue = positionSize * conservativeEntry;
+    final requiredMargin = notionalValue / recommendedLeverage;
     final estimatedRoundTripCosts = positionSize * estimatedCostPerUnit;
     final secondTarget = long
         ? conservativeEntry + riskPerUnit * math.max(2.2, riskReward + 0.6)
         : conservativeEntry - riskPerUnit * math.max(2.2, riskReward + 0.6);
+    final thirdTarget = long
+        ? conservativeEntry + riskPerUnit * math.max(3.2, riskReward + 1.4)
+        : conservativeEntry - riskPerUnit * math.max(3.2, riskReward + 1.4);
     final confidence =
         (52 +
                 analysis.directionStrength * 24 +
@@ -175,11 +203,19 @@ abstract final class TradeIdeaFactory {
       entryLower: entryLower,
       entryUpper: entryUpper,
       stopLoss: stop,
-      targets: List.unmodifiable([firstTarget, secondTarget]),
+      targets: List.unmodifiable([firstTarget, secondTarget, thirdTarget]),
       riskReward: riskReward,
       maximumLoss: maximumLoss,
       positionSize: positionSize,
+      notionalValue: notionalValue,
+      recommendedLeverage: recommendedLeverage,
+      requiredMargin: requiredMargin,
       estimatedRoundTripCosts: estimatedRoundTripCosts,
+      setupId:
+          '${analysis.symbol}|${analysis.timeframe}|${long ? 'long' : 'short'}|${analysis.fingerprint}',
+      candleClosedAt: analysis.latestCandle.openTime.add(
+        _durationFor(analysis.timeframe),
+      ),
       summary: fa
           ? 'سناریوی $directionText با حد ابطال روشن و نسبت سود به زیان قابل بررسی است؛ این تحلیل الگوریتمی است، نه دستور معامله.'
           : 'The $directionText scenario has clear invalidation and reviewable reward relative to risk. It is algorithmic analysis, not a trade instruction.',
@@ -197,6 +233,7 @@ abstract final class TradeIdeaFactory {
                 'ناحیه محافظ ${protectiveZone.touchCount} واکنش تأییدشده دارد.',
                 if (aligned > 0) '$aligned تایم‌فریم با جهت فعلی هم‌سو است.',
                 'زیان محاسباتی به ${riskPercent.toStringAsFixed(1)}٪ سرمایه محدود شده است.',
+                'اهرم ${recommendedLeverage}x حداقل اهرم لازم در سقف محافظه‌کارانه این ستاپ است.',
                 'برای کارمزد و لغزش رفت‌وبرگشت، ۰٫۲۰٪ هزینه فرضی در نظر گرفته شده است.',
               ]
             : [
@@ -205,9 +242,35 @@ abstract final class TradeIdeaFactory {
                 if (aligned > 0)
                   '$aligned timeframes align with the current direction.',
                 'Calculated loss is limited to ${riskPercent.toStringAsFixed(1)}% of capital.',
+                '${recommendedLeverage}x is the minimum required leverage within this setup’s conservative cap.',
                 'A 0.20% round-trip fee and slippage estimate is included.',
               ],
       ),
     );
   }
+
+  static int confidenceLeverageCap(
+    double directionStrength,
+    double protectiveZoneStrength,
+  ) {
+    final combined = directionStrength * 0.6 + protectiveZoneStrength * 0.4;
+    if (combined < 0.45) {
+      return 2;
+    }
+    if (combined < 0.6) {
+      return 3;
+    }
+    if (combined < 0.75) {
+      return 5;
+    }
+    return 8;
+  }
+
+  static Duration _durationFor(String timeframe) => switch (timeframe) {
+    '15m' => const Duration(minutes: 15),
+    '1h' => const Duration(hours: 1),
+    '4h' => const Duration(hours: 4),
+    '1D' => const Duration(days: 1),
+    _ => Duration.zero,
+  };
 }

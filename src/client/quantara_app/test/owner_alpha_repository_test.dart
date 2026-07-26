@@ -40,8 +40,12 @@ void main() {
       languageCode: 'fa',
     );
 
-    expect(requestCount, 6);
+    expect(requestCount, 8);
     expect(snapshot.radar, hasLength(2));
+    expect(
+      snapshot.radar.first.ideasByTimeframe.keys,
+      containsAll(['15m', '1h', '4h']),
+    );
     expect(
       snapshot.timeframeDirections.keys,
       containsAll(['15m', '1h', '4h', '1D']),
@@ -119,6 +123,81 @@ void main() {
     final repaired = snapshot.selectedAnalysis.candles[1];
     expect(repaired.high, repaired.open);
     expect(repaired.isValid, isTrue);
+  });
+
+  test('uses quoted price precision for one-tick AVAX rounding drift', () async {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/tickers')) {
+        return _jsonResponse({
+          'code': 0,
+          'msg': 'Success',
+          'data': [_ticker('AVAXUSDT', 6.46)],
+        });
+      }
+      final candles = _candles(
+        6.46,
+        request.url.queryParameters['interval']!,
+      );
+      candles[1]['open'] = '6.460';
+      candles[1]['close'] = '6.459';
+      candles[1]['high'] = '6.459';
+      return _jsonResponse({'code': 0, 'msg': 'Success', 'data': candles});
+    });
+    final repository = BitunixOwnerAlphaRepository(
+      client: client,
+      requestSpacing: Duration.zero,
+      now: () => DateTime.utc(2026, 7, 21, 8),
+    );
+
+    final snapshot = await repository.scan(
+      symbols: const ['AVAXUSDT'],
+      selectedSymbol: 'AVAXUSDT',
+      selectedTimeframe: '1h',
+      capital: 10000,
+      riskPercent: 1,
+      languageCode: 'fa',
+    );
+
+    expect(snapshot.selectedAnalysis.candles[1].high, 6.46);
+    expect(snapshot.scanFailures, isEmpty);
+  });
+
+  test('keeps healthy timeframes when one timeframe is malformed', () async {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/tickers')) {
+        return _jsonResponse({
+          'code': 0,
+          'msg': 'Success',
+          'data': [_ticker('BTCUSDT', 60000)],
+        });
+      }
+      if (request.url.queryParameters['interval'] == '15m') {
+        return _jsonResponse({'code': 0, 'msg': 'Success', 'data': 'broken'});
+      }
+      return _jsonResponse({
+        'code': 0,
+        'msg': 'Success',
+        'data': _candles(60000, request.url.queryParameters['interval']!),
+      });
+    });
+    final repository = BitunixOwnerAlphaRepository(
+      client: client,
+      requestSpacing: Duration.zero,
+      now: () => DateTime.utc(2026, 7, 21, 8),
+    );
+
+    final snapshot = await repository.scan(
+      symbols: const ['BTCUSDT'],
+      selectedSymbol: 'BTCUSDT',
+      selectedTimeframe: '1h',
+      capital: 10000,
+      riskPercent: 1,
+      languageCode: 'en',
+    );
+
+    expect(snapshot.radar, hasLength(1));
+    expect(snapshot.scanFailures, contains('BTCUSDT/15m'));
+    expect(snapshot.radar.first.ideasByTimeframe, isNot(contains('15m')));
   });
 
   test('still rejects materially inconsistent candle ranges', () async {

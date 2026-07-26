@@ -27,6 +27,16 @@ void main() {
     expect(idea.positionSize! * lossPerUnit, closeTo(100, 0.0001));
     expect(idea.estimatedRoundTripCosts, greaterThan(0));
     expect(idea.riskReward, greaterThanOrEqualTo(1.6));
+    expect(idea.targets, hasLength(3));
+    expect(idea.targets[1], greaterThan(idea.targets[0]));
+    expect(idea.targets[2], greaterThan(idea.targets[1]));
+    expect(idea.recommendedLeverage, inInclusiveRange(1, 8));
+    expect(idea.requiredMargin, lessThanOrEqualTo(10000));
+    expect(idea.notionalValue, closeTo(
+      idea.requiredMargin! * idea.recommendedLeverage!,
+      0.0001,
+    ));
+    expect(idea.setupId, contains('test-fingerprint-bullish'));
   });
 
   test('returns wait when the market has no directional structure', () {

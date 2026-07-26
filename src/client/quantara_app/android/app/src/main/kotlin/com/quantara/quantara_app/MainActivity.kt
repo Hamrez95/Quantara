@@ -1,8 +1,13 @@
 package com.quantara.quantara_app
 
 import android.annotation.SuppressLint
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.SharedPreferences
 import android.os.Build
 import android.view.View
@@ -18,6 +23,8 @@ import io.flutter.plugin.platform.PlatformViewFactory
 import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
+    private var notificationPermissionResult: MethodChannel.Result? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         flutterEngine.platformViewsController.registry.registerViewFactory(
@@ -25,6 +32,7 @@ class MainActivity : FlutterActivity() {
             QuantaraChartFactory(),
         )
         configureSettingsChannel(flutterEngine)
+        configureOpportunityChannel(flutterEngine)
     }
 
     private fun configureSettingsChannel(flutterEngine: FlutterEngine) {
@@ -121,7 +129,196 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
+
+    private fun configureOpportunityChannel(flutterEngine: FlutterEngine) {
+        val preferences = getSharedPreferences("quantara_owner_alpha", Context.MODE_PRIVATE)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "quantara/opportunities",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "loadOpportunityState" -> {
+                    result.success(
+                        mapOf(
+                            "notificationsEnabled" to preferences.getBoolean(
+                                "setupNotificationsEnabled",
+                                false,
+                            ),
+                            "takenSetupIds" to preferences
+                                .getStringSet("takenSetupIds", emptySet())
+                                .orEmpty()
+                                .toList(),
+                            "notifiedSetupIds" to preferences
+                                .getStringSet("notifiedSetupIds", emptySet())
+                                .orEmpty()
+                                .toList(),
+                        ),
+                    )
+                }
+                "saveOpportunityState" -> {
+                    val arguments = call.arguments as? Map<*, *>
+                    val enabled = arguments?.get("notificationsEnabled") as? Boolean
+                    val taken = arguments?.readSetupIds("takenSetupIds")
+                    val notified = arguments?.readSetupIds("notifiedSetupIds")
+                    if (enabled == null || taken == null || notified == null) {
+                        result.error("invalid_opportunity_state", "Opportunity state is invalid.", null)
+                    } else {
+                        preferences.edit()
+                            .putBoolean("setupNotificationsEnabled", enabled)
+                            .putStringSet("takenSetupIds", taken)
+                            .putStringSet("notifiedSetupIds", notified)
+                            .apply()
+                        result.success(null)
+                    }
+                }
+                "requestNotificationPermission" -> requestNotificationPermission(result)
+                "showSetupNotification" -> {
+                    showSetupNotification(call.arguments as? Map<*, *>)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun requestNotificationPermission(result: MethodChannel.Result) {
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(true)
+            return
+        }
+        if (notificationPermissionResult != null) {
+            result.success(false)
+            return
+        }
+        notificationPermissionResult = result
+        requestPermissions(
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_PERMISSION_REQUEST,
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
+            val granted =
+                grantResults.isNotEmpty() &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED
+            notificationPermissionResult?.success(granted)
+            notificationPermissionResult = null
+        }
+    }
+
+    private fun showSetupNotification(arguments: Map<*, *>?) {
+        if (arguments == null) return
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val setupId = arguments["setupId"] as? String ?: return
+        val symbol = arguments["symbol"] as? String ?: return
+        val timeframe = arguments["timeframe"] as? String ?: return
+        val direction = arguments["direction"] as? String ?: return
+        val entryLower = (arguments["entryLower"] as? Number)?.toDouble() ?: return
+        val entryUpper = (arguments["entryUpper"] as? Number)?.toDouble() ?: return
+        val stopLoss = (arguments["stopLoss"] as? Number)?.toDouble() ?: return
+        val targets = (arguments["targets"] as? List<*>)
+            ?.filterIsInstance<Number>()
+            ?.map { it.toDouble() }
+            ?: return
+        val leverage = (arguments["leverage"] as? Number)?.toInt() ?: return
+        val persian = arguments["languageCode"] != "en"
+        if (targets.size != 3 || setupId.length > 320) return
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    SETUP_CHANNEL_ID,
+                    if (persian) "ستاپ‌های معاملاتی Quantara" else "Quantara setups",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = if (persian) {
+                        "هشدار ستاپ تازه پس از اسکن بازار"
+                    } else {
+                        "New market setup alerts after a scan"
+                    }
+                },
+            )
+        }
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            setupId.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val directionLabel = if (persian) {
+            if (direction == "long") "خرید" else "فروش"
+        } else {
+            direction.uppercase()
+        }
+        val title = if (persian) {
+            "ستاپ $directionLabel · $symbol · $timeframe"
+        } else {
+            "$directionLabel setup · $symbol · $timeframe"
+        }
+        val details = if (persian) {
+            "ورود ${entryLower.pretty()}–${entryUpper.pretty()} | SL ${stopLoss.pretty()} | " +
+                "TP ${targets.joinToString(" / ") { it.pretty() }} | اهرم پیشنهادی ${leverage}x"
+        } else {
+            "Entry ${entryLower.pretty()}–${entryUpper.pretty()} | SL ${stopLoss.pretty()} | " +
+                "TP ${targets.joinToString(" / ") { it.pretty() }} | Suggested ${leverage}x"
+        }
+        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.Notification.Builder(this, SETUP_CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            android.app.Notification.Builder(this)
+        }.setSmallIcon(R.drawable.ic_quantara_launcher)
+            .setContentTitle(title)
+            .setContentText(details)
+            .setStyle(android.app.Notification.BigTextStyle().bigText(details))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setCategory(android.app.Notification.CATEGORY_RECOMMENDATION)
+            .build()
+        manager.notify(setupId.hashCode(), notification)
+    }
+
+    companion object {
+        private const val NOTIFICATION_PERMISSION_REQUEST = 4107
+        private const val SETUP_CHANNEL_ID = "quantara_setup_alerts_v1"
+    }
 }
+
+private fun Map<*, *>.readSetupIds(key: String): Set<String>? {
+    val values = this[key] as? List<*> ?: return null
+    val ids = values.filterIsInstance<String>()
+        .filter { it.isNotEmpty() && it.length <= 320 }
+        .take(250)
+        .toSet()
+    return if (ids.size == values.size) ids else null
+}
+
+private fun Double.pretty(): String =
+    when {
+        this >= 1000 -> String.format(java.util.Locale.US, "%.2f", this)
+        this >= 1 -> String.format(java.util.Locale.US, "%.4f", this)
+        else -> String.format(java.util.Locale.US, "%.6f", this)
+    }
 
 private fun SharedPreferences.readExactDouble(
     key: String,

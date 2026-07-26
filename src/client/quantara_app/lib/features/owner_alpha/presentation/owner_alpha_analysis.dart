@@ -135,11 +135,21 @@ class _MultiTimeframeCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            strings.multiTimeframe,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  strings.multiTimeframe,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _InfoButton(
+                title: strings.multiTimeframe,
+                paragraphs: [strings.strategyDescription],
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -174,11 +184,25 @@ class _TradePlanCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            strings.riskPlan,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  strings.riskPlan,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _InfoButton(
+                title: strings.riskPlan,
+                paragraphs: [
+                  strings.riskSettingsDescription,
+                  strings.leverageCaption,
+                  strings.lossEstimateWarning,
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           StatusPill(
@@ -208,15 +232,37 @@ class _TradePlanCard extends StatelessWidget {
                   value: QuantaraNumberFormat.marketValue(idea.stopLoss!),
                   valueColor: QuantaraColors.danger,
                 ),
-                MetricTile(
-                  label: strings.firstTarget,
-                  value: QuantaraNumberFormat.marketValue(idea.targets.first),
-                  valueColor: QuantaraColors.success,
-                ),
+                for (var index = 0; index < idea.targets.length; index++)
+                  MetricTile(
+                    label: strings.target(index + 1),
+                    value: QuantaraNumberFormat.marketValue(
+                      idea.targets[index],
+                    ),
+                    valueColor: QuantaraColors.success,
+                  ),
                 MetricTile(
                   label: strings.positionSize,
                   value: idea.positionSize!.toStringAsFixed(5),
                   caption: strings.unitsNoLeverage,
+                ),
+                MetricTile(
+                  label: strings.notionalValue,
+                  value: QuantaraNumberFormat.marketValue(
+                    idea.notionalValue!,
+                    unit: 'USDT',
+                  ),
+                ),
+                MetricTile(
+                  label: strings.recommendedLeverage,
+                  value: '${idea.recommendedLeverage}x',
+                  caption: strings.leverageCaption,
+                ),
+                MetricTile(
+                  label: strings.requiredMargin,
+                  value: QuantaraNumberFormat.marketValue(
+                    idea.requiredMargin!,
+                    unit: 'USDT',
+                  ),
                 ),
                 MetricTile(
                   label: strings.maximumLoss,
@@ -280,11 +326,21 @@ class _PriceZonesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            strings.priceZones,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  strings.priceZones,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _InfoButton(
+                title: strings.priceZones,
+                paragraphs: [strings.strategyDescription],
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           if (analysis.strongestZones.isEmpty)

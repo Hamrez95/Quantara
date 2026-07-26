@@ -220,28 +220,66 @@ class _ProfileViewState extends State<_ProfileView> {
               ),
               const Divider(height: 32),
               _ProfileConnection(
-                icon: Icons.notifications_off_outlined,
+                icon: Icons.notifications_active_outlined,
                 title: strings.backgroundMonitoring,
-                subtitle: strings.backgroundMonitoringOff,
+                subtitle: strings.setupNotifications,
                 status: StatusPill(
-                  label: strings.unavailable,
-                  color: QuantaraColors.warning,
+                  label: controller.notificationsEnabled
+                      ? strings.active
+                      : strings.unavailable,
+                  color: controller.notificationsEnabled
+                      ? QuantaraColors.success
+                      : QuantaraColors.warning,
                 ),
-                description: strings.liveBoundary,
+                description: strings.setupNotificationsDescription,
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: controller.notificationsEnabled,
+                title: Text(strings.setupNotifications),
+                subtitle: Text(strings.setupNotificationsDescription),
+                onChanged: (value) async {
+                  final enabled = await controller.setNotificationsEnabled(
+                    value,
+                  );
+                  if (value && !enabled && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(strings.notificationPermissionDenied),
+                      ),
+                    );
+                  }
+                },
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
+        const _StrategyCard(),
+        const SizedBox(height: 16),
         SectionCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                strings.riskSettings,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      strings.riskSettings,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  _InfoButton(
+                    title: strings.riskSettings,
+                    paragraphs: [
+                      strings.riskSettingsDescription,
+                      strings.leverageCaption,
+                      strings.lossEstimateWarning,
+                    ],
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(strings.riskSettingsDescription),

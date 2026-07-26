@@ -15,11 +15,14 @@ part 'owner_alpha_dashboard.dart';
 part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_exchange.dart';
+part 'owner_alpha_strategy.dart';
 
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
     required this.repository,
     required this.settingsStore,
+    this.opportunityStateStore,
+    this.notificationGateway = const NoopSetupNotificationGateway(),
     required this.themeMode,
     required this.locale,
     required this.onToggleTheme,
@@ -29,6 +32,8 @@ class OwnerAlphaPage extends StatefulWidget {
 
   final OwnerAlphaRepository repository;
   final OwnerAlphaSettingsStore settingsStore;
+  final OpportunityStateStore? opportunityStateStore;
+  final SetupNotificationGateway notificationGateway;
   final ThemeMode themeMode;
   final Locale locale;
   final VoidCallback onToggleTheme;
@@ -42,6 +47,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   late final OwnerAlphaController _controller = OwnerAlphaController(
     repository: widget.repository,
     settingsStore: widget.settingsStore,
+    opportunityStateStore: widget.opportunityStateStore,
+    notificationGateway: widget.notificationGateway,
     languageCode: widget.locale.languageCode,
   );
   int _destination = 0;
@@ -335,6 +342,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                         snapshot: controller.snapshot!,
                       ),
                       _ => _RadarDashboard(
+                        controller: controller,
                         snapshot: controller.snapshot!,
                         onOpenAnalysis: onOpenAnalysis,
                       ),

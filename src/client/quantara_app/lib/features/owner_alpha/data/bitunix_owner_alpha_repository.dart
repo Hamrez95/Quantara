@@ -55,6 +55,7 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
   static const _apiOrigin = 'https://fapi.bitunix.com';
   static const _maximumResponseBytes = 2 * 1024 * 1024;
   static const supportedTimeframes = ['15m', '1h', '4h', '1D'];
+  static const opportunityTimeframes = ['15m', '1h', '4h'];
   static const _displayNames = {
     'BTCUSDT': 'Bitcoin',
     'ETHUSDT': 'Ethereum',
@@ -98,50 +99,108 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
 
     try {
       final quotes = await _loadQuotes(normalized);
-      final hourlyAnalyses = <String, TimeframeChartAnalysis>{};
-      for (final symbol in normalized) {
-        hourlyAnalyses[symbol] = await _loadAnalysis(symbol, '1h');
-        await _pace();
-      }
-
-      final selectedAnalyses = <String, TimeframeChartAnalysis>{
-        '1h': hourlyAnalyses[selected]!,
-      };
-      for (final timeframe in supportedTimeframes) {
-        if (timeframe == '1h') {
-          continue;
+      final requests = <(String, String)>[
+        for (final symbol in normalized)
+          for (final timeframe in opportunityTimeframes) (symbol, timeframe),
+        (selected, '1D'),
+      ];
+      final analysesBySymbol =
+          <String, Map<String, TimeframeChartAnalysis>>{};
+      final failures = <String, String>{};
+      for (var offset = 0; offset < requests.length; offset += 4) {
+        final end = math.min(offset + 4, requests.length);
+        final batch = requests.sublist(offset, end);
+        final results = await Future.wait(
+          batch.map(
+            (request) => _tryLoadAnalysis(
+              request.$1,
+              request.$2,
+              languageCode,
+            ),
+          ),
+        );
+        for (final result in results) {
+          final analysis = result.analysis;
+          if (analysis != null) {
+            (analysesBySymbol[result.symbol] ??= {})[result.timeframe] =
+                analysis;
+          } else {
+            failures['${result.symbol}/${result.timeframe}'] =
+                result.errorMessage!;
+          }
         }
-        selectedAnalyses[timeframe] = await _loadAnalysis(selected, timeframe);
         await _pace();
       }
 
-      final directions = <String, ChartDirection>{
-        for (final entry in selectedAnalyses.entries)
-          entry.key: entry.value.direction,
-      };
       final radar = <SymbolRadarResult>[];
       for (final symbol in normalized) {
-        final analysis = hourlyAnalyses[symbol]!;
+        final analyses = analysesBySymbol[symbol];
+        if (analyses == null || analyses.isEmpty) {
+          continue;
+        }
+        final analysis =
+            analyses['1h'] ??
+            analyses['15m'] ??
+            analyses['4h'] ??
+            analyses.values.first;
+        final symbolDirections = <String, ChartDirection>{
+          for (final entry in analyses.entries)
+            entry.key: entry.value.direction,
+        };
+        final ideas = <String, TradeIdea>{
+          for (final entry in analyses.entries)
+            if (opportunityTimeframes.contains(entry.key))
+              entry.key: TradeIdeaFactory.create(
+                analysis: entry.value,
+                capital: capital,
+                riskPercent: riskPercent,
+                languageCode: languageCode,
+                confluence: symbolDirections,
+              ),
+        };
         radar.add(
           SymbolRadarResult(
             quote: quotes[symbol]!,
             analysis: analysis,
-            idea: TradeIdeaFactory.create(
-              analysis: analysis,
-              capital: capital,
-              riskPercent: riskPercent,
-              languageCode: languageCode,
-              confluence: symbol == selected ? directions : const {},
-            ),
+            idea:
+                ideas[analysis.timeframe] ??
+                TradeIdeaFactory.create(
+                  analysis: analysis,
+                  capital: capital,
+                  riskPercent: riskPercent,
+                  languageCode: languageCode,
+                  confluence: symbolDirections,
+                ),
+            analysesByTimeframe: analyses,
+            ideasByTimeframe: ideas,
           ),
         );
       }
-
-      final selectedAnalysis = selectedAnalyses[selectedTimeframe]!;
+      if (radar.isEmpty) {
+        throw OwnerAlphaDataException(
+          'هیچ‌کدام از نمادها داده کافی و معتبر برای تحلیل نداشتند.',
+          'None of the symbols had enough valid data for analysis.',
+        );
+      }
+      final effectiveSelected = radar.any(
+        (result) => result.quote.symbol == selected,
+      )
+          ? selected
+          : radar.first.quote.symbol;
+      final selectedResult = radar.firstWhere(
+        (result) => result.quote.symbol == effectiveSelected,
+      );
+      final selectedAnalysis =
+          selectedResult.analysesByTimeframe[selectedTimeframe] ??
+          selectedResult.analysis;
+      final directions = <String, ChartDirection>{
+        for (final entry in selectedResult.analysesByTimeframe.entries)
+          entry.key: entry.value.direction,
+      };
       return OwnerAlphaSnapshot(
         radar: radar,
-        selectedSymbol: selected,
-        selectedTimeframe: selectedTimeframe,
+        selectedSymbol: effectiveSelected,
+        selectedTimeframe: selectedAnalysis.timeframe,
         selectedAnalysis: selectedAnalysis,
         selectedIdea: TradeIdeaFactory.create(
           analysis: selectedAnalysis,
@@ -151,6 +210,7 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
           confluence: directions,
         ),
         timeframeDirections: directions,
+        scanFailures: failures,
         generatedAt: _now().toUtc(),
       );
     } on OwnerAlphaDataException {
@@ -169,6 +229,42 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
       throw const OwnerAlphaDataException(
         'پاسخ بازار با قرارداد مورد انتظار Quantara سازگار نبود.',
         'The market response did not match Quantara\'s expected contract.',
+      );
+    }
+  }
+
+  Future<_AnalysisLoadResult> _tryLoadAnalysis(
+    String symbol,
+    String timeframe,
+    String languageCode,
+  ) async {
+    try {
+      return _AnalysisLoadResult(
+        symbol: symbol,
+        timeframe: timeframe,
+        analysis: await _loadAnalysis(symbol, timeframe),
+      );
+    } on OwnerAlphaDataException catch (error) {
+      return _AnalysisLoadResult(
+        symbol: symbol,
+        timeframe: timeframe,
+        errorMessage: error.messageFor(languageCode),
+      );
+    } on TimeoutException {
+      return _AnalysisLoadResult(
+        symbol: symbol,
+        timeframe: timeframe,
+        errorMessage: languageCode == 'en'
+            ? 'Timed out while loading this timeframe.'
+            : 'دریافت این تایم‌فریم بیش از حد طول کشید.',
+      );
+    } on Object {
+      return _AnalysisLoadResult(
+        symbol: symbol,
+        timeframe: timeframe,
+        errorMessage: languageCode == 'en'
+            ? 'This timeframe returned incompatible market data.'
+            : 'داده این تایم‌فریم با قرارداد مورد انتظار سازگار نبود.',
       );
     }
   }
@@ -249,13 +345,23 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
           openTime.isAfter(now.add(const Duration(days: 1)))) {
         throw FormatException('Invalid candle time for $symbol/$timeframe.');
       }
-      final open = _positiveNumber(item['open']);
-      final rawHigh = _positiveNumber(item['high']);
-      final rawLow = _positiveNumber(item['low']);
-      final close = _positiveNumber(item['close']);
+      final openValue = item['open'];
+      final highValue = item['high'];
+      final lowValue = item['low'];
+      final closeValue = item['close'];
+      final open = _positiveNumber(openValue);
+      final rawHigh = _positiveNumber(highValue);
+      final rawLow = _positiveNumber(lowValue);
+      final close = _positiveNumber(closeValue);
       final bodyHigh = math.max(open, close);
       final bodyLow = math.min(open, close);
-      final roundingTolerance = bodyHigh * 0.0001;
+      final priceQuantum = [
+        _decimalQuantum(openValue),
+        _decimalQuantum(highValue),
+        _decimalQuantum(lowValue),
+        _decimalQuantum(closeValue),
+      ].reduce(math.max);
+      final roundingTolerance = math.max(bodyHigh * 0.0001, priceQuantum * 1.1);
       if (bodyHigh - rawHigh > roundingTolerance ||
           rawLow - bodyLow > roundingTolerance) {
         throw FormatException('Invalid candle range for $symbol/$timeframe.');
@@ -455,4 +561,34 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
     }
     return number;
   }
+
+  static double _decimalQuantum(Object? value) {
+    final text = value.toString().toLowerCase();
+    if (text.contains('e')) {
+      return 0;
+    }
+    final separator = text.indexOf('.');
+    if (separator < 0) {
+      return 1;
+    }
+    final decimals = text.length - separator - 1;
+    return math.pow(10, -decimals).toDouble();
+  }
+}
+
+final class _AnalysisLoadResult {
+  const _AnalysisLoadResult({
+    required this.symbol,
+    required this.timeframe,
+    this.analysis,
+    this.errorMessage,
+  }) : assert(
+         (analysis == null) != (errorMessage == null),
+         'Exactly one result value is required.',
+       );
+
+  final String symbol;
+  final String timeframe;
+  final TimeframeChartAnalysis? analysis;
+  final String? errorMessage;
 }

@@ -18,12 +18,17 @@ final class OwnerAlphaController extends ChangeNotifier {
   factory OwnerAlphaController({
     required OwnerAlphaRepository repository,
     required OwnerAlphaSettingsStore settingsStore,
+    OpportunityStateStore? opportunityStateStore,
+    SetupNotificationGateway notificationGateway =
+        const NoopSetupNotificationGateway(),
     Duration scanInterval = const Duration(seconds: 60),
     String languageCode = 'fa',
   }) {
     return OwnerAlphaController._(
       repository,
       settingsStore,
+      opportunityStateStore,
+      notificationGateway,
       scanInterval,
       languageCode,
     );
@@ -32,6 +37,8 @@ final class OwnerAlphaController extends ChangeNotifier {
   OwnerAlphaController._(
     this._repository,
     this._settingsStore,
+    this._opportunityStateStore,
+    this._notificationGateway,
     this._scanInterval,
     this._languageCode,
   ) {
@@ -46,6 +53,8 @@ final class OwnerAlphaController extends ChangeNotifier {
 
   final OwnerAlphaRepository _repository;
   final OwnerAlphaSettingsStore _settingsStore;
+  final OpportunityStateStore? _opportunityStateStore;
+  final SetupNotificationGateway _notificationGateway;
   final Duration _scanInterval;
 
   List<String> _symbols = List.of(defaultSymbols);
@@ -65,6 +74,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   Future<bool>? _activeScan;
   bool _disposed = false;
   String _languageCode;
+  OpportunityState _opportunityState = const OpportunityState();
 
   List<String> get symbols => List.unmodifiable(_symbols);
   String get selectedSymbol => _selectedSymbol;
@@ -78,6 +88,11 @@ final class OwnerAlphaController extends ChangeNotifier {
   DateTime? get nextScanAt => _nextScanAt;
   bool get hasStaleSnapshot => _snapshot != null && _error != null;
   String get languageCode => _languageCode;
+  bool get notificationsEnabled => _opportunityState.notificationsEnabled;
+  Set<String> get takenSetupIds =>
+      Set.unmodifiable(_opportunityState.takenSetupIds);
+  bool isTaken(String setupId) =>
+      _opportunityState.takenSetupIds.contains(setupId);
   OwnerAlphaConnectionState get connectionState {
     final current = _snapshot;
     if (current == null) {
@@ -100,6 +115,9 @@ final class OwnerAlphaController extends ChangeNotifier {
       return;
     }
     _initialized = true;
+    if (_opportunityStateStore != null) {
+      _opportunityState = await _opportunityStateStore!.load();
+    }
     final saved = await _settingsStore.load();
     if (saved != null) {
       final normalized = saved.symbols
@@ -210,13 +228,14 @@ final class OwnerAlphaController extends ChangeNotifier {
         return false;
       }
       _symbols = requestedSymbols;
-      _selectedSymbol = requestedSymbol;
-      _selectedTimeframe = requestedTimeframe;
+      _selectedSymbol = result.selectedSymbol;
+      _selectedTimeframe = result.selectedTimeframe;
       _snapshot = result;
       _error = null;
       _lastDataException = null;
       _unexpectedError = false;
       _nextScanAt = DateTime.now().toUtc().add(_scanInterval);
+      await _notifyNewOpportunities(result.opportunities);
       return true;
     } catch (error) {
       if (_disposed || generation != _requestGeneration) {
@@ -322,15 +341,17 @@ final class OwnerAlphaController extends ChangeNotifier {
             SymbolRadarResult(
               quote: result.quote,
               analysis: result.analysis,
-              idea: TradeIdeaFactory.create(
-                analysis: result.analysis,
-                capital: _capital,
-                riskPercent: _riskPercent,
-                languageCode: _languageCode,
-                confluence: result.quote.symbol == current.selectedSymbol
-                    ? directions
-                    : const {},
-              ),
+              idea: _rebuildIdea(result.analysis, result.analysesByTimeframe),
+              analysesByTimeframe: result.analysesByTimeframe,
+              ideasByTimeframe: {
+                for (final entry in result.analysesByTimeframe.entries)
+                  if (BitunixOwnerAlphaRepository.opportunityTimeframes
+                      .contains(entry.key))
+                    entry.key: _rebuildIdea(
+                      entry.value,
+                      result.analysesByTimeframe,
+                    ),
+              },
             ),
         ],
         selectedSymbol: current.selectedSymbol,
@@ -344,6 +365,7 @@ final class OwnerAlphaController extends ChangeNotifier {
           confluence: directions,
         ),
         timeframeDirections: directions,
+        scanFailures: current.scanFailures,
         generatedAt: current.generatedAt,
       );
     }
@@ -384,15 +406,17 @@ final class OwnerAlphaController extends ChangeNotifier {
             SymbolRadarResult(
               quote: result.quote,
               analysis: result.analysis,
-              idea: TradeIdeaFactory.create(
-                analysis: result.analysis,
-                capital: _capital,
-                riskPercent: _riskPercent,
-                confluence: result.quote.symbol == current.selectedSymbol
-                    ? directions
-                    : const {},
-                languageCode: _languageCode,
-              ),
+              idea: _rebuildIdea(result.analysis, result.analysesByTimeframe),
+              analysesByTimeframe: result.analysesByTimeframe,
+              ideasByTimeframe: {
+                for (final entry in result.analysesByTimeframe.entries)
+                  if (BitunixOwnerAlphaRepository.opportunityTimeframes
+                      .contains(entry.key))
+                    entry.key: _rebuildIdea(
+                      entry.value,
+                      result.analysesByTimeframe,
+                    ),
+              },
             ),
         ],
         selectedSymbol: current.selectedSymbol,
@@ -406,6 +430,7 @@ final class OwnerAlphaController extends ChangeNotifier {
           languageCode: _languageCode,
         ),
         timeframeDirections: directions,
+        scanFailures: current.scanFailures,
         generatedAt: current.generatedAt,
       );
     }
@@ -424,6 +449,70 @@ final class OwnerAlphaController extends ChangeNotifier {
         riskPercent: _riskPercent,
       ),
     );
+  }
+
+  TradeIdea _rebuildIdea(
+    TimeframeChartAnalysis analysis,
+    Map<String, TimeframeChartAnalysis> analyses,
+  ) {
+    return TradeIdeaFactory.create(
+      analysis: analysis,
+      capital: _capital,
+      riskPercent: _riskPercent,
+      confluence: {
+        for (final entry in analyses.entries)
+          entry.key: entry.value.direction,
+      },
+      languageCode: _languageCode,
+    );
+  }
+
+  Future<bool> setNotificationsEnabled(bool enabled) async {
+    if (enabled && !await _notificationGateway.requestPermission()) {
+      return false;
+    }
+    _opportunityState = _opportunityState.copyWith(
+      notificationsEnabled: enabled,
+    );
+    await _persistOpportunityState();
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> setTaken(String setupId, bool taken) async {
+    final updated = Set<String>.of(_opportunityState.takenSetupIds);
+    taken ? updated.add(setupId) : updated.remove(setupId);
+    _opportunityState = _opportunityState.copyWith(takenSetupIds: updated);
+    await _persistOpportunityState();
+    notifyListeners();
+  }
+
+  Future<void> _notifyNewOpportunities(List<TradeIdea> ideas) async {
+    if (!_opportunityState.notificationsEnabled || ideas.isEmpty) {
+      return;
+    }
+    final notified = Set<String>.of(_opportunityState.notifiedSetupIds);
+    var changed = false;
+    for (final idea in ideas) {
+      if (!notified.add(idea.setupId)) {
+        continue;
+      }
+      await _notificationGateway.show(idea, languageCode: _languageCode);
+      changed = true;
+    }
+    if (changed) {
+      final bounded = notified.length <= 250
+          ? notified
+          : notified.skip(notified.length - 250).toSet();
+      _opportunityState = _opportunityState.copyWith(
+        notifiedSetupIds: bounded,
+      );
+      await _persistOpportunityState();
+    }
+  }
+
+  Future<void> _persistOpportunityState() async {
+    await _opportunityStateStore?.save(_opportunityState);
   }
 
   @override

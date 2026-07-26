@@ -30,6 +30,7 @@ final class AppStrings {
   String get appName => 'Quantara';
   String get appSubtitle => t('پایش و تحلیل بازار', 'Market intelligence');
   String get radar => t('رادار', 'Radar');
+  String get setups => t('ستاپ‌ها', 'Setups');
   String get watchlist => t('واچ‌لیست', 'Watchlist');
   String get analysis => t('تحلیل', 'Analysis');
   String get profile => t('پروفایل', 'Profile');
@@ -134,7 +135,7 @@ final class AppStrings {
   String get riskReward => t('ریسک به بازده', 'Risk to reward');
   String get inspectChart => t('بررسی روی نمودار', 'Inspect on chart');
   String get hourlyCoverage =>
-      t('پوشش اسکن یک‌ساعته', 'One-hour scan coverage');
+      t('پوشش اسکن ۱۵دقیقه، ۱ساعت و ۴ساعت', '15m, 1h and 4h scan coverage');
   String get safetyBoundary => t('مرز ایمنی', 'Safety boundary');
   String get safetyDescription => t(
     'Quantara داده عمومی واقعی را می‌خواند و سناریوی تحلیلی می‌سازد. کلید صرافی، سفارش واقعی و برداشت در این نسخه وجود ندارد.',
@@ -166,9 +167,23 @@ final class AppStrings {
   String get riskPlan => t('پیشنهاد مدیریت سرمایه', 'Risk management plan');
   String get entryRange => t('محدوده ورود', 'Entry range');
   String get firstTarget => t('هدف اول', 'First target');
+  String target(int index) => t('هدف ${integer(index)}', 'Target $index');
   String get positionSize => t('حجم پیشنهادی', 'Suggested size');
   String get unitsNoLeverage =>
-      t('تعداد واحد دارایی؛ بدون اهرم', 'Asset units; no leverage');
+      t('تعداد واحد دارایی با سقف ریسک', 'Risk-capped asset units');
+  String get notionalValue => t('ارزش پوزیشن', 'Position notional');
+  String get recommendedLeverage =>
+      t('اهرم پیشنهادی', 'Suggested leverage');
+  String get requiredMargin => t('مبلغ ورود', 'Entry margin');
+  String get leverageCaption => t(
+    'حداقل اهرم لازم؛ افزایش آن حجم پیشنهادی را بیشتر نمی‌کند',
+    'Minimum required leverage; increasing it does not raise suggested size',
+  );
+  String get taken => t('گرفتم', 'Taken');
+  String get markTaken => t(
+    'این ستاپ را در ژورنال محلی به‌عنوان گرفته‌شده ثبت کن',
+    'Record this setup as taken in the local journal',
+  );
   String get maximumLoss => t('حداکثر زیان', 'Maximum loss');
   String get maximumLossCaption => t(
     'برآورد مدیریت ریسک؛ سقف واقعی تضمین نمی‌شود',
@@ -245,6 +260,33 @@ final class AppStrings {
     'غیرفعال؛ اسکن فقط هنگام باز بودن اپ انجام می‌شود.',
     'Off; scanning runs only while the app is open.',
   );
+  String get setupNotifications =>
+      t('اعلان ستاپ‌های تازه', 'New setup notifications');
+  String get setupNotificationsDescription => t(
+    'پس از هر اسکن موفق، برای ستاپ تازه در ۱۵ دقیقه، ۱ ساعت و ۴ ساعت اعلان محلی می‌فرستد. وقتی اپ کاملاً بسته است تضمین نمی‌شود.',
+    'After each successful scan, sends a local alert for new 15m, 1h and 4h setups. Delivery is not guaranteed while the app is fully closed.',
+  );
+  String get notificationPermissionDenied => t(
+    'مجوز اعلان داده نشد. از تنظیمات Android اجازه Notifications را فعال کن.',
+    'Notification permission was not granted. Enable Notifications in Android settings.',
+  );
+  String get partialScan => t('اسکن جزئی', 'Partial scan');
+  String partialScanDescription(int count) => t(
+    '${integer(count)} تایم‌فریم موقتاً دریافت نشد؛ نتایج سالم همچنان نمایش داده می‌شوند.',
+    '$count timeframes were temporarily unavailable; healthy results remain visible.',
+  );
+  String get strategies => t('استراتژی‌های تحلیلی', 'Analysis strategies');
+  String get strategyVersion => 'Structure Zones v1.1';
+  String get strategyDescription => t(
+    'الگوریتم قطعی بر پایه ۱۲۰ کندل بسته‌شده، Pivot پنج‌کندلی، نواحی حمایت/مقاومت، ATR تقریبی ۱۴، حجم ۲۰، جهت ۹/۳۰ و هم‌سویی چندتایم‌فریمی.',
+    'Deterministic pipeline using 120 closed candles, five-candle pivots, support/resistance zones, approximate ATR-14, volume-20, 9/30 direction and multi-timeframe alignment.',
+  );
+  String get strategyRules => t(
+    'ستاپ فقط با جهت کافی، حد ابطال روشن و نسبت سود‌به‌زیان حداقل ۱٫۶ ساخته می‌شود. هزینه رفت‌وبرگشت ۰٫۲۰٪ فرض شده و هیچ نتیجه‌ای تضمین سود نیست.',
+    'A setup requires sufficient direction, clear invalidation and at least 1.6 reward-to-risk. A 0.20% round-trip cost is assumed and no result guarantees profit.',
+  );
+  String get howItWorks => t('روش محاسبه', 'How it works');
+  String get info => t('راهنما', 'Info');
 
   String get riskSettings =>
       t('تنظیمات مدیریت سرمایه', 'Risk management settings');
@@ -279,7 +321,7 @@ final class AppStrings {
     'The app contains no API key or trading permission. This version of Quantara only observes and analyzes.',
   );
   String get about => t('درباره اپ', 'About');
-  String get version => t('نسخه ۰٫۴٫۰ اندروید', 'Android version 0.4.0');
+  String get version => t('نسخه ۰٫۵٫۰ اندروید', 'Android version 0.5.0');
 
   // Legacy cockpit strings remain available while its unused routes are retained.
   String get cockpit => t('مرکز کنترل', 'Cockpit');

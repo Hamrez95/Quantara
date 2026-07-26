@@ -1,8 +1,13 @@
 part of 'owner_alpha_page.dart';
 
 class _RadarDashboard extends StatelessWidget {
-  const _RadarDashboard({required this.snapshot, required this.onOpenAnalysis});
+  const _RadarDashboard({
+    required this.controller,
+    required this.snapshot,
+    required this.onOpenAnalysis,
+  });
 
+  final OwnerAlphaController controller;
   final OwnerAlphaSnapshot snapshot;
   final ValueChanged<String> onOpenAnalysis;
 
@@ -53,12 +58,39 @@ class _RadarDashboard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
+        if (snapshot.scanFailures.isNotEmpty) ...[
+          SectionCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: QuantaraColors.warning,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    strings.partialScanDescription(
+                      snapshot.scanFailures.length,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         if (opportunities.isEmpty)
           _NoTradeCard(snapshot: snapshot)
         else
           for (var index = 0; index < opportunities.length; index++) ...[
             _OpportunityCard(
               idea: opportunities[index],
+              taken: controller.isTaken(opportunities[index].setupId),
+              onTakenChanged: (value) => controller.setTaken(
+                opportunities[index].setupId,
+                value,
+              ),
               onTap: () => onOpenAnalysis(opportunities[index].symbol),
             ),
             if (index != opportunities.length - 1) const SizedBox(height: 12),
@@ -109,9 +141,16 @@ class _NoTradeCard extends StatelessWidget {
 }
 
 class _OpportunityCard extends StatelessWidget {
-  const _OpportunityCard({required this.idea, required this.onTap});
+  const _OpportunityCard({
+    required this.idea,
+    required this.taken,
+    required this.onTakenChanged,
+    required this.onTap,
+  });
 
   final TradeIdea idea;
+  final bool taken;
+  final ValueChanged<bool> onTakenChanged;
   final VoidCallback onTap;
 
   @override
@@ -192,16 +231,49 @@ class _OpportunityCard extends StatelessWidget {
                 label: strings.riskReward,
                 value: '1:${idea.riskReward!.toStringAsFixed(2)}',
               ),
+              for (var index = 0; index < idea.targets.length; index++)
+                MetricTile(
+                  label: strings.target(index + 1),
+                  value: QuantaraNumberFormat.marketValue(
+                    idea.targets[index],
+                  ),
+                  valueColor: QuantaraColors.success,
+                ),
+              MetricTile(
+                label: strings.recommendedLeverage,
+                value: '${idea.recommendedLeverage}x',
+                caption: strings.leverageCaption,
+              ),
+              MetricTile(
+                label: strings.requiredMargin,
+                value: QuantaraNumberFormat.marketValue(
+                  idea.requiredMargin!,
+                  unit: 'USDT',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: FilledButton.tonalIcon(
-              onPressed: onTap,
-              icon: const Icon(Icons.candlestick_chart_rounded),
-              label: Text(strings.inspectChart),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: taken,
+                  onChanged: (value) => onTakenChanged(value ?? false),
+                  title: Text(strings.taken),
+                  subtitle: Text(strings.markTaken),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: onTap,
+                icon: const Icon(Icons.candlestick_chart_rounded),
+                label: Text(strings.inspectChart),
+              ),
+            ],
           ),
         ],
       ),
@@ -249,15 +321,18 @@ class _RadarCoverage extends StatelessWidget {
             const SizedBox(height: 8),
             Align(
               alignment: AlignmentDirectional.centerStart,
-              child: StatusPill(
-                label: _ideaLabel(
-                  context,
-                  snapshot.radar[index].idea.direction,
-                ),
-                color: _ideaColor(
-                  context,
-                  snapshot.radar[index].idea.direction,
-                ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry
+                      in snapshot.radar[index].ideasByTimeframe.entries)
+                    StatusPill(
+                      label:
+                          '${entry.key} · ${_ideaLabel(context, entry.value.direction)}',
+                      color: _ideaColor(context, entry.value.direction),
+                    ),
+                ],
               ),
             ),
             if (index != snapshot.radar.length - 1) const Divider(height: 24),
