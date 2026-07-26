@@ -43,11 +43,11 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
     this._requestSpacing,
     this._now,
   ) {
-    if (timeout <= Duration.zero || timeout > const Duration(seconds: 30)) {
-      throw ArgumentError.value(timeout, 'timeout');
+    if (_timeout <= Duration.zero || _timeout > const Duration(seconds: 30)) {
+      throw ArgumentError.value(_timeout, 'timeout');
     }
-    if (requestSpacing.isNegative) {
-      throw ArgumentError.value(requestSpacing, 'requestSpacing');
+    if (_requestSpacing.isNegative) {
+      throw ArgumentError.value(_requestSpacing, 'requestSpacing');
     }
   }
 
