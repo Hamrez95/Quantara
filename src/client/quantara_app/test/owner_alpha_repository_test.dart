@@ -86,6 +86,87 @@ void main() {
       );
     },
   );
+
+  test('repairs sub-basis-point Bitunix candle rounding drift', () async {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/tickers')) {
+        return _jsonResponse({
+          'code': 0,
+          'msg': 'Success',
+          'data': [_ticker('BTCUSDT', 60000)],
+        });
+      }
+      final candles = _candles(
+        60000,
+        request.url.queryParameters['interval']!,
+      );
+      final open = double.parse(candles[1]['open']! as String);
+      candles[1]['high'] = (open * 0.99995).toString();
+      return _jsonResponse({
+        'code': 0,
+        'msg': 'Success',
+        'data': candles,
+      });
+    });
+    final repository = BitunixOwnerAlphaRepository(
+      client: client,
+      requestSpacing: Duration.zero,
+      now: () => DateTime.utc(2026, 7, 21, 8),
+    );
+
+    final snapshot = await repository.scan(
+      symbols: const ['BTCUSDT'],
+      selectedSymbol: 'BTCUSDT',
+      selectedTimeframe: '1h',
+      capital: 10000,
+      riskPercent: 1,
+      languageCode: 'fa',
+    );
+
+    final repaired = snapshot.selectedAnalysis.candles[1];
+    expect(repaired.high, repaired.open);
+    expect(repaired.isValid, isTrue);
+  });
+
+  test('still rejects materially inconsistent candle ranges', () async {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/tickers')) {
+        return _jsonResponse({
+          'code': 0,
+          'msg': 'Success',
+          'data': [_ticker('BTCUSDT', 60000)],
+        });
+      }
+      final candles = _candles(
+        60000,
+        request.url.queryParameters['interval']!,
+      );
+      final open = double.parse(candles[1]['open']! as String);
+      candles[1]['high'] = (open * 0.99).toString();
+      return _jsonResponse({
+        'code': 0,
+        'msg': 'Success',
+        'data': candles,
+      });
+    });
+    final repository = BitunixOwnerAlphaRepository(
+      client: client,
+      requestSpacing: Duration.zero,
+      now: () => DateTime.utc(2026, 7, 21, 8),
+    );
+
+    expect(
+      () => repository.scan(
+        symbols: const ['BTCUSDT'],
+        selectedSymbol: 'BTCUSDT',
+        selectedTimeframe: '1h',
+        capital: 10000,
+        riskPercent: 1,
+        languageCode: 'fa',
+      ),
+      throwsA(isA<OwnerAlphaDataException>()),
+    );
+  });
 }
 
 Map<String, Object> _ticker(String symbol, double price) {
