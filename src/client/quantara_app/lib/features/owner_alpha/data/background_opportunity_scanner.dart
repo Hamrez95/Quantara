@@ -80,7 +80,7 @@ void quantaraBackgroundDispatcher() {
           .toSet();
       final notifications = FlutterLocalNotificationsPlugin();
       await notifications.initialize(
-        const InitializationSettings(
+        settings: const InitializationSettings(
           android: AndroidInitializationSettings('ic_launcher'),
         ),
       );
@@ -102,10 +102,10 @@ void quantaraBackgroundDispatcher() {
             ? 'Fresh ${idea.strategyVersion} idea · valid until ${localExpiry.hour}:$minute'
             : 'پیشنهاد تازه ${idea.strategyVersion} · معتبر تا ${localExpiry.hour}:$minute';
         await notifications.show(
-          _stableNotificationId(idea.setupId),
-          title,
-          body,
-          const NotificationDetails(
+          id: _stableNotificationId(idea.setupId),
+          title: title,
+          body: body,
+          notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
               'quantara_background_setups',
               'Quantara background setups',
