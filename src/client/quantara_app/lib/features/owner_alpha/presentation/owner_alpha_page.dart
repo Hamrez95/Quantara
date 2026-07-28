@@ -17,6 +17,7 @@ import '../domain/owner_alpha_models.dart';
 
 part 'owner_alpha_dashboard.dart';
 part 'owner_alpha_watchlist.dart';
+part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
@@ -117,7 +118,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onLocaleChanged: widget.onLocaleChanged,
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
-            onOpenStrategyLab: () => setState(() => _destination = 3),
+            onOpenStrategyLab: () => setState(() => _destination = 4),
           ),
         );
         if (desktop) {
@@ -158,9 +159,9 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           bottomNavigationBar: SafeArea(
             top: false,
             child: NavigationBar(
-              selectedIndex: _destination == 3
-                  ? 2
-                  : _mobileDestinationIndexes.indexOf(_destination),
+              selectedIndex: _mobileDestinationIndexes.contains(_destination)
+                  ? _mobileDestinationIndexes.indexOf(_destination)
+                  : 2,
               labelBehavior: constraints.maxWidth < 380
                   ? NavigationDestinationLabelBehavior.onlyShowSelected
                   : NavigationDestinationLabelBehavior.alwaysShow,
@@ -252,21 +253,23 @@ class _AddSymbolDialogState extends State<_AddSymbolDialog> {
 
 const _destinations = [
   _Destination(Icons.radar_outlined, Icons.radar_rounded),
-  _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
+  _Destination(Icons.inbox_outlined, Icons.inbox_rounded),
   _Destination(
     Icons.candlestick_chart_outlined,
     Icons.candlestick_chart_rounded,
   ),
+  _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
   _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _mobileDestinationIndexes = [0, 1, 2, 4];
+const _mobileDestinationIndexes = [0, 1, 2, 5];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
-  1 => strings.watchlist,
+  1 => strings.setups,
   2 => strings.analysis,
-  3 => strings.strategyLab,
-  4 => strings.profile,
+  3 => strings.watchlist,
+  4 => strings.strategyLab,
+  5 => strings.profile,
   _ => strings.radar,
 };
 
@@ -332,7 +335,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  if (destination == 4)
+                  if (destination == 5)
                     _ProfileView(
                       controller: controller,
                       themeMode: themeMode,
@@ -344,11 +347,9 @@ class _OwnerAlphaBody extends StatelessWidget {
                     _InitialLoading(controller: controller)
                   else
                     switch (destination) {
-                      1 => _WatchlistView(
+                      1 => _SignalInboxView(
                         controller: controller,
-                        snapshot: controller.snapshot!,
                         onOpenAnalysis: onOpenAnalysis,
-                        onAddSymbol: onAddSymbol,
                       ),
                       2 => Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -365,7 +366,13 @@ class _OwnerAlphaBody extends StatelessWidget {
                           ),
                         ],
                       ),
-                      3 => _StrategyLabView(
+                      3 => _WatchlistView(
+                        controller: controller,
+                        snapshot: controller.snapshot!,
+                        onOpenAnalysis: onOpenAnalysis,
+                        onAddSymbol: onAddSymbol,
+                      ),
+                      4 => _StrategyLabView(
                         controller: controller,
                         snapshot: controller.snapshot!,
                       ),
