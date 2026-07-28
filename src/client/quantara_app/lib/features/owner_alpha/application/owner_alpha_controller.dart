@@ -63,6 +63,8 @@ final class OwnerAlphaController extends ChangeNotifier {
   String _selectedTimeframe = '1h';
   double _capital = 10000;
   double _riskPercent = 1;
+  AnalysisStrategy _strategy = AnalysisStrategy.structureZones;
+  SignalCadence _cadence = SignalCadence.balanced;
   OwnerAlphaSnapshot? _snapshot;
   String? _error;
   OwnerAlphaDataException? _lastDataException;
@@ -82,6 +84,8 @@ final class OwnerAlphaController extends ChangeNotifier {
   String get selectedTimeframe => _selectedTimeframe;
   double get capital => _capital;
   double get riskPercent => _riskPercent;
+  AnalysisStrategy get strategy => _strategy;
+  SignalCadence get cadence => _cadence;
   OwnerAlphaSnapshot? get snapshot => _snapshot;
   String? get error => _error;
   bool get isLoading => _loading;
@@ -133,6 +137,8 @@ final class OwnerAlphaController extends ChangeNotifier {
       }
       _capital = saved.capital.clamp(100, 100000000).toDouble();
       _riskPercent = saved.riskPercent.clamp(0.1, 2).toDouble();
+      _strategy = saved.strategy;
+      _cadence = saved.cadence;
     }
     await refresh();
     if (!_disposed) {
@@ -222,6 +228,8 @@ final class OwnerAlphaController extends ChangeNotifier {
             symbols: requestedSymbols,
             capital: _capital,
             riskPercent: _riskPercent,
+            strategy: _strategy,
+            cadence: _cadence,
           ),
         );
       }
@@ -231,12 +239,13 @@ final class OwnerAlphaController extends ChangeNotifier {
       _symbols = requestedSymbols;
       _selectedSymbol = result.selectedSymbol;
       _selectedTimeframe = result.selectedTimeframe;
-      _snapshot = result;
+      final configuredResult = _applyStrategy(result);
+      _snapshot = configuredResult;
       _error = null;
       _lastDataException = null;
       _unexpectedError = false;
       _nextScanAt = DateTime.now().toUtc().add(_scanInterval);
-      await _notifyNewOpportunities(result.opportunities);
+      await _notifyNewOpportunities(configuredResult.opportunities);
       return true;
     } catch (error) {
       if (_disposed || generation != _requestGeneration) {
@@ -436,6 +445,67 @@ final class OwnerAlphaController extends ChangeNotifier {
     return value.length <= 24 ? value : null;
   }
 
+  Future<void> updateSignalPolicy({
+    required AnalysisStrategy strategy,
+    required SignalCadence cadence,
+  }) async {
+    if (_strategy == strategy && _cadence == cadence) {
+      return;
+    }
+    _strategy = strategy;
+    _cadence = cadence;
+    await _saveSettings();
+    final current = _snapshot;
+    if (current != null) {
+      _snapshot = _applyStrategy(current);
+    }
+    notifyListeners();
+  }
+
+  OwnerAlphaSnapshot _applyStrategy(OwnerAlphaSnapshot current) {
+    final rebuiltRadar = <SymbolRadarResult>[
+      for (final result in current.radar)
+        SymbolRadarResult(
+          quote: result.quote,
+          analysis: result.analysis,
+          idea: _rebuildIdea(result.analysis, result.analysesByTimeframe),
+          analysesByTimeframe: result.analysesByTimeframe,
+          ideasByTimeframe: {
+            for (final entry in result.analysesByTimeframe.entries)
+              if (BitunixOwnerAlphaRepository.opportunityTimeframes
+                  .contains(entry.key))
+                entry.key: _rebuildIdea(
+                  entry.value,
+                  result.analysesByTimeframe,
+                ),
+          },
+        ),
+    ];
+    final selectedResult = rebuiltRadar.firstWhere(
+      (item) => item.quote.symbol == current.selectedSymbol,
+    );
+    final selectedAnalysis =
+        selectedResult.analysesByTimeframe[current.selectedTimeframe] ??
+        current.selectedAnalysis;
+    return OwnerAlphaSnapshot(
+      radar: rebuiltRadar,
+      selectedSymbol: current.selectedSymbol,
+      selectedTimeframe: current.selectedTimeframe,
+      selectedAnalysis: selectedAnalysis,
+      selectedIdea: _rebuildIdea(
+        selectedAnalysis,
+        selectedResult.analysesByTimeframe,
+      ),
+      timeframeDirections: {
+        for (final entry in selectedResult.analysesByTimeframe.entries)
+          entry.key: entry.value.direction,
+      },
+      scanFailures: current.scanFailures,
+      diagnostics: current.diagnostics,
+      generatedAt: current.generatedAt,
+    );
+  }
+
   void setLanguage(String languageCode, {bool notify = true}) {
     final normalized = languageCode == 'en' ? 'en' : 'fa';
     if (_languageCode == normalized) {
@@ -501,6 +571,8 @@ final class OwnerAlphaController extends ChangeNotifier {
         symbols: _symbols,
         capital: _capital,
         riskPercent: _riskPercent,
+        strategy: _strategy,
+        cadence: _cadence,
       ),
     );
   }
@@ -517,6 +589,8 @@ final class OwnerAlphaController extends ChangeNotifier {
         for (final entry in analyses.entries) entry.key: entry.value.direction,
       },
       languageCode: _languageCode,
+      strategy: _strategy,
+      cadence: _cadence,
     );
   }
 
