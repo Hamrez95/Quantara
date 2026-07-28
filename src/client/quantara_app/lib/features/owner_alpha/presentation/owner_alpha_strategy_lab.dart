@@ -475,6 +475,28 @@ class _StrategyLabReportCard extends StatelessWidget {
             strings.regimeName(report.regime.name),
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          const SizedBox(height: 10),
+          StatusPill(
+            label: report.trades.length >= 20
+                ? (Directionality.of(context) == TextDirection.rtl
+                      ? 'نمونه قابل بررسی'
+                      : 'Reviewable sample')
+                : (Directionality.of(context) == TextDirection.rtl
+                      ? 'نمونه کم؛ هنوز قابل اتکا نیست'
+                      : 'Small sample; not reliable yet'),
+            color: report.trades.length >= 20
+                ? QuantaraColors.success
+                : QuantaraColors.warning,
+            icon: report.trades.length >= 20
+                ? Icons.verified_outlined
+                : Icons.warning_amber_rounded,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${report.startedAt.toLocal()} → ${report.endedAt.toLocal()}',
+            textDirection: TextDirection.ltr,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
