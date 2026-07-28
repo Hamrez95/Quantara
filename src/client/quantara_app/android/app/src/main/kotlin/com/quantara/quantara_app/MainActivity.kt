@@ -261,6 +261,10 @@ class MainActivity : FlutterActivity() {
                                 .getStringSet("notifiedSetupIds", emptySet())
                                 .orEmpty()
                                 .toList(),
+                            "journalJson" to preferences.getString(
+                                "signalJournalJson",
+                                "[]",
+                            ),
                         ),
                     )
                 }
@@ -269,13 +273,21 @@ class MainActivity : FlutterActivity() {
                     val enabled = arguments?.get("notificationsEnabled") as? Boolean
                     val taken = arguments?.readSetupIds("takenSetupIds")
                     val notified = arguments?.readSetupIds("notifiedSetupIds")
-                    if (enabled == null || taken == null || notified == null) {
+                    val journalJson = arguments?.get("journalJson") as? String
+                    if (
+                        enabled == null ||
+                        taken == null ||
+                        notified == null ||
+                        journalJson == null ||
+                        journalJson.length > 200_000
+                    ) {
                         result.error("invalid_opportunity_state", "Opportunity state is invalid.", null)
                     } else {
                         preferences.edit()
                             .putBoolean("setupNotificationsEnabled", enabled)
                             .putStringSet("takenSetupIds", taken)
                             .putStringSet("notifiedSetupIds", notified)
+                            .putString("signalJournalJson", journalJson)
                             .apply()
                         result.success(null)
                     }
