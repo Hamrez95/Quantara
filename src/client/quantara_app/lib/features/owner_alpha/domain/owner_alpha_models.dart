@@ -2,6 +2,16 @@ import '../../market_analysis/domain/market_chart_models.dart';
 
 enum TradeDirection { long, short, wait }
 
+enum AnalysisStrategy {
+  structureZones,
+  trendPullback,
+  momentumContinuation,
+}
+
+enum SignalCadence { conservative, balanced, active }
+
+enum SignalLifecycle { fresh, expiring, expired, taken, closed }
+
 enum SetupRejectionReason {
   none,
   weakDirection,
@@ -73,6 +83,8 @@ final class TradeIdea {
     required this.invalidation,
     required this.reasons,
     this.rejectionReason = SetupRejectionReason.none,
+    this.strategy = AnalysisStrategy.structureZones,
+    this.strategyVersion = '1.1',
   });
 
   final String symbol;
@@ -96,6 +108,31 @@ final class TradeIdea {
   final String invalidation;
   final List<String> reasons;
   final SetupRejectionReason rejectionReason;
+  final AnalysisStrategy strategy;
+  final String strategyVersion;
+
+  DateTime get createdAt => candleClosedAt;
+
+  Duration get validityWindow => switch (timeframe) {
+    '15m' => const Duration(minutes: 45),
+    '1h' => const Duration(hours: 3),
+    '4h' => const Duration(hours: 12),
+    '1D' => const Duration(days: 3),
+    _ => Duration.zero,
+  };
+
+  DateTime get validUntil => candleClosedAt.add(validityWindow);
+
+  bool isExpiredAt(DateTime now) =>
+      isActionable && !now.toUtc().isBefore(validUntil);
+
+  bool isExpiringAt(DateTime now) {
+    if (!isActionable || isExpiredAt(now)) {
+      return false;
+    }
+    final remaining = validUntil.difference(now.toUtc());
+    return remaining <= validityWindow ~/ 3;
+  }
 
   bool get isActionable => direction != TradeDirection.wait;
 
@@ -228,6 +265,8 @@ final class OwnerAlphaSettings {
     required this.symbols,
     required this.capital,
     required this.riskPercent,
+    this.strategy = AnalysisStrategy.structureZones,
+    this.cadence = SignalCadence.balanced,
   });
 
   final List<String> symbols;
