@@ -156,24 +156,28 @@ final class WorkmanagerBackgroundScanGateway
     required OwnerAlphaSettings settings,
     required String languageCode,
   }) async {
-    if (!enabled) {
-      await Workmanager().cancelByUniqueName(_backgroundUniqueName);
-      return;
+    try {
+      if (!enabled) {
+        await Workmanager().cancelByUniqueName(_backgroundUniqueName);
+        return;
+      }
+      await Workmanager().registerPeriodicTask(
+        _backgroundUniqueName,
+        _backgroundTask,
+        frequency: const Duration(minutes: 15),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+        constraints: Constraints(networkType: NetworkType.connected),
+        inputData: {
+          'symbols': settings.symbols,
+          'capital': settings.capital,
+          'riskPercent': settings.riskPercent,
+          'strategy': settings.strategy.name,
+          'cadence': settings.cadence.name,
+          'languageCode': languageCode,
+        },
+      );
+    } on Object {
+      // Background scheduling is best effort and must not block live analysis.
     }
-    await Workmanager().registerPeriodicTask(
-      _backgroundUniqueName,
-      _backgroundTask,
-      frequency: const Duration(minutes: 15),
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
-      constraints: Constraints(networkType: NetworkType.connected),
-      inputData: {
-        'symbols': settings.symbols,
-        'capital': settings.capital,
-        'riskPercent': settings.riskPercent,
-        'strategy': settings.strategy.name,
-        'cadence': settings.cadence.name,
-        'languageCode': languageCode,
-      },
-    );
   }
 }
