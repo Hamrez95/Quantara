@@ -14,7 +14,8 @@ class _StrategyLabViewState extends State<_StrategyLabView> {
   final StrategyLabSessionStore _sessionStore =
       const PlatformStrategyLabSessionStore();
   StrategyKind _strategy = StrategyKind.structureZones;
-  int _days = 3;
+  static const _fullHistoryDays = 3650;
+  int _forwardDays = 3;
   late String _symbol = widget.snapshot.selectedSymbol;
   late String _timeframe = widget.snapshot.selectedTimeframe;
   StrategyLabReport? _report;
@@ -70,7 +71,7 @@ class _StrategyLabViewState extends State<_StrategyLabView> {
               strategy: strategy,
               symbol: analysis.symbol,
               timeframe: analysis.timeframe,
-              window: Duration(days: _days),
+              window: const Duration(days: _fullHistoryDays),
               initialCapital: widget.controller.capital,
               riskPercent: math.min(widget.controller.riskPercent, 1),
             ),
@@ -94,7 +95,7 @@ class _StrategyLabViewState extends State<_StrategyLabView> {
       '1h' => 3,
       _ => 7,
     };
-    if (_days > maximumDays) {
+    if (_forwardDays > maximumDays) {
       setState(() => _error = AppStrings.of(context).forwardWindowTooLong);
       return;
     }
@@ -104,12 +105,12 @@ class _StrategyLabViewState extends State<_StrategyLabView> {
         strategy: _strategy,
         symbol: _symbol,
         timeframe: _timeframe,
-        window: Duration(days: _days),
+        window: Duration(days: _forwardDays),
         initialCapital: widget.controller.capital,
         riskPercent: math.min(widget.controller.riskPercent, 1),
       ),
       startedAt: startedAt,
-      endsAt: startedAt.add(Duration(days: _days)),
+      endsAt: startedAt.add(Duration(days: _forwardDays)),
     );
     await _sessionStore.save(session);
     if (mounted) {
@@ -288,29 +289,61 @@ class _StrategyLabViewState extends State<_StrategyLabView> {
                 ],
               ),
               const SizedBox(height: 14),
-              Text(strings.testWindow),
-              const SizedBox(height: 8),
+              Text(
+                Directionality.of(context) == TextDirection.rtl
+                    ? 'بک‌تست فوری با بیشترین تاریخچه'
+                    : 'Instant backtest with maximum history',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                Directionality.of(context) == TextDirection.rtl
+                    ? 'همین حالا روی همه کندل‌های بسته موجود اجرا می‌شود؛ منتظر چند روز نمی‌مانی.'
+                    : 'Runs now on every available closed candle; no multi-day wait.',
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _run,
+                icon: const Icon(Icons.assessment_rounded),
+                label: Text(
+                  Directionality.of(context) == TextDirection.rtl
+                      ? 'ساخت گزارش تاریخی'
+                      : 'Build historical report',
+                ),
+              ),
+              const Divider(height: 32),
+              Text(
+                Directionality.of(context) == TextDirection.rtl
+                    ? 'فوروارد تست زنده'
+                    : 'Live forward test',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                Directionality.of(context) == TextDirection.rtl
+                    ? 'از الان به بعد و بدون نگاه به آینده، عملکرد واقعی سیگنال‌ها را ثبت می‌کند.'
+                    : 'Tracks real signals from now on without looking ahead.',
+              ),
+              const SizedBox(height: 10),
               SegmentedButton<int>(
                 segments: [
                   ButtonSegment(value: 1, label: Text(strings.oneDay)),
                   ButtonSegment(value: 3, label: Text(strings.threeDays)),
                   ButtonSegment(value: 7, label: Text(strings.sevenDays)),
                 ],
-                selected: {_days},
+                selected: {_forwardDays},
                 onSelectionChanged: (value) {
                   setState(() {
-                    _days = value.first;
+                    _forwardDays = value.first;
                     _report = null;
                   });
                 },
               ),
-              const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: _run,
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(strings.runSimulation),
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _session == null ? _startForwardTest : null,
                 icon: const Icon(Icons.schedule_rounded),
