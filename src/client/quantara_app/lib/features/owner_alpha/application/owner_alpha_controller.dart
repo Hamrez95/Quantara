@@ -247,6 +247,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       _symbols = requestedSymbols;
       _selectedSymbol = result.selectedSymbol;
       _selectedTimeframe = result.selectedTimeframe;
+      await _configureBackgroundScan();
       final configuredResult = _applyStrategy(result);
       _snapshot = configuredResult;
       _error = null;
