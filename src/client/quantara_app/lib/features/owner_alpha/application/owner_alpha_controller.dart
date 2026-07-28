@@ -572,6 +572,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         generatedAt: current.generatedAt,
       );
     }
+    unawaited(_configureBackgroundScan());
     if (notify) {
       notifyListeners();
     }
