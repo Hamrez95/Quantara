@@ -2,11 +2,7 @@ import '../../market_analysis/domain/market_chart_models.dart';
 
 enum TradeDirection { long, short, wait }
 
-enum AnalysisStrategy {
-  structureZones,
-  trendPullback,
-  momentumContinuation,
-}
+enum AnalysisStrategy { structureZones, trendPullback, momentumContinuation }
 
 enum SignalCadence { conservative, balanced, active }
 
@@ -400,7 +396,9 @@ final class SignalJournalEntry {
           .toList(growable: false);
       final setupId = value['setupId'] as String;
       final symbol = value['symbol'] as String;
-      if (setupId.isEmpty || setupId.length > 320 || symbol.isEmpty) return null;
+      if (setupId.isEmpty || setupId.length > 320 || symbol.isEmpty) {
+        return null;
+      }
       return SignalJournalEntry(
         setupId: setupId,
         symbol: symbol,

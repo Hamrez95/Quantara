@@ -36,9 +36,9 @@ void main() {
   });
 
   test('journal survives serialization and exposes lifecycle', () {
-    final original = SignalJournalEntry.fromIdea(idea).copyWith(
-      note: 'entered after retest',
-    );
+    final original = SignalJournalEntry.fromIdea(
+      idea,
+    ).copyWith(note: 'entered after retest');
     final restored = SignalJournalEntry.tryFromJson(original.toJson());
 
     expect(restored, isNotNull);
@@ -46,10 +46,7 @@ void main() {
     expect(restored.note, 'entered after retest');
     expect(restored.strategy, AnalysisStrategy.trendPullback);
     expect(
-      restored.lifecycle(
-        DateTime.utc(2026, 7, 28, 10, 30),
-        taken: false,
-      ),
+      restored.lifecycle(DateTime.utc(2026, 7, 28, 10, 30), taken: false),
       SignalLifecycle.expiring,
     );
     expect(
@@ -57,10 +54,9 @@ void main() {
       SignalLifecycle.taken,
     );
     expect(
-      restored.copyWith(closed: true).lifecycle(
-            DateTime.utc(2026, 7, 28, 9),
-            taken: true,
-          ),
+      restored
+          .copyWith(closed: true)
+          .lifecycle(DateTime.utc(2026, 7, 28, 9), taken: true),
       SignalLifecycle.closed,
     );
   });

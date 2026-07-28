@@ -293,9 +293,9 @@ class _StrategyLabViewState extends State<_StrategyLabView> {
                 Directionality.of(context) == TextDirection.rtl
                     ? 'بک‌تست فوری با بیشترین تاریخچه'
                     : 'Instant backtest with maximum history',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 6),
               Text(
@@ -318,9 +318,9 @@ class _StrategyLabViewState extends State<_StrategyLabView> {
                 Directionality.of(context) == TextDirection.rtl
                     ? 'فوروارد تست زنده'
                     : 'Live forward test',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 6),
               Text(

@@ -26,22 +26,24 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     final controller = widget.controller;
     final now = DateTime.now().toUtc();
     final all = controller.signalJournal;
-    final filtered = all.where((entry) {
-      final lifecycle = entry.lifecycle(
-        now,
-        taken: controller.isTaken(entry.setupId),
-      );
-      return switch (_filter) {
-        _SignalFilter.all => true,
-        _SignalFilter.live =>
-          lifecycle == SignalLifecycle.fresh ||
-              lifecycle == SignalLifecycle.expiring,
-        _SignalFilter.taken => lifecycle == SignalLifecycle.taken,
-        _SignalFilter.expired =>
-          lifecycle == SignalLifecycle.expired ||
-              lifecycle == SignalLifecycle.closed,
-      };
-    }).toList(growable: false);
+    final filtered = all
+        .where((entry) {
+          final lifecycle = entry.lifecycle(
+            now,
+            taken: controller.isTaken(entry.setupId),
+          );
+          return switch (_filter) {
+            _SignalFilter.all => true,
+            _SignalFilter.live =>
+              lifecycle == SignalLifecycle.fresh ||
+                  lifecycle == SignalLifecycle.expiring,
+            _SignalFilter.taken => lifecycle == SignalLifecycle.taken,
+            _SignalFilter.expired =>
+              lifecycle == SignalLifecycle.expired ||
+                  lifecycle == SignalLifecycle.closed,
+          };
+        })
+        .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -121,7 +123,10 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                             'هنوز پیشنهاد قابل‌اقدامی ثبت نشده',
                             'No actionable idea has been recorded yet',
                           )
-                        : _t('در این دسته چیزی نیست', 'Nothing in this category'),
+                        : _t(
+                            'در این دسته چیزی نیست',
+                            'Nothing in this category',
+                          ),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -227,9 +232,9 @@ class _SignalPolicyCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   _t(context, 'روش پیدا کردن پیشنهاد', 'Signal policy'),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
             ],
@@ -305,12 +310,21 @@ class _SignalPolicyCard extends StatelessWidget {
 
   String _strategyLabel(BuildContext context, AnalysisStrategy strategy) =>
       switch (strategy) {
-        AnalysisStrategy.structureZones =>
-          _t(context, 'ناحیه و ساختار', 'Structure & zones'),
-        AnalysisStrategy.trendPullback =>
-          _t(context, 'پولبک در روند', 'Trend pullback'),
-        AnalysisStrategy.momentumContinuation =>
-          _t(context, 'ادامه مومنتوم', 'Momentum continuation'),
+        AnalysisStrategy.structureZones => _t(
+          context,
+          'ناحیه و ساختار',
+          'Structure & zones',
+        ),
+        AnalysisStrategy.trendPullback => _t(
+          context,
+          'پولبک در روند',
+          'Trend pullback',
+        ),
+        AnalysisStrategy.momentumContinuation => _t(
+          context,
+          'ادامه مومنتوم',
+          'Momentum continuation',
+        ),
       };
 }
 
@@ -496,12 +510,21 @@ class _SignalJournalCard extends StatelessWidget {
       : _t(context, 'فروش', 'Short');
 
   String _strategy(BuildContext context) => switch (entry.strategy) {
-    AnalysisStrategy.structureZones =>
-      _t(context, 'ناحیه و ساختار', 'Structure & zones'),
-    AnalysisStrategy.trendPullback =>
-      _t(context, 'پولبک روند', 'Trend pullback'),
-    AnalysisStrategy.momentumContinuation =>
-      _t(context, 'ادامه مومنتوم', 'Momentum continuation'),
+    AnalysisStrategy.structureZones => _t(
+      context,
+      'ناحیه و ساختار',
+      'Structure & zones',
+    ),
+    AnalysisStrategy.trendPullback => _t(
+      context,
+      'پولبک روند',
+      'Trend pullback',
+    ),
+    AnalysisStrategy.momentumContinuation => _t(
+      context,
+      'ادامه مومنتوم',
+      'Momentum continuation',
+    ),
   };
 
   String _lifecycle(BuildContext context, SignalLifecycle value) =>

@@ -433,9 +433,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         selectedIdea: _rebuildIdea(
           current.selectedAnalysis,
           current.radar
-              .firstWhere(
-                (item) => item.quote.symbol == current.selectedSymbol,
-              )
+              .firstWhere((item) => item.quote.symbol == current.selectedSymbol)
               .analysesByTimeframe,
         ),
         timeframeDirections: directions,
@@ -485,8 +483,9 @@ final class OwnerAlphaController extends ChangeNotifier {
           analysesByTimeframe: result.analysesByTimeframe,
           ideasByTimeframe: {
             for (final entry in result.analysesByTimeframe.entries)
-              if (BitunixOwnerAlphaRepository.opportunityTimeframes
-                  .contains(entry.key))
+              if (BitunixOwnerAlphaRepository.opportunityTimeframes.contains(
+                entry.key,
+              ))
                 entry.key: _rebuildIdea(
                   entry.value,
                   result.analysesByTimeframe,
@@ -561,9 +560,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         selectedIdea: _rebuildIdea(
           current.selectedAnalysis,
           current.radar
-              .firstWhere(
-                (item) => item.quote.symbol == current.selectedSymbol,
-              )
+              .firstWhere((item) => item.quote.symbol == current.selectedSymbol)
               .analysesByTimeframe,
         ),
         timeframeDirections: directions,

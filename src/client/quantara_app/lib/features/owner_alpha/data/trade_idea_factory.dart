@@ -57,8 +57,11 @@ abstract final class TradeIdeaFactory {
     };
     final strategyAligned = switch (strategy) {
       AnalysisStrategy.structureZones => true,
-      AnalysisStrategy.trendPullback =>
-        protectiveAlignment(analysis, supports, resistances),
+      AnalysisStrategy.trendPullback => protectiveAlignment(
+        analysis,
+        supports,
+        resistances,
+      ),
       AnalysisStrategy.momentumContinuation => aligned >= 2,
     };
     final enoughStrength =
@@ -284,11 +287,12 @@ abstract final class TradeIdeaFactory {
     return distance <= math.max(0.008, analysis.volatilityPercent / 100 * 1.4);
   }
 
-  static String strategyVersion(AnalysisStrategy strategy) => switch (strategy) {
-    AnalysisStrategy.structureZones => 'structure-zones/1.2',
-    AnalysisStrategy.trendPullback => 'trend-pullback/1.0',
-    AnalysisStrategy.momentumContinuation => 'momentum-continuation/1.0',
-  };
+  static String strategyVersion(AnalysisStrategy strategy) =>
+      switch (strategy) {
+        AnalysisStrategy.structureZones => 'structure-zones/1.2',
+        AnalysisStrategy.trendPullback => 'trend-pullback/1.0',
+        AnalysisStrategy.momentumContinuation => 'momentum-continuation/1.0',
+      };
 
   static int confidenceLeverageCap(
     double directionStrength,

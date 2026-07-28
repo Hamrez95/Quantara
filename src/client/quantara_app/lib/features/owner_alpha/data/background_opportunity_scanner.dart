@@ -19,7 +19,8 @@ void quantaraBackgroundDispatcher() {
       return true;
     }
     WidgetsFlutterBinding.ensureInitialized();
-    final symbols = (inputData['symbols'] as List<Object?>?)
+    final symbols =
+        (inputData['symbols'] as List<Object?>?)
             ?.whereType<String>()
             .take(12)
             .toList(growable: false) ??
@@ -52,8 +53,9 @@ void quantaraBackgroundDispatcher() {
       final ideas = <TradeIdea>[
         for (final result in snapshot.radar)
           for (final entry in result.analysesByTimeframe.entries)
-            if (BitunixOwnerAlphaRepository.opportunityTimeframes
-                .contains(entry.key))
+            if (BitunixOwnerAlphaRepository.opportunityTimeframes.contains(
+              entry.key,
+            ))
               TradeIdeaFactory.create(
                 analysis: entry.value,
                 capital: capital,
@@ -62,8 +64,7 @@ void quantaraBackgroundDispatcher() {
                 strategy: strategy,
                 cadence: cadence,
                 confluence: {
-                  for (final direction
-                      in result.analysesByTimeframe.entries)
+                  for (final direction in result.analysesByTimeframe.entries)
                     direction.key: direction.value.direction,
                 },
               ),
@@ -73,11 +74,10 @@ void quantaraBackgroundDispatcher() {
       }
 
       final preferences = SharedPreferencesAsync();
-      final notified = (await preferences.getStringList(
-                _backgroundNotifiedKey,
-              ) ??
-              const <String>[])
-          .toSet();
+      final notified =
+          (await preferences.getStringList(_backgroundNotifiedKey) ??
+                  const <String>[])
+              .toSet();
       final notifications = FlutterLocalNotificationsPlugin();
       await notifications.initialize(
         settings: const InitializationSettings(
@@ -151,8 +151,7 @@ abstract final class BackgroundOpportunityScanner {
   }
 }
 
-final class WorkmanagerBackgroundScanGateway
-    implements BackgroundScanGateway {
+final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
   const WorkmanagerBackgroundScanGateway();
 
   @override
