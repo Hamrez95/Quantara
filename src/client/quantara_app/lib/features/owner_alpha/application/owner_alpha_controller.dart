@@ -98,6 +98,8 @@ final class OwnerAlphaController extends ChangeNotifier {
       Set.unmodifiable(_opportunityState.takenSetupIds);
   bool isTaken(String setupId) =>
       _opportunityState.takenSetupIds.contains(setupId);
+  List<SignalJournalEntry> get signalJournal =>
+      List.unmodifiable(_opportunityState.journal);
   OwnerAlphaConnectionState get connectionState {
     final current = _snapshot;
     if (current == null) {
@@ -245,6 +247,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       _lastDataException = null;
       _unexpectedError = false;
       _nextScanAt = DateTime.now().toUtc().add(_scanInterval);
+      await _captureOpportunities(configuredResult.opportunities);
       await _notifyNewOpportunities(configuredResult.opportunities);
       return true;
     } catch (error) {
@@ -612,6 +615,48 @@ final class OwnerAlphaController extends ChangeNotifier {
     _opportunityState = _opportunityState.copyWith(takenSetupIds: updated);
     await _persistOpportunityState();
     notifyListeners();
+  }
+
+  Future<void> updateSignalNote(String setupId, String note) async {
+    final safeNote = note.trim();
+    if (safeNote.length > 2000) {
+      throw ArgumentError.value(note, 'note');
+    }
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final item in _opportunityState.journal)
+          item.setupId == setupId ? item.copyWith(note: safeNote) : item,
+      ],
+    );
+    await _persistOpportunityState();
+    notifyListeners();
+  }
+
+  Future<void> closeSignal(String setupId, bool closed) async {
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final item in _opportunityState.journal)
+          item.setupId == setupId ? item.copyWith(closed: closed) : item,
+      ],
+    );
+    await _persistOpportunityState();
+    notifyListeners();
+  }
+
+  Future<void> _captureOpportunities(List<TradeIdea> ideas) async {
+    if (ideas.isEmpty) return;
+    final byId = {
+      for (final item in _opportunityState.journal) item.setupId: item,
+    };
+    for (final idea in ideas) {
+      byId.putIfAbsent(idea.setupId, () => SignalJournalEntry.fromIdea(idea));
+    }
+    final journal = byId.values.toList()
+      ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    _opportunityState = _opportunityState.copyWith(
+      journal: journal.take(100).toList(growable: false),
+    );
+    await _persistOpportunityState();
   }
 
   Future<void> _notifyNewOpportunities(List<TradeIdea> ideas) async {
