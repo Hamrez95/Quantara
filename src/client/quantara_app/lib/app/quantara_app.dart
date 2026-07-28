@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/settings/app_preferences.dart';
 import '../core/theme/quantara_theme.dart';
+import '../features/owner_alpha/data/background_opportunity_scanner.dart';
 import '../features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../features/owner_alpha/data/platform_owner_alpha_settings_store.dart';
 import '../features/owner_alpha/data/platform_opportunity_services.dart';
@@ -131,6 +132,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
         notificationGateway:
             widget.notificationGateway ??
             const PlatformSetupNotificationGateway(),
+        backgroundScanGateway: const WorkmanagerBackgroundScanGateway(),
         themeMode: _themeMode,
         locale: _locale,
         onToggleTheme: _toggleTheme,
