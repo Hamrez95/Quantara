@@ -131,7 +131,7 @@ final class TradeIdea {
       return false;
     }
     final remaining = validUntil.difference(now.toUtc());
-    return remaining <= validityWindow ~/ 3;
+    return remaining.inMilliseconds <= validityWindow.inMilliseconds ~/ 3;
   }
 
   bool get isActionable => direction != TradeDirection.wait;
@@ -272,6 +272,8 @@ final class OwnerAlphaSettings {
   final List<String> symbols;
   final double capital;
   final double riskPercent;
+  final AnalysisStrategy strategy;
+  final SignalCadence cadence;
 }
 
 abstract interface class OwnerAlphaSettingsStore {
@@ -340,7 +342,7 @@ final class SignalJournalEntry {
     if (!now.toUtc().isBefore(validUntil)) return SignalLifecycle.expired;
     final total = validUntil.difference(createdAt);
     final remaining = validUntil.difference(now.toUtc());
-    return remaining <= total ~/ 3
+    return remaining.inMilliseconds <= total.inMilliseconds ~/ 3
         ? SignalLifecycle.expiring
         : SignalLifecycle.fresh;
   }
