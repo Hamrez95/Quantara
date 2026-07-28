@@ -88,6 +88,14 @@ class MainActivity : FlutterActivity() {
                                     legacyKey = "riskPercent",
                                     defaultValue = 1.0,
                                 ),
+                                "strategy" to preferences.getString(
+                                    "analysisStrategy",
+                                    "structureZones",
+                                ),
+                                "cadence" to preferences.getString(
+                                    "signalCadence",
+                                    "balanced",
+                                ),
                             ),
                         )
                     }
@@ -102,6 +110,8 @@ class MainActivity : FlutterActivity() {
                         .orEmpty()
                     val capital = (arguments?.get("capital") as? Number)?.toDouble()
                     val riskPercent = (arguments?.get("riskPercent") as? Number)?.toDouble()
+                    val strategy = arguments?.get("strategy") as? String
+                    val cadence = arguments?.get("cadence") as? String
                     if (
                         rawSymbols == null ||
                         symbols.size != rawSymbols.size ||
@@ -111,7 +121,13 @@ class MainActivity : FlutterActivity() {
                         capital !in 100.0..100_000_000.0 ||
                         riskPercent == null ||
                         !riskPercent.isFinite() ||
-                        riskPercent !in 0.1..2.0
+                        riskPercent !in 0.1..2.0 ||
+                        strategy !in setOf(
+                            "structureZones",
+                            "trendPullback",
+                            "momentumContinuation",
+                        ) ||
+                        cadence !in setOf("conservative", "balanced", "active")
                     ) {
                         result.error("invalid_settings", "Owner Alpha settings are invalid.", null)
                     } else {
@@ -119,6 +135,8 @@ class MainActivity : FlutterActivity() {
                             .putString("symbols", symbols.joinToString(","))
                             .putLong("capitalBits", capital.toBits())
                             .putLong("riskPercentBits", riskPercent.toBits())
+                            .putString("analysisStrategy", strategy)
+                            .putString("signalCadence", cadence)
                             .remove("capital")
                             .remove("riskPercent")
                             .apply()
