@@ -29,6 +29,7 @@ class OwnerAlphaPage extends StatefulWidget {
     required this.settingsStore,
     this.opportunityStateStore,
     this.notificationGateway = const NoopSetupNotificationGateway(),
+    this.backgroundScanGateway = const NoopBackgroundScanGateway(),
     required this.themeMode,
     required this.locale,
     required this.onToggleTheme,
@@ -40,6 +41,7 @@ class OwnerAlphaPage extends StatefulWidget {
   final OwnerAlphaSettingsStore settingsStore;
   final OpportunityStateStore? opportunityStateStore;
   final SetupNotificationGateway notificationGateway;
+  final BackgroundScanGateway backgroundScanGateway;
   final ThemeMode themeMode;
   final Locale locale;
   final VoidCallback onToggleTheme;
@@ -55,6 +57,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     settingsStore: widget.settingsStore,
     opportunityStateStore: widget.opportunityStateStore,
     notificationGateway: widget.notificationGateway,
+    backgroundScanGateway: widget.backgroundScanGateway,
     languageCode: widget.locale.languageCode,
   );
   int _destination = 0;
