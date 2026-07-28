@@ -262,8 +262,8 @@ final class AppStrings {
   String get setupNotifications =>
       t('اعلان ستاپ‌های تازه', 'New setup notifications');
   String get setupNotificationsDescription => t(
-    'پس از هر اسکن موفق، برای ستاپ تازه در ۱۵ دقیقه، ۱ ساعت و ۴ ساعت اعلان محلی می‌فرستد. وقتی اپ کاملاً بسته است تضمین نمی‌شود.',
-    'After each successful scan, sends a local alert for new 15m, 1h and 4h setups. Delivery is not guaranteed while the app is fully closed.',
+    'هر ۱۵ دقیقه در پس‌زمینه بازار را بررسی می‌کند و برای پیشنهاد تازه اعلان می‌فرستد؛ Android ممکن است به‌خاطر باتری زمان اجرا را کمی عقب بیندازد.',
+    'Checks the market about every 15 minutes in the background and alerts on fresh ideas; Android may delay work to protect battery.',
   );
   String get notificationPermissionDenied => t(
     'مجوز اعلان داده نشد. از تنظیمات Android اجازه Notifications را فعال کن.',
