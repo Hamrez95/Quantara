@@ -5,6 +5,7 @@ import '../domain/owner_alpha_models.dart';
 
 abstract final class TradeIdeaFactory {
   static const assumedRoundTripCostRate = 0.002;
+  static const targetMarginFraction = 0.20;
 
   static TradeIdea create({
     required TimeframeChartAnalysis analysis,
@@ -189,12 +190,16 @@ abstract final class TradeIdeaFactory {
       protectiveZone.strength,
     );
     final safeLeverage = math.min(liquidationCushionCap, confidenceCap);
-    final fundingLeverage = (riskSizedNotional / capital)
+    // Keep most account equity available for other setups. Leverage changes
+    // required margin, not the risk-sized notional or the maximum planned loss.
+    final targetMargin = capital * targetMarginFraction;
+    final fundingLeverage = (riskSizedNotional / targetMargin)
         .ceil()
         .clamp(1, 100)
         .toInt();
     final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
-    final fundedUnits = capital * recommendedLeverage / conservativeEntry;
+    final fundedUnits =
+        targetMargin * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     final notionalValue = positionSize * conservativeEntry;
     final requiredMargin = notionalValue / recommendedLeverage;
@@ -255,7 +260,7 @@ abstract final class TradeIdeaFactory {
                 'ناحیه محافظ ${protectiveZone.touchCount} واکنش تأییدشده دارد.',
                 if (aligned > 0) '$aligned تایم‌فریم با جهت فعلی هم‌سو است.',
                 'زیان محاسباتی به ${riskPercent.toStringAsFixed(1)}٪ سرمایه محدود شده است.',
-                'اهرم ${recommendedLeverage}x حداقل اهرم لازم در سقف محافظه‌کارانه این ستاپ است.',
+                'اهرم ${recommendedLeverage}x برای درگیرکردن حداکثر ۲۰٪ سرمایه انتخاب شده و از سقف امن این ستاپ بالاتر نمی‌رود.',
                 'برای کارمزد و لغزش رفت‌وبرگشت، ۰٫۲۰٪ هزینه فرضی در نظر گرفته شده است.',
               ]
             : [
@@ -264,7 +269,7 @@ abstract final class TradeIdeaFactory {
                 if (aligned > 0)
                   '$aligned timeframes align with the current direction.',
                 'Calculated loss is limited to ${riskPercent.toStringAsFixed(1)}% of capital.',
-                '${recommendedLeverage}x is the minimum required leverage within this setup’s conservative cap.',
+                '${recommendedLeverage}x targets at most 20% account margin without exceeding this setup’s safety cap.',
                 'A 0.20% round-trip fee and slippage estimate is included.',
               ],
       ),
