@@ -327,6 +327,8 @@ final class OwnerAlphaController extends ChangeNotifier {
             riskPercent: _riskPercent,
             languageCode: _languageCode,
             confluence: directions,
+            strategy: _strategy,
+            cadence: _cadence,
           ),
       timeframeDirections: directions,
       scanFailures: current.scanFailures,
@@ -421,12 +423,13 @@ final class OwnerAlphaController extends ChangeNotifier {
         selectedSymbol: current.selectedSymbol,
         selectedTimeframe: current.selectedTimeframe,
         selectedAnalysis: current.selectedAnalysis,
-        selectedIdea: TradeIdeaFactory.create(
-          analysis: current.selectedAnalysis,
-          capital: _capital,
-          riskPercent: _riskPercent,
-          languageCode: _languageCode,
-          confluence: directions,
+        selectedIdea: _rebuildIdea(
+          current.selectedAnalysis,
+          current.radar
+              .firstWhere(
+                (item) => item.quote.symbol == current.selectedSymbol,
+              )
+              .analysesByTimeframe,
         ),
         timeframeDirections: directions,
         scanFailures: current.scanFailures,
@@ -548,12 +551,13 @@ final class OwnerAlphaController extends ChangeNotifier {
         selectedSymbol: current.selectedSymbol,
         selectedTimeframe: current.selectedTimeframe,
         selectedAnalysis: current.selectedAnalysis,
-        selectedIdea: TradeIdeaFactory.create(
-          analysis: current.selectedAnalysis,
-          capital: _capital,
-          riskPercent: _riskPercent,
-          confluence: directions,
-          languageCode: _languageCode,
+        selectedIdea: _rebuildIdea(
+          current.selectedAnalysis,
+          current.radar
+              .firstWhere(
+                (item) => item.quote.symbol == current.selectedSymbol,
+              )
+              .analysesByTimeframe,
         ),
         timeframeDirections: directions,
         scanFailures: current.scanFailures,
