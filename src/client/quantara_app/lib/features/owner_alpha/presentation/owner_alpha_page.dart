@@ -262,7 +262,7 @@ const _destinations = [
   _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _mobileDestinationIndexes = [0, 1, 2, 5];
+const _mobileDestinationIndexes = [0, 1, 2, 3, 5];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
