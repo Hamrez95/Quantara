@@ -22,6 +22,8 @@ final class OwnerAlphaController extends ChangeNotifier {
     OpportunityStateStore? opportunityStateStore,
     SetupNotificationGateway notificationGateway =
         const NoopSetupNotificationGateway(),
+    BackgroundScanGateway backgroundScanGateway =
+        const NoopBackgroundScanGateway(),
     Duration scanInterval = const Duration(seconds: 60),
     String languageCode = 'fa',
   }) {
@@ -30,6 +32,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       settingsStore,
       opportunityStateStore,
       notificationGateway,
+      backgroundScanGateway,
       scanInterval,
       languageCode,
     );
@@ -40,6 +43,7 @@ final class OwnerAlphaController extends ChangeNotifier {
     this._settingsStore,
     this._opportunityStateStore,
     this._notificationGateway,
+    this._backgroundScanGateway,
     this._scanInterval,
     this._languageCode,
   ) {
@@ -56,6 +60,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   final OwnerAlphaSettingsStore _settingsStore;
   final OpportunityStateStore? _opportunityStateStore;
   final SetupNotificationGateway _notificationGateway;
+  final BackgroundScanGateway _backgroundScanGateway;
   final Duration _scanInterval;
 
   List<String> _symbols = List.of(defaultSymbols);
@@ -142,6 +147,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       _strategy = saved.strategy;
       _cadence = saved.cadence;
     }
+    await _configureBackgroundScan();
     await refresh();
     if (!_disposed) {
       _timer = Timer.periodic(_scanInterval, (_) => refresh(silent: true));
@@ -572,15 +578,24 @@ final class OwnerAlphaController extends ChangeNotifier {
 
   String _t(String fa, String en) => _languageCode == 'en' ? en : fa;
 
-  Future<void> _saveSettings() {
-    return _settingsStore.save(
-      OwnerAlphaSettings(
-        symbols: _symbols,
-        capital: _capital,
-        riskPercent: _riskPercent,
-        strategy: _strategy,
-        cadence: _cadence,
-      ),
+  OwnerAlphaSettings get _currentSettings => OwnerAlphaSettings(
+    symbols: _symbols,
+    capital: _capital,
+    riskPercent: _riskPercent,
+    strategy: _strategy,
+    cadence: _cadence,
+  );
+
+  Future<void> _saveSettings() async {
+    await _settingsStore.save(_currentSettings);
+    await _configureBackgroundScan();
+  }
+
+  Future<void> _configureBackgroundScan() {
+    return _backgroundScanGateway.configure(
+      enabled: _opportunityState.notificationsEnabled,
+      settings: _currentSettings,
+      languageCode: _languageCode,
     );
   }
 
@@ -609,6 +624,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       notificationsEnabled: enabled,
     );
     await _persistOpportunityState();
+    await _configureBackgroundScan();
     notifyListeners();
     return true;
   }
