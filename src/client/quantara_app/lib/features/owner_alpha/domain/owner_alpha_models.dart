@@ -457,6 +457,25 @@ abstract interface class OpportunityStateStore {
   Future<void> save(OpportunityState state);
 }
 
+abstract interface class BackgroundScanGateway {
+  Future<void> configure({
+    required bool enabled,
+    required OwnerAlphaSettings settings,
+    required String languageCode,
+  });
+}
+
+final class NoopBackgroundScanGateway implements BackgroundScanGateway {
+  const NoopBackgroundScanGateway();
+
+  @override
+  Future<void> configure({
+    required bool enabled,
+    required OwnerAlphaSettings settings,
+    required String languageCode,
+  }) async {}
+}
+
 abstract interface class SetupNotificationGateway {
   Future<bool> requestPermission();
 
