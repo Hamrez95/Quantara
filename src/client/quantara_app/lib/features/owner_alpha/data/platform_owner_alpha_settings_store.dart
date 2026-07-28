@@ -37,6 +37,14 @@ final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
         symbols: symbols,
         capital: capital.toDouble(),
         riskPercent: riskPercent.toDouble(),
+        strategy: AnalysisStrategy.values.firstWhere(
+          (item) => item.name == value['strategy'],
+          orElse: () => AnalysisStrategy.structureZones,
+        ),
+        cadence: SignalCadence.values.firstWhere(
+          (item) => item.name == value['cadence'],
+          orElse: () => SignalCadence.balanced,
+        ),
       );
     } on PlatformException {
       return null;
@@ -52,6 +60,8 @@ final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
         'symbols': settings.symbols,
         'capital': settings.capital,
         'riskPercent': settings.riskPercent,
+        'strategy': settings.strategy.name,
+        'cadence': settings.cadence.name,
       });
     } on PlatformException {
       // Settings persistence is helpful but must never block live analysis.
