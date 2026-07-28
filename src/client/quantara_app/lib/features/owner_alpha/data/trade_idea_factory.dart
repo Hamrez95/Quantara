@@ -270,8 +270,8 @@ abstract final class TradeIdeaFactory {
 
   static bool protectiveAlignment(
     TimeframeChartAnalysis analysis,
-    List<ChartZone> supports,
-    List<ChartZone> resistances,
+    List<ChartPriceZone> supports,
+    List<ChartPriceZone> resistances,
   ) {
     final current = analysis.latestCandle.close;
     final zones = analysis.direction == ChartDirection.bullish
