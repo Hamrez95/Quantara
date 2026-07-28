@@ -49,7 +49,7 @@ abstract final class QuantaraTheme {
         backgroundColor: QuantaraColors.deepNavy,
         indicatorColor: Color(0x3343D7C4),
         labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
         ),
       ),
     );
@@ -81,7 +81,7 @@ abstract final class QuantaraTheme {
         backgroundColor: QuantaraColors.lightSurface,
         indicatorColor: scheme.primary.withValues(alpha: 0.12),
         labelTextStyle: const WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
         ),
       ),
     );
@@ -97,18 +97,18 @@ abstract final class QuantaraTheme {
       useMaterial3: true,
       colorScheme: scheme,
       visualDensity: VisualDensity.standard,
-      splashFactory: InkRipple.splashFactory,
+      splashFactory: InkSparkle.splashFactory,
       textTheme: baseText.copyWith(
         headlineSmall: baseText.headlineSmall?.copyWith(
-          fontSize: 25,
+          fontSize: 26,
           height: 1.35,
         ),
-        titleLarge: baseText.titleLarge?.copyWith(fontSize: 21, height: 1.4),
-        titleMedium: baseText.titleMedium?.copyWith(fontSize: 17, height: 1.45),
+        titleLarge: baseText.titleLarge?.copyWith(fontSize: 22, height: 1.38),
+        titleMedium: baseText.titleMedium?.copyWith(fontSize: 18, height: 1.42),
         titleSmall: baseText.titleSmall?.copyWith(fontSize: 15, height: 1.45),
         bodyLarge: baseText.bodyLarge?.copyWith(fontSize: 17, height: 1.55),
-        bodyMedium: baseText.bodyMedium?.copyWith(fontSize: 15, height: 1.5),
-        bodySmall: baseText.bodySmall?.copyWith(fontSize: 13, height: 1.45),
+        bodyMedium: baseText.bodyMedium?.copyWith(fontSize: 16, height: 1.55),
+        bodySmall: baseText.bodySmall?.copyWith(fontSize: 14, height: 1.5),
         labelLarge: baseText.labelLarge?.copyWith(fontSize: 14),
         labelMedium: baseText.labelMedium?.copyWith(fontSize: 13),
       ),
