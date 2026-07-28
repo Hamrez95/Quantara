@@ -21,6 +21,7 @@ class QuantaraApp extends StatefulWidget {
     this.preferencesStore,
     this.opportunityStateStore,
     this.notificationGateway,
+    this.backgroundScanGateway,
     this.initialThemeMode = ThemeMode.dark,
     this.initialLocale = const Locale('fa'),
   });
@@ -30,6 +31,7 @@ class QuantaraApp extends StatefulWidget {
   final AppPreferencesStore? preferencesStore;
   final OpportunityStateStore? opportunityStateStore;
   final SetupNotificationGateway? notificationGateway;
+  final BackgroundScanGateway? backgroundScanGateway;
   final ThemeMode initialThemeMode;
   final Locale initialLocale;
 
@@ -132,7 +134,11 @@ class _QuantaraAppState extends State<QuantaraApp> {
         notificationGateway:
             widget.notificationGateway ??
             const PlatformSetupNotificationGateway(),
-        backgroundScanGateway: const WorkmanagerBackgroundScanGateway(),
+        backgroundScanGateway:
+            widget.backgroundScanGateway ??
+            (widget.repository == null
+                ? const WorkmanagerBackgroundScanGateway()
+                : const NoopBackgroundScanGateway()),
         themeMode: _themeMode,
         locale: _locale,
         onToggleTheme: _toggleTheme,
