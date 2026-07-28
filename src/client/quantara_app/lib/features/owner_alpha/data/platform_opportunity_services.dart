@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 
 import '../domain/owner_alpha_models.dart';
@@ -22,6 +24,7 @@ final class PlatformOpportunityStateStore implements OpportunityStateStore {
         notificationsEnabled: value['notificationsEnabled'] == true,
         takenSetupIds: _stringSet(value['takenSetupIds']),
         notifiedSetupIds: _stringSet(value['notifiedSetupIds']),
+        journal: _decodeJournal(value['journalJson']),
       );
     } on PlatformException {
       return const OpportunityState();
@@ -37,11 +40,36 @@ final class PlatformOpportunityStateStore implements OpportunityStateStore {
         'notificationsEnabled': state.notificationsEnabled,
         'takenSetupIds': state.takenSetupIds.toList(growable: false),
         'notifiedSetupIds': state.notifiedSetupIds.toList(growable: false),
+        'journalJson': jsonEncode(
+          state.journal.map((item) => item.toJson()).toList(growable: false),
+        ),
       });
     } on PlatformException {
       // Local journaling must never block market analysis.
     } on MissingPluginException {
       // Tests and non-Android previews intentionally have no native channel.
+    }
+  }
+
+  static List<SignalJournalEntry> _decodeJournal(Object? value) {
+    if (value is! String || value.isEmpty || value.length > 200000) {
+      return const [];
+    }
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List<Object?>) return const [];
+      return decoded
+          .whereType<Map<Object?, Object?>>()
+          .map(
+            (item) => SignalJournalEntry.tryFromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          )
+          .whereType<SignalJournalEntry>()
+          .take(100)
+          .toList(growable: false);
+    } on FormatException {
+      return const [];
     }
   }
 
