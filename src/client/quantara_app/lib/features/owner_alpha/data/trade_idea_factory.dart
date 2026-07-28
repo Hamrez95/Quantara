@@ -12,6 +12,8 @@ abstract final class TradeIdeaFactory {
     required double riskPercent,
     Map<String, ChartDirection> confluence = const {},
     String languageCode = 'fa',
+    AnalysisStrategy strategy = AnalysisStrategy.structureZones,
+    SignalCadence cadence = SignalCadence.balanced,
   }) {
     if (!capital.isFinite || capital <= 0) {
       throw ArgumentError.value(capital, 'capital');
@@ -43,7 +45,24 @@ abstract final class TradeIdeaFactory {
         .where((direction) => direction == analysis.direction)
         .length;
     final directional = analysis.direction != ChartDirection.sideways;
-    final enoughStrength = analysis.directionStrength >= 0.32;
+    final cadenceFloor = switch (cadence) {
+      SignalCadence.conservative => 0.42,
+      SignalCadence.balanced => 0.32,
+      SignalCadence.active => 0.25,
+    };
+    final strategyFloor = switch (strategy) {
+      AnalysisStrategy.structureZones => cadenceFloor,
+      AnalysisStrategy.trendPullback => cadenceFloor - 0.04,
+      AnalysisStrategy.momentumContinuation => cadenceFloor + 0.08,
+    };
+    final strategyAligned = switch (strategy) {
+      AnalysisStrategy.structureZones => true,
+      AnalysisStrategy.trendPullback =>
+        protectiveAlignment(analysis, supports, resistances),
+      AnalysisStrategy.momentumContinuation => aligned >= 2,
+    };
+    final enoughStrength =
+        analysis.directionStrength >= strategyFloor && strategyAligned;
 
     if (!directional || !enoughStrength) {
       return TradeIdea.wait(
@@ -248,6 +267,28 @@ abstract final class TradeIdeaFactory {
       ),
     );
   }
+
+  static bool protectiveAlignment(
+    TimeframeChartAnalysis analysis,
+    List<ChartZone> supports,
+    List<ChartZone> resistances,
+  ) {
+    final current = analysis.latestCandle.close;
+    final zones = analysis.direction == ChartDirection.bullish
+        ? supports
+        : resistances;
+    if (zones.isEmpty || current <= 0) {
+      return false;
+    }
+    final distance = (current - zones.first.center).abs() / current;
+    return distance <= math.max(0.008, analysis.volatilityPercent / 100 * 1.4);
+  }
+
+  static String strategyVersion(AnalysisStrategy strategy) => switch (strategy) {
+    AnalysisStrategy.structureZones => 'structure-zones/1.2',
+    AnalysisStrategy.trendPullback => 'trend-pullback/1.0',
+    AnalysisStrategy.momentumContinuation => 'momentum-continuation/1.0',
+  };
 
   static int confidenceLeverageCap(
     double directionStrength,
