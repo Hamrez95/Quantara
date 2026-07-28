@@ -280,26 +280,173 @@ abstract interface class OwnerAlphaSettingsStore {
   Future<void> save(OwnerAlphaSettings settings);
 }
 
+final class SignalJournalEntry {
+  const SignalJournalEntry({
+    required this.setupId,
+    required this.symbol,
+    required this.timeframe,
+    required this.direction,
+    required this.strategy,
+    required this.strategyVersion,
+    required this.createdAt,
+    required this.validUntil,
+    required this.entryLower,
+    required this.entryUpper,
+    required this.stopLoss,
+    required this.targets,
+    required this.summary,
+    required this.invalidation,
+    this.note = '',
+    this.closed = false,
+  });
+
+  factory SignalJournalEntry.fromIdea(TradeIdea idea) => SignalJournalEntry(
+    setupId: idea.setupId,
+    symbol: idea.symbol,
+    timeframe: idea.timeframe,
+    direction: idea.direction,
+    strategy: idea.strategy,
+    strategyVersion: idea.strategyVersion,
+    createdAt: idea.createdAt,
+    validUntil: idea.validUntil,
+    entryLower: idea.entryLower,
+    entryUpper: idea.entryUpper,
+    stopLoss: idea.stopLoss,
+    targets: idea.targets,
+    summary: idea.summary,
+    invalidation: idea.invalidation,
+  );
+
+  final String setupId;
+  final String symbol;
+  final String timeframe;
+  final TradeDirection direction;
+  final AnalysisStrategy strategy;
+  final String strategyVersion;
+  final DateTime createdAt;
+  final DateTime validUntil;
+  final double? entryLower;
+  final double? entryUpper;
+  final double? stopLoss;
+  final List<double> targets;
+  final String summary;
+  final String invalidation;
+  final String note;
+  final bool closed;
+
+  SignalLifecycle lifecycle(DateTime now, {required bool taken}) {
+    if (closed) return SignalLifecycle.closed;
+    if (taken) return SignalLifecycle.taken;
+    if (!now.toUtc().isBefore(validUntil)) return SignalLifecycle.expired;
+    final total = validUntil.difference(createdAt);
+    final remaining = validUntil.difference(now.toUtc());
+    return remaining <= total ~/ 3
+        ? SignalLifecycle.expiring
+        : SignalLifecycle.fresh;
+  }
+
+  SignalJournalEntry copyWith({String? note, bool? closed}) =>
+      SignalJournalEntry(
+        setupId: setupId,
+        symbol: symbol,
+        timeframe: timeframe,
+        direction: direction,
+        strategy: strategy,
+        strategyVersion: strategyVersion,
+        createdAt: createdAt,
+        validUntil: validUntil,
+        entryLower: entryLower,
+        entryUpper: entryUpper,
+        stopLoss: stopLoss,
+        targets: targets,
+        summary: summary,
+        invalidation: invalidation,
+        note: note ?? this.note,
+        closed: closed ?? this.closed,
+      );
+
+  Map<String, Object?> toJson() => {
+    'setupId': setupId,
+    'symbol': symbol,
+    'timeframe': timeframe,
+    'direction': direction.name,
+    'strategy': strategy.name,
+    'strategyVersion': strategyVersion,
+    'createdAt': createdAt.toIso8601String(),
+    'validUntil': validUntil.toIso8601String(),
+    'entryLower': entryLower,
+    'entryUpper': entryUpper,
+    'stopLoss': stopLoss,
+    'targets': targets,
+    'summary': summary,
+    'invalidation': invalidation,
+    'note': note,
+    'closed': closed,
+  };
+
+  static SignalJournalEntry? tryFromJson(Map<String, Object?> value) {
+    try {
+      final direction = TradeDirection.values.firstWhere(
+        (item) => item.name == value['direction'],
+      );
+      final strategy = AnalysisStrategy.values.firstWhere(
+        (item) => item.name == value['strategy'],
+      );
+      final targets = (value['targets'] as List<Object?>)
+          .whereType<num>()
+          .map((item) => item.toDouble())
+          .toList(growable: false);
+      final setupId = value['setupId'] as String;
+      final symbol = value['symbol'] as String;
+      if (setupId.isEmpty || setupId.length > 320 || symbol.isEmpty) return null;
+      return SignalJournalEntry(
+        setupId: setupId,
+        symbol: symbol,
+        timeframe: value['timeframe'] as String,
+        direction: direction,
+        strategy: strategy,
+        strategyVersion: value['strategyVersion'] as String,
+        createdAt: DateTime.parse(value['createdAt'] as String).toUtc(),
+        validUntil: DateTime.parse(value['validUntil'] as String).toUtc(),
+        entryLower: (value['entryLower'] as num?)?.toDouble(),
+        entryUpper: (value['entryUpper'] as num?)?.toDouble(),
+        stopLoss: (value['stopLoss'] as num?)?.toDouble(),
+        targets: targets,
+        summary: value['summary'] as String,
+        invalidation: value['invalidation'] as String,
+        note: (value['note'] as String?) ?? '',
+        closed: value['closed'] == true,
+      );
+    } on Object {
+      return null;
+    }
+  }
+}
+
 final class OpportunityState {
   const OpportunityState({
     this.notificationsEnabled = false,
     this.takenSetupIds = const {},
     this.notifiedSetupIds = const {},
+    this.journal = const [],
   });
 
   final bool notificationsEnabled;
   final Set<String> takenSetupIds;
   final Set<String> notifiedSetupIds;
+  final List<SignalJournalEntry> journal;
 
   OpportunityState copyWith({
     bool? notificationsEnabled,
     Set<String>? takenSetupIds,
     Set<String>? notifiedSetupIds,
+    List<SignalJournalEntry>? journal,
   }) {
     return OpportunityState(
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       takenSetupIds: takenSetupIds ?? this.takenSetupIds,
       notifiedSetupIds: notifiedSetupIds ?? this.notifiedSetupIds,
+      journal: journal ?? this.journal,
     );
   }
 }
