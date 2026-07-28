@@ -142,8 +142,13 @@ int _stableNotificationId(String value) {
 }
 
 abstract final class BackgroundOpportunityScanner {
-  static Future<void> initialize() =>
-      Workmanager().initialize(quantaraBackgroundDispatcher);
+  static Future<void> initialize() async {
+    try {
+      await Workmanager().initialize(quantaraBackgroundDispatcher);
+    } on Object {
+      // The foreground experience remains usable if background work is unavailable.
+    }
+  }
 }
 
 final class WorkmanagerBackgroundScanGateway
