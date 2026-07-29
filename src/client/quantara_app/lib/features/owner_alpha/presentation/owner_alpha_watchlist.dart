@@ -104,7 +104,7 @@ class _WatchlistRow extends StatelessWidget {
                 ),
               ],
             )
-          : const Icon(Icons.chevron_left_rounded, size: 20),
+          : const Icon(Icons.candlestick_chart_outlined, size: 20),
     );
   }
 }

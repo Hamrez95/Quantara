@@ -262,6 +262,81 @@ class MarketListRow extends StatelessWidget {
     final marketType =
         theme.extension<QuantaraMarketTypography>() ??
         const QuantaraMarketTypography(numericFeatures: []);
+    final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.35;
+    final identity = Row(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.7),
+            ),
+          ),
+          child: SizedBox.square(
+            dimension: 40,
+            child: Center(
+              child: Text(
+                leadingLabel ?? symbol.characters.first,
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: QuantaraSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                symbol,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                name,
+                maxLines: largeText ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final quote = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          price,
+          textDirection: TextDirection.ltr,
+          style: marketType.numeric(
+            theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          change,
+          textDirection: TextDirection.ltr,
+          style: marketType.numeric(
+            theme.textTheme.bodyMedium?.copyWith(
+              color: changeColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
     return Semantics(
       button: true,
       label: '$symbol، $price، $change',
@@ -272,87 +347,38 @@ class MarketListRow extends StatelessWidget {
             horizontal: QuantaraSpacing.sm,
             vertical: QuantaraSpacing.sm,
           ),
-          child: Row(
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.7),
-                  ),
-                ),
-                child: SizedBox.square(
-                  dimension: 40,
-                  child: Center(
-                    child: Text(
-                      leadingLabel ?? symbol.characters.first,
-                      textDirection: TextDirection.ltr,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: QuantaraSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: largeText
+              ? Column(
                   children: [
-                    Text(
-                      symbol,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textDirection: TextDirection.ltr,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                    identity,
+                    const SizedBox(height: QuantaraSpacing.xs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: quote,
+                          ),
+                        ),
+                        if (trailing != null) ...[
+                          const SizedBox(width: QuantaraSpacing.xs),
+                          trailing!,
+                        ],
+                      ],
                     ),
                   ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: identity),
+                    const SizedBox(width: QuantaraSpacing.sm),
+                    quote,
+                    if (trailing != null) ...[
+                      const SizedBox(width: QuantaraSpacing.xs),
+                      trailing!,
+                    ],
+                  ],
                 ),
-              ),
-              const SizedBox(width: QuantaraSpacing.sm),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    price,
-                    textDirection: TextDirection.ltr,
-                    style: marketType.numeric(
-                      theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    change,
-                    textDirection: TextDirection.ltr,
-                    style: marketType.numeric(
-                      theme.textTheme.bodyMedium?.copyWith(
-                        color: changeColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (trailing != null) ...[
-                const SizedBox(width: QuantaraSpacing.xs),
-                trailing!,
-              ],
-            ],
-          ),
         ),
       ),
     );
