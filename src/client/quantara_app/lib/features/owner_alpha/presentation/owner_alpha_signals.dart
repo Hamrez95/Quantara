@@ -155,10 +155,8 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
               onNote: () => _editNote(filtered[index]),
               onClose: (value) =>
                   controller.closeSignal(filtered[index].setupId, value),
-              onLeverageChanged: (value) => controller.setSignalLeverage(
-                filtered[index].setupId,
-                value,
-              ),
+              onLeverageChanged: (value) =>
+                  controller.setSignalLeverage(filtered[index].setupId, value),
             ),
             if (index != filtered.length - 1) const SizedBox(height: 12),
           ],
@@ -603,24 +601,25 @@ class _SignalJournalCard extends StatelessWidget {
       'ورود فعال نشد',
       'Entry not triggered',
     ),
-    SignalOutcome.stopped => entry.highestTargetHit > 0
-        ? _t(
-            context,
-            'TP${entry.highestTargetHit} سپس SL',
-            'TP${entry.highestTargetHit}, then SL',
-          )
-        : 'SL',
+    SignalOutcome.stopped =>
+      entry.highestTargetHit > 0
+          ? _t(
+              context,
+              'TP${entry.highestTargetHit} سپس SL',
+              'TP${entry.highestTargetHit}, then SL',
+            )
+          : 'SL',
     SignalOutcome.tp1 => 'TP1',
     SignalOutcome.tp2 => 'TP2',
     SignalOutcome.tp3 => 'TP3',
   };
 
   Color _outcomeColor(BuildContext context) => switch (entry.outcome) {
-    SignalOutcome.pendingEntry =>
-      Theme.of(context).colorScheme.onSurfaceVariant,
+    SignalOutcome.pendingEntry => Theme.of(
+      context,
+    ).colorScheme.onSurfaceVariant,
     SignalOutcome.active => QuantaraColors.cyan,
-    SignalOutcome.expiredUntriggered =>
-      Theme.of(context).colorScheme.outline,
+    SignalOutcome.expiredUntriggered => Theme.of(context).colorScheme.outline,
     SignalOutcome.stopped => QuantaraColors.danger,
     SignalOutcome.tp1 ||
     SignalOutcome.tp2 ||
