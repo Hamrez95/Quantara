@@ -183,9 +183,7 @@ jobs:
             test -s android-pid.txt
             adb logcat -d > android-logcat.txt
             adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
-            if grep -E "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt; then
-              exit 1
-            fi
+            ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
 
       - name: Upload Android launch diagnostics
         if: always()
