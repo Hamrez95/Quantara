@@ -86,8 +86,7 @@ void quantaraBackgroundDispatcher() {
         final existing = journalById[idea.setupId];
         if (existing == null) {
           journalById[idea.setupId] = SignalJournalEntry.fromIdea(idea);
-        } else if (existing.positionSize <= 0 ||
-            existing.notionalValue <= 0) {
+        } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {
           journalById[idea.setupId] = SignalJournalEntry.fromIdea(
             idea,
           ).copyWith(note: existing.note, closed: existing.closed);
@@ -96,8 +95,9 @@ void quantaraBackgroundDispatcher() {
       final analyses = <String, List<ChartCandle>>{
         for (final result in snapshot.radar)
           for (final analysis in result.analysesByTimeframe.values)
-            '${analysis.symbol}|${analysis.timeframe}':
-                analysis.candles.toList(growable: false),
+            '${analysis.symbol}|${analysis.timeframe}': analysis.candles.toList(
+              growable: false,
+            ),
       };
       final evaluatedAt = DateTime.now().toUtc();
       final journal = [
@@ -244,9 +244,7 @@ final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
         languageCode,
       ].join('|');
       final preferences = SharedPreferencesAsync();
-      final previous = await preferences.getString(
-        _backgroundConfigurationKey,
-      );
+      final previous = await preferences.getString(_backgroundConfigurationKey);
       if (configuration != previous) {
         await Workmanager().registerOneOffTask(
           _backgroundImmediateName,
@@ -255,10 +253,7 @@ final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
           constraints: Constraints(networkType: NetworkType.connected),
           inputData: input,
         );
-        await preferences.setString(
-          _backgroundConfigurationKey,
-          configuration,
-        );
+        await preferences.setString(_backgroundConfigurationKey, configuration);
       }
       await Workmanager().registerPeriodicTask(
         _backgroundUniqueName,
