@@ -26,19 +26,33 @@ class _AlphaAnalysisView extends StatelessWidget {
                 ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final symbol in controller.symbols)
-                    ChoiceChip(
-                      label: Text(symbol, textDirection: TextDirection.ltr),
-                      selected: symbol == controller.selectedSymbol,
-                      onSelected: controller.isLoading
-                          ? null
-                          : (_) => controller.selectSymbol(symbol),
-                    ),
-                ],
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final symbol in controller.symbols) ...[
+                      ChoiceChip(
+                        showCheckmark: false,
+                        avatar: Icon(
+                          symbol == controller.selectedSymbol
+                              ? Icons.bolt_rounded
+                              : Icons.show_chart_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          symbol,
+                          textDirection: TextDirection.ltr,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        selected: symbol == controller.selectedSymbol,
+                        onSelected: controller.isLoading
+                            ? null
+                            : (_) => controller.selectSymbol(symbol),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
               Text(
@@ -48,19 +62,25 @@ class _AlphaAnalysisView extends StatelessWidget {
                 ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final timeframe in OwnerAlphaController.timeframes)
-                    ChoiceChip(
-                      key: ValueKey('alpha-timeframe-$timeframe'),
-                      label: Text(timeframe),
-                      selected: timeframe == controller.selectedTimeframe,
-                      onSelected: controller.isLoading
-                          ? null
-                          : (_) => controller.selectTimeframe(timeframe),
-                    ),
-                ],
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final timeframe in OwnerAlphaController.timeframes)
+                      ButtonSegment(
+                        value: timeframe,
+                        label: Text(
+                          timeframe,
+                          key: ValueKey('alpha-timeframe-$timeframe'),
+                        ),
+                      ),
+                  ],
+                  selected: {controller.selectedTimeframe},
+                  onSelectionChanged: controller.isLoading
+                      ? null
+                      : (value) => controller.selectTimeframe(value.single),
+                ),
               ),
             ],
           ),
@@ -319,35 +339,12 @@ class _TradePlanCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
-                      key: ValueKey(
-                        'leverage-${idea.setupId}-$selectedLeverage',
-                      ),
-                      initialValue: selectedLeverage,
-                      decoration: InputDecoration(
-                        labelText: persian
-                            ? 'اهرم انتخابی'
-                            : 'Selected leverage',
-                        helperText: persian
-                            ? 'پیشنهاد اپ ${idea.recommendedLeverage}x · سقف امن ${idea.maximumSafeLeverage}x'
-                            : 'Suggested ${idea.recommendedLeverage}x · safe cap ${idea.maximumSafeLeverage}x',
-                      ),
-                      items: [
-                        for (
-                          var leverage = 1;
-                          leverage <= idea.maximumSafeLeverage!;
-                          leverage++
-                        )
-                          DropdownMenuItem(
-                            value: leverage,
-                            child: Text('${leverage}x'),
-                          ),
-                      ],
-                      onChanged: (leverage) {
-                        if (leverage != null) {
-                          controller.setSignalLeverage(idea.setupId, leverage);
-                        }
-                      },
+                    _LeverageControl(
+                      selected: selectedLeverage,
+                      recommended: idea.recommendedLeverage!,
+                      safeCap: idea.maximumSafeLeverage!,
+                      onChanged: (leverage) =>
+                          controller.setSignalLeverage(idea.setupId, leverage),
                     ),
                     const SizedBox(height: 10),
                     Text(

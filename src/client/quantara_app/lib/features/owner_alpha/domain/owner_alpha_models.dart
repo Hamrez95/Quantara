@@ -67,6 +67,8 @@ final class AlphaMarketQuote {
 }
 
 final class TradeIdea {
+  static const int maximumManualLeverage = 125;
+
   const TradeIdea({
     required this.symbol,
     required this.timeframe,
@@ -148,7 +150,7 @@ final class TradeIdea {
     if (!isActionable ||
         notionalValue == null ||
         leverage < 1 ||
-        leverage > (maximumSafeLeverage ?? 1)) {
+        leverage > maximumManualLeverage) {
       return null;
     }
     return notionalValue! / leverage;

@@ -13,6 +13,7 @@ import '../../strategy_lab/data/strategy_lab_runner.dart';
 import '../../strategy_lab/data/platform_strategy_lab_session_store.dart';
 import '../../strategy_lab/domain/strategy_lab_models.dart';
 import '../application/owner_alpha_controller.dart';
+import '../data/signal_timeframe_priority.dart';
 import '../domain/owner_alpha_models.dart';
 
 part 'owner_alpha_dashboard.dart';
