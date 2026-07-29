@@ -91,8 +91,7 @@ abstract final class AdvancedStrategyEngine {
     final long =
         candle.close <= indicators.bollingerLower20 + bandTolerance &&
         indicators.rsi14 <= 42 &&
-        (candle.isBullish ||
-            lowerWick >= body * 1.25 && closeLocation >= 0.55);
+        (candle.isBullish || lowerWick >= body * 1.25 && closeLocation >= 0.55);
     final short =
         candle.close >= indicators.bollingerUpper20 - bandTolerance &&
         indicators.rsi14 >= 58 &&
@@ -110,11 +109,10 @@ abstract final class AdvancedStrategyEngine {
         .round()
         .clamp(0, 10)
         .toInt();
-    final efficiencyContribution =
-        ((0.42 - indicators.trendEfficiency20) * 30)
-            .round()
-            .clamp(0, 10)
-            .toInt();
+    final efficiencyContribution = ((0.42 - indicators.trendEfficiency20) * 30)
+        .round()
+        .clamp(0, 10)
+        .toInt();
     final score =
         55 +
         rsiContribution +
@@ -398,9 +396,8 @@ abstract final class AdvancedStrategyEngine {
         .where((zone) => (zone.center - price).abs() <= maximumDistance)
         .toList(growable: false);
     candidates.sort(
-      (left, right) => (left.center - price).abs().compareTo(
-        (right.center - price).abs(),
-      ),
+      (left, right) =>
+          (left.center - price).abs().compareTo((right.center - price).abs()),
     );
     return candidates.isEmpty ? null : candidates.first;
   }
@@ -485,10 +482,7 @@ abstract final class AdvancedStrategyEngine {
         .ceil()
         .clamp(1, 100)
         .toInt();
-    final recommendedLeverage = math.min(
-      safeLeverage,
-      fundingLeverage,
-    ).toInt();
+    final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
     final fundedUnits = targetMargin * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     if (!positionSize.isFinite || positionSize <= 0) {
