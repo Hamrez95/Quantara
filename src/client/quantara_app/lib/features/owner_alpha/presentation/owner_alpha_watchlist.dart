@@ -42,8 +42,7 @@ class _WatchlistView extends StatelessWidget {
               onRemove: () =>
                   controller.removeSymbol(snapshot.radar[index].quote.symbol),
             ),
-            if (index != snapshot.radar.length - 1)
-              const Divider(indent: 64),
+            if (index != snapshot.radar.length - 1) const Divider(indent: 64),
           ],
         ],
       ),
