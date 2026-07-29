@@ -132,32 +132,36 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android cold-start candidate
+      - name: Upload Android background candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-cold-start-0.10.2
+          name: quantara-android-background-0.10.3
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
           retention-days: 14
 
-  android-api-36-launch:
-    name: Android 16 cold-start smoke
+  android-launch:
+    name: Android ${{ matrix.api-level }} cold-start smoke
     needs: flutter
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [34, 35, 36]
     steps:
       - name: Download Android candidate
         uses: actions/download-artifact@v4
         with:
-          name: quantara-android-cold-start-0.10.2
+          name: quantara-android-background-0.10.3
           path: apk
 
-      - name: Boot API 36 emulator and verify launch
+      - name: Boot emulator and verify deferred background launch
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 36
+          api-level: ${{ matrix.api-level }}
           arch: x86_64
           profile: pixel_6
           disable-animations: true
@@ -167,11 +171,12 @@ jobs:
             adb logcat -c
             adb shell am force-stop "$ANDROID_PACKAGE"
             adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" | tee android-start.txt
-            sleep 10
+            sleep 20
             adb shell pidof "$ANDROID_PACKAGE" | tee android-pid.txt
             test -s android-pid.txt
             adb logcat -d > android-logcat.txt
-            if grep -E "FATAL EXCEPTION|Process: $ANDROID_PACKAGE" android-logcat.txt; then
+            adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
+            if grep -E "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt; then
               exit 1
             fi
 
@@ -179,10 +184,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-36-launch-diagnostics
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics
           path: |
             android-start.txt
             android-pid.txt
             android-logcat.txt
+            android-jobscheduler.txt
           if-no-files-found: ignore
           retention-days: 14
