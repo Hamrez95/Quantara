@@ -23,13 +23,11 @@ abstract final class AdvancedStrategyEngine {
     if (analysis.candles.length < 60) {
       return null;
     }
-
     final indicators = TechnicalIndicatorEngine.analyze(analysis.candles);
     final regime = MarketRegimeClassifier.classify(
       analysis: analysis,
       indicators: indicators,
     );
-
     return switch (strategy) {
       AnalysisStrategy.structureZones => _bestIdea([
         _rangeMeanReversion(
@@ -77,57 +75,55 @@ abstract final class AdvancedStrategyEngine {
     if (regime.regime != MarketRegime.range) {
       return null;
     }
-
     final candle = analysis.latestCandle;
-    final range = math.max(candle.high - candle.low, indicators.atr14 * 0.05);
-    final body = math.max((candle.close - candle.open).abs(), range * 0.02);
+    final candleRange = math.max(
+      candle.high - candle.low,
+      indicators.atr14 * 0.05,
+    );
+    final body = math.max(
+      (candle.close - candle.open).abs(),
+      candleRange * 0.02,
+    );
     final lowerWick = math.min(candle.open, candle.close) - candle.low;
     final upperWick = candle.high - math.max(candle.open, candle.close);
-    final closeLocation = (candle.close - candle.low) / range;
+    final closeLocation = (candle.close - candle.low) / candleRange;
     final bandTolerance = indicators.atr14 * 0.35;
-
-    final longBand = candle.close <= indicators.bollingerLower20 + bandTolerance;
-    final shortBand = candle.close >= indicators.bollingerUpper20 - bandTolerance;
-    final longRsi = indicators.rsi14 <= 42;
-    final shortRsi = indicators.rsi14 >= 58;
-    final bullishTurn =
-        candle.isBullish ||
-        (lowerWick >= body * 1.25 && closeLocation >= 0.55);
-    final bearishTurn =
-        !candle.isBullish ||
-        (upperWick >= body * 1.25 && closeLocation <= 0.45);
-
-    final long = longBand && longRsi && bullishTurn;
-    final short = shortBand && shortRsi && bearishTurn;
+    final long =
+        candle.close <= indicators.bollingerLower20 + bandTolerance &&
+        indicators.rsi14 <= 42 &&
+        (candle.isBullish ||
+            lowerWick >= body * 1.25 && closeLocation >= 0.55);
+    final short =
+        candle.close >= indicators.bollingerUpper20 - bandTolerance &&
+        indicators.rsi14 >= 58 &&
+        (!candle.isBullish ||
+            upperWick >= body * 1.25 && closeLocation <= 0.45);
     if (!long && !short) {
       return null;
     }
-
-    final score =
-        25 +
-        20 +
+    final rsiContribution =
         ((long ? 50 - indicators.rsi14 : indicators.rsi14 - 50) * 0.7)
             .round()
             .clamp(0, 15)
-            .toInt() +
-        ((22 - indicators.adx14) * 0.6).round().clamp(0, 10).toInt() +
+            .toInt();
+    final adxContribution = ((22 - indicators.adx14) * 0.6)
+        .round()
+        .clamp(0, 10)
+        .toInt();
+    final efficiencyContribution =
         ((0.42 - indicators.trendEfficiency20) * 30)
             .round()
             .clamp(0, 10)
-            .toInt() +
-        10 +
+            .toInt();
+    final score =
+        55 +
+        rsiContribution +
+        adxContribution +
+        efficiencyContribution +
         (indicators.relativeVolume20 <= 1.8 ? 5 : 0);
-    final threshold = _threshold(
-      cadence,
-      conservative: 76,
-      balanced: 66,
-      active: 56,
-    );
-    if (score < threshold) {
+    if (score < _threshold(cadence, 76, 66, 56)) {
       return null;
     }
-
-    final conservativeEntry = candle.close;
     final stop = long
         ? math.min(candle.low, indicators.bollingerLower20) -
               indicators.atr14 * 0.45
@@ -140,26 +136,26 @@ abstract final class AdvancedStrategyEngine {
       riskPercent: riskPercent,
       strategy: AnalysisStrategy.structureZones,
       long: long,
-      entryCenter: conservativeEntry,
+      entryCenter: candle.close,
       stop: stop,
       atr: indicators.atr14,
       targetMultiples: const [1.25, 1.8, 2.4],
       score: score,
       version: 'adaptive-range/2.1',
       summary: fa
-          ? 'بازگشت به میانگین در بازار رنج با باند بولینگر، RSI و کندل برگشتی تأیید شد.'
+          ? 'بازگشت به میانگین در بازار رنج با بولینگر، RSI و کندل برگشتی تأیید شد.'
           : 'A range mean-reversion setup was confirmed by Bollinger position, RSI and a reversal candle.',
       invalidation: fa
           ? 'شکست معتبر بیرون باند و عبور از حد ATR سناریوی بازگشت را باطل می‌کند.'
-          : 'A confirmed extension beyond the band and ATR stop invalidates the mean-reversion setup.',
+          : 'A confirmed extension beyond the band and ATR stop invalidates the setup.',
       reasons: fa
           ? [
-              'رژیم بازار رنج با اطمینان ${regime.confidencePercent}٪ تشخیص داده شد.',
-              'RSI برابر ${indicators.rsi14.toStringAsFixed(1)} و ADX برابر ${indicators.adx14.toStringAsFixed(1)} است.',
+              'رژیم رنج با اطمینان ${regime.confidencePercent}٪ تشخیص داده شد.',
+              'RSI ${indicators.rsi14.toStringAsFixed(1)} و ADX ${indicators.adx14.toStringAsFixed(1)} است.',
               'امتیاز استراتژی $score از ۱۰۰ است.',
             ]
           : [
-              'The market was classified as range with ${regime.confidencePercent}% confidence.',
+              'The range regime confidence is ${regime.confidencePercent}%.',
               'RSI is ${indicators.rsi14.toStringAsFixed(1)} and ADX is ${indicators.adx14.toStringAsFixed(1)}.',
               'The strategy score is $score out of 100.',
             ],
@@ -176,26 +172,24 @@ abstract final class AdvancedStrategyEngine {
     required SignalCadence cadence,
   }) {
     if (analysis.candles.length < 2 ||
-        (regime.regime != MarketRegime.range &&
-            regime.regime != MarketRegime.transition)) {
+        regime.regime != MarketRegime.range &&
+            regime.regime != MarketRegime.transition) {
       return null;
     }
-
     final candle = analysis.latestCandle;
     final previous = analysis.candles[analysis.candles.length - 2];
     final support = _nearestZone(
       analysis.zones,
-      role: ChartZoneRole.support,
-      price: candle.close,
-      maximumDistance: indicators.atr14 * 1.25,
+      ChartZoneRole.support,
+      candle.close,
+      indicators.atr14 * 1.25,
     );
     final resistance = _nearestZone(
       analysis.zones,
-      role: ChartZoneRole.resistance,
-      price: candle.close,
-      maximumDistance: indicators.atr14 * 1.25,
+      ChartZoneRole.resistance,
+      candle.close,
+      indicators.atr14 * 1.25,
     );
-
     final body = math.max((candle.close - candle.open).abs(), 0.0000001);
     final candleRange = math.max(candle.high - candle.low, body);
     final lowerWick = math.min(candle.open, candle.close) - candle.low;
@@ -221,23 +215,21 @@ abstract final class AdvancedStrategyEngine {
         resistance != null &&
         candle.high > resistance.upper &&
         candle.close < resistance.lower;
-
-    final long = support != null &&
-        (bullishSweep || bullishEngulfing || bullishPin);
-    final short = resistance != null &&
-        (bearishSweep || bearishEngulfing || bearishPin);
+    final long =
+        support != null && (bullishSweep || bullishEngulfing || bullishPin);
+    final short =
+        resistance != null && (bearishSweep || bearishEngulfing || bearishPin);
     if (!long && !short) {
       return null;
     }
-
-    final selectedLong = long &&
-        (!short || support!.strength >= resistance!.strength);
+    final selectedLong =
+        long && (!short || support!.strength >= resistance!.strength);
     final zone = selectedLong ? support! : resistance!;
     final sweep = selectedLong ? bullishSweep : bearishSweep;
     final engulfing = selectedLong ? bullishEngulfing : bearishEngulfing;
     final pin = selectedLong ? bullishPin : bearishPin;
     final score =
-        15 +
+        25 +
         (zone.strength * 15).round() +
         math.min(10, zone.touchCount * 2) +
         (engulfing || pin ? 18 : 0) +
@@ -246,18 +238,10 @@ abstract final class AdvancedStrategyEngine {
         ((selectedLong && indicators.rsi14 <= 50) ||
                 (!selectedLong && indicators.rsi14 >= 50)
             ? 9
-            : 0) +
-        10;
-    final threshold = _threshold(
-      cadence,
-      conservative: 74,
-      balanced: 64,
-      active: 54,
-    );
-    if (score < threshold) {
+            : 0);
+    if (score < _threshold(cadence, 74, 64, 54)) {
       return null;
     }
-
     final stop = selectedLong
         ? math.min(candle.low, zone.lower) - indicators.atr14 * 0.35
         : math.max(candle.high, zone.upper) + indicators.atr14 * 0.35;
@@ -275,21 +259,21 @@ abstract final class AdvancedStrategyEngine {
       score: score,
       version: 'adaptive-price-action/2.1',
       summary: fa
-          ? 'برگشت پرایس‌اکشن روی ناحیه معتبر با کندل بسته‌شده و حد ابطال روشن شناسایی شد.'
+          ? 'برگشت پرایس‌اکشن روی ناحیه معتبر با کندل بسته‌شده شناسایی شد.'
           : 'A price-action reversal at a validated zone was confirmed on a closed candle.',
       invalidation: fa
           ? 'بسته‌شدن معتبر پشت ناحیه و حد ATR سناریوی برگشت را باطل می‌کند.'
           : 'A confirmed close beyond the zone and ATR stop invalidates the reversal.',
       reasons: fa
           ? [
-              'ناحیه ${zone.touchCount} واکنش تأییدشده و قدرت ${(zone.strength * 100).round()}٪ دارد.',
+              'ناحیه ${zone.touchCount} واکنش و قدرت ${(zone.strength * 100).round()}٪ دارد.',
               if (sweep) 'شکار نقدینگی و بازگشت داخل ناحیه ثبت شد.',
               if (engulfing) 'کندل پوشای تأییدی ثبت شد.',
               if (pin) 'رد قیمت با سایه بلند ثبت شد.',
               'امتیاز استراتژی $score از ۱۰۰ است.',
             ]
           : [
-              'The zone has ${zone.touchCount} confirmed reactions and ${(zone.strength * 100).round()}% strength.',
+              'The zone has ${zone.touchCount} reactions and ${(zone.strength * 100).round()}% strength.',
               if (sweep) 'A liquidity sweep returned inside the zone.',
               if (engulfing) 'A confirming engulfing candle was detected.',
               if (pin) 'A long-wick rejection candle was detected.',
@@ -309,11 +293,10 @@ abstract final class AdvancedStrategyEngine {
     required Map<String, ChartDirection> confluence,
   }) {
     if (analysis.candles.length < 80 ||
-        (regime.regime != MarketRegime.directionalTrend &&
-            regime.regime != MarketRegime.transition)) {
+        regime.regime != MarketRegime.directionalTrend &&
+            regime.regime != MarketRegime.transition) {
       return null;
     }
-
     final ichimoku = IchimokuIndicatorEngine.analyze(analysis.candles);
     final candle = analysis.latestCandle;
     final previous = analysis.candles[analysis.candles.length - 2];
@@ -330,42 +313,36 @@ abstract final class AdvancedStrategyEngine {
     if (!long && !short) {
       return null;
     }
-
-    final kijunDistance = (candle.close - ichimoku.kijun26).abs();
     final pullback =
-        kijunDistance <= indicators.atr14 * 1.1 ||
-        (long && candle.low <= ichimoku.tenkan9 && candle.close > ichimoku.tenkan9) ||
-        (short && candle.high >= ichimoku.tenkan9 && candle.close < ichimoku.tenkan9);
+        (candle.close - ichimoku.kijun26).abs() <= indicators.atr14 * 1.1 ||
+        long &&
+            candle.low <= ichimoku.tenkan9 &&
+            candle.close > ichimoku.tenkan9 ||
+        short &&
+            candle.high >= ichimoku.tenkan9 &&
+            candle.close < ichimoku.tenkan9;
     final cloudBreak =
-        (long && previous.close <= ichimoku.cloudTop) ||
-        (short && previous.close >= ichimoku.cloudBottom);
+        long && previous.close <= ichimoku.cloudTop ||
+        short && previous.close >= ichimoku.cloudBottom;
     final candleTrigger = long ? candle.isBullish : !candle.isBullish;
     final aligned = confluence.values
         .where(
           (direction) =>
-              (long && direction == ChartDirection.bullish) ||
-              (short && direction == ChartDirection.bearish),
+              long && direction == ChartDirection.bullish ||
+              short && direction == ChartDirection.bearish,
         )
         .length;
     final score =
-        20 +
-        14 +
-        12 +
-        12 +
+        58 +
         (indicators.adx14 / 35 * 14).round().clamp(0, 14).toInt() +
         (pullback || cloudBreak ? 14 : 0) +
         (candleTrigger ? 7 : 0) +
         math.min(7, aligned * 2);
-    final threshold = _threshold(
-      cadence,
-      conservative: 82,
-      balanced: 72,
-      active: 62,
-    );
-    if ((!pullback && !cloudBreak) || !candleTrigger || score < threshold) {
+    if ((!pullback && !cloudBreak) ||
+        !candleTrigger ||
+        score < _threshold(cadence, 82, 72, 62)) {
       return null;
     }
-
     final stop = long
         ? math.min(
                 math.min(ichimoku.kijun26, ichimoku.cloudBottom),
@@ -392,18 +369,18 @@ abstract final class AdvancedStrategyEngine {
       version: 'ichimoku-trend/2.1',
       summary: fa
           ? 'روند ایچیموکو با ابر، تنکان/کیجون، چیکو و کندل بسته‌شده تأیید شد.'
-          : 'An Ichimoku trend setup was confirmed by the cloud, Tenkan/Kijun, Chikou clearance and a closed candle.',
+          : 'An Ichimoku trend was confirmed by the cloud, Tenkan/Kijun, Chikou and a closed candle.',
       invalidation: fa
           ? 'بازگشت معتبر پشت کیجون، ابر و حد ATR سناریوی روند را باطل می‌کند.'
-          : 'A confirmed return beyond Kijun, the cloud and the ATR stop invalidates the trend setup.',
+          : 'A confirmed return beyond Kijun, the cloud and ATR stop invalidates the setup.',
       reasons: fa
           ? [
               'ابر فعلی بدون استفاده از داده آینده محاسبه شده است.',
-              'ADX برابر ${indicators.adx14.toStringAsFixed(1)} و هم‌جهتی تایم‌فریم‌ها $aligned است.',
+              'ADX ${indicators.adx14.toStringAsFixed(1)} و هم‌جهتی $aligned تایم‌فریم است.',
               'امتیاز استراتژی $score از ۱۰۰ است.',
             ]
           : [
-              'The current cloud was calculated without future-data leakage.',
+              'The cloud was calculated without future-data leakage.',
               'ADX is ${indicators.adx14.toStringAsFixed(1)} with $aligned aligned timeframes.',
               'The strategy score is $score out of 100.',
             ],
@@ -411,20 +388,20 @@ abstract final class AdvancedStrategyEngine {
   }
 
   static ChartPriceZone? _nearestZone(
-    Iterable<ChartPriceZone> zones, {
-    required ChartZoneRole role,
-    required double price,
-    required double maximumDistance,
-  }) {
+    Iterable<ChartPriceZone> zones,
+    ChartZoneRole role,
+    double price,
+    double maximumDistance,
+  ) {
     final candidates = zones
         .where((zone) => zone.role == role)
         .where((zone) => (zone.center - price).abs() <= maximumDistance)
-        .toList(growable: false)
-      ..sort(
-        (left, right) => (left.center - price).abs().compareTo(
-          (right.center - price).abs(),
-        ),
-      );
+        .toList(growable: false);
+    candidates.sort(
+      (left, right) => (left.center - price).abs().compareTo(
+        (right.center - price).abs(),
+      ),
+    );
     return candidates.isEmpty ? null : candidates.first;
   }
 
@@ -434,17 +411,18 @@ abstract final class AdvancedStrategyEngine {
       return null;
     }
     candidates.sort(
-      (left, right) => right.confidencePercent.compareTo(left.confidencePercent),
+      (left, right) =>
+          right.confidencePercent.compareTo(left.confidencePercent),
     );
     return candidates.first;
   }
 
   static int _threshold(
-    SignalCadence cadence, {
-    required int conservative,
-    required int balanced,
-    required int active,
-  }) {
+    SignalCadence cadence,
+    int conservative,
+    int balanced,
+    int active,
+  ) {
     return switch (cadence) {
       SignalCadence.conservative => conservative,
       SignalCadence.balanced => balanced,
@@ -474,11 +452,10 @@ abstract final class AdvancedStrategyEngine {
     final conservativeEntry = long ? entryUpper : entryLower;
     if (!stop.isFinite ||
         stop <= 0 ||
-        (long && stop >= conservativeEntry) ||
-        (!long && stop <= conservativeEntry)) {
+        long && stop >= conservativeEntry ||
+        !long && stop <= conservativeEntry) {
       return null;
     }
-
     final estimatedCostPerUnit = conservativeEntry * _roundTripCostRate;
     final stopDistance = (conservativeEntry - stop).abs();
     final riskPerUnit = stopDistance + estimatedCostPerUnit;
@@ -486,12 +463,11 @@ abstract final class AdvancedStrategyEngine {
     if (riskPerUnit <= 0 || !riskPerUnit.isFinite || maximumLoss <= 0) {
       return null;
     }
-
     final riskSizedUnits = maximumLoss / riskPerUnit;
     final riskSizedNotional = riskSizedUnits * conservativeEntry;
-    final stopDistancePercent = stopDistance / conservativeEntry;
     final volatilityRate = analysis.volatilityPercent / 100;
-    final liquidationCushionCap =
+    final stopDistancePercent = stopDistance / conservativeEntry;
+    final liquidationCap =
         (0.45 / math.max(0.005, stopDistancePercent + volatilityRate * 0.75))
             .floor()
             .clamp(1, 10)
@@ -503,20 +479,22 @@ abstract final class AdvancedStrategyEngine {
         : score >= 64
         ? 4
         : 3;
-    final safeLeverage = math.min(liquidationCushionCap, confidenceCap).toInt();
+    final safeLeverage = math.min(liquidationCap, confidenceCap).toInt();
     final targetMargin = capital * _targetMarginFraction;
     final fundingLeverage = (riskSizedNotional / targetMargin)
         .ceil()
         .clamp(1, 100)
         .toInt();
-    final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
+    final recommendedLeverage = math.min(
+      safeLeverage,
+      fundingLeverage,
+    ).toInt();
     final fundedUnits = targetMargin * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     if (!positionSize.isFinite || positionSize <= 0) {
       return null;
     }
     final notionalValue = positionSize * conservativeEntry;
-    final requiredMargin = notionalValue / recommendedLeverage;
     final targets = [
       for (final multiple in targetMultiples)
         long
@@ -526,7 +504,6 @@ abstract final class AdvancedStrategyEngine {
     if (targets.any((target) => target <= 0 || !target.isFinite)) {
       return null;
     }
-
     return TradeIdea(
       symbol: analysis.symbol,
       timeframe: analysis.timeframe,
@@ -542,7 +519,7 @@ abstract final class AdvancedStrategyEngine {
       notionalValue: notionalValue,
       recommendedLeverage: recommendedLeverage,
       maximumSafeLeverage: safeLeverage,
-      requiredMargin: requiredMargin,
+      requiredMargin: notionalValue / recommendedLeverage,
       estimatedRoundTripCosts: positionSize * estimatedCostPerUnit,
       setupId:
           '${analysis.symbol}|${analysis.timeframe}|$version|${long ? 'long' : 'short'}|${analysis.fingerprint}',
