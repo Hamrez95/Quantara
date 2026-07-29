@@ -8,7 +8,7 @@
         android:roundIcon="@drawable/ic_quantara_launcher"
         android:usesCleartextTraffic="false">
         <activity
-            android:name=".MainActivity"
+            android:name=".SafeMainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
