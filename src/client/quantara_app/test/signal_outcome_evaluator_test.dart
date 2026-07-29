@@ -70,9 +70,7 @@ void main() {
 
 final _origin = DateTime.utc(2026, 7, 29, 10);
 
-SignalJournalEntry _entry({
-  TradeDirection direction = TradeDirection.long,
-}) {
+SignalJournalEntry _entry({TradeDirection direction = TradeDirection.long}) {
   final long = direction == TradeDirection.long;
   return SignalJournalEntry(
     setupId: 'BTCUSDT|15m|${direction.name}|test',
