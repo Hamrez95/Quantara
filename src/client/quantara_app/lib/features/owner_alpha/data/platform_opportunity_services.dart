@@ -41,9 +41,9 @@ final class PlatformOpportunityStateStore implements OpportunityStateStore {
                   .toSet(),
           notifiedSetupIds:
               (await preferences.getStringList(
-                    opportunityNotifiedSetupIdsKey,
-                  ) ??
-                  const <String>[])
+                        opportunityNotifiedSetupIdsKey,
+                      ) ??
+                      const <String>[])
                   .toSet(),
           journal: decodeSignalJournal(sharedJournal),
           lastBackgroundScanAt: DateTime.tryParse(
