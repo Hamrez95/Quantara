@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final class AppPreferences {
   const AppPreferences({required this.languageCode, required this.themeMode});
@@ -15,36 +15,31 @@ abstract interface class AppPreferencesStore {
 }
 
 final class PlatformAppPreferencesStore implements AppPreferencesStore {
-  const PlatformAppPreferencesStore({
-    this._channel = const MethodChannel('quantara/settings'),
-  });
+  const PlatformAppPreferencesStore();
 
-  final MethodChannel _channel;
+  static const _languageKey = 'quantara.preferences.language';
+  static const _themeKey = 'quantara.preferences.theme';
 
   @override
   Future<AppPreferences?> load() async {
     try {
-      final value = await _channel.invokeMapMethod<String, Object?>(
-        'loadAppPreferences',
-      );
-      if (value == null) {
-        return null;
-      }
-      final languageCode = value['languageCode'];
-      final themeMode = value['themeMode'];
-      if (languageCode is! String || themeMode is! String) {
+      final preferences = SharedPreferencesAsync();
+      final languageCode = await preferences.getString(_languageKey);
+      final themeMode = await preferences.getString(_themeKey);
+      if (languageCode == null || themeMode == null) {
         return null;
       }
       if (languageCode != 'fa' && languageCode != 'en') {
+        return null;
+      }
+      if (themeMode != 'light' && themeMode != 'dark') {
         return null;
       }
       return AppPreferences(
         languageCode: languageCode,
         themeMode: themeMode == 'light' ? ThemeMode.light : ThemeMode.dark,
       );
-    } on PlatformException {
-      return null;
-    } on MissingPluginException {
+    } on Object {
       return null;
     }
   }
@@ -52,14 +47,11 @@ final class PlatformAppPreferencesStore implements AppPreferencesStore {
   @override
   Future<void> save(AppPreferences preferences) async {
     try {
-      await _channel.invokeMethod<void>('saveAppPreferences', {
-        'languageCode': preferences.languageCode,
-        'themeMode': preferences.themeMode.name,
-      });
-    } on PlatformException {
+      final store = SharedPreferencesAsync();
+      await store.setString(_languageKey, preferences.languageCode);
+      await store.setString(_themeKey, preferences.themeMode.name);
+    } on Object {
       // A persistence failure must not block language or theme changes.
-    } on MissingPluginException {
-      // Widget tests and non-Android previews intentionally have no channel.
     }
   }
 }
