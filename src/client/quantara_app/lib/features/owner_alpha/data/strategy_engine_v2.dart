@@ -75,8 +75,7 @@ abstract final class StrategyEngineV2 {
       (candle.close - indicators.ema20).abs(),
       (candle.close - indicators.ema50).abs(),
     );
-    final pullbackNearValue =
-        nearestTrendAverage <= indicators.atr14 * 0.85;
+    final pullbackNearValue = nearestTrendAverage <= indicators.atr14 * 0.85;
     final rsiReset = long
         ? indicators.rsi14 >= 42 && indicators.rsi14 <= 68
         : short
@@ -97,10 +96,7 @@ abstract final class StrategyEngineV2 {
     final scoreParts = <String, int>{
       'regime': regimeAllowed ? 18 : 0,
       'trend': directional ? 18 : 0,
-      'adx': (indicators.adx14 / 35 * 14)
-          .round()
-          .clamp(0, 14)
-          .toInt(),
+      'adx': (indicators.adx14 / 35 * 14).round().clamp(0, 14).toInt(),
       'pullback': pullbackNearValue ? 20 : 0,
       'rsiReset': rsiReset ? 10 : 0,
       'priceAction': candleTrigger ? 10 : 0,
@@ -233,14 +229,8 @@ abstract final class StrategyEngineV2 {
           .round()
           .clamp(0, 16)
           .toInt(),
-      'breakDistance': (normalizedExpansion * 18)
-          .round()
-          .clamp(0, 14)
-          .toInt(),
-      'adx': (indicators.adx14 / 35 * 10)
-          .round()
-          .clamp(0, 10)
-          .toInt(),
+      'breakDistance': (normalizedExpansion * 18).round().clamp(0, 14).toInt(),
+      'adx': (indicators.adx14 / 35 * 10).round().clamp(0, 10).toInt(),
       'multiTimeframe': math.min(5, alignedTimeframes * 2).toInt(),
     };
     final score = scoreParts.values.fold<int>(0, (sum, value) => sum + value);
@@ -393,17 +383,13 @@ abstract final class StrategyEngineV2 {
         : score >= 62
         ? 4
         : 3;
-    final safeLeverage = math
-        .min(liquidationCushionCap, confidenceCap)
-        .toInt();
+    final safeLeverage = math.min(liquidationCushionCap, confidenceCap).toInt();
     final targetMargin = capital * _targetMarginFraction;
     final fundingLeverage = (riskSizedNotional / targetMargin)
         .ceil()
         .clamp(1, 100)
         .toInt();
-    final recommendedLeverage = math
-        .min(safeLeverage, fundingLeverage)
-        .toInt();
+    final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
     final fundedUnits = targetMargin * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     final notionalValue = positionSize * conservativeEntry;
