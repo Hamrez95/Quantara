@@ -52,12 +52,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          dart format lib test
-          git diff -- lib test
-          git diff --exit-code -- lib test
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         shell: bash
