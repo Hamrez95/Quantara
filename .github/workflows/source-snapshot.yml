@@ -1,0 +1,27 @@
+name: Strategy source snapshot
+
+on:
+  push:
+    branches:
+      - feat/52-strategy-engine-v2
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload strategy source
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-strategy-source
+          path: |
+            src/client/quantara_app/lib
+            src/client/quantara_app/test
+            src/client/quantara_app/pubspec.yaml
+          if-no-files-found: error
+          retention-days: 1
