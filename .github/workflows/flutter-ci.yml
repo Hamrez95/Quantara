@@ -25,6 +25,11 @@ concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FLUTTER_VERSION: '3.44.8'
+  ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+  ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
+
 jobs:
   flutter:
     name: Flutter format, analyze, test, and build
@@ -40,6 +45,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
@@ -96,8 +102,27 @@ jobs:
       - name: Build stable offline-first web PWA
         run: flutter build web --release
 
-      - name: Build stable offline-first Android release package
+      - name: Build universal Android release APK
         run: flutter build apk --release
+
+      - name: Verify universal APK 16KB ZIP alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -x "$zipalign_path"
+          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Build ABI-split Android release APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Verify arm64 APK 16KB ZIP alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -x "$zipalign_path"
+          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
       - name: Upload web preview
         uses: actions/upload-artifact@v4
@@ -107,10 +132,57 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android release package
+      - name: Upload Android cold-start candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-release
-          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+          name: quantara-android-cold-start-0.10.2
+          path: |
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
+
+  android-api-36-launch:
+    name: Android 16 cold-start smoke
+    needs: flutter
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download Android candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: quantara-android-cold-start-0.10.2
+          path: apk
+
+      - name: Boot API 36 emulator and verify launch
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            adb install -r apk/app-release.apk
+            adb logcat -c
+            adb shell am force-stop "$ANDROID_PACKAGE"
+            adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" | tee android-start.txt
+            sleep 10
+            adb shell pidof "$ANDROID_PACKAGE" | tee android-pid.txt
+            test -s android-pid.txt
+            adb logcat -d > android-logcat.txt
+            if grep -E "FATAL EXCEPTION|Process: $ANDROID_PACKAGE" android-logcat.txt; then
+              exit 1
+            fi
+
+      - name: Upload Android launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-api-36-launch-diagnostics
+          path: |
+            android-start.txt
+            android-pid.txt
+            android-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 14
