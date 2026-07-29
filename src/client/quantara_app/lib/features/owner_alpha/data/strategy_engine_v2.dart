@@ -89,29 +89,37 @@ abstract final class StrategyEngineV2 {
     final alignedTimeframes = confluence.values
         .where(
           (direction) =>
-              long && direction == ChartDirection.bullish ||
-              short && direction == ChartDirection.bearish,
+              (long && direction == ChartDirection.bullish) ||
+              (short && direction == ChartDirection.bearish),
         )
         .length;
 
     final scoreParts = <String, int>{
       'regime': regimeAllowed ? 18 : 0,
       'trend': directional ? 18 : 0,
-      'adx': (indicators.adx14 / 35 * 14).round().clamp(0, 14),
+      'adx': (indicators.adx14 / 35 * 14)
+          .round()
+          .clamp(0, 14)
+          .toInt(),
       'pullback': pullbackNearValue ? 20 : 0,
       'rsiReset': rsiReset ? 10 : 0,
       'priceAction': candleTrigger ? 10 : 0,
       'volume': indicators.relativeVolume20 >= 0.75 ? 5 : 0,
-      'multiTimeframe': math.min(5, alignedTimeframes * 2),
+      'multiTimeframe': math.min(5, alignedTimeframes * 2).toInt(),
     };
     final score = scoreParts.values.fold<int>(0, (sum, value) => sum + value);
-    final threshold = _scoreThreshold(cadence, conservative: 76, balanced: 66, active: 56);
+    final threshold = _scoreThreshold(
+      cadence,
+      conservative: 76,
+      balanced: 66,
+      active: 56,
+    );
 
     if (!regimeAllowed || !directional || score < threshold) {
       return _wait(
         analysis: analysis,
         strategy: AnalysisStrategy.trendPullback,
-        confidencePercent: score.clamp(0, 92),
+        confidencePercent: score.clamp(0, 92).toInt(),
         maximumLoss: capital * riskPercent / 100,
         rejectionReason: SetupRejectionReason.weakDirection,
         summary: fa
@@ -201,8 +209,8 @@ abstract final class StrategyEngineV2 {
     final alignedTimeframes = confluence.values
         .where(
           (direction) =>
-              long && direction == ChartDirection.bullish ||
-              short && direction == ChartDirection.bearish,
+              (long && direction == ChartDirection.bullish) ||
+              (short && direction == ChartDirection.bearish),
         )
         .length;
     final expansionDistance = long
@@ -217,26 +225,44 @@ abstract final class StrategyEngineV2 {
     final scoreParts = <String, int>{
       'channelBreak': breakout ? 25 : 0,
       'directionalMovement': directionConfirmed ? 14 : 0,
-      'atrExpansion':
-          ((indicators.atrExpansionRatio - 0.9) * 20).round().clamp(0, 16),
-      'relativeVolume':
-          ((indicators.relativeVolume20 - 0.7) * 12).round().clamp(0, 16),
-      'breakDistance': (normalizedExpansion * 18).round().clamp(0, 14),
-      'adx': (indicators.adx14 / 35 * 10).round().clamp(0, 10),
-      'multiTimeframe': math.min(5, alignedTimeframes * 2),
+      'atrExpansion': ((indicators.atrExpansionRatio - 0.9) * 20)
+          .round()
+          .clamp(0, 16)
+          .toInt(),
+      'relativeVolume': ((indicators.relativeVolume20 - 0.7) * 12)
+          .round()
+          .clamp(0, 16)
+          .toInt(),
+      'breakDistance': (normalizedExpansion * 18)
+          .round()
+          .clamp(0, 14)
+          .toInt(),
+      'adx': (indicators.adx14 / 35 * 10)
+          .round()
+          .clamp(0, 10)
+          .toInt(),
+      'multiTimeframe': math.min(5, alignedTimeframes * 2).toInt(),
     };
     final score = scoreParts.values.fold<int>(0, (sum, value) => sum + value);
-    final threshold = _scoreThreshold(cadence, conservative: 78, balanced: 68, active: 58);
+    final threshold = _scoreThreshold(
+      cadence,
+      conservative: 78,
+      balanced: 68,
+      active: 58,
+    );
     final regimeAllowed =
         regime.regime == MarketRegime.breakoutExpansion ||
         (regime.regime == MarketRegime.directionalTrend &&
             indicators.atrExpansionRatio >= 1.05);
 
-    if (!breakout || !directionConfirmed || !regimeAllowed || score < threshold) {
+    if (!breakout ||
+        !directionConfirmed ||
+        !regimeAllowed ||
+        score < threshold) {
       return _wait(
         analysis: analysis,
         strategy: AnalysisStrategy.momentumContinuation,
-        confidencePercent: score.clamp(0, 92),
+        confidencePercent: score.clamp(0, 92).toInt(),
         maximumLoss: capital * riskPercent / 100,
         rejectionReason: SetupRejectionReason.weakDirection,
         summary: fa
@@ -367,13 +393,17 @@ abstract final class StrategyEngineV2 {
         : score >= 62
         ? 4
         : 3;
-    final safeLeverage = math.min(liquidationCushionCap, confidenceCap);
+    final safeLeverage = math
+        .min(liquidationCushionCap, confidenceCap)
+        .toInt();
     final targetMargin = capital * _targetMarginFraction;
     final fundingLeverage = (riskSizedNotional / targetMargin)
         .ceil()
         .clamp(1, 100)
         .toInt();
-    final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
+    final recommendedLeverage = math
+        .min(safeLeverage, fundingLeverage)
+        .toInt();
     final fundedUnits = targetMargin * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     final notionalValue = positionSize * conservativeEntry;
@@ -389,7 +419,7 @@ abstract final class StrategyEngineV2 {
       symbol: analysis.symbol,
       timeframe: analysis.timeframe,
       direction: long ? TradeDirection.long : TradeDirection.short,
-      confidencePercent: score.clamp(0, 94),
+      confidencePercent: score.clamp(0, 94).toInt(),
       entryLower: entryLower,
       entryUpper: entryUpper,
       stopLoss: stop,
@@ -429,7 +459,7 @@ abstract final class StrategyEngineV2 {
       symbol: analysis.symbol,
       timeframe: analysis.timeframe,
       direction: TradeDirection.wait,
-      confidencePercent: confidencePercent.clamp(0, 92),
+      confidencePercent: confidencePercent.clamp(0, 92).toInt(),
       entryLower: null,
       entryUpper: null,
       stopLoss: null,
