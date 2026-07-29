@@ -11,7 +11,6 @@ on:
     paths:
       - 'src/client/quantara_app/**'
       - '.github/workflows/flutter-ci.yml'
-      - 'scripts/fix_56_priority_patch.py'
   pull_request:
     branches:
       - main
@@ -21,7 +20,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -50,26 +49,6 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-
-      - name: Apply multi-timeframe priority patch
-        if: github.event_name == 'push' && github.ref_name == 'fix/56-signal-ux-risk-sizing'
-        working-directory: .
-        run: |
-          python scripts/fix_56_priority_patch.py
-          cd src/client/quantara_app
-          dart format lib test
-
-      - name: Commit multi-timeframe priority patch
-        if: github.event_name == 'push' && github.ref_name == 'fix/56-signal-ux-risk-sizing'
-        working-directory: .
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/client/quantara_app
-          if ! git diff --cached --quiet; then
-            git commit -m "Add primary timeframe and conflict guidance"
-            git push origin HEAD:fix/56-signal-ux-risk-sizing
-          fi
 
       - name: Display tool versions
         run: |
