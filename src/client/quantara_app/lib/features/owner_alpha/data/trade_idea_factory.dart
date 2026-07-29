@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../domain/owner_alpha_models.dart';
+import 'advanced_strategy_engine.dart';
+import 'strategy_engine_v2.dart';
 
 abstract final class TradeIdeaFactory {
   static const assumedRoundTripCostRate = 0.002;
@@ -23,6 +25,50 @@ abstract final class TradeIdeaFactory {
       throw ArgumentError.value(riskPercent, 'riskPercent');
     }
 
+    final advancedIdea = AdvancedStrategyEngine.tryCreate(
+      analysis: analysis,
+      capital: capital,
+      riskPercent: riskPercent,
+      languageCode: languageCode,
+      strategy: strategy,
+      cadence: cadence,
+      confluence: confluence,
+    );
+    if (advancedIdea != null) {
+      return advancedIdea;
+    }
+
+    final v2Idea = StrategyEngineV2.tryCreate(
+      analysis: analysis,
+      capital: capital,
+      riskPercent: riskPercent,
+      languageCode: languageCode,
+      strategy: strategy,
+      cadence: cadence,
+      confluence: confluence,
+    );
+    if (v2Idea != null) {
+      return v2Idea;
+    }
+
+    return _structureZones(
+      analysis: analysis,
+      capital: capital,
+      riskPercent: riskPercent,
+      confluence: confluence,
+      languageCode: languageCode,
+      cadence: cadence,
+    );
+  }
+
+  static TradeIdea _structureZones({
+    required TimeframeChartAnalysis analysis,
+    required double capital,
+    required double riskPercent,
+    required Map<String, ChartDirection> confluence,
+    required String languageCode,
+    required SignalCadence cadence,
+  }) {
     final maximumLoss = capital * riskPercent / 100;
     final fa = languageCode != 'en';
     final current = analysis.latestCandle.close;
@@ -45,28 +91,13 @@ abstract final class TradeIdeaFactory {
     final aligned = confluence.values
         .where((direction) => direction == analysis.direction)
         .length;
-    final directional = analysis.direction != ChartDirection.sideways;
     final cadenceFloor = switch (cadence) {
       SignalCadence.conservative => 0.42,
       SignalCadence.balanced => 0.32,
       SignalCadence.active => 0.25,
     };
-    final strategyFloor = switch (strategy) {
-      AnalysisStrategy.structureZones => cadenceFloor,
-      AnalysisStrategy.trendPullback => cadenceFloor - 0.04,
-      AnalysisStrategy.momentumContinuation => cadenceFloor + 0.08,
-    };
-    final strategyAligned = switch (strategy) {
-      AnalysisStrategy.structureZones => true,
-      AnalysisStrategy.trendPullback => protectiveAlignment(
-        analysis,
-        supports,
-        resistances,
-      ),
-      AnalysisStrategy.momentumContinuation => aligned >= 2,
-    };
-    final enoughStrength =
-        analysis.directionStrength >= strategyFloor && strategyAligned;
+    final directional = analysis.direction != ChartDirection.sideways;
+    final enoughStrength = analysis.directionStrength >= cadenceFloor;
 
     if (!directional || !enoughStrength) {
       return TradeIdea.wait(
@@ -190,8 +221,6 @@ abstract final class TradeIdeaFactory {
       protectiveZone.strength,
     );
     final safeLeverage = math.min(liquidationCushionCap, confidenceCap);
-    // Keep most account equity available for other setups. Leverage changes
-    // required margin, not the risk-sized notional or the maximum planned loss.
     final targetMargin = capital * targetMarginFraction;
     final fundingLeverage = (riskSizedNotional / targetMargin)
         .ceil()
@@ -273,6 +302,8 @@ abstract final class TradeIdeaFactory {
                 'A 0.20% round-trip fee and slippage estimate is included.',
               ],
       ),
+      strategy: AnalysisStrategy.structureZones,
+      strategyVersion: strategyVersion(AnalysisStrategy.structureZones),
     );
   }
 
@@ -295,8 +326,8 @@ abstract final class TradeIdeaFactory {
   static String strategyVersion(AnalysisStrategy strategy) =>
       switch (strategy) {
         AnalysisStrategy.structureZones => 'structure-zones/1.2',
-        AnalysisStrategy.trendPullback => 'trend-pullback/1.0',
-        AnalysisStrategy.momentumContinuation => 'momentum-continuation/1.0',
+        AnalysisStrategy.trendPullback => 'trend-pullback/2.0',
+        AnalysisStrategy.momentumContinuation => 'donchian-breakout/2.0',
       };
 
   static int confidenceLeverageCap(
@@ -304,15 +335,9 @@ abstract final class TradeIdeaFactory {
     double protectiveZoneStrength,
   ) {
     final combined = directionStrength * 0.6 + protectiveZoneStrength * 0.4;
-    if (combined < 0.45) {
-      return 2;
-    }
-    if (combined < 0.6) {
-      return 3;
-    }
-    if (combined < 0.75) {
-      return 5;
-    }
+    if (combined < 0.45) return 2;
+    if (combined < 0.6) return 3;
+    if (combined < 0.75) return 5;
     return 8;
   }
 
