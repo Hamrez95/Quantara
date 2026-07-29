@@ -112,10 +112,9 @@ final class OwnerAlphaController extends ChangeNotifier {
     }
     return null;
   }
-  DateTime? get lastBackgroundScanAt =>
-      _opportunityState.lastBackgroundScanAt;
-  String? get lastBackgroundError =>
-      _opportunityState.lastBackgroundError;
+
+  DateTime? get lastBackgroundScanAt => _opportunityState.lastBackgroundScanAt;
+  String? get lastBackgroundError => _opportunityState.lastBackgroundError;
   OwnerAlphaConnectionState get connectionState {
     final current = _snapshot;
     if (current == null) {
@@ -686,9 +685,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         break;
       }
     }
-    if (entry == null ||
-        leverage < 1 ||
-        leverage > entry.maximumSafeLeverage) {
+    if (entry == null || leverage < 1 || leverage > entry.maximumSafeLeverage) {
       return;
     }
     final margin = entry.notionalValue / leverage;
@@ -744,8 +741,9 @@ final class OwnerAlphaController extends ChangeNotifier {
     final candles = <String, List<ChartCandle>>{
       for (final result in snapshot.radar)
         for (final analysis in result.analysesByTimeframe.values)
-          '${analysis.symbol}|${analysis.timeframe}':
-              analysis.candles.toList(growable: false),
+          '${analysis.symbol}|${analysis.timeframe}': analysis.candles.toList(
+            growable: false,
+          ),
     };
     final evaluatedAt = DateTime.now().toUtc();
     _opportunityState = _opportunityState.copyWith(
