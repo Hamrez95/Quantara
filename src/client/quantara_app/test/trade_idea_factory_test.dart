@@ -23,9 +23,7 @@ void main() {
     expect(idea.targets[2], greaterThan(idea.targets[1]));
     expect(
       idea.requiredMargin,
-      lessThanOrEqualTo(
-        10000 * TradeIdeaFactory.targetMarginFraction + 0.0001,
-      ),
+      lessThanOrEqualTo(10000 * TradeIdeaFactory.targetMarginFraction + 0.0001),
     );
     final conservativeEntry = idea.entryUpper!;
     final lossPerUnit =
@@ -69,9 +67,7 @@ void main() {
     expect(idea.setupId, contains('|short|'));
     expect(
       idea.requiredMargin,
-      lessThanOrEqualTo(
-        10000 * TradeIdeaFactory.targetMarginFraction + 0.0001,
-      ),
+      lessThanOrEqualTo(10000 * TradeIdeaFactory.targetMarginFraction + 0.0001),
     );
   });
 }
