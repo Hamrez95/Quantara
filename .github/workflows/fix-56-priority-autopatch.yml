@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/56-signal-ux-risk-sizing
+  workflow_dispatch:
 
 permissions:
   contents: write
