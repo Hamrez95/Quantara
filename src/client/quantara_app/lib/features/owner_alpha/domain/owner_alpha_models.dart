@@ -424,41 +424,38 @@ final class SignalJournalEntry {
     double? priceChangePercent,
     double? simulatedPnl,
     double? marginReturnPercent,
-  }) =>
-      SignalJournalEntry(
-        setupId: setupId,
-        symbol: symbol,
-        timeframe: timeframe,
-        direction: direction,
-        strategy: strategy,
-        strategyVersion: strategyVersion,
-        createdAt: createdAt,
-        validUntil: validUntil,
-        entryLower: entryLower,
-        entryUpper: entryUpper,
-        stopLoss: stopLoss,
-        targets: targets,
-        maximumLoss: maximumLoss,
-        positionSize: positionSize,
-        notionalValue: notionalValue,
-        estimatedRoundTripCosts: estimatedRoundTripCosts,
-        recommendedLeverage: recommendedLeverage,
-        maximumSafeLeverage: maximumSafeLeverage,
-        selectedLeverage: selectedLeverage ?? this.selectedLeverage,
-        summary: summary,
-        invalidation: invalidation,
-        outcome: outcome ?? this.outcome,
-        highestTargetHit: highestTargetHit ?? this.highestTargetHit,
-        activatedAt: activatedAt ?? this.activatedAt,
-        resolvedAt: resolvedAt ?? this.resolvedAt,
-        priceChangePercent:
-            priceChangePercent ?? this.priceChangePercent,
-        simulatedPnl: simulatedPnl ?? this.simulatedPnl,
-        marginReturnPercent:
-            marginReturnPercent ?? this.marginReturnPercent,
-        note: note ?? this.note,
-        closed: closed ?? this.closed,
-      );
+  }) => SignalJournalEntry(
+    setupId: setupId,
+    symbol: symbol,
+    timeframe: timeframe,
+    direction: direction,
+    strategy: strategy,
+    strategyVersion: strategyVersion,
+    createdAt: createdAt,
+    validUntil: validUntil,
+    entryLower: entryLower,
+    entryUpper: entryUpper,
+    stopLoss: stopLoss,
+    targets: targets,
+    maximumLoss: maximumLoss,
+    positionSize: positionSize,
+    notionalValue: notionalValue,
+    estimatedRoundTripCosts: estimatedRoundTripCosts,
+    recommendedLeverage: recommendedLeverage,
+    maximumSafeLeverage: maximumSafeLeverage,
+    selectedLeverage: selectedLeverage ?? this.selectedLeverage,
+    summary: summary,
+    invalidation: invalidation,
+    outcome: outcome ?? this.outcome,
+    highestTargetHit: highestTargetHit ?? this.highestTargetHit,
+    activatedAt: activatedAt ?? this.activatedAt,
+    resolvedAt: resolvedAt ?? this.resolvedAt,
+    priceChangePercent: priceChangePercent ?? this.priceChangePercent,
+    simulatedPnl: simulatedPnl ?? this.simulatedPnl,
+    marginReturnPercent: marginReturnPercent ?? this.marginReturnPercent,
+    note: note ?? this.note,
+    closed: closed ?? this.closed,
+  );
 
   Map<String, Object?> toJson() => {
     'setupId': setupId,
@@ -516,8 +513,7 @@ final class SignalJournalEntry {
           (value['maximumSafeLeverage'] as num?)?.toInt() ??
           recommendedLeverage;
       final selectedLeverage =
-          (value['selectedLeverage'] as num?)?.toInt() ??
-          recommendedLeverage;
+          (value['selectedLeverage'] as num?)?.toInt() ?? recommendedLeverage;
       final outcomeName = value['outcome'] as String?;
       final outcome = SignalOutcome.values.firstWhere(
         (item) => item.name == outcomeName,
@@ -543,24 +539,20 @@ final class SignalJournalEntry {
             (value['estimatedRoundTripCosts'] as num?)?.toDouble() ?? 0,
         recommendedLeverage: recommendedLeverage.clamp(1, 100).toInt(),
         maximumSafeLeverage: maximumSafeLeverage.clamp(1, 100).toInt(),
-        selectedLeverage: selectedLeverage.clamp(
-          1,
-          maximumSafeLeverage.clamp(1, 100),
-        ).toInt(),
+        selectedLeverage: selectedLeverage
+            .clamp(1, maximumSafeLeverage.clamp(1, 100))
+            .toInt(),
         summary: value['summary'] as String,
         invalidation: value['invalidation'] as String,
         outcome: outcome,
-        highestTargetHit:
-            ((value['highestTargetHit'] as num?)?.toInt() ?? 0)
-                .clamp(0, 3)
-                .toInt(),
+        highestTargetHit: ((value['highestTargetHit'] as num?)?.toInt() ?? 0)
+            .clamp(0, 3)
+            .toInt(),
         activatedAt: _tryDate(value['activatedAt']),
         resolvedAt: _tryDate(value['resolvedAt']),
-        priceChangePercent:
-            (value['priceChangePercent'] as num?)?.toDouble(),
+        priceChangePercent: (value['priceChangePercent'] as num?)?.toDouble(),
         simulatedPnl: (value['simulatedPnl'] as num?)?.toDouble(),
-        marginReturnPercent:
-            (value['marginReturnPercent'] as num?)?.toDouble(),
+        marginReturnPercent: (value['marginReturnPercent'] as num?)?.toDouble(),
         note: (value['note'] as String?) ?? '',
         closed: value['closed'] == true,
       );
@@ -605,10 +597,8 @@ final class OpportunityState {
       takenSetupIds: takenSetupIds ?? this.takenSetupIds,
       notifiedSetupIds: notifiedSetupIds ?? this.notifiedSetupIds,
       journal: journal ?? this.journal,
-      lastBackgroundScanAt:
-          lastBackgroundScanAt ?? this.lastBackgroundScanAt,
-      lastBackgroundError:
-          lastBackgroundError ?? this.lastBackgroundError,
+      lastBackgroundScanAt: lastBackgroundScanAt ?? this.lastBackgroundScanAt,
+      lastBackgroundError: lastBackgroundError ?? this.lastBackgroundError,
     );
   }
 }
