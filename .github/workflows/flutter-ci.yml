@@ -11,6 +11,7 @@ on:
     paths:
       - 'src/client/quantara_app/**'
       - '.github/workflows/flutter-ci.yml'
+      - 'scripts/fix_56_patch.py'
   pull_request:
     branches:
       - main
@@ -20,7 +21,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -49,6 +50,26 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+
+      - name: Apply issue 56 patch
+        if: github.event_name == 'push' && github.ref_name == 'fix/56-signal-ux-risk-sizing'
+        working-directory: .
+        run: |
+          python scripts/fix_56_patch.py
+          cd src/client/quantara_app
+          dart format lib test
+
+      - name: Commit issue 56 patch
+        if: github.event_name == 'push' && github.ref_name == 'fix/56-signal-ux-risk-sizing'
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app
+          if ! git diff --cached --quiet; then
+            git commit -m "Fix signal leverage UX and compact analysis selectors"
+            git push origin HEAD:fix/56-signal-ux-risk-sizing
+          fi
 
       - name: Display tool versions
         run: |
@@ -133,15 +154,15 @@ jobs:
       - name: Upload web preview
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-preview-0.11.0
+          name: quantara-web-preview-0.11.1
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android 0.11.0 candidate
+      - name: Upload Android 0.11.1 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-0.11.0
+          name: quantara-android-0.11.1
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -161,7 +182,7 @@ jobs:
       - name: Download Android candidate
         uses: actions/download-artifact@v4
         with:
-          name: quantara-android-0.11.0
+          name: quantara-android-0.11.1
           path: apk
 
       - name: Boot emulator and verify deferred background launch
