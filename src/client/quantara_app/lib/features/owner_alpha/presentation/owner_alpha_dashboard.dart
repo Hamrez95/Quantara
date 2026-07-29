@@ -310,26 +310,62 @@ class _OpportunityCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: taken,
-                  onChanged: (value) => onTakenChanged(value ?? false),
-                  title: Text(strings.taken),
-                  subtitle: Text(strings.markTaken),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final takenControl = InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => onTakenChanged(!taken),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: taken,
+                        onChanged: (value) => onTakenChanged(value ?? false),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(strings.taken),
+                            Text(
+                              strings.markTaken,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonalIcon(
+              );
+              final chartButton = FilledButton.tonalIcon(
                 onPressed: onTap,
                 icon: const Icon(Icons.candlestick_chart_rounded),
                 label: Text(strings.inspectChart),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 520) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    takenControl,
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: chartButton,
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: takenControl),
+                  const SizedBox(width: 8),
+                  chartButton,
+                ],
+              );
+            },
           ),
         ],
       ),
