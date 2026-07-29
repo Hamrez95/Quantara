@@ -685,7 +685,9 @@ final class OwnerAlphaController extends ChangeNotifier {
         break;
       }
     }
-    if (entry == null || leverage < 1 || leverage > entry.maximumSafeLeverage) {
+    if (entry == null ||
+        leverage < 1 ||
+        leverage > TradeIdea.maximumManualLeverage) {
       return;
     }
     final margin = entry.notionalValue / leverage;

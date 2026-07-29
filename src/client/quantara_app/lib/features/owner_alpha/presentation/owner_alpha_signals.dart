@@ -485,33 +485,11 @@ class _SignalJournalCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            DropdownButtonFormField<int>(
-              key: ValueKey(
-                'journal-leverage-${entry.setupId}-${entry.selectedLeverage}',
-              ),
-              initialValue: entry.selectedLeverage,
-              decoration: InputDecoration(
-                labelText: _t(context, 'اهرم این پوزیشن', 'Position leverage'),
-                helperText: _t(
-                  context,
-                  'پیشنهاد ${entry.recommendedLeverage}x · سقف امن ${entry.maximumSafeLeverage}x',
-                  'Suggested ${entry.recommendedLeverage}x · safe cap ${entry.maximumSafeLeverage}x',
-                ),
-              ),
-              items: [
-                for (
-                  var leverage = 1;
-                  leverage <= entry.maximumSafeLeverage;
-                  leverage++
-                )
-                  DropdownMenuItem(
-                    value: leverage,
-                    child: Text('${leverage}x'),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) onLeverageChanged(value);
-              },
+            _LeverageControl(
+              selected: entry.selectedLeverage,
+              recommended: entry.recommendedLeverage,
+              safeCap: entry.maximumSafeLeverage,
+              onChanged: onLeverageChanged,
             ),
             if (entry.outcome != SignalOutcome.pendingEntry ||
                 !DateTime.now().toUtc().isBefore(entry.validUntil)) ...[
@@ -790,6 +768,174 @@ class _TimeLine extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LeverageControl extends StatefulWidget {
+  const _LeverageControl({
+    required this.selected,
+    required this.recommended,
+    required this.safeCap,
+    required this.onChanged,
+  });
+
+  final int selected;
+  final int recommended;
+  final int safeCap;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_LeverageControl> createState() => _LeverageControlState();
+}
+
+class _LeverageControlState extends State<_LeverageControl> {
+  late double _draft = widget.selected.toDouble();
+
+  @override
+  void didUpdateWidget(covariant _LeverageControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selected != widget.selected) {
+      _draft = widget.selected.toDouble();
+    }
+  }
+
+  bool get _persian => Directionality.of(context) == TextDirection.rtl;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = _draft.round().clamp(1, TradeIdea.maximumManualLeverage);
+    final presets =
+        <int>{
+              1,
+              2,
+              3,
+              5,
+              10,
+              20,
+              50,
+              100,
+              widget.recommended,
+              widget.safeCap,
+              selected,
+            }
+            .where(
+              (value) => value >= 1 && value <= TradeIdea.maximumManualLeverage,
+            )
+            .toList(growable: false)
+          ..sort();
+    final aboveSafe = selected > widget.safeCap;
+    final scheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: aboveSafe
+              ? QuantaraColors.warning.withValues(alpha: 0.65)
+              : scheme.outlineVariant,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _persian ? 'اهرم انتخابی' : 'Selected leverage',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                StatusPill(
+                  label: '${selected}x',
+                  color: aboveSafe
+                      ? QuantaraColors.warning
+                      : QuantaraColors.cyan,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _persian
+                  ? 'پیشنهاد ${widget.recommended}x · مرز محافظه‌کارانه ${widget.safeCap}x · انتخاب دستی تا ${TradeIdea.maximumManualLeverage}x'
+                  : 'Suggested ${widget.recommended}x · conservative boundary ${widget.safeCap}x · manual selection up to ${TradeIdea.maximumManualLeverage}x',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final leverage in presets) ...[
+                    ChoiceChip(
+                      showCheckmark: false,
+                      selected: leverage == selected,
+                      label: Text('${leverage}x'),
+                      onSelected: (_) {
+                        setState(() => _draft = leverage.toDouble());
+                        widget.onChanged(leverage);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('1x', textDirection: TextDirection.ltr),
+                Expanded(
+                  child: Slider(
+                    value: selected.toDouble(),
+                    min: 1,
+                    max: TradeIdea.maximumManualLeverage.toDouble(),
+                    divisions: TradeIdea.maximumManualLeverage - 1,
+                    label: '${selected}x',
+                    onChanged: (value) => setState(() => _draft = value),
+                    onChangeEnd: (value) => widget.onChanged(value.round()),
+                  ),
+                ),
+                Text(
+                  '${TradeIdea.maximumManualLeverage}x',
+                  textDirection: TextDirection.ltr,
+                ),
+              ],
+            ),
+            if (aboveSafe) ...[
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 20,
+                    color: QuantaraColors.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _persian
+                          ? 'بالاتر از مرز امن مدل انتخاب شده است. اندازه پوزیشن و زیان برنامه‌ریزی‌شده ثابت می‌ماند، اما مارجین کمتر و فاصله تا لیکویید کوتاه‌تر می‌شود.'
+                          : 'This is above the model safe boundary. Position notional and planned stop loss stay fixed, but margin is lower and liquidation distance becomes tighter.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: QuantaraColors.warning,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
