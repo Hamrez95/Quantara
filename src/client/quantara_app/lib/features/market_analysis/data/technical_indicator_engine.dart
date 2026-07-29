@@ -89,10 +89,10 @@ abstract final class TechnicalIndicatorEngine {
     final averageVolume = _average(previousVolumes);
     final volumeDeviation = _standardDeviation(previousVolumes, averageVolume);
     final relativeVolume = averageVolume <= 0
-        ? 0
+        ? 0.0
         : volumes.last / averageVolume;
     final volumeZScore = volumeDeviation <= 0
-        ? 0
+        ? 0.0
         : (volumes.last - averageVolume) / volumeDeviation;
 
     final donchianWindow = candles.sublist(
@@ -147,7 +147,7 @@ abstract final class TechnicalIndicatorEngine {
           latestAtr,
       atr14: latestAtr,
       atrPercent: latestAtr / closes.last * 100,
-      atrExpansionRatio: atrBaseline <= 0 ? 1 : latestAtr / atrBaseline,
+      atrExpansionRatio: atrBaseline <= 0 ? 1.0 : latestAtr / atrBaseline,
       rsi14: _rsi(closes, 14),
       adx14: directional.$1,
       plusDi14: directional.$2,
@@ -160,9 +160,9 @@ abstract final class TechnicalIndicatorEngine {
       bollingerUpper20: bollingerUpper,
       bollingerLower20: bollingerLower,
       bollingerBandwidthPercent: bollingerMiddle <= 0
-          ? 0
+          ? 0.0
           : (bollingerUpper - bollingerLower) / bollingerMiddle * 100,
-      trendEfficiency20: pathLength <= 0 ? 0 : netMove / pathLength,
+      trendEfficiency20: pathLength <= 0 ? 0.0 : netMove / pathLength,
       recentSwingHigh: swingWindow
           .map((candle) => candle.high)
           .reduce(math.max),
