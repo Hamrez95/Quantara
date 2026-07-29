@@ -309,11 +309,12 @@ abstract final class TradeIdeaFactory {
     return distance <= math.max(0.008, analysis.volatilityPercent / 100 * 1.4);
   }
 
-  static String strategyVersion(AnalysisStrategy strategy) => switch (strategy) {
-    AnalysisStrategy.structureZones => 'structure-zones/1.2',
-    AnalysisStrategy.trendPullback => 'trend-pullback/2.0',
-    AnalysisStrategy.momentumContinuation => 'donchian-breakout/2.0',
-  };
+  static String strategyVersion(AnalysisStrategy strategy) =>
+      switch (strategy) {
+        AnalysisStrategy.structureZones => 'structure-zones/1.2',
+        AnalysisStrategy.trendPullback => 'trend-pullback/2.0',
+        AnalysisStrategy.momentumContinuation => 'donchian-breakout/2.0',
+      };
 
   static int confidenceLeverageCap(
     double directionStrength,
