@@ -198,8 +198,7 @@ abstract final class TradeIdeaFactory {
         .clamp(1, 100)
         .toInt();
     final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
-    final fundedUnits =
-        targetMargin * recommendedLeverage / conservativeEntry;
+    final fundedUnits = targetMargin * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     final notionalValue = positionSize * conservativeEntry;
     final requiredMargin = notionalValue / recommendedLeverage;
