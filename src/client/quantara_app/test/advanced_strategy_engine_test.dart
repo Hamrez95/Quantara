@@ -52,13 +52,13 @@ void main() {
         candles: candles,
         zones: [
           ChartPriceZone(
-            lower: 98.55,
-            upper: 99.15,
+            lower: 99.15,
+            upper: 99.70,
             role: ChartZoneRole.support,
             state: ChartZoneState.active,
             touchCount: 4,
             strength: 0.86,
-            distancePercent: 1.2,
+            distancePercent: 0.8,
             lastTouchedAt: candles.last.openTime,
             explanation: 'validated support',
           ),
