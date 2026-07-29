@@ -68,8 +68,12 @@ abstract final class TechnicalIndicatorEngine {
       }
     }
 
-    final closes = candles.map((candle) => candle.close).toList(growable: false);
-    final volumes = candles.map((candle) => candle.volume).toList(growable: false);
+    final closes = candles
+        .map((candle) => candle.close)
+        .toList(growable: false);
+    final volumes = candles
+        .map((candle) => candle.volume)
+        .toList(growable: false);
     final ema20Series = _emaSeries(closes, 20);
     final ema50Series = _emaSeries(closes, 50);
     final ema200Series = _emaSeries(closes, 200);
@@ -78,15 +82,23 @@ abstract final class TechnicalIndicatorEngine {
     final latestAtr = math.max(atrSeries.last, closes.last * 0.000001);
     final slopeLookback = math.min(5, candles.length - 1);
 
-    final previousVolumes = volumes.sublist(volumes.length - 21, volumes.length - 1);
+    final previousVolumes = volumes.sublist(
+      volumes.length - 21,
+      volumes.length - 1,
+    );
     final averageVolume = _average(previousVolumes);
     final volumeDeviation = _standardDeviation(previousVolumes, averageVolume);
-    final relativeVolume = averageVolume <= 0 ? 0 : volumes.last / averageVolume;
+    final relativeVolume = averageVolume <= 0
+        ? 0
+        : volumes.last / averageVolume;
     final volumeZScore = volumeDeviation <= 0
         ? 0
         : (volumes.last - averageVolume) / volumeDeviation;
 
-    final donchianWindow = candles.sublist(candles.length - 21, candles.length - 1);
+    final donchianWindow = candles.sublist(
+      candles.length - 21,
+      candles.length - 1,
+    );
     final previousDonchianHigh = donchianWindow
         .map((candle) => candle.high)
         .reduce(math.max);
@@ -126,10 +138,12 @@ abstract final class TechnicalIndicatorEngine {
       ema50: ema50Series.last,
       ema200: ema200Series.last,
       ema20SlopeAtr:
-          (ema20Series.last - ema20Series[ema20Series.length - 1 - slopeLookback]) /
+          (ema20Series.last -
+              ema20Series[ema20Series.length - 1 - slopeLookback]) /
           latestAtr,
       ema50SlopeAtr:
-          (ema50Series.last - ema50Series[ema50Series.length - 1 - slopeLookback]) /
+          (ema50Series.last -
+              ema50Series[ema50Series.length - 1 - slopeLookback]) /
           latestAtr,
       atr14: latestAtr,
       atrPercent: latestAtr / closes.last * 100,
@@ -149,7 +163,9 @@ abstract final class TechnicalIndicatorEngine {
           ? 0
           : (bollingerUpper - bollingerLower) / bollingerMiddle * 100,
       trendEfficiency20: pathLength <= 0 ? 0 : netMove / pathLength,
-      recentSwingHigh: swingWindow.map((candle) => candle.high).reduce(math.max),
+      recentSwingHigh: swingWindow
+          .map((candle) => candle.high)
+          .reduce(math.max),
       recentSwingLow: swingWindow.map((candle) => candle.low).reduce(math.min),
     );
   }
