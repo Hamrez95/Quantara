@@ -21,12 +21,21 @@ class TradingViewLightweightChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    // A Flutter-rendered chart avoids Android PlatformView/WebView lifecycle
-    // leaks when navigating back to the signal inbox. It also keeps the chart
-    // available offline and removes a packaging dependency on HTML assets.
+    final overlay = idea.isActionable
+        ? ChartTradeOverlay(
+            entry: (idea.entryLower! + idea.entryUpper!) / 2,
+            stop: idea.stopLoss!,
+            targets: idea.targets,
+            isLong: idea.direction == TradeDirection.long,
+          )
+        : null;
     final chart = RepaintBoundary(
-      key: ValueKey('quantara-chart-${analysis.fingerprint}'),
-      child: QuantaraCandlestickChart(analysis: analysis, height: height),
+      key: ValueKey('quantara-chart-${analysis.fingerprint}-${idea.setupId}'),
+      child: QuantaraCandlestickChart(
+        analysis: analysis,
+        tradeOverlay: overlay,
+        height: height,
+      ),
     );
     return Semantics(
       container: true,
@@ -41,5 +50,4 @@ class TradingViewLightweightChart extends StatelessWidget {
       child: ExcludeSemantics(child: chart),
     );
   }
-
 }
