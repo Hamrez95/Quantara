@@ -12,10 +12,12 @@ void main() {
       'android/app/src/main/AndroidManifest.xml',
     ).readAsStringSync();
     final activity = File(
-      'android/app/src/main/kotlin/com/quantara/quantara_app/SafeMainActivity.kt',
+      'android/app/src/main/kotlin/com/quantara/quantara_app/'
+      'SafeMainActivity.kt',
     ).readAsStringSync();
     final application = File(
-      'android/app/src/main/kotlin/com/quantara/quantara_app/QuantaraApplication.kt',
+      'android/app/src/main/kotlin/com/quantara/quantara_app/'
+      'QuantaraApplication.kt',
     ).readAsStringSync();
     final pubspec = File('pubspec.yaml').readAsStringSync();
 
