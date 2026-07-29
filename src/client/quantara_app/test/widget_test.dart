@@ -53,7 +53,7 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('اجرای تست استراتژی'));
+    await tester.tap(find.text('ساخت گزارش تاریخی'));
     await tester.pumpAndSettle();
 
     expect(find.text('کارنامه تست'), findsOneWidget);

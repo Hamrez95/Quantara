@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quantara_app/features/market_analysis/domain/market_chart_models.dart';
 import 'package:quantara_app/features/owner_alpha/application/owner_alpha_controller.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
@@ -175,7 +176,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       languageCode: languageCode,
     );
     final result = base.radar.first;
-    final analysis = result.analysis;
+    final analysis = _actionableAnalysis();
     final idea = TradeIdea(
       symbol: result.quote.symbol,
       timeframe: '1h',
@@ -190,6 +191,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       positionSize: 10,
       notionalValue: 1000,
       recommendedLeverage: 2,
+      maximumSafeLeverage: 8,
       requiredMargin: 500,
       estimatedRoundTripCosts: 2,
       setupId: 'BTCUSDT|1h|long|fixed-closed-candle',
@@ -215,6 +217,56 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       generatedAt: base.generatedAt,
     );
   }
+}
+
+TimeframeChartAnalysis _actionableAnalysis() {
+  final candles = List.generate(60, (index) {
+    final open = 100 + index * 0.5;
+    return ChartCandle(
+      openTime: DateTime.utc(2026, 7, 26).add(Duration(hours: index)),
+      open: open,
+      high: open + 1.2,
+      low: open - 1,
+      close: open + 0.5,
+      volume: 1000 + index.toDouble(),
+    );
+  });
+  final current = candles.last.close;
+  return TimeframeChartAnalysis(
+    symbol: 'BTCUSDT',
+    timeframe: '1h',
+    candles: candles,
+    zones: [
+      ChartPriceZone(
+        lower: current - 4.5,
+        upper: current - 3.5,
+        role: ChartZoneRole.support,
+        state: ChartZoneState.active,
+        touchCount: 4,
+        strength: 0.8,
+        distancePercent: 3,
+        lastTouchedAt: candles[45].openTime,
+        explanation: 'support',
+      ),
+      ChartPriceZone(
+        lower: current + 14,
+        upper: current + 16,
+        role: ChartZoneRole.resistance,
+        state: ChartZoneState.active,
+        touchCount: 3,
+        strength: 0.72,
+        distancePercent: 10,
+        lastTouchedAt: candles[48].openTime,
+        explanation: 'resistance',
+      ),
+    ],
+    direction: ChartDirection.bullish,
+    directionStrength: 0.8,
+    volatilityPercent: 0.8,
+    summary: 'actionable fixture',
+    generatedAt: DateTime.utc(2026, 7, 29),
+    fingerprint: 'controller-actionable-fixture',
+  );
 }
 
 final class _SwitchableRepository implements OwnerAlphaRepository {
