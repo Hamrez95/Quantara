@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/owner_alpha_models.dart';
@@ -40,9 +41,9 @@ final class PlatformOpportunityStateStore implements OpportunityStateStore {
                   .toSet(),
           notifiedSetupIds:
               (await preferences.getStringList(
-                        opportunityNotifiedSetupIdsKey,
-                      ) ??
-                      const <String>[])
+                    opportunityNotifiedSetupIdsKey,
+                  ) ??
+                  const <String>[])
                   .toSet(),
           journal: decodeSignalJournal(sharedJournal),
           lastBackgroundScanAt: DateTime.tryParse(
@@ -165,16 +166,35 @@ final class PlatformSetupNotificationGateway
 
   final MethodChannel _channel;
 
+  static final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
+  static Future<void>? _notificationInitialization;
+
+  static Future<void> _ensureInitialized() {
+    return _notificationInitialization ??= _initializeNotifications();
+  }
+
+  static Future<void> _initializeNotifications() async {
+    await _notifications.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('ic_quantara_launcher'),
+      ),
+    );
+  }
+
   @override
   Future<bool> requestPermission() async {
     try {
-      return await _channel.invokeMethod<bool>(
-            'requestNotificationPermission',
-          ) ??
-          false;
-    } on PlatformException {
-      return false;
-    } on MissingPluginException {
+      await _ensureInitialized();
+      final android = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      if (android == null) {
+        return false;
+      }
+      return await android.requestNotificationsPermission() ?? false;
+    } on Object {
       return false;
     }
   }
@@ -196,22 +216,43 @@ final class PlatformSetupNotificationGateway
       return;
     }
     try {
-      await _channel.invokeMethod<void>('showSetupNotification', {
-        'setupId': idea.setupId,
-        'symbol': idea.symbol,
-        'timeframe': idea.timeframe,
-        'direction': idea.direction.name,
-        'entryLower': idea.entryLower,
-        'entryUpper': idea.entryUpper,
-        'stopLoss': idea.stopLoss,
-        'targets': idea.targets,
-        'leverage': idea.recommendedLeverage,
-        'languageCode': languageCode,
-      });
-    } on PlatformException {
+      await _ensureInitialized();
+      final persian = languageCode != 'en';
+      final direction = persian
+          ? (idea.direction == TradeDirection.long ? 'خرید' : 'فروش')
+          : idea.direction.name.toUpperCase();
+      final title = persian
+          ? 'ستاپ $direction · ${idea.symbol} · ${idea.timeframe}'
+          : '$direction setup · ${idea.symbol} · ${idea.timeframe}';
+      final body = persian
+          ? 'ورود ${idea.entryLower}–${idea.entryUpper} | SL ${idea.stopLoss} | TP ${idea.targets.join(' / ')} | اهرم ${idea.recommendedLeverage}x'
+          : 'Entry ${idea.entryLower}–${idea.entryUpper} | SL ${idea.stopLoss} | TP ${idea.targets.join(' / ')} | ${idea.recommendedLeverage}x';
+      await _notifications.show(
+        id: _stableNotificationId(idea.setupId),
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'quantara_setup_alerts_v1',
+            'Quantara setups',
+            channelDescription: 'New paper-trading setup alerts after a scan',
+            importance: Importance.high,
+            priority: Priority.high,
+            category: AndroidNotificationCategory.recommendation,
+          ),
+        ),
+        payload: idea.setupId,
+      );
+    } on Object {
       // Notification delivery is best effort and must not fail a scan.
-    } on MissingPluginException {
-      // Tests and non-Android previews intentionally have no native channel.
     }
   }
+}
+
+int _stableNotificationId(String value) {
+  var hash = 17;
+  for (final unit in value.codeUnits) {
+    hash = ((hash * 31) + unit) & 0x7fffffff;
+  }
+  return hash;
 }
