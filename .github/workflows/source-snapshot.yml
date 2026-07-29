@@ -18,6 +18,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.12.2
+
+      - name: Format source snapshot
+        working-directory: src/client/quantara_app
+        run: dart format lib test
+
       - name: Upload strategy source
         uses: actions/upload-artifact@v4
         with:
