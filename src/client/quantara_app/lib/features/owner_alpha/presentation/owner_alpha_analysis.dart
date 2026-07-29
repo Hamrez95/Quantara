@@ -68,7 +68,13 @@ class _AlphaAnalysisView extends StatelessWidget {
                   showSelectedIcon: false,
                   segments: [
                     for (final timeframe in OwnerAlphaController.timeframes)
-                      ButtonSegment(value: timeframe, label: Text(timeframe)),
+                      ButtonSegment(
+                        value: timeframe,
+                        label: Text(
+                          timeframe,
+                          key: ValueKey('alpha-timeframe-$timeframe'),
+                        ),
+                      ),
                   ],
                   selected: {controller.selectedTimeframe},
                   onSelectionChanged: controller.isLoading
