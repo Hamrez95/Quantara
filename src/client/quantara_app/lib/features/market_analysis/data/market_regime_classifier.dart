@@ -26,7 +26,8 @@ abstract final class MarketRegimeClassifier {
                   (indicators.relativeVolume20 - 1).clamp(0, 2) * 10 +
                   (indicators.adx14 / 100).clamp(0, 1) * 14)
               .round()
-              .clamp(0, 96);
+              .clamp(0, 96)
+              .toInt();
       return MarketRegimeAssessment(
         regime: MarketRegime.breakoutExpansion,
         confidencePercent: confidence,
@@ -58,7 +59,8 @@ abstract final class MarketRegimeClassifier {
                   indicators.trendEfficiency20.clamp(0, 1) * 18 +
                   analysis.directionStrength.clamp(0, 1) * 12)
               .round()
-              .clamp(0, 94);
+              .clamp(0, 94)
+              .toInt();
       return MarketRegimeAssessment(
         regime: MarketRegime.directionalTrend,
         confidencePercent: confidence,
@@ -82,7 +84,8 @@ abstract final class MarketRegimeClassifier {
                   (1 - indicators.trendEfficiency20).clamp(0, 1) * 18 +
                   (1.2 - indicators.atrExpansionRatio).clamp(0, 0.5) * 20)
               .round()
-              .clamp(0, 92);
+              .clamp(0, 92)
+              .toInt();
       return MarketRegimeAssessment(
         regime: MarketRegime.range,
         confidencePercent: confidence,
