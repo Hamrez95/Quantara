@@ -333,10 +333,7 @@ abstract final class AdvancedStrategyEngine {
         .length;
     final score =
         (58 +
-                (indicators.adx14 / 35 * 14)
-                    .round()
-                    .clamp(0, 14)
-                    .toInt() +
+                (indicators.adx14 / 35 * 14).round().clamp(0, 14).toInt() +
                 (pullback || cloudBreak ? 14 : 0) +
                 (candleTrigger ? 7 : 0) +
                 math.min(7, aligned * 2))
