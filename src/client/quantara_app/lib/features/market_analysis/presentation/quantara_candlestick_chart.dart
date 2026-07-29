@@ -264,14 +264,7 @@ final class _CandlestickPainter extends CustomPainter {
       'ENTRY',
       colorScheme.onSurface,
     );
-    _paintTradeLine(
-      canvas,
-      plot,
-      startX,
-      stopY,
-      'SL',
-      QuantaraColors.danger,
-    );
+    _paintTradeLine(canvas, plot, startX, stopY, 'SL', QuantaraColors.danger);
     for (var index = 0; index < overlay.targets.length; index++) {
       _paintTradeLine(
         canvas,
@@ -360,10 +353,7 @@ final class _CandlestickPainter extends CustomPainter {
         centerX + bodyWidth / 2,
         volumeRect.bottom,
       );
-      canvas.drawRect(
-        volumeBar,
-        Paint()..color = color.withValues(alpha: 0.3),
-      );
+      canvas.drawRect(volumeBar, Paint()..color = color.withValues(alpha: 0.3));
     }
   }
 
