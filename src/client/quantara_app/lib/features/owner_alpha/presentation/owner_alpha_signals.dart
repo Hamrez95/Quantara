@@ -26,6 +26,10 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     final controller = widget.controller;
     final now = DateTime.now().toUtc();
     final all = controller.signalJournal;
+    final priorityBySetupId = SignalTimeframePriorityResolver.resolve(
+      all,
+      now: now,
+    );
     final filtered = all
         .where((entry) {
           final lifecycle = entry.lifecycle(
@@ -148,6 +152,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
           for (var index = 0; index < filtered.length; index++) ...[
             _SignalJournalCard(
               entry: filtered[index],
+              priority: priorityBySetupId[filtered[index].setupId],
               taken: controller.isTaken(filtered[index].setupId),
               onOpen: () => widget.onOpenAnalysis(filtered[index].symbol),
               onTakenChanged: (value) =>
@@ -333,6 +338,7 @@ class _SignalPolicyCard extends StatelessWidget {
 class _SignalJournalCard extends StatelessWidget {
   const _SignalJournalCard({
     required this.entry,
+    required this.priority,
     required this.taken,
     required this.onOpen,
     required this.onTakenChanged,
@@ -342,6 +348,7 @@ class _SignalJournalCard extends StatelessWidget {
   });
 
   final SignalJournalEntry entry;
+  final SignalTimeframePriorityKind? priority;
   final bool taken;
   final VoidCallback onOpen;
   final ValueChanged<bool> onTakenChanged;
@@ -426,6 +433,18 @@ class _SignalJournalCard extends StatelessWidget {
                   ),
                   color: QuantaraColors.violet,
                 ),
+                if (priority == SignalTimeframePriorityKind.primary)
+                  StatusPill(
+                    label: _t(context, 'گزینه اصلی', 'Primary setup'),
+                    color: QuantaraColors.cyan,
+                    icon: Icons.stars_rounded,
+                  ),
+                if (priority == SignalTimeframePriorityKind.conflict)
+                  StatusPill(
+                    label: _t(context, 'تعارض تایم‌فریم', 'Timeframe conflict'),
+                    color: QuantaraColors.danger,
+                    icon: Icons.sync_problem_rounded,
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -443,6 +462,34 @@ class _SignalJournalCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(entry.summary),
+            if (priority == SignalTimeframePriorityKind.primary) ...[
+              const SizedBox(height: 8),
+              Text(
+                _t(
+                  context,
+                  'برای این نماد، این تایم‌فریم گزینه اجرای اصلی است؛ تایم بالاتر جهت و تایم پایین‌تر فقط ماشه ورود است.',
+                  'This is the primary execution timeframe for the symbol; higher timeframes define bias and lower timeframes only refine the trigger.',
+                ),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: QuantaraColors.cyan,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            if (priority == SignalTimeframePriorityKind.conflict) ...[
+              const SizedBox(height: 8),
+              Text(
+                _t(
+                  context,
+                  'جهت ستاپ‌های این نماد بین تایم‌فریم‌ها متناقض است؛ هم‌زمان هر دو جهت را نگیر و تا هم‌جهتی صبر کن.',
+                  'This symbol has conflicting setup directions across timeframes. Do not take both directions; wait for alignment.',
+                ),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: QuantaraColors.danger,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 18,
