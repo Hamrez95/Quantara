@@ -216,13 +216,13 @@ abstract final class AdvancedStrategyEngine {
     late final bool selectedLong;
     late final ChartPriceZone zone;
     if (long && short) {
-      final longZone = support!;
-      final shortZone = resistance!;
+      final longZone = support;
+      final shortZone = resistance;
       selectedLong = longZone.strength >= shortZone.strength;
       zone = selectedLong ? longZone : shortZone;
     } else if (long) {
       selectedLong = true;
-      zone = support!;
+      zone = support;
     } else {
       selectedLong = false;
       zone = resistance!;
