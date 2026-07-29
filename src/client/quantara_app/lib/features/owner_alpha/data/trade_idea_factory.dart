@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../domain/owner_alpha_models.dart';
+import 'advanced_strategy_engine.dart';
 import 'strategy_engine_v2.dart';
 
 abstract final class TradeIdeaFactory {
@@ -22,6 +23,19 @@ abstract final class TradeIdeaFactory {
     }
     if (!riskPercent.isFinite || riskPercent <= 0 || riskPercent > 2) {
       throw ArgumentError.value(riskPercent, 'riskPercent');
+    }
+
+    final advancedIdea = AdvancedStrategyEngine.tryCreate(
+      analysis: analysis,
+      capital: capital,
+      riskPercent: riskPercent,
+      languageCode: languageCode,
+      strategy: strategy,
+      cadence: cadence,
+      confluence: confluence,
+    );
+    if (advancedIdea != null) {
+      return advancedIdea;
     }
 
     final v2Idea = StrategyEngineV2.tryCreate(
