@@ -7,8 +7,7 @@ import '../domain/owner_alpha_models.dart';
 
 const opportunityNotificationsEnabledKey =
     'quantara.opportunities.notifications-enabled';
-const opportunityTakenSetupIdsKey =
-    'quantara.opportunities.taken-setup-ids';
+const opportunityTakenSetupIdsKey = 'quantara.opportunities.taken-setup-ids';
 const opportunityNotifiedSetupIdsKey =
     'quantara.opportunities.notified-setup-ids';
 const opportunityJournalKey = 'quantara.opportunities.journal-json';
@@ -35,12 +34,16 @@ final class PlatformOpportunityStateStore implements OpportunityStateStore {
       if (sharedJournal != null || sharedEnabled != null) {
         return OpportunityState(
           notificationsEnabled: sharedEnabled ?? false,
-          takenSetupIds: (await preferences.getStringList(
-            opportunityTakenSetupIdsKey,
-          ) ?? const <String>[]).toSet(),
-          notifiedSetupIds: (await preferences.getStringList(
-            opportunityNotifiedSetupIdsKey,
-          ) ?? const <String>[]).toSet(),
+          takenSetupIds:
+              (await preferences.getStringList(opportunityTakenSetupIdsKey) ??
+                      const <String>[])
+                  .toSet(),
+          notifiedSetupIds:
+              (await preferences.getStringList(
+                        opportunityNotifiedSetupIdsKey,
+                      ) ??
+                      const <String>[])
+                  .toSet(),
           journal: decodeSignalJournal(sharedJournal),
           lastBackgroundScanAt: DateTime.tryParse(
             await preferences.getString(opportunityLastBackgroundScanKey) ?? '',
