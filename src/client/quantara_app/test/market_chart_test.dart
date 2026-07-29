@@ -5,6 +5,8 @@ import 'package:quantara_app/features/cockpit/data/mock_cockpit_repository.dart'
 import 'package:quantara_app/features/market_analysis/data/demo_market_chart_factory.dart';
 import 'package:quantara_app/features/market_analysis/presentation/quantara_candlestick_chart.dart';
 
+import 'support/owner_alpha_test_fakes.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -61,23 +63,23 @@ void main() {
     tester,
   ) async {
     _setViewport(tester, const Size(390, 844));
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('بازار'));
-    await tester.pump();
+    await tester.tap(find.text('تحلیل'));
+    await tester.pumpAndSettle();
     final chartFinder = find.byType(QuantaraCandlestickChart);
     expect(chartFinder, findsOneWidget);
     final oneHour = tester.widget<QuantaraCandlestickChart>(chartFinder);
 
-    await tester.tap(find.byKey(const ValueKey('timeframe-4h')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('alpha-timeframe-4h')));
+    await tester.pumpAndSettle();
     final fourHours = tester.widget<QuantaraCandlestickChart>(chartFinder);
 
     expect(oneHour.analysis.timeframe, '1h');
     expect(fourHours.analysis.timeframe, '4h');
     expect(oneHour.analysis.fingerprint, isNot(fourHours.analysis.fingerprint));
-    expect(find.text('حمایت و مقاومت'), findsOneWidget);
+    expect(find.text('حمایت و مقاومت روی نمودار'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -88,10 +90,10 @@ void main() {
     tester.platformDispatcher.textScaleFactorTestValue = 1.3;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('بازار'));
-    await tester.pump();
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تحلیل'));
+    await tester.pumpAndSettle();
 
     for (var attempt = 0; attempt < 4; attempt++) {
       final tooltip = attempt.isEven ? 'حالت روشن' : 'حالت تیره';
@@ -105,6 +107,16 @@ void main() {
     expect(find.byType(QuantaraCandlestickChart), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+Widget _testApp() {
+  return QuantaraApp(
+    repository: const FakeOwnerAlphaRepository(),
+    settingsStore: MemoryOwnerAlphaSettingsStore(),
+    preferencesStore: MemoryAppPreferencesStore(),
+    opportunityStateStore: MemoryOpportunityStateStore(),
+    notificationGateway: RecordingSetupNotificationGateway(),
+  );
 }
 
 void _setViewport(WidgetTester tester, Size size) {

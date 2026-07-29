@@ -2,42 +2,117 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/quantara_theme.dart';
+
 class SectionCard extends StatelessWidget {
   const SectionCard({
     required this.child,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(QuantaraSpacing.md),
     this.semanticLabel,
+    this.onTap,
+    this.accentColor,
     super.key,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final String? semanticLabel;
+  final VoidCallback? onTap;
+  final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final card = DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.72)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(QuantaraRadius.card);
+    Widget card = Material(
+      color: scheme.surface,
+      elevation: dark ? 0 : 0.5,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: radius,
+        side: BorderSide(color: scheme.outline.withValues(alpha: 0.78)),
       ),
-      child: Padding(padding: padding, child: child),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Stack(
+          children: [
+            Padding(padding: padding, child: child),
+            if (accentColor != null)
+              PositionedDirectional(
+                top: 0,
+                bottom: 0,
+                start: 0,
+                child: ColoredBox(
+                  color: accentColor!,
+                  child: const SizedBox(width: 3),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
 
-    if (semanticLabel == null) {
-      return card;
+    if (semanticLabel != null) {
+      card = Semantics(
+        container: true,
+        button: onTap != null,
+        label: semanticLabel,
+        child: card,
+      );
     }
+    return card;
+  }
+}
 
-    return Semantics(container: true, label: semanticLabel, child: card);
+class SectionHeading extends StatelessWidget {
+  const SectionHeading({
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    super.key,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: QuantaraSpacing.xxs),
+                Text(
+                  subtitle!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: QuantaraSpacing.sm),
+          trailing!,
+        ],
+      ],
+    );
   }
 }
 
@@ -57,29 +132,34 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: label,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 15, color: color),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w800,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.11),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withValues(alpha: 0.26)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: color),
+                  const SizedBox(width: 5),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    softWrap: true,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -103,40 +183,203 @@ class MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-
+    final theme = Theme.of(context);
+    final marketType =
+        theme.extension<QuantaraMarketTypography>() ??
+        const QuantaraMarketTypography(numericFeatures: []);
     return Semantics(
       label: '$label: $value',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: textTheme.labelMedium?.copyWith(
-              color: onSurface.withValues(alpha: 0.62),
+      child: ExcludeSemantics(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 92),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: QuantaraSpacing.xxs),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+                softWrap: false,
+                textDirection: TextDirection.ltr,
+                style: marketType.numeric(
+                  theme.textTheme.titleMedium?.copyWith(
+                    color: valueColor,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.15,
+                  ),
+                ),
+              ),
+              if (caption != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  caption!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MarketListRow extends StatelessWidget {
+  const MarketListRow({
+    required this.symbol,
+    required this.name,
+    required this.price,
+    required this.change,
+    required this.changeColor,
+    required this.onTap,
+    this.leadingLabel,
+    this.trailing,
+    super.key,
+  });
+
+  final String symbol;
+  final String name;
+  final String price;
+  final String change;
+  final Color changeColor;
+  final VoidCallback onTap;
+  final String? leadingLabel;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final marketType =
+        theme.extension<QuantaraMarketTypography>() ??
+        const QuantaraMarketTypography(numericFeatures: []);
+    final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.35;
+    final identity = Row(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.7),
             ),
           ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: textTheme.titleLarge?.copyWith(
-              color: valueColor,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-            ),
-          ),
-          if (caption != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              caption!,
-              style: textTheme.bodySmall?.copyWith(
-                color: onSurface.withValues(alpha: 0.52),
+          child: SizedBox.square(
+            dimension: 40,
+            child: Center(
+              child: Text(
+                leadingLabel ?? symbol.characters.first,
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
-          ],
-        ],
+          ),
+        ),
+        const SizedBox(width: QuantaraSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                symbol,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                name,
+                maxLines: largeText ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final quote = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          price,
+          textDirection: TextDirection.ltr,
+          style: marketType.numeric(
+            theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          change,
+          textDirection: TextDirection.ltr,
+          style: marketType.numeric(
+            theme.textTheme.bodyMedium?.copyWith(
+              color: changeColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+    return Semantics(
+      button: true,
+      label: '$symbol، $price، $change',
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: QuantaraSpacing.sm,
+            vertical: QuantaraSpacing.sm,
+          ),
+          child: largeText
+              ? Column(
+                  children: [
+                    identity,
+                    const SizedBox(height: QuantaraSpacing.xs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: quote,
+                          ),
+                        ),
+                        if (trailing != null) ...[
+                          const SizedBox(width: QuantaraSpacing.xs),
+                          trailing!,
+                        ],
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: identity),
+                    const SizedBox(width: QuantaraSpacing.sm),
+                    quote,
+                    if (trailing != null) ...[
+                      const SizedBox(width: QuantaraSpacing.xs),
+                      trailing!,
+                    ],
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -161,7 +404,7 @@ class RiskProgress extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         child: LinearProgressIndicator(
           value: value,
-          minHeight: 9,
+          minHeight: 7,
           backgroundColor: scheme.outline.withValues(alpha: 0.32),
           valueColor: AlwaysStoppedAnimation<Color>(
             value > 0.75 ? scheme.error : scheme.primary,
@@ -221,33 +464,33 @@ class _SparklinePainter extends CustomPainter {
       final dx = size.width * index / (values.length - 1);
       final normalized = range == 0 ? 0.5 : (values[index] - minimum) / range;
       final dy = size.height - (normalized * (size.height - 8)) - 4;
-      if (index == 0) {
-        path.moveTo(dx, dy);
-      } else {
-        path.lineTo(dx, dy);
-      }
+      index == 0 ? path.moveTo(dx, dy) : path.lineTo(dx, dy);
     }
 
-    final stroke = Paint()
-      ..color = color
-      ..strokeWidth = 2.4
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path, stroke);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke,
+    );
 
     final fillPath = Path.from(path)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
-    final fill = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0)],
-      ).createShader(Offset.zero & size)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(fillPath, fill);
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0)],
+        ).createShader(Offset.zero & size)
+        ..style = PaintingStyle.fill,
+    );
   }
 
   @override

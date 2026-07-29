@@ -1,7 +1,7 @@
 name: quantara_app
 description: Quantara explainable market research and paper-trading cockpit.
 publish_to: 'none'
-version: 0.2.0+2
+version: 0.11.0+12
 
 environment:
   sdk: ^3.12.2
@@ -12,6 +12,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   http: ^1.6.0
+  flutter_local_notifications: ^22.2.0
+  shared_preferences: ^2.5.3
+  workmanager: ^0.9.0+3
 
 dev_dependencies:
   flutter_test:
@@ -20,3 +23,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Vazirmatn
+      fonts:
+        - asset: assets/fonts/Vazirmatn-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Vazirmatn-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Vazirmatn-Bold.ttf
+          weight: 700

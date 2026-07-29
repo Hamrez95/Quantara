@@ -1,129 +1,213 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/app/quantara_app.dart';
-import 'package:quantara_app/features/cockpit/data/mock_cockpit_repository.dart';
-import 'package:quantara_app/features/cockpit/domain/cockpit_models.dart';
+import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
+
+import 'support/owner_alpha_test_fakes.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('shows a concise and unmistakable demo dashboard', (
-    tester,
-  ) async {
+  testWidgets('shows the real market data safety boundary', (tester) async {
     _setViewport(tester, const Size(390, 844));
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.textContaining('نسخه آزمایشی'), findsWidgets);
-    expect(find.text('عدم معامله'), findsOneWidget);
-    expect(find.text('BTCUSDT'), findsWidgets);
-    expect(find.text('معامله با پول واقعی غیرفعال است'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('deep mobile scrolling never produces a layout exception', (
-    tester,
-  ) async {
-    _setViewport(tester, const Size(390, 844));
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
-
-    final list = find.byType(ListView);
-    expect(list, findsOneWidget);
-
-    for (var attempt = 0; attempt < 8; attempt++) {
-      await tester.drag(list, const Offset(0, -520));
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-    }
-
-    for (var attempt = 0; attempt < 8; attempt++) {
-      await tester.drag(list, const Offset(0, 520));
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-    }
-  });
-
-  testWidgets('theme can be toggled repeatedly without assertions', (
-    tester,
-  ) async {
-    _setViewport(tester, const Size(390, 844));
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
-
-    for (var attempt = 0; attempt < 8; attempt++) {
-      final tooltip = attempt.isEven ? 'حالت روشن' : 'حالت تیره';
-      await tester.tap(find.byTooltip(tooltip));
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-    }
-  });
-
-  testWidgets('small phone with larger text remains stable', (tester) async {
-    _setViewport(tester, const Size(360, 800));
-    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.text('عدم معامله'), findsOneWidget);
-    await tester.drag(find.byType(ListView), const Offset(0, -700));
-    await tester.pump();
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('market selection changes the dynamic chart source', (
-    tester,
-  ) async {
-    _setViewport(tester, const Size(390, 844));
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
-
-    await tester.tap(find.text('بازار'));
-    await tester.pump();
-    expect(find.text('BTCUSDT'), findsWidgets);
-
-    final ethereum = find.text('ETHUSDT').last;
-    await tester.ensureVisible(ethereum);
+    await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
-    await tester.tap(ethereum);
-    await tester.pump();
-    expect(find.text('ETHUSDT'), findsWidgets);
+
+    expect(find.textContaining('داده بازار واقعی'), findsOneWidget);
+    expect(find.textContaining('بازار عمومی Bitunix'), findsOneWidget);
+    expect(find.textContaining('بدون سفارش واقعی'), findsOneWidget);
+    expect(find.text('رادار موقعیت‌ها'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('uses side navigation on a desktop-sized viewport', (
+  testWidgets('opens analysis with chart, timeframes, and risk plan', (
     tester,
   ) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تحلیل'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Lightweight Charts'), findsOneWidget);
+    expect(find.text('هم‌سویی چندتایم‌فریمی'), findsOneWidget);
+    expect(find.text('پیشنهاد مدیریت سرمایه'), findsOneWidget);
+    expect(find.text('حمایت و مقاومت روی نمودار'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('runs a symbol-specific paper strategy report', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تحلیل'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تست این تحلیل در آزمایشگاه'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('آزمایشگاه'), findsOneWidget);
+    expect(find.text('BTCUSDT'), findsWidgets);
+    expect(find.text('پیپر / تحقیق'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ساخت گزارش تاریخی'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('کارنامه تست'), findsOneWidget);
+    expect(find.text('وین‌ریت'), findsOneWidget);
+    expect(find.text('SL'), findsOneWidget);
+    expect(find.text('TP1 / TP2 / TP3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('adds a verified symbol to the watchlist', (tester) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('واچ‌لیست'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('افزودن'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'XRP');
+    await tester.tap(find.text('بررسی و افزودن'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('XRPUSDT'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens profile with settings and honest connection states', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('پروفایل'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bitunix Futures'), findsOneWidget);
+    expect(find.text('پروفایل و تنظیمات'), findsOneWidget);
+    expect(find.text('زبان'), findsOneWidget);
+    expect(find.text('حساب خصوصی و اجرای سفارش'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('switches Persian RTL to English LTR without losing state', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(390, 844));
+    final preferences = MemoryAppPreferencesStore();
+    await tester.pumpWidget(_testApp(preferencesStore: preferences));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('پروفایل'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('انگلیسی'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile & settings'), findsOneWidget);
+    expect(find.text('Radar'), findsOneWidget);
+    expect(
+      Directionality.of(tester.element(find.text('Profile & settings'))),
+      TextDirection.ltr,
+    );
+    expect(preferences.value?.languageCode, 'en');
+
+    await tester.tap(find.text('Radar').last);
+    await tester.pumpAndSettle();
+    expect(find.text('BTCUSDT'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('theme toggles and deep scrolling stay stable', (tester) async {
+    _setViewport(tester, const Size(360, 800));
+    tester.platformDispatcher.textScaleFactorTestValue = 1.25;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('حالت روشن'));
+    await tester.pump();
+    await tester.tap(find.text('تحلیل'));
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 6; attempt++) {
+      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('uses side navigation on desktop', (tester) async {
     _setViewport(tester, const Size(1440, 1000));
-    await tester.pumpWidget(const QuantaraApp());
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
 
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
-    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps loading and loaded states explicit', (tester) async {
-    final repository = _ControlledRepository();
+  testWidgets('all destinations survive small width and large text', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(320, 568));
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(_testApp());
+    await tester.pumpAndSettle();
+
+    for (final target in {
+      Icons.view_list_outlined: 'واچ‌لیست',
+      Icons.candlestick_chart_outlined: 'تحلیل',
+      Icons.person_outline_rounded: 'پروفایل',
+      Icons.radar_outlined: 'رادار',
+    }.entries) {
+      await tester.tap(find.byIcon(target.key));
+      await tester.pumpAndSettle();
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'overflow on ${target.value}',
+      );
+    }
+  });
+
+  testWidgets('profile remains available when market loading fails', (
+    tester,
+  ) async {
     _setViewport(tester, const Size(390, 844));
-    await tester.pumpWidget(QuantaraApp(repository: repository));
+    await tester.pumpWidget(
+      QuantaraApp(
+        repository: const _FailingRepository(),
+        settingsStore: MemoryOwnerAlphaSettingsStore(),
+        preferencesStore: MemoryAppPreferencesStore(),
+        opportunityStateStore: MemoryOpportunityStateStore(),
+        notificationGateway: RecordingSetupNotificationGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(find.text('عدم معامله'), findsNothing);
+    await tester.tap(find.text('پروفایل'));
+    await tester.pumpAndSettle();
 
-    repository.complete(MockCockpitRepository.demoSnapshot);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.text('عدم معامله'), findsOneWidget);
+    expect(find.text('پروفایل و تنظیمات'), findsOneWidget);
+    expect(find.text('Bitunix Futures'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+Widget _testApp({MemoryAppPreferencesStore? preferencesStore}) {
+  return QuantaraApp(
+    repository: const FakeOwnerAlphaRepository(),
+    settingsStore: MemoryOwnerAlphaSettingsStore(),
+    preferencesStore: preferencesStore ?? MemoryAppPreferencesStore(),
+    opportunityStateStore: MemoryOpportunityStateStore(),
+    notificationGateway: RecordingSetupNotificationGateway(),
+  );
 }
 
 void _setViewport(WidgetTester tester, Size size) {
@@ -133,13 +217,18 @@ void _setViewport(WidgetTester tester, Size size) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
-final class _ControlledRepository implements CockpitRepository {
-  final Completer<CockpitSnapshot> _completer = Completer<CockpitSnapshot>();
+final class _FailingRepository implements OwnerAlphaRepository {
+  const _FailingRepository();
 
   @override
-  Future<CockpitSnapshot> load() => _completer.future;
-
-  void complete(CockpitSnapshot snapshot) {
-    _completer.complete(snapshot);
+  Future<OwnerAlphaSnapshot> scan({
+    required List<String> symbols,
+    required String selectedSymbol,
+    required String selectedTimeframe,
+    required double capital,
+    required double riskPercent,
+    required String languageCode,
+  }) {
+    throw StateError('offline');
   }
 }
