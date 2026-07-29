@@ -56,11 +56,7 @@ abstract final class IchimokuIndicatorEngine {
       period: 26,
     );
     final senkouA = (shiftedTenkan + shiftedKijun) / 2;
-    final senkouB = _midpoint(
-      candles,
-      endExclusive: shiftedEnd,
-      period: 52,
-    );
+    final senkouB = _midpoint(candles, endExclusive: shiftedEnd, period: 52);
 
     final referenceStart = math.max(0, shiftedEnd - 5);
     final reference = candles.sublist(referenceStart, shiftedEnd);
