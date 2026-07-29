@@ -15,6 +15,6 @@ import androidx.work.Configuration
 class QuantaraApplication : Application(), Configuration.Provider {
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setMinimumLoggingLevel(if (BuildConfig.DEBUG) Log.DEBUG else Log.ERROR)
+            .setMinimumLoggingLevel(Log.ERROR)
             .build()
 }
