@@ -10,7 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 /**
  * Minimal launch activity for Android 16.
  *
- * The legacy chart WebView and large persistence/notification channel surface
+ * The legacy chart renderer and large persistence/notification channel surface
  * stay out of the activity. The only custom channel opens Android's app settings;
  * notifications and persistence use maintained Flutter plugins.
  */
