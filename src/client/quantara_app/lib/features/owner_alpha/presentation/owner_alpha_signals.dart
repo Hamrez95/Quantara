@@ -155,6 +155,10 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
               onNote: () => _editNote(filtered[index]),
               onClose: (value) =>
                   controller.closeSignal(filtered[index].setupId, value),
+              onLeverageChanged: (value) => controller.setSignalLeverage(
+                filtered[index].setupId,
+                value,
+              ),
             ),
             if (index != filtered.length - 1) const SizedBox(height: 12),
           ],
@@ -336,6 +340,7 @@ class _SignalJournalCard extends StatelessWidget {
     required this.onTakenChanged,
     required this.onNote,
     required this.onClose,
+    required this.onLeverageChanged,
   });
 
   final SignalJournalEntry entry;
@@ -344,6 +349,7 @@ class _SignalJournalCard extends StatelessWidget {
   final ValueChanged<bool> onTakenChanged;
   final VoidCallback onNote;
   final ValueChanged<bool> onClose;
+  final ValueChanged<int> onLeverageChanged;
 
   bool _fa(BuildContext context) =>
       Directionality.of(context) == TextDirection.rtl;
@@ -405,6 +411,26 @@ class _SignalJournalCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                StatusPill(
+                  label: _outcomeLabel(context),
+                  color: _outcomeColor(context),
+                  icon: _outcomeIcon,
+                ),
+                StatusPill(
+                  label: _t(
+                    context,
+                    '${entry.selectedLeverage}x انتخابی',
+                    '${entry.selectedLeverage}x selected',
+                  ),
+                  color: QuantaraColors.violet,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _TimeLine(
               icon: Icons.schedule_rounded,
               label: _t(context, 'ساخته شد', 'Created'),
@@ -436,8 +462,64 @@ class _SignalJournalCard extends StatelessWidget {
                     value: QuantaraNumberFormat.marketValue(entry.stopLoss!),
                     valueColor: QuantaraColors.danger,
                   ),
+                for (var index = 0; index < entry.targets.length; index++)
+                  MetricTile(
+                    label: 'TP${index + 1}',
+                    value: QuantaraNumberFormat.marketValue(
+                      entry.targets[index],
+                    ),
+                    valueColor: QuantaraColors.success,
+                  ),
+                MetricTile(
+                  label: _t(context, 'ارزش پوزیشن', 'Position notional'),
+                  value: QuantaraNumberFormat.marketValue(
+                    entry.notionalValue,
+                    unit: 'USDT',
+                  ),
+                ),
+                MetricTile(
+                  label: _t(context, 'مارجین لازم', 'Required margin'),
+                  value: QuantaraNumberFormat.marketValue(
+                    entry.selectedMargin,
+                    unit: 'USDT',
+                  ),
+                ),
               ],
             ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int>(
+              key: ValueKey(
+                'journal-leverage-${entry.setupId}-${entry.selectedLeverage}',
+              ),
+              initialValue: entry.selectedLeverage,
+              decoration: InputDecoration(
+                labelText: _t(context, 'اهرم این پوزیشن', 'Position leverage'),
+                helperText: _t(
+                  context,
+                  'پیشنهاد ${entry.recommendedLeverage}x · سقف امن ${entry.maximumSafeLeverage}x',
+                  'Suggested ${entry.recommendedLeverage}x · safe cap ${entry.maximumSafeLeverage}x',
+                ),
+              ),
+              items: [
+                for (
+                  var leverage = 1;
+                  leverage <= entry.maximumSafeLeverage;
+                  leverage++
+                )
+                  DropdownMenuItem(
+                    value: leverage,
+                    child: Text('${leverage}x'),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) onLeverageChanged(value);
+              },
+            ),
+            if (entry.outcome != SignalOutcome.pendingEntry ||
+                !DateTime.now().toUtc().isBefore(entry.validUntil)) ...[
+              const SizedBox(height: 14),
+              _SignalPerformancePanel(entry: entry),
+            ],
             const SizedBox(height: 12),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
@@ -509,6 +591,52 @@ class _SignalJournalCard extends StatelessWidget {
       ? _t(context, 'خرید', 'Long')
       : _t(context, 'فروش', 'Short');
 
+  String _outcomeLabel(BuildContext context) => switch (entry.outcome) {
+    SignalOutcome.pendingEntry => _t(
+      context,
+      'منتظر فعال‌شدن ورود',
+      'Waiting for entry',
+    ),
+    SignalOutcome.active => _t(context, 'ورود فعال شد', 'Entry activated'),
+    SignalOutcome.expiredUntriggered => _t(
+      context,
+      'ورود فعال نشد',
+      'Entry not triggered',
+    ),
+    SignalOutcome.stopped => entry.highestTargetHit > 0
+        ? _t(
+            context,
+            'TP${entry.highestTargetHit} سپس SL',
+            'TP${entry.highestTargetHit}, then SL',
+          )
+        : 'SL',
+    SignalOutcome.tp1 => 'TP1',
+    SignalOutcome.tp2 => 'TP2',
+    SignalOutcome.tp3 => 'TP3',
+  };
+
+  Color _outcomeColor(BuildContext context) => switch (entry.outcome) {
+    SignalOutcome.pendingEntry =>
+      Theme.of(context).colorScheme.onSurfaceVariant,
+    SignalOutcome.active => QuantaraColors.cyan,
+    SignalOutcome.expiredUntriggered =>
+      Theme.of(context).colorScheme.outline,
+    SignalOutcome.stopped => QuantaraColors.danger,
+    SignalOutcome.tp1 ||
+    SignalOutcome.tp2 ||
+    SignalOutcome.tp3 => QuantaraColors.success,
+  };
+
+  IconData get _outcomeIcon => switch (entry.outcome) {
+    SignalOutcome.pendingEntry => Icons.hourglass_top_rounded,
+    SignalOutcome.active => Icons.play_circle_outline_rounded,
+    SignalOutcome.expiredUntriggered => Icons.timer_off_outlined,
+    SignalOutcome.stopped => Icons.cancel_outlined,
+    SignalOutcome.tp1 ||
+    SignalOutcome.tp2 ||
+    SignalOutcome.tp3 => Icons.check_circle_outline_rounded,
+  };
+
   String _strategy(BuildContext context) => switch (entry.strategy) {
     AnalysisStrategy.structureZones => _t(
       context,
@@ -542,6 +670,92 @@ class _SignalJournalCard extends StatelessWidget {
     return _fa(context)
         ? '${local.year}/${local.month}/${local.day}، ${local.hour}:$minute'
         : '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} ${local.hour}:$minute';
+  }
+}
+
+class _SignalPerformancePanel extends StatelessWidget {
+  const _SignalPerformancePanel({required this.entry});
+
+  final SignalJournalEntry entry;
+
+  bool _fa(BuildContext context) =>
+      Directionality.of(context) == TextDirection.rtl;
+  String _t(BuildContext context, String fa, String en) =>
+      _fa(context) ? fa : en;
+
+  @override
+  Widget build(BuildContext context) {
+    final pnl = entry.simulatedPnl;
+    final positive = (pnl ?? 0) >= 0;
+    final color = pnl == null
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : positive
+        ? QuantaraColors.success
+        : QuantaraColors.danger;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _t(context, 'نتیجه شبیه‌سازی', 'Simulated outcome'),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            if (pnl == null)
+              Text(
+                _t(
+                  context,
+                  'هنوز نتیجه قیمتی قطعی نشده؛ اسکن‌های بعدی خودکار ادامه می‌دهند.',
+                  'No price outcome yet; future scans keep tracking it automatically.',
+                ),
+              )
+            else
+              Wrap(
+                spacing: 18,
+                runSpacing: 10,
+                children: [
+                  MetricTile(
+                    label: _t(context, 'سود/زیان', 'P/L'),
+                    value:
+                        '${pnl >= 0 ? '+' : ''}${QuantaraNumberFormat.marketValue(pnl, unit: 'USDT')}',
+                    valueColor: color,
+                  ),
+                  MetricTile(
+                    label: _t(context, 'حرکت قیمت', 'Price move'),
+                    value:
+                        '${(entry.priceChangePercent ?? 0) >= 0 ? '+' : ''}${(entry.priceChangePercent ?? 0).toStringAsFixed(2)}%',
+                    valueColor: color,
+                  ),
+                  MetricTile(
+                    label: _t(context, 'بازده مارجین', 'Margin return'),
+                    value:
+                        '${(entry.marginReturnPercent ?? 0) >= 0 ? '+' : ''}${(entry.marginReturnPercent ?? 0).toStringAsFixed(2)}%',
+                    valueColor: color,
+                  ),
+                ],
+              ),
+            const SizedBox(height: 8),
+            Text(
+              _t(
+                context,
+                'این گزارش مستقل از دکمه «گرفتم» و با ورود محافظه‌کارانه محاسبه می‌شود. اگر بعد از TP حد ضرر بخورد، خروج پله‌ای مساوی لحاظ می‌شود؛ کارمزد و لغزش فرضی هم کسر شده‌اند.',
+                'This report runs even when “Taken” is off and uses a conservative fill. If price stops after a TP, equal scale-outs are modeled; estimated fees and slippage are deducted.',
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

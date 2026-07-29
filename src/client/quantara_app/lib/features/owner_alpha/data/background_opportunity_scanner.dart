@@ -4,13 +4,18 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../../market_analysis/domain/market_chart_models.dart';
 import '../domain/owner_alpha_models.dart';
 import 'bitunix_owner_alpha_repository.dart';
+import 'platform_opportunity_services.dart';
+import 'signal_outcome_evaluator.dart';
 import 'trade_idea_factory.dart';
 
 const _backgroundTask = 'quantara.opportunity-scan.v1';
 const _backgroundUniqueName = 'quantara-periodic-opportunity-scan';
-const _backgroundNotifiedKey = 'quantara.background.notified-setup-ids';
+const _backgroundImmediateName = 'quantara-immediate-opportunity-scan';
+const _backgroundConfigurationKey =
+    'quantara.opportunities.background-configuration';
 
 @pragma('vm:entry-point')
 void quantaraBackgroundDispatcher() {
@@ -69,19 +74,63 @@ void quantaraBackgroundDispatcher() {
                 },
               ),
       ].where((idea) => idea.isActionable).toList(growable: false);
+
+      final preferences = SharedPreferencesAsync();
+      final existingJournal = decodeSignalJournal(
+        await preferences.getString(opportunityJournalKey),
+      );
+      final journalById = {
+        for (final entry in existingJournal) entry.setupId: entry,
+      };
+      for (final idea in ideas) {
+        final existing = journalById[idea.setupId];
+        if (existing == null) {
+          journalById[idea.setupId] = SignalJournalEntry.fromIdea(idea);
+        } else if (existing.positionSize <= 0 ||
+            existing.notionalValue <= 0) {
+          journalById[idea.setupId] = SignalJournalEntry.fromIdea(
+            idea,
+          ).copyWith(note: existing.note, closed: existing.closed);
+        }
+      }
+      final analyses = <String, List<ChartCandle>>{
+        for (final result in snapshot.radar)
+          for (final analysis in result.analysesByTimeframe.values)
+            '${analysis.symbol}|${analysis.timeframe}':
+                analysis.candles.toList(growable: false),
+      };
+      final evaluatedAt = DateTime.now().toUtc();
+      final journal = [
+        for (final entry in journalById.values)
+          SignalOutcomeEvaluator.evaluate(
+            entry: entry,
+            candles:
+                analyses['${entry.symbol}|${entry.timeframe}'] ??
+                const <ChartCandle>[],
+            evaluatedAt: evaluatedAt,
+          ),
+      ]..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      await preferences.setString(
+        opportunityJournalKey,
+        encodeSignalJournal(journal.take(100)),
+      );
+      await preferences.setString(
+        opportunityLastBackgroundScanKey,
+        evaluatedAt.toIso8601String(),
+      );
+      await preferences.remove(opportunityLastBackgroundErrorKey);
+
+      final notified =
+          (await preferences.getStringList(opportunityNotifiedSetupIdsKey) ??
+                  const <String>[])
+              .toSet();
       if (ideas.isEmpty) {
         return true;
       }
-
-      final preferences = SharedPreferencesAsync();
-      final notified =
-          (await preferences.getStringList(_backgroundNotifiedKey) ??
-                  const <String>[])
-              .toSet();
       final notifications = FlutterLocalNotificationsPlugin();
       await notifications.initialize(
         settings: const InitializationSettings(
-          android: AndroidInitializationSettings('ic_launcher'),
+          android: AndroidInitializationSettings('ic_quantara_launcher'),
         ),
       );
       var changed = false;
@@ -122,10 +171,21 @@ void quantaraBackgroundDispatcher() {
         final bounded = notified.length <= 250
             ? notified.toList(growable: false)
             : notified.skip(notified.length - 250).toList(growable: false);
-        await preferences.setStringList(_backgroundNotifiedKey, bounded);
+        await preferences.setStringList(
+          opportunityNotifiedSetupIdsKey,
+          bounded,
+        );
       }
       return true;
-    } on Object {
+    } on Object catch (error) {
+      try {
+        await SharedPreferencesAsync().setString(
+          opportunityLastBackgroundErrorKey,
+          error.runtimeType.toString(),
+        );
+      } on Object {
+        // Preserve the original retry result if status persistence also fails.
+      }
       return false;
     } finally {
       client.close();
@@ -163,7 +223,42 @@ final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
     try {
       if (!enabled) {
         await Workmanager().cancelByUniqueName(_backgroundUniqueName);
+        await Workmanager().cancelByUniqueName(_backgroundImmediateName);
+        await SharedPreferencesAsync().remove(_backgroundConfigurationKey);
         return;
+      }
+      final input = {
+        'symbols': settings.symbols,
+        'capital': settings.capital,
+        'riskPercent': settings.riskPercent,
+        'strategy': settings.strategy.name,
+        'cadence': settings.cadence.name,
+        'languageCode': languageCode,
+      };
+      final configuration = [
+        settings.symbols.join(','),
+        settings.capital.toStringAsFixed(4),
+        settings.riskPercent.toStringAsFixed(4),
+        settings.strategy.name,
+        settings.cadence.name,
+        languageCode,
+      ].join('|');
+      final preferences = SharedPreferencesAsync();
+      final previous = await preferences.getString(
+        _backgroundConfigurationKey,
+      );
+      if (configuration != previous) {
+        await Workmanager().registerOneOffTask(
+          _backgroundImmediateName,
+          _backgroundTask,
+          existingWorkPolicy: ExistingWorkPolicy.replace,
+          constraints: Constraints(networkType: NetworkType.connected),
+          inputData: input,
+        );
+        await preferences.setString(
+          _backgroundConfigurationKey,
+          configuration,
+        );
       }
       await Workmanager().registerPeriodicTask(
         _backgroundUniqueName,
@@ -171,14 +266,7 @@ final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
         frequency: const Duration(minutes: 15),
         existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
         constraints: Constraints(networkType: NetworkType.connected),
-        inputData: {
-          'symbols': settings.symbols,
-          'capital': settings.capital,
-          'riskPercent': settings.riskPercent,
-          'strategy': settings.strategy.name,
-          'cadence': settings.cadence.name,
-          'languageCode': languageCode,
-        },
+        inputData: input,
       );
     } on Object {
       // Background scheduling is best effort and must not block live analysis.

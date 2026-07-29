@@ -232,6 +232,13 @@ class _ProfileViewState extends State<_ProfileView> {
                       : QuantaraColors.warning,
                 ),
                 description: strings.setupNotificationsDescription,
+                detail: controller.lastBackgroundScanAt == null
+                    ? (widget.locale.languageCode == 'fa'
+                          ? 'هنوز اسکن پس‌زمینه ثبت نشده است.'
+                          : 'No background scan has been recorded yet.')
+                    : (widget.locale.languageCode == 'fa'
+                          ? 'آخرین اسکن پس‌زمینه: ${controller.lastBackgroundScanAt!.toLocal()}'
+                          : 'Last background scan: ${controller.lastBackgroundScanAt!.toLocal()}'),
               ),
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
@@ -248,9 +255,48 @@ class _ProfileViewState extends State<_ProfileView> {
                         content: Text(strings.notificationPermissionDenied),
                       ),
                     );
+                  } else if (value && enabled && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          widget.locale.languageCode == 'fa'
+                              ? 'پایش فعال شد؛ یک اسکن اولیه و سپس بررسی‌های دوره‌ای انجام می‌شود.'
+                              : 'Monitoring is on. An initial scan and periodic checks are scheduled.',
+                        ),
+                      ),
+                    );
                   }
                 },
               ),
+              const SizedBox(height: 4),
+              OutlinedButton.icon(
+                onPressed: controller.openBackgroundSettings,
+                icon: const Icon(Icons.battery_saver_outlined),
+                label: Text(
+                  widget.locale.languageCode == 'fa'
+                      ? 'تنظیمات باتری و پس‌زمینه'
+                      : 'Battery & background settings',
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.locale.languageCode == 'fa'
+                    ? 'برای اعلان قابل‌اعتمادتر، Quantara را روی حالت Restricted نگذار. اندروید زمان دقیق اسکن را تضمین نمی‌کند و Force Stop تا اجرای دوباره اپ، پایش را متوقف می‌کند.'
+                    : 'For more reliable alerts, do not set Quantara to Restricted. Android does not guarantee exact scan timing, and Force Stop pauses monitoring until the app is opened again.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              if (controller.lastBackgroundError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  widget.locale.languageCode == 'fa'
+                      ? 'آخرین اسکن پس‌زمینه کامل نشد؛ در اتصال بعدی دوباره تلاش می‌کنیم.'
+                      : 'The last background scan did not complete; it will retry when possible.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: QuantaraColors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

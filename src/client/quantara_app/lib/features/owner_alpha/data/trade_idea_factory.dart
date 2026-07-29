@@ -236,6 +236,7 @@ abstract final class TradeIdeaFactory {
       positionSize: positionSize,
       notionalValue: notionalValue,
       recommendedLeverage: recommendedLeverage,
+      maximumSafeLeverage: safeLeverage,
       requiredMargin: requiredMargin,
       estimatedRoundTripCosts: estimatedRoundTripCosts,
       setupId:

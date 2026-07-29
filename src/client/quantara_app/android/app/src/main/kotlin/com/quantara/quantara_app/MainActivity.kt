@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.view.View
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -293,6 +295,16 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "requestNotificationPermission" -> requestNotificationPermission(result)
+                "openBackgroundSettings" -> {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName"),
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    result.success(null)
+                }
                 "showSetupNotification" -> {
                     showSetupNotification(call.arguments as? Map<*, *>)
                     result.success(null)

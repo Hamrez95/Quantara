@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 class SectionCard extends StatelessWidget {
   const SectionCard({
     required this.child,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(16),
     this.semanticLabel,
     super.key,
   });
@@ -19,11 +19,11 @@ class SectionCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final card = Material(
       color: scheme.surface,
-      elevation: 2,
+      elevation: 1,
       shadowColor: Colors.black.withValues(alpha: 0.18),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: scheme.outline.withValues(alpha: 0.72)),
       ),
       child: Padding(padding: padding, child: child),

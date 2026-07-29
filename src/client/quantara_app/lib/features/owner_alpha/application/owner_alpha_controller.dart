@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../data/bitunix_owner_alpha_repository.dart';
+import '../data/signal_outcome_evaluator.dart';
 import '../data/trade_idea_factory.dart';
 import '../domain/owner_alpha_models.dart';
 
@@ -105,6 +106,16 @@ final class OwnerAlphaController extends ChangeNotifier {
       _opportunityState.takenSetupIds.contains(setupId);
   List<SignalJournalEntry> get signalJournal =>
       List.unmodifiable(_opportunityState.journal);
+  SignalJournalEntry? signalEntry(String setupId) {
+    for (final item in _opportunityState.journal) {
+      if (item.setupId == setupId) return item;
+    }
+    return null;
+  }
+  DateTime? get lastBackgroundScanAt =>
+      _opportunityState.lastBackgroundScanAt;
+  String? get lastBackgroundError =>
+      _opportunityState.lastBackgroundError;
   OwnerAlphaConnectionState get connectionState {
     final current = _snapshot;
     if (current == null) {
@@ -254,7 +265,9 @@ final class OwnerAlphaController extends ChangeNotifier {
       _lastDataException = null;
       _unexpectedError = false;
       _nextScanAt = DateTime.now().toUtc().add(_scanInterval);
+      await _reloadOpportunityState();
       await _captureOpportunities(configuredResult.opportunities);
+      await _evaluateSignalJournal(configuredResult);
       await _notifyNewOpportunities(configuredResult.opportunities);
       return true;
     } catch (error) {
@@ -628,6 +641,9 @@ final class OwnerAlphaController extends ChangeNotifier {
     return true;
   }
 
+  Future<void> openBackgroundSettings() =>
+      _notificationGateway.openBackgroundSettings();
+
   Future<void> setTaken(String setupId, bool taken) async {
     final updated = Set<String>.of(_opportunityState.takenSetupIds);
     taken ? updated.add(setupId) : updated.remove(setupId);
@@ -662,18 +678,87 @@ final class OwnerAlphaController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setSignalLeverage(String setupId, int leverage) async {
+    SignalJournalEntry? entry;
+    for (final item in _opportunityState.journal) {
+      if (item.setupId == setupId) {
+        entry = item;
+        break;
+      }
+    }
+    if (entry == null ||
+        leverage < 1 ||
+        leverage > entry.maximumSafeLeverage) {
+      return;
+    }
+    final margin = entry.notionalValue / leverage;
+    final marginReturn = entry.simulatedPnl == null || margin <= 0
+        ? entry.marginReturnPercent
+        : entry.simulatedPnl! / margin * 100;
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final item in _opportunityState.journal)
+          item.setupId == setupId
+              ? item.copyWith(
+                  selectedLeverage: leverage,
+                  marginReturnPercent: marginReturn,
+                )
+              : item,
+      ],
+    );
+    await _persistOpportunityState();
+    notifyListeners();
+  }
+
   Future<void> _captureOpportunities(List<TradeIdea> ideas) async {
     if (ideas.isEmpty) return;
     final byId = {
       for (final item in _opportunityState.journal) item.setupId: item,
     };
     for (final idea in ideas) {
-      byId.putIfAbsent(idea.setupId, () => SignalJournalEntry.fromIdea(idea));
+      final existing = byId[idea.setupId];
+      if (existing == null) {
+        byId[idea.setupId] = SignalJournalEntry.fromIdea(idea);
+      } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {
+        byId[idea.setupId] = SignalJournalEntry.fromIdea(
+          idea,
+        ).copyWith(note: existing.note, closed: existing.closed);
+      }
     }
     final journal = byId.values.toList()
       ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
     _opportunityState = _opportunityState.copyWith(
       journal: journal.take(100).toList(growable: false),
+    );
+    await _persistOpportunityState();
+  }
+
+  Future<void> _reloadOpportunityState() async {
+    final store = _opportunityStateStore;
+    if (store == null) return;
+    _opportunityState = await store.load();
+  }
+
+  Future<void> _evaluateSignalJournal(OwnerAlphaSnapshot snapshot) async {
+    if (_opportunityState.journal.isEmpty) return;
+    final candles = <String, List<ChartCandle>>{
+      for (final result in snapshot.radar)
+        for (final analysis in result.analysesByTimeframe.values)
+          '${analysis.symbol}|${analysis.timeframe}':
+              analysis.candles.toList(growable: false),
+    };
+    final evaluatedAt = DateTime.now().toUtc();
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final entry in _opportunityState.journal)
+          SignalOutcomeEvaluator.evaluate(
+            entry: entry,
+            candles:
+                candles['${entry.symbol}|${entry.timeframe}'] ??
+                const <ChartCandle>[],
+            evaluatedAt: evaluatedAt,
+          ),
+      ],
     );
     await _persistOpportunityState();
   }

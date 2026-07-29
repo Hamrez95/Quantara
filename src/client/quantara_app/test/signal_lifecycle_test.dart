@@ -17,6 +17,7 @@ void main() {
     positionSize: 1,
     notionalValue: 100,
     recommendedLeverage: 2,
+    maximumSafeLeverage: 5,
     requiredMargin: 50,
     estimatedRoundTripCosts: 0.2,
     setupId: 'BTCUSDT|1h|long|fixture',
@@ -45,6 +46,10 @@ void main() {
     expect(restored!.setupId, original.setupId);
     expect(restored.note, 'entered after retest');
     expect(restored.strategy, AnalysisStrategy.trendPullback);
+    expect(restored.recommendedLeverage, 2);
+    expect(restored.maximumSafeLeverage, 5);
+    expect(restored.selectedLeverage, 2);
+    expect(restored.outcome, SignalOutcome.pendingEntry);
     expect(
       restored.lifecycle(DateTime.utc(2026, 7, 28, 10, 30), taken: false),
       SignalLifecycle.expiring,
