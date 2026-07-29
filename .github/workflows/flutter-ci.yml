@@ -171,13 +171,15 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             adb install -r apk/app-release.apk
             adb logcat -c
             adb shell am force-stop "$ANDROID_PACKAGE"
-            adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" | tee android-start.txt
+            adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" > android-start.txt
+            cat android-start.txt
             sleep 20
-            adb shell pidof "$ANDROID_PACKAGE" | tee android-pid.txt
+            adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt
+            cat android-pid.txt
             test -s android-pid.txt
             adb logcat -d > android-logcat.txt
             adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
