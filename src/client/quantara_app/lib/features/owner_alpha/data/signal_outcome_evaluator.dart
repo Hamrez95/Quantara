@@ -26,8 +26,7 @@ abstract final class SignalOutcomeEvaluator {
     var activatedAt = entry.activatedAt;
     var highestTarget = entry.highestTargetHit;
     var latest = entry;
-    final replayFrom =
-        entry.resolvedAt ?? entry.activatedAt ?? entry.createdAt;
+    final replayFrom = entry.resolvedAt ?? entry.activatedAt ?? entry.createdAt;
 
     for (final candle in candles) {
       if (candle.openTime.isBefore(replayFrom)) continue;
@@ -35,8 +34,7 @@ abstract final class SignalOutcomeEvaluator {
 
       if (!active) {
         final touchesEntry =
-            candle.low <= entry.entryUpper! &&
-            candle.high >= entry.entryLower!;
+            candle.low <= entry.entryUpper! && candle.high >= entry.entryLower!;
         if (!touchesEntry) continue;
         active = true;
         activatedAt = candle.openTime;
@@ -122,8 +120,7 @@ abstract final class SignalOutcomeEvaluator {
             (sum, target) =>
                 sum + (target - referenceEntry) * trancheSize * direction,
           );
-      final remainingSize =
-          entry.positionSize - trancheSize * highestTarget;
+      final remainingSize = entry.positionSize - trancheSize * highestTarget;
       final stoppedRemainder =
           (entry.stopLoss! - referenceEntry) * remainingSize * direction;
       grossPnl = realizedTargets + stoppedRemainder;
@@ -131,9 +128,7 @@ abstract final class SignalOutcomeEvaluator {
           referenceEntry + grossPnl / entry.positionSize * direction;
     }
     final priceChange =
-        ((effectiveExit - referenceEntry) / referenceEntry) *
-        direction *
-        100;
+        ((effectiveExit - referenceEntry) / referenceEntry) * direction * 100;
     final netPnl = grossPnl - entry.estimatedRoundTripCosts;
     final marginReturn = entry.selectedMargin <= 0
         ? 0.0
