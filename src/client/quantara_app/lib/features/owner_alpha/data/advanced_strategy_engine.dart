@@ -221,22 +221,23 @@ abstract final class AdvancedStrategyEngine {
       return null;
     }
     final selectedLong =
-        long && (!short || support!.strength >= resistance!.strength);
-    final zone = selectedLong ? support! : resistance!;
+        long && (!short || support.strength >= resistance.strength);
+    final zone = selectedLong ? support : resistance;
     final sweep = selectedLong ? bullishSweep : bearishSweep;
     final engulfing = selectedLong ? bullishEngulfing : bearishEngulfing;
     final pin = selectedLong ? bullishPin : bearishPin;
     final score =
-        25 +
-        (zone.strength * 15).round() +
-        math.min(10, zone.touchCount * 2) +
-        (engulfing || pin ? 18 : 0) +
-        (sweep ? 15 : 0) +
-        (indicators.relativeVolume20 >= 0.9 ? 8 : 0) +
-        ((selectedLong && indicators.rsi14 <= 50) ||
-                (!selectedLong && indicators.rsi14 >= 50)
-            ? 9
-            : 0);
+        (25 +
+                (zone.strength * 15).round() +
+                math.min(10, zone.touchCount * 2) +
+                (engulfing || pin ? 18 : 0) +
+                (sweep ? 15 : 0) +
+                (indicators.relativeVolume20 >= 0.9 ? 8 : 0) +
+                ((selectedLong && indicators.rsi14 <= 50) ||
+                        (!selectedLong && indicators.rsi14 >= 50)
+                    ? 9
+                    : 0))
+            .toInt();
     if (score < _threshold(cadence, 74, 64, 54)) {
       return null;
     }
@@ -331,11 +332,15 @@ abstract final class AdvancedStrategyEngine {
         )
         .length;
     final score =
-        58 +
-        (indicators.adx14 / 35 * 14).round().clamp(0, 14).toInt() +
-        (pullback || cloudBreak ? 14 : 0) +
-        (candleTrigger ? 7 : 0) +
-        math.min(7, aligned * 2);
+        (58 +
+                (indicators.adx14 / 35 * 14)
+                    .round()
+                    .clamp(0, 14)
+                    .toInt() +
+                (pullback || cloudBreak ? 14 : 0) +
+                (candleTrigger ? 7 : 0) +
+                math.min(7, aligned * 2))
+            .toInt();
     if ((!pullback && !cloudBreak) ||
         !candleTrigger ||
         score < _threshold(cadence, 82, 72, 62)) {
