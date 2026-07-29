@@ -345,10 +345,7 @@ class _TradePlanCard extends StatelessWidget {
                       ],
                       onChanged: (leverage) {
                         if (leverage != null) {
-                          controller.setSignalLeverage(
-                            idea.setupId,
-                            leverage,
-                          );
+                          controller.setSignalLeverage(idea.setupId, leverage);
                         }
                       },
                     ),
