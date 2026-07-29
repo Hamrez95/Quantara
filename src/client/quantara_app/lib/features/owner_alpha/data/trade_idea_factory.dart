@@ -5,6 +5,7 @@ import '../domain/owner_alpha_models.dart';
 
 abstract final class TradeIdeaFactory {
   static const assumedRoundTripCostRate = 0.002;
+  static const targetMarginFraction = 0.20;
 
   static TradeIdea create({
     required TimeframeChartAnalysis analysis,
@@ -12,6 +13,8 @@ abstract final class TradeIdeaFactory {
     required double riskPercent,
     Map<String, ChartDirection> confluence = const {},
     String languageCode = 'fa',
+    AnalysisStrategy strategy = AnalysisStrategy.structureZones,
+    SignalCadence cadence = SignalCadence.balanced,
   }) {
     if (!capital.isFinite || capital <= 0) {
       throw ArgumentError.value(capital, 'capital');
@@ -43,7 +46,27 @@ abstract final class TradeIdeaFactory {
         .where((direction) => direction == analysis.direction)
         .length;
     final directional = analysis.direction != ChartDirection.sideways;
-    final enoughStrength = analysis.directionStrength >= 0.32;
+    final cadenceFloor = switch (cadence) {
+      SignalCadence.conservative => 0.42,
+      SignalCadence.balanced => 0.32,
+      SignalCadence.active => 0.25,
+    };
+    final strategyFloor = switch (strategy) {
+      AnalysisStrategy.structureZones => cadenceFloor,
+      AnalysisStrategy.trendPullback => cadenceFloor - 0.04,
+      AnalysisStrategy.momentumContinuation => cadenceFloor + 0.08,
+    };
+    final strategyAligned = switch (strategy) {
+      AnalysisStrategy.structureZones => true,
+      AnalysisStrategy.trendPullback => protectiveAlignment(
+        analysis,
+        supports,
+        resistances,
+      ),
+      AnalysisStrategy.momentumContinuation => aligned >= 2,
+    };
+    final enoughStrength =
+        analysis.directionStrength >= strategyFloor && strategyAligned;
 
     if (!directional || !enoughStrength) {
       return TradeIdea.wait(
@@ -167,12 +190,15 @@ abstract final class TradeIdeaFactory {
       protectiveZone.strength,
     );
     final safeLeverage = math.min(liquidationCushionCap, confidenceCap);
-    final fundingLeverage = (riskSizedNotional / capital)
+    // Keep most account equity available for other setups. Leverage changes
+    // required margin, not the risk-sized notional or the maximum planned loss.
+    final targetMargin = capital * targetMarginFraction;
+    final fundingLeverage = (riskSizedNotional / targetMargin)
         .ceil()
         .clamp(1, 100)
         .toInt();
     final recommendedLeverage = math.min(safeLeverage, fundingLeverage).toInt();
-    final fundedUnits = capital * recommendedLeverage / conservativeEntry;
+    final fundedUnits = targetMargin * recommendedLeverage / conservativeEntry;
     final positionSize = math.min(riskSizedUnits, fundedUnits);
     final notionalValue = positionSize * conservativeEntry;
     final requiredMargin = notionalValue / recommendedLeverage;
@@ -209,6 +235,7 @@ abstract final class TradeIdeaFactory {
       positionSize: positionSize,
       notionalValue: notionalValue,
       recommendedLeverage: recommendedLeverage,
+      maximumSafeLeverage: safeLeverage,
       requiredMargin: requiredMargin,
       estimatedRoundTripCosts: estimatedRoundTripCosts,
       setupId:
@@ -233,7 +260,7 @@ abstract final class TradeIdeaFactory {
                 'ناحیه محافظ ${protectiveZone.touchCount} واکنش تأییدشده دارد.',
                 if (aligned > 0) '$aligned تایم‌فریم با جهت فعلی هم‌سو است.',
                 'زیان محاسباتی به ${riskPercent.toStringAsFixed(1)}٪ سرمایه محدود شده است.',
-                'اهرم ${recommendedLeverage}x حداقل اهرم لازم در سقف محافظه‌کارانه این ستاپ است.',
+                'اهرم ${recommendedLeverage}x برای درگیرکردن حداکثر ۲۰٪ سرمایه انتخاب شده و از سقف امن این ستاپ بالاتر نمی‌رود.',
                 'برای کارمزد و لغزش رفت‌وبرگشت، ۰٫۲۰٪ هزینه فرضی در نظر گرفته شده است.',
               ]
             : [
@@ -242,12 +269,35 @@ abstract final class TradeIdeaFactory {
                 if (aligned > 0)
                   '$aligned timeframes align with the current direction.',
                 'Calculated loss is limited to ${riskPercent.toStringAsFixed(1)}% of capital.',
-                '${recommendedLeverage}x is the minimum required leverage within this setup’s conservative cap.',
+                '${recommendedLeverage}x targets at most 20% account margin without exceeding this setup’s safety cap.',
                 'A 0.20% round-trip fee and slippage estimate is included.',
               ],
       ),
     );
   }
+
+  static bool protectiveAlignment(
+    TimeframeChartAnalysis analysis,
+    List<ChartPriceZone> supports,
+    List<ChartPriceZone> resistances,
+  ) {
+    final current = analysis.latestCandle.close;
+    final zones = analysis.direction == ChartDirection.bullish
+        ? supports
+        : resistances;
+    if (zones.isEmpty || current <= 0) {
+      return false;
+    }
+    final distance = (current - zones.first.center).abs() / current;
+    return distance <= math.max(0.008, analysis.volatilityPercent / 100 * 1.4);
+  }
+
+  static String strategyVersion(AnalysisStrategy strategy) =>
+      switch (strategy) {
+        AnalysisStrategy.structureZones => 'structure-zones/1.2',
+        AnalysisStrategy.trendPullback => 'trend-pullback/1.0',
+        AnalysisStrategy.momentumContinuation => 'momentum-continuation/1.0',
+      };
 
   static int confidenceLeverageCap(
     double directionStrength,

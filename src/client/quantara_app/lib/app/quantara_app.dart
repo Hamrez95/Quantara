@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/settings/app_preferences.dart';
 import '../core/theme/quantara_theme.dart';
+import '../features/owner_alpha/data/background_opportunity_scanner.dart';
 import '../features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../features/owner_alpha/data/platform_owner_alpha_settings_store.dart';
 import '../features/owner_alpha/data/platform_opportunity_services.dart';
@@ -20,6 +21,7 @@ class QuantaraApp extends StatefulWidget {
     this.preferencesStore,
     this.opportunityStateStore,
     this.notificationGateway,
+    this.backgroundScanGateway,
     this.initialThemeMode = ThemeMode.dark,
     this.initialLocale = const Locale('fa'),
   });
@@ -29,6 +31,7 @@ class QuantaraApp extends StatefulWidget {
   final AppPreferencesStore? preferencesStore;
   final OpportunityStateStore? opportunityStateStore;
   final SetupNotificationGateway? notificationGateway;
+  final BackgroundScanGateway? backgroundScanGateway;
   final ThemeMode initialThemeMode;
   final Locale initialLocale;
 
@@ -131,6 +134,11 @@ class _QuantaraAppState extends State<QuantaraApp> {
         notificationGateway:
             widget.notificationGateway ??
             const PlatformSetupNotificationGateway(),
+        backgroundScanGateway:
+            widget.backgroundScanGateway ??
+            (widget.repository == null
+                ? const WorkmanagerBackgroundScanGateway()
+                : const NoopBackgroundScanGateway()),
         themeMode: _themeMode,
         locale: _locale,
         onToggleTheme: _toggleTheme,

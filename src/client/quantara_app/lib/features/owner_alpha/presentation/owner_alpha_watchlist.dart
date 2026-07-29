@@ -16,48 +16,42 @@ class _WatchlistView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              strings.myWatchlist,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+    return SectionCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(QuantaraSpacing.md),
+            child: SectionHeading(
+              title: strings.myWatchlist,
+              subtitle: strings.futuresLimit,
+              trailing: FilledButton.tonalIcon(
+                onPressed: controller.isLoading ? null : onAddSymbol,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: Text(strings.add),
+              ),
             ),
-            Text(
-              strings.futuresLimit,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: controller.isLoading ? null : onAddSymbol,
-              icon: const Icon(Icons.add_rounded),
-              label: Text(strings.add),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        for (var index = 0; index < snapshot.radar.length; index++) ...[
-          _WatchlistTile(
-            result: snapshot.radar[index],
-            canRemove: snapshot.radar.length > 1,
-            onOpen: () => onOpenAnalysis(snapshot.radar[index].quote.symbol),
-            onRemove: () =>
-                controller.removeSymbol(snapshot.radar[index].quote.symbol),
           ),
-          if (index != snapshot.radar.length - 1) const SizedBox(height: 12),
+          const Divider(),
+          for (var index = 0; index < snapshot.radar.length; index++) ...[
+            _WatchlistRow(
+              result: snapshot.radar[index],
+              canRemove: snapshot.radar.length > 1,
+              onOpen: () => onOpenAnalysis(snapshot.radar[index].quote.symbol),
+              onRemove: () =>
+                  controller.removeSymbol(snapshot.radar[index].quote.symbol),
+            ),
+            if (index != snapshot.radar.length - 1) const Divider(indent: 64),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
-class _WatchlistTile extends StatelessWidget {
-  const _WatchlistTile({
+class _WatchlistRow extends StatelessWidget {
+  const _WatchlistRow({
     required this.result,
     required this.canRemove,
     required this.onOpen,
@@ -76,100 +70,42 @@ class _WatchlistTile extends StatelessWidget {
     final changeColor = quote.changePercent >= 0
         ? QuantaraColors.success
         : QuantaraColors.danger;
-    final largeText = MediaQuery.of(context).textScaler.scale(1) > 1.4;
-    final identity = Row(
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: SizedBox.square(
-            dimension: 46,
-            child: Center(
-              child: Text(
-                quote.symbol.substring(0, 1),
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                quote.symbol,
-                textDirection: TextDirection.ltr,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              Text(quote.displayName),
-            ],
-          ),
-        ),
-      ],
-    );
-    final price = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          QuantaraNumberFormat.marketValue(quote.lastPrice),
-          textDirection: TextDirection.ltr,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        Text(
-          QuantaraNumberFormat.marketPercent(quote.changePercent),
-          textDirection: TextDirection.ltr,
-          style: TextStyle(color: changeColor, fontWeight: FontWeight.w800),
-        ),
-      ],
-    );
-    return SectionCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          if (largeText) ...[
-            identity,
-            const SizedBox(height: 10),
-            Align(alignment: AlignmentDirectional.centerEnd, child: price),
-          ] else
-            Row(
-              children: [
-                Expanded(child: identity),
-                const SizedBox(width: 12),
-                price,
-              ],
-            ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              StatusPill(
-                label: _ideaLabel(context, result.idea.direction),
-                color: _ideaColor(context, result.idea.direction),
-              ),
-              if (canRemove)
-                IconButton(
-                  onPressed: onRemove,
-                  tooltip: strings.removeSymbol(quote.symbol),
-                  icon: const Icon(Icons.delete_outline_rounded),
+    final direction = _ideaLabel(context, result.idea.direction);
+    return MarketListRow(
+      symbol: quote.symbol,
+      name: '${quote.displayName} · $direction',
+      price: QuantaraNumberFormat.marketValue(quote.lastPrice),
+      change: QuantaraNumberFormat.marketPercent(quote.changePercent),
+      changeColor: changeColor,
+      onTap: onOpen,
+      trailing: canRemove
+          ? PopupMenuButton<_WatchlistAction>(
+              tooltip: strings.removeSymbol(quote.symbol),
+              icon: const Icon(Icons.more_horiz_rounded),
+              onSelected: (action) {
+                if (action == _WatchlistAction.remove) {
+                  onRemove();
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: _WatchlistAction.remove,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline_rounded,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: QuantaraSpacing.xs),
+                      Text(strings.removeSymbol(quote.symbol)),
+                    ],
+                  ),
                 ),
-              TextButton.icon(
-                onPressed: onOpen,
-                icon: const Icon(Icons.open_in_new_rounded),
-                label: Text(strings.analysis),
-              ),
-            ],
-          ),
-        ],
-      ),
+              ],
+            )
+          : const Icon(Icons.candlestick_chart_outlined, size: 20),
     );
   }
 }
+
+enum _WatchlistAction { remove }

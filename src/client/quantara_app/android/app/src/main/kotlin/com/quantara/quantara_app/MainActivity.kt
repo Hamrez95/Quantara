@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.view.View
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -88,6 +90,14 @@ class MainActivity : FlutterActivity() {
                                     legacyKey = "riskPercent",
                                     defaultValue = 1.0,
                                 ),
+                                "strategy" to preferences.getString(
+                                    "analysisStrategy",
+                                    "structureZones",
+                                ),
+                                "cadence" to preferences.getString(
+                                    "signalCadence",
+                                    "balanced",
+                                ),
                             ),
                         )
                     }
@@ -102,6 +112,8 @@ class MainActivity : FlutterActivity() {
                         .orEmpty()
                     val capital = (arguments?.get("capital") as? Number)?.toDouble()
                     val riskPercent = (arguments?.get("riskPercent") as? Number)?.toDouble()
+                    val strategy = arguments?.get("strategy") as? String
+                    val cadence = arguments?.get("cadence") as? String
                     if (
                         rawSymbols == null ||
                         symbols.size != rawSymbols.size ||
@@ -111,7 +123,13 @@ class MainActivity : FlutterActivity() {
                         capital !in 100.0..100_000_000.0 ||
                         riskPercent == null ||
                         !riskPercent.isFinite() ||
-                        riskPercent !in 0.1..2.0
+                        riskPercent !in 0.1..2.0 ||
+                        strategy !in setOf(
+                            "structureZones",
+                            "trendPullback",
+                            "momentumContinuation",
+                        ) ||
+                        cadence !in setOf("conservative", "balanced", "active")
                     ) {
                         result.error("invalid_settings", "Owner Alpha settings are invalid.", null)
                     } else {
@@ -119,6 +137,8 @@ class MainActivity : FlutterActivity() {
                             .putString("symbols", symbols.joinToString(","))
                             .putLong("capitalBits", capital.toBits())
                             .putLong("riskPercentBits", riskPercent.toBits())
+                            .putString("analysisStrategy", strategy)
+                            .putString("signalCadence", cadence)
                             .remove("capital")
                             .remove("riskPercent")
                             .apply()
@@ -243,6 +263,10 @@ class MainActivity : FlutterActivity() {
                                 .getStringSet("notifiedSetupIds", emptySet())
                                 .orEmpty()
                                 .toList(),
+                            "journalJson" to preferences.getString(
+                                "signalJournalJson",
+                                "[]",
+                            ),
                         ),
                     )
                 }
@@ -251,18 +275,36 @@ class MainActivity : FlutterActivity() {
                     val enabled = arguments?.get("notificationsEnabled") as? Boolean
                     val taken = arguments?.readSetupIds("takenSetupIds")
                     val notified = arguments?.readSetupIds("notifiedSetupIds")
-                    if (enabled == null || taken == null || notified == null) {
+                    val journalJson = arguments?.get("journalJson") as? String
+                    if (
+                        enabled == null ||
+                        taken == null ||
+                        notified == null ||
+                        journalJson == null ||
+                        journalJson.length > 200_000
+                    ) {
                         result.error("invalid_opportunity_state", "Opportunity state is invalid.", null)
                     } else {
                         preferences.edit()
                             .putBoolean("setupNotificationsEnabled", enabled)
                             .putStringSet("takenSetupIds", taken)
                             .putStringSet("notifiedSetupIds", notified)
+                            .putString("signalJournalJson", journalJson)
                             .apply()
                         result.success(null)
                     }
                 }
                 "requestNotificationPermission" -> requestNotificationPermission(result)
+                "openBackgroundSettings" -> {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName"),
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    result.success(null)
+                }
                 "showSetupNotification" -> {
                     showSetupNotification(call.arguments as? Map<*, *>)
                     result.success(null)

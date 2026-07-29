@@ -169,6 +169,9 @@ final class RecordingSetupNotificationGateway
   Future<bool> requestPermission() async => permissionGranted;
 
   @override
+  Future<void> openBackgroundSettings() async {}
+
+  @override
   Future<void> show(TradeIdea idea, {required String languageCode}) async {
     shown.add(idea.setupId);
   }

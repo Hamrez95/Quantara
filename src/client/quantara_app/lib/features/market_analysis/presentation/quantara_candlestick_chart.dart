@@ -5,15 +5,32 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../domain/market_chart_models.dart';
 
+@immutable
+class ChartTradeOverlay {
+  const ChartTradeOverlay({
+    required this.entry,
+    required this.stop,
+    required this.targets,
+    required this.isLong,
+  });
+
+  final double entry;
+  final double stop;
+  final List<double> targets;
+  final bool isLong;
+}
+
 class QuantaraCandlestickChart extends StatelessWidget {
   const QuantaraCandlestickChart({
     required this.analysis,
+    this.tradeOverlay,
     this.height = 320,
     this.visibleCandleCount = 56,
     super.key,
   });
 
   final TimeframeChartAnalysis analysis;
+  final ChartTradeOverlay? tradeOverlay;
   final double height;
   final int visibleCandleCount;
 
@@ -36,6 +53,7 @@ class QuantaraCandlestickChart extends StatelessWidget {
             candles: candles,
             zones: analysis.strongestZones,
             currentValue: analysis.latestCandle.close,
+            tradeOverlay: tradeOverlay,
             colorScheme: Theme.of(context).colorScheme,
           ),
         ),
@@ -49,12 +67,14 @@ final class _CandlestickPainter extends CustomPainter {
     required this.candles,
     required this.zones,
     required this.currentValue,
+    required this.tradeOverlay,
     required this.colorScheme,
   });
 
   final List<ChartCandle> candles;
   final List<ChartPriceZone> zones;
   final double currentValue;
+  final ChartTradeOverlay? tradeOverlay;
   final ColorScheme colorScheme;
 
   @override
@@ -63,7 +83,7 @@ final class _CandlestickPainter extends CustomPainter {
       return;
     }
 
-    const rightScaleWidth = 62.0;
+    const rightScaleWidth = 66.0;
     const topPadding = 12.0;
     const bottomAxisHeight = 26.0;
     const volumeHeight = 42.0;
@@ -90,8 +110,19 @@ final class _CandlestickPainter extends CustomPainter {
       minimum = math.min(minimum, zone.lower);
       maximum = math.max(maximum, zone.upper);
     }
+    final overlay = tradeOverlay;
+    if (overlay != null) {
+      minimum = math.min(minimum, overlay.stop);
+      maximum = math.max(maximum, overlay.stop);
+      minimum = math.min(minimum, overlay.entry);
+      maximum = math.max(maximum, overlay.entry);
+      for (final target in overlay.targets) {
+        minimum = math.min(minimum, target);
+        maximum = math.max(maximum, target);
+      }
+    }
     final rawRange = maximum - minimum;
-    final padding = rawRange == 0 ? maximum * 0.01 : rawRange * 0.08;
+    final padding = rawRange == 0 ? maximum.abs() * 0.01 : rawRange * 0.08;
     minimum -= padding;
     maximum += padding;
     final range = math.max(0.00000001, maximum - minimum);
@@ -103,6 +134,9 @@ final class _CandlestickPainter extends CustomPainter {
 
     _paintGrid(canvas, plot, minimum, maximum, yFor);
     _paintZones(canvas, plot, yFor);
+    if (overlay != null) {
+      _paintTradeOverlay(canvas, plot, overlay, yFor);
+    }
     _paintCandles(canvas, plot, volumeRect, yFor);
     _paintCurrentValue(canvas, plot, yFor(currentValue));
     _paintTimeAxis(canvas, plot, volumeRect);
@@ -116,10 +150,10 @@ final class _CandlestickPainter extends CustomPainter {
     double Function(double value) yFor,
   ) {
     final gridPaint = Paint()
-      ..color = colorScheme.outline.withValues(alpha: 0.24)
-      ..strokeWidth = 1;
+      ..color = colorScheme.outline.withValues(alpha: 0.26)
+      ..strokeWidth = 0.8;
     final labelStyle = TextStyle(
-      color: colorScheme.onSurface.withValues(alpha: 0.55),
+      color: colorScheme.onSurface.withValues(alpha: 0.58),
       fontSize: 10,
       fontWeight: FontWeight.w600,
     );
@@ -160,17 +194,111 @@ final class _CandlestickPainter extends CustomPainter {
       canvas.drawRect(
         rect,
         Paint()
-          ..color = color.withValues(alpha: 0.045 + zone.strength * 0.09)
+          ..color = color.withValues(alpha: 0.035 + zone.strength * 0.07)
           ..style = PaintingStyle.fill,
       );
       canvas.drawLine(
         Offset(plot.left, rect.center.dy),
         Offset(plot.right, rect.center.dy),
         Paint()
-          ..color = color.withValues(alpha: 0.35 + zone.strength * 0.35)
-          ..strokeWidth = zone.state == ChartZoneState.flipped ? 1.8 : 1.2,
+          ..color = color.withValues(alpha: 0.28 + zone.strength * 0.3)
+          ..strokeWidth = zone.state == ChartZoneState.flipped ? 1.6 : 1,
       );
     }
+  }
+
+  void _paintTradeOverlay(
+    Canvas canvas,
+    Rect plot,
+    ChartTradeOverlay overlay,
+    double Function(double value) yFor,
+  ) {
+    final startX = plot.left + plot.width * 0.66;
+    final entryY = yFor(overlay.entry);
+    final stopY = yFor(overlay.stop);
+    final finalTarget = overlay.targets.isEmpty
+        ? overlay.entry
+        : overlay.targets.last;
+    final targetY = yFor(finalTarget);
+    final rewardRect = Rect.fromLTRB(
+      startX,
+      math.min(entryY, targetY),
+      plot.right,
+      math.max(entryY, targetY),
+    );
+    final riskRect = Rect.fromLTRB(
+      startX,
+      math.min(entryY, stopY),
+      plot.right,
+      math.max(entryY, stopY),
+    );
+
+    canvas.drawRect(
+      rewardRect,
+      Paint()..color = QuantaraColors.success.withValues(alpha: 0.13),
+    );
+    canvas.drawRect(
+      riskRect,
+      Paint()..color = QuantaraColors.danger.withValues(alpha: 0.14),
+    );
+    canvas.drawRect(
+      rewardRect,
+      Paint()
+        ..color = QuantaraColors.success.withValues(alpha: 0.42)
+        ..strokeWidth = 0.8
+        ..style = PaintingStyle.stroke,
+    );
+    canvas.drawRect(
+      riskRect,
+      Paint()
+        ..color = QuantaraColors.danger.withValues(alpha: 0.44)
+        ..strokeWidth = 0.8
+        ..style = PaintingStyle.stroke,
+    );
+
+    _paintTradeLine(
+      canvas,
+      plot,
+      startX,
+      entryY,
+      'ENTRY',
+      colorScheme.onSurface,
+    );
+    _paintTradeLine(canvas, plot, startX, stopY, 'SL', QuantaraColors.danger);
+    for (var index = 0; index < overlay.targets.length; index++) {
+      _paintTradeLine(
+        canvas,
+        plot,
+        startX,
+        yFor(overlay.targets[index]),
+        'TP${index + 1}',
+        QuantaraColors.success,
+      );
+    }
+  }
+
+  void _paintTradeLine(
+    Canvas canvas,
+    Rect plot,
+    double startX,
+    double y,
+    String label,
+    Color color,
+  ) {
+    canvas.drawLine(
+      Offset(startX, y),
+      Offset(plot.right, y),
+      Paint()
+        ..color = color.withValues(alpha: 0.8)
+        ..strokeWidth = 1,
+    );
+    _paintText(
+      canvas,
+      label,
+      Offset(startX + 5, y - 14),
+      TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w800),
+      TextDirection.ltr,
+    );
   }
 
   void _paintCandles(
@@ -193,10 +321,13 @@ final class _CandlestickPainter extends CustomPainter {
       final lowY = yFor(candle.low);
       final openY = yFor(candle.open);
       final closeY = yFor(candle.close);
-      final wickPaint = Paint()
-        ..color = color.withValues(alpha: 0.9)
-        ..strokeWidth = math.max(1, bodyWidth * 0.16);
-      canvas.drawLine(Offset(centerX, highY), Offset(centerX, lowY), wickPaint);
+      canvas.drawLine(
+        Offset(centerX, highY),
+        Offset(centerX, lowY),
+        Paint()
+          ..color = color.withValues(alpha: 0.92)
+          ..strokeWidth = math.max(1, bodyWidth * 0.16),
+      );
 
       final bodyTop = math.min(openY, closeY);
       final bodyBottom = math.max(openY, closeY);
@@ -207,7 +338,7 @@ final class _CandlestickPainter extends CustomPainter {
         math.max(bodyTop + 1.5, bodyBottom),
       );
       canvas.drawRRect(
-        RRect.fromRectAndRadius(body, const Radius.circular(1.2)),
+        RRect.fromRectAndRadius(body, const Radius.circular(1.1)),
         Paint()
           ..color = color
           ..style = PaintingStyle.fill,
@@ -222,40 +353,34 @@ final class _CandlestickPainter extends CustomPainter {
         centerX + bodyWidth / 2,
         volumeRect.bottom,
       );
-      canvas.drawRect(
-        volumeBar,
-        Paint()..color = color.withValues(alpha: 0.28),
-      );
+      canvas.drawRect(volumeBar, Paint()..color = color.withValues(alpha: 0.3));
     }
   }
 
   void _paintCurrentValue(Canvas canvas, Rect plot, double y) {
     final paint = Paint()
-      ..color = colorScheme.primary.withValues(alpha: 0.85)
-      ..strokeWidth = 1.2;
+      ..color = colorScheme.primary.withValues(alpha: 0.9)
+      ..strokeWidth = 1;
     var x = plot.left;
     while (x < plot.right) {
       canvas.drawLine(
         Offset(x, y),
-        Offset(math.min(x + 5, plot.right), y),
+        Offset(math.min(x + 4, plot.right), y),
         paint,
       );
-      x += 9;
+      x += 8;
     }
     final labelRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(plot.right + 3, y - 10, 57, 20),
-      const Radius.circular(5),
+      Rect.fromLTWH(plot.right + 3, y - 10, 61, 20),
+      const Radius.circular(4),
     );
-    canvas.drawRRect(
-      labelRect,
-      Paint()..color = colorScheme.primary.withValues(alpha: 0.18),
-    );
+    canvas.drawRRect(labelRect, Paint()..color = colorScheme.primary);
     _paintText(
       canvas,
       _formatValue(currentValue),
       Offset(plot.right + 7, y - 7),
       TextStyle(
-        color: colorScheme.primary,
+        color: colorScheme.onPrimary,
         fontSize: 9.5,
         fontWeight: FontWeight.w800,
       ),
@@ -315,6 +440,7 @@ final class _CandlestickPainter extends CustomPainter {
     return oldDelegate.candles != candles ||
         oldDelegate.zones != zones ||
         oldDelegate.currentValue != currentValue ||
+        oldDelegate.tradeOverlay != tradeOverlay ||
         oldDelegate.colorScheme != colorScheme;
   }
 }

@@ -115,7 +115,7 @@ class _AlphaAnalysisView extends StatelessWidget {
         const SizedBox(height: 16),
         _MultiTimeframeCard(directions: snapshot.timeframeDirections),
         const SizedBox(height: 16),
-        _TradePlanCard(idea: idea),
+        _TradePlanCard(controller: controller, idea: idea),
         const SizedBox(height: 16),
         _PriceZonesCard(analysis: analysis),
       ],
@@ -171,14 +171,20 @@ class _MultiTimeframeCard extends StatelessWidget {
 }
 
 class _TradePlanCard extends StatelessWidget {
-  const _TradePlanCard({required this.idea});
+  const _TradePlanCard({required this.controller, required this.idea});
 
+  final OwnerAlphaController controller;
   final TradeIdea idea;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final color = _ideaColor(context, idea.direction);
+    final journalEntry = controller.signalEntry(idea.setupId);
+    final selectedLeverage =
+        journalEntry?.selectedLeverage ?? idea.recommendedLeverage ?? 1;
+    final selectedMargin = idea.marginAt(selectedLeverage);
+    final persian = Directionality.of(context) == TextDirection.rtl;
     return SectionCard(
       semanticLabel: strings.riskPlan,
       child: Column(
@@ -260,7 +266,7 @@ class _TradePlanCard extends StatelessWidget {
                 MetricTile(
                   label: strings.requiredMargin,
                   value: QuantaraNumberFormat.marketValue(
-                    idea.requiredMargin!,
+                    selectedMargin ?? idea.requiredMargin!,
                     unit: 'USDT',
                   ),
                 ),
@@ -286,6 +292,75 @@ class _TradePlanCard extends StatelessWidget {
                   value: '1:${idea.riskReward!.toStringAsFixed(2)}',
                 ),
               ],
+            ),
+            const SizedBox(height: 18),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: color.withValues(alpha: 0.24)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      persian ? 'اهرم این سناریو' : 'Leverage for this setup',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      persian
+                          ? 'اصل حرفه‌ای ساده است: اهرم، مارجین را آزاد می‌کند؛ سقف زیان را بالا نمی‌برد.'
+                          : 'Professional rule: leverage frees margin; it does not raise the planned loss cap.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      key: ValueKey(
+                        'leverage-${idea.setupId}-$selectedLeverage',
+                      ),
+                      initialValue: selectedLeverage,
+                      decoration: InputDecoration(
+                        labelText: persian
+                            ? 'اهرم انتخابی'
+                            : 'Selected leverage',
+                        helperText: persian
+                            ? 'پیشنهاد اپ ${idea.recommendedLeverage}x · سقف امن ${idea.maximumSafeLeverage}x'
+                            : 'Suggested ${idea.recommendedLeverage}x · safe cap ${idea.maximumSafeLeverage}x',
+                      ),
+                      items: [
+                        for (
+                          var leverage = 1;
+                          leverage <= idea.maximumSafeLeverage!;
+                          leverage++
+                        )
+                          DropdownMenuItem(
+                            value: leverage,
+                            child: Text('${leverage}x'),
+                          ),
+                      ],
+                      onChanged: (leverage) {
+                        if (leverage != null) {
+                          controller.setSignalLeverage(idea.setupId, leverage);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      persian
+                          ? 'با ${selectedLeverage}x حدود ${QuantaraNumberFormat.marketValue(selectedMargin ?? idea.requiredMargin!, unit: 'USDT')} مارجین درگیر می‌شود؛ ارزش پوزیشن ${QuantaraNumberFormat.marketValue(idea.notionalValue!, unit: 'USDT')} و زیان برنامه‌ریزی‌شده حداکثر ${QuantaraNumberFormat.marketValue(idea.maximumLoss, unit: 'USDT')} می‌ماند.'
+                          : 'At ${selectedLeverage}x, about ${QuantaraNumberFormat.marketValue(selectedMargin ?? idea.requiredMargin!, unit: 'USDT')} margin is used. Position notional stays ${QuantaraNumberFormat.marketValue(idea.notionalValue!, unit: 'USDT')} and planned loss stays capped at ${QuantaraNumberFormat.marketValue(idea.maximumLoss, unit: 'USDT')}.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
           ],

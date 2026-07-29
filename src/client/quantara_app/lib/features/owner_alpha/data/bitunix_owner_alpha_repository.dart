@@ -377,7 +377,7 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
       queryParameters: {
         'symbol': symbol,
         'interval': timeframe == '1D' ? '1d' : timeframe,
-        'limit': '120',
+        'limit': '200',
         'type': 'LAST_PRICE',
       },
     );

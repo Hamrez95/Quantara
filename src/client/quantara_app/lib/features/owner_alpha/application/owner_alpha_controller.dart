@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../data/bitunix_owner_alpha_repository.dart';
+import '../data/signal_outcome_evaluator.dart';
 import '../data/trade_idea_factory.dart';
 import '../domain/owner_alpha_models.dart';
 
@@ -22,6 +23,8 @@ final class OwnerAlphaController extends ChangeNotifier {
     OpportunityStateStore? opportunityStateStore,
     SetupNotificationGateway notificationGateway =
         const NoopSetupNotificationGateway(),
+    BackgroundScanGateway backgroundScanGateway =
+        const NoopBackgroundScanGateway(),
     Duration scanInterval = const Duration(seconds: 60),
     String languageCode = 'fa',
   }) {
@@ -30,6 +33,7 @@ final class OwnerAlphaController extends ChangeNotifier {
       settingsStore,
       opportunityStateStore,
       notificationGateway,
+      backgroundScanGateway,
       scanInterval,
       languageCode,
     );
@@ -40,6 +44,7 @@ final class OwnerAlphaController extends ChangeNotifier {
     this._settingsStore,
     this._opportunityStateStore,
     this._notificationGateway,
+    this._backgroundScanGateway,
     this._scanInterval,
     this._languageCode,
   ) {
@@ -56,6 +61,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   final OwnerAlphaSettingsStore _settingsStore;
   final OpportunityStateStore? _opportunityStateStore;
   final SetupNotificationGateway _notificationGateway;
+  final BackgroundScanGateway _backgroundScanGateway;
   final Duration _scanInterval;
 
   List<String> _symbols = List.of(defaultSymbols);
@@ -63,6 +69,8 @@ final class OwnerAlphaController extends ChangeNotifier {
   String _selectedTimeframe = '1h';
   double _capital = 10000;
   double _riskPercent = 1;
+  AnalysisStrategy _strategy = AnalysisStrategy.structureZones;
+  SignalCadence _cadence = SignalCadence.balanced;
   OwnerAlphaSnapshot? _snapshot;
   String? _error;
   OwnerAlphaDataException? _lastDataException;
@@ -82,6 +90,8 @@ final class OwnerAlphaController extends ChangeNotifier {
   String get selectedTimeframe => _selectedTimeframe;
   double get capital => _capital;
   double get riskPercent => _riskPercent;
+  AnalysisStrategy get strategy => _strategy;
+  SignalCadence get cadence => _cadence;
   OwnerAlphaSnapshot? get snapshot => _snapshot;
   String? get error => _error;
   bool get isLoading => _loading;
@@ -94,6 +104,17 @@ final class OwnerAlphaController extends ChangeNotifier {
       Set.unmodifiable(_opportunityState.takenSetupIds);
   bool isTaken(String setupId) =>
       _opportunityState.takenSetupIds.contains(setupId);
+  List<SignalJournalEntry> get signalJournal =>
+      List.unmodifiable(_opportunityState.journal);
+  SignalJournalEntry? signalEntry(String setupId) {
+    for (final item in _opportunityState.journal) {
+      if (item.setupId == setupId) return item;
+    }
+    return null;
+  }
+
+  DateTime? get lastBackgroundScanAt => _opportunityState.lastBackgroundScanAt;
+  String? get lastBackgroundError => _opportunityState.lastBackgroundError;
   OwnerAlphaConnectionState get connectionState {
     final current = _snapshot;
     if (current == null) {
@@ -133,7 +154,10 @@ final class OwnerAlphaController extends ChangeNotifier {
       }
       _capital = saved.capital.clamp(100, 100000000).toDouble();
       _riskPercent = saved.riskPercent.clamp(0.1, 2).toDouble();
+      _strategy = saved.strategy;
+      _cadence = saved.cadence;
     }
+    await _configureBackgroundScan();
     await refresh();
     if (!_disposed) {
       _timer = Timer.periodic(_scanInterval, (_) => refresh(silent: true));
@@ -222,6 +246,8 @@ final class OwnerAlphaController extends ChangeNotifier {
             symbols: requestedSymbols,
             capital: _capital,
             riskPercent: _riskPercent,
+            strategy: _strategy,
+            cadence: _cadence,
           ),
         );
       }
@@ -231,12 +257,17 @@ final class OwnerAlphaController extends ChangeNotifier {
       _symbols = requestedSymbols;
       _selectedSymbol = result.selectedSymbol;
       _selectedTimeframe = result.selectedTimeframe;
-      _snapshot = result;
+      await _configureBackgroundScan();
+      final configuredResult = _applyStrategy(result);
+      _snapshot = configuredResult;
       _error = null;
       _lastDataException = null;
       _unexpectedError = false;
       _nextScanAt = DateTime.now().toUtc().add(_scanInterval);
-      await _notifyNewOpportunities(result.opportunities);
+      await _reloadOpportunityState();
+      await _captureOpportunities(configuredResult.opportunities);
+      await _evaluateSignalJournal(configuredResult);
+      await _notifyNewOpportunities(configuredResult.opportunities);
       return true;
     } catch (error) {
       if (_disposed || generation != _requestGeneration) {
@@ -315,6 +346,8 @@ final class OwnerAlphaController extends ChangeNotifier {
             riskPercent: _riskPercent,
             languageCode: _languageCode,
             confluence: directions,
+            strategy: _strategy,
+            cadence: _cadence,
           ),
       timeframeDirections: directions,
       scanFailures: current.scanFailures,
@@ -409,12 +442,11 @@ final class OwnerAlphaController extends ChangeNotifier {
         selectedSymbol: current.selectedSymbol,
         selectedTimeframe: current.selectedTimeframe,
         selectedAnalysis: current.selectedAnalysis,
-        selectedIdea: TradeIdeaFactory.create(
-          analysis: current.selectedAnalysis,
-          capital: _capital,
-          riskPercent: _riskPercent,
-          languageCode: _languageCode,
-          confluence: directions,
+        selectedIdea: _rebuildIdea(
+          current.selectedAnalysis,
+          current.radar
+              .firstWhere((item) => item.quote.symbol == current.selectedSymbol)
+              .analysesByTimeframe,
         ),
         timeframeDirections: directions,
         scanFailures: current.scanFailures,
@@ -434,6 +466,68 @@ final class OwnerAlphaController extends ChangeNotifier {
       value = '${value}USDT';
     }
     return value.length <= 24 ? value : null;
+  }
+
+  Future<void> updateSignalPolicy({
+    required AnalysisStrategy strategy,
+    required SignalCadence cadence,
+  }) async {
+    if (_strategy == strategy && _cadence == cadence) {
+      return;
+    }
+    _strategy = strategy;
+    _cadence = cadence;
+    await _saveSettings();
+    final current = _snapshot;
+    if (current != null) {
+      _snapshot = _applyStrategy(current);
+    }
+    notifyListeners();
+  }
+
+  OwnerAlphaSnapshot _applyStrategy(OwnerAlphaSnapshot current) {
+    final rebuiltRadar = <SymbolRadarResult>[
+      for (final result in current.radar)
+        SymbolRadarResult(
+          quote: result.quote,
+          analysis: result.analysis,
+          idea: _rebuildIdea(result.analysis, result.analysesByTimeframe),
+          analysesByTimeframe: result.analysesByTimeframe,
+          ideasByTimeframe: {
+            for (final entry in result.analysesByTimeframe.entries)
+              if (BitunixOwnerAlphaRepository.opportunityTimeframes.contains(
+                entry.key,
+              ))
+                entry.key: _rebuildIdea(
+                  entry.value,
+                  result.analysesByTimeframe,
+                ),
+          },
+        ),
+    ];
+    final selectedResult = rebuiltRadar.firstWhere(
+      (item) => item.quote.symbol == current.selectedSymbol,
+    );
+    final selectedAnalysis =
+        selectedResult.analysesByTimeframe[current.selectedTimeframe] ??
+        current.selectedAnalysis;
+    return OwnerAlphaSnapshot(
+      radar: rebuiltRadar,
+      selectedSymbol: current.selectedSymbol,
+      selectedTimeframe: current.selectedTimeframe,
+      selectedAnalysis: selectedAnalysis,
+      selectedIdea: _rebuildIdea(
+        selectedAnalysis,
+        selectedResult.analysesByTimeframe,
+      ),
+      timeframeDirections: {
+        for (final entry in selectedResult.analysesByTimeframe.entries)
+          entry.key: entry.value.direction,
+      },
+      scanFailures: current.scanFailures,
+      diagnostics: current.diagnostics,
+      generatedAt: current.generatedAt,
+    );
   }
 
   void setLanguage(String languageCode, {bool notify = true}) {
@@ -475,12 +569,11 @@ final class OwnerAlphaController extends ChangeNotifier {
         selectedSymbol: current.selectedSymbol,
         selectedTimeframe: current.selectedTimeframe,
         selectedAnalysis: current.selectedAnalysis,
-        selectedIdea: TradeIdeaFactory.create(
-          analysis: current.selectedAnalysis,
-          capital: _capital,
-          riskPercent: _riskPercent,
-          confluence: directions,
-          languageCode: _languageCode,
+        selectedIdea: _rebuildIdea(
+          current.selectedAnalysis,
+          current.radar
+              .firstWhere((item) => item.quote.symbol == current.selectedSymbol)
+              .analysesByTimeframe,
         ),
         timeframeDirections: directions,
         scanFailures: current.scanFailures,
@@ -488,6 +581,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         generatedAt: current.generatedAt,
       );
     }
+    unawaited(_configureBackgroundScan());
     if (notify) {
       notifyListeners();
     }
@@ -495,13 +589,24 @@ final class OwnerAlphaController extends ChangeNotifier {
 
   String _t(String fa, String en) => _languageCode == 'en' ? en : fa;
 
-  Future<void> _saveSettings() {
-    return _settingsStore.save(
-      OwnerAlphaSettings(
-        symbols: _symbols,
-        capital: _capital,
-        riskPercent: _riskPercent,
-      ),
+  OwnerAlphaSettings get _currentSettings => OwnerAlphaSettings(
+    symbols: _symbols,
+    capital: _capital,
+    riskPercent: _riskPercent,
+    strategy: _strategy,
+    cadence: _cadence,
+  );
+
+  Future<void> _saveSettings() async {
+    await _settingsStore.save(_currentSettings);
+    await _configureBackgroundScan();
+  }
+
+  Future<void> _configureBackgroundScan() {
+    return _backgroundScanGateway.configure(
+      enabled: _opportunityState.notificationsEnabled,
+      settings: _currentSettings,
+      languageCode: _languageCode,
     );
   }
 
@@ -517,6 +622,8 @@ final class OwnerAlphaController extends ChangeNotifier {
         for (final entry in analyses.entries) entry.key: entry.value.direction,
       },
       languageCode: _languageCode,
+      strategy: _strategy,
+      cadence: _cadence,
     );
   }
 
@@ -528,9 +635,13 @@ final class OwnerAlphaController extends ChangeNotifier {
       notificationsEnabled: enabled,
     );
     await _persistOpportunityState();
+    await _configureBackgroundScan();
     notifyListeners();
     return true;
   }
+
+  Future<void> openBackgroundSettings() =>
+      _notificationGateway.openBackgroundSettings();
 
   Future<void> setTaken(String setupId, bool taken) async {
     final updated = Set<String>.of(_opportunityState.takenSetupIds);
@@ -538,6 +649,116 @@ final class OwnerAlphaController extends ChangeNotifier {
     _opportunityState = _opportunityState.copyWith(takenSetupIds: updated);
     await _persistOpportunityState();
     notifyListeners();
+  }
+
+  Future<void> updateSignalNote(String setupId, String note) async {
+    final safeNote = note.trim();
+    if (safeNote.length > 2000) {
+      throw ArgumentError.value(note, 'note');
+    }
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final item in _opportunityState.journal)
+          item.setupId == setupId ? item.copyWith(note: safeNote) : item,
+      ],
+    );
+    await _persistOpportunityState();
+    notifyListeners();
+  }
+
+  Future<void> closeSignal(String setupId, bool closed) async {
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final item in _opportunityState.journal)
+          item.setupId == setupId ? item.copyWith(closed: closed) : item,
+      ],
+    );
+    await _persistOpportunityState();
+    notifyListeners();
+  }
+
+  Future<void> setSignalLeverage(String setupId, int leverage) async {
+    SignalJournalEntry? entry;
+    for (final item in _opportunityState.journal) {
+      if (item.setupId == setupId) {
+        entry = item;
+        break;
+      }
+    }
+    if (entry == null || leverage < 1 || leverage > entry.maximumSafeLeverage) {
+      return;
+    }
+    final margin = entry.notionalValue / leverage;
+    final marginReturn = entry.simulatedPnl == null || margin <= 0
+        ? entry.marginReturnPercent
+        : entry.simulatedPnl! / margin * 100;
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final item in _opportunityState.journal)
+          item.setupId == setupId
+              ? item.copyWith(
+                  selectedLeverage: leverage,
+                  marginReturnPercent: marginReturn,
+                )
+              : item,
+      ],
+    );
+    await _persistOpportunityState();
+    notifyListeners();
+  }
+
+  Future<void> _captureOpportunities(List<TradeIdea> ideas) async {
+    if (ideas.isEmpty) return;
+    final byId = {
+      for (final item in _opportunityState.journal) item.setupId: item,
+    };
+    for (final idea in ideas) {
+      final existing = byId[idea.setupId];
+      if (existing == null) {
+        byId[idea.setupId] = SignalJournalEntry.fromIdea(idea);
+      } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {
+        byId[idea.setupId] = SignalJournalEntry.fromIdea(
+          idea,
+        ).copyWith(note: existing.note, closed: existing.closed);
+      }
+    }
+    final journal = byId.values.toList()
+      ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    _opportunityState = _opportunityState.copyWith(
+      journal: journal.take(100).toList(growable: false),
+    );
+    await _persistOpportunityState();
+  }
+
+  Future<void> _reloadOpportunityState() async {
+    final store = _opportunityStateStore;
+    if (store == null) return;
+    _opportunityState = await store.load();
+  }
+
+  Future<void> _evaluateSignalJournal(OwnerAlphaSnapshot snapshot) async {
+    if (_opportunityState.journal.isEmpty) return;
+    final candles = <String, List<ChartCandle>>{
+      for (final result in snapshot.radar)
+        for (final analysis in result.analysesByTimeframe.values)
+          '${analysis.symbol}|${analysis.timeframe}': analysis.candles.toList(
+            growable: false,
+          ),
+    };
+    final evaluatedAt = DateTime.now().toUtc();
+    _opportunityState = _opportunityState.copyWith(
+      journal: [
+        for (final entry in _opportunityState.journal)
+          SignalOutcomeEvaluator.evaluate(
+            entry: entry,
+            candles:
+                candles['${entry.symbol}|${entry.timeframe}'] ??
+                const <ChartCandle>[],
+            evaluatedAt: evaluatedAt,
+          ),
+      ],
+    );
+    await _persistOpportunityState();
   }
 
   Future<void> _notifyNewOpportunities(List<TradeIdea> ideas) async {

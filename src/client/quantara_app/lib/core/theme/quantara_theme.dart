@@ -1,20 +1,41 @@
 import 'package:flutter/material.dart';
 
 abstract final class QuantaraColors {
-  static const ink = Color(0xFF07101F);
-  static const deepNavy = Color(0xFF0B1528);
-  static const navy = Color(0xFF111D33);
-  static const elevatedNavy = Color(0xFF17243D);
-  static const cyan = Color(0xFF43D7C4);
+  static const ink = Color(0xFF07090D);
+  static const deepNavy = Color(0xFF0B0E14);
+  static const navy = Color(0xFF11151D);
+  static const elevatedNavy = Color(0xFF181D27);
+  static const cyan = Color(0xFF22B8A5);
   static const violet = Color(0xFF8175F5);
-  static const success = Color(0xFF39D58A);
-  static const warning = Color(0xFFFFBF5B);
-  static const danger = Color(0xFFFF7280);
-  static const muted = Color(0xFF92A2BD);
-  static const softBorder = Color(0xFF253654);
-  static const lightCanvas = Color(0xFFF3F6FA);
+  static const success = Color(0xFF22B8A5);
+  static const warning = Color(0xFFF4B740);
+  static const danger = Color(0xFFF04452);
+  static const muted = Color(0xFF8A93A3);
+  static const softBorder = Color(0xFF2A303A);
+  static const lightCanvas = Color(0xFFF4F6F8);
   static const lightSurface = Color(0xFFFFFFFF);
-  static const lightBorder = Color(0xFFD9E1EC);
+  static const lightBorder = Color(0xFFDDE2E8);
+}
+
+abstract final class QuantaraSpacing {
+  static const xxs = 4.0;
+  static const xs = 8.0;
+  static const sm = 12.0;
+  static const md = 16.0;
+  static const lg = 24.0;
+  static const xl = 32.0;
+}
+
+abstract final class QuantaraRadius {
+  static const control = 10.0;
+  static const card = 14.0;
+  static const large = 18.0;
+}
+
+abstract final class QuantaraMotion {
+  static const fast = Duration(milliseconds: 160);
+  static const standard = Duration(milliseconds: 220);
+  static const curve = Curves.easeOutCubic;
 }
 
 abstract final class QuantaraTheme {
@@ -25,9 +46,11 @@ abstract final class QuantaraTheme {
       secondary: QuantaraColors.violet,
       onSecondary: Colors.white,
       surface: QuantaraColors.navy,
-      onSurface: Color(0xFFF5F8FF),
+      onSurface: Color(0xFFF1F3F7),
+      surfaceContainerHighest: QuantaraColors.elevatedNavy,
+      onSurfaceVariant: QuantaraColors.muted,
       error: QuantaraColors.danger,
-      onError: QuantaraColors.ink,
+      onError: Colors.white,
       outline: QuantaraColors.softBorder,
     );
 
@@ -36,7 +59,7 @@ abstract final class QuantaraTheme {
       dividerColor: QuantaraColors.softBorder,
       navigationRailTheme: const NavigationRailThemeData(
         backgroundColor: QuantaraColors.deepNavy,
-        indicatorColor: Color(0x3343D7C4),
+        indicatorColor: Color(0x2622B8A5),
         selectedIconTheme: IconThemeData(color: QuantaraColors.cyan),
         unselectedIconTheme: IconThemeData(color: QuantaraColors.muted),
         selectedLabelTextStyle: TextStyle(
@@ -46,10 +69,13 @@ abstract final class QuantaraTheme {
         unselectedLabelTextStyle: TextStyle(color: QuantaraColors.muted),
       ),
       navigationBarTheme: const NavigationBarThemeData(
+        height: 72,
         backgroundColor: QuantaraColors.deepNavy,
-        indicatorColor: Color(0x3343D7C4),
+        indicatorColor: Color(0x2622B8A5),
+        elevation: 0,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
         ),
       ),
     );
@@ -63,6 +89,8 @@ abstract final class QuantaraTheme {
       onSecondary: Colors.white,
       surface: QuantaraColors.lightSurface,
       onSurface: Color(0xFF172033),
+      surfaceContainerHighest: Color(0xFFF0F3F6),
+      onSurfaceVariant: Color(0xFF64748B),
       error: Color(0xFFB42338),
       onError: Colors.white,
       outline: QuantaraColors.lightBorder,
@@ -73,15 +101,18 @@ abstract final class QuantaraTheme {
       dividerColor: QuantaraColors.lightBorder,
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: QuantaraColors.lightSurface,
-        indicatorColor: scheme.primary.withValues(alpha: 0.12),
+        indicatorColor: scheme.primary.withValues(alpha: 0.1),
         selectedIconTheme: IconThemeData(color: scheme.primary),
         unselectedIconTheme: const IconThemeData(color: Color(0xFF64748B)),
       ),
       navigationBarTheme: NavigationBarThemeData(
+        height: 72,
         backgroundColor: QuantaraColors.lightSurface,
-        indicatorColor: scheme.primary.withValues(alpha: 0.12),
+        indicatorColor: scheme.primary.withValues(alpha: 0.1),
+        elevation: 0,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: const WidgetStatePropertyAll(
-          TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
         ),
       ),
     );
@@ -91,48 +122,112 @@ abstract final class QuantaraTheme {
     final baseText = ThemeData(
       useMaterial3: true,
       brightness: scheme.brightness,
+      fontFamily: 'Vazirmatn',
+      fontFamilyFallback: const ['Roboto', 'Arial'],
     ).textTheme;
+    const numericFeatures = [FontFeature.tabularFigures()];
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
+      fontFamily: 'Vazirmatn',
+      fontFamilyFallback: const ['Roboto', 'Arial'],
       visualDensity: VisualDensity.standard,
-      splashFactory: InkRipple.splashFactory,
+      splashFactory: InkSparkle.splashFactory,
       textTheme: baseText.copyWith(
         headlineSmall: baseText.headlineSmall?.copyWith(
-          fontSize: 25,
-          height: 1.35,
+          fontSize: 24,
+          height: 1.3,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.4,
         ),
-        titleLarge: baseText.titleLarge?.copyWith(fontSize: 21, height: 1.4),
-        titleMedium: baseText.titleMedium?.copyWith(fontSize: 17, height: 1.45),
-        titleSmall: baseText.titleSmall?.copyWith(fontSize: 15, height: 1.45),
-        bodyLarge: baseText.bodyLarge?.copyWith(fontSize: 17, height: 1.55),
-        bodyMedium: baseText.bodyMedium?.copyWith(fontSize: 15, height: 1.5),
-        bodySmall: baseText.bodySmall?.copyWith(fontSize: 13, height: 1.45),
-        labelLarge: baseText.labelLarge?.copyWith(fontSize: 14),
-        labelMedium: baseText.labelMedium?.copyWith(fontSize: 13),
+        titleLarge: baseText.titleLarge?.copyWith(
+          fontSize: 20,
+          height: 1.35,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.2,
+        ),
+        titleMedium: baseText.titleMedium?.copyWith(
+          fontSize: 16,
+          height: 1.4,
+          fontWeight: FontWeight.w700,
+        ),
+        titleSmall: baseText.titleSmall?.copyWith(
+          fontSize: 14,
+          height: 1.42,
+          fontWeight: FontWeight.w700,
+        ),
+        bodyLarge: baseText.bodyLarge?.copyWith(fontSize: 15, height: 1.5),
+        bodyMedium: baseText.bodyMedium?.copyWith(fontSize: 14, height: 1.5),
+        bodySmall: baseText.bodySmall?.copyWith(fontSize: 12, height: 1.45),
+        labelLarge: baseText.labelLarge?.copyWith(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        labelMedium: baseText.labelMedium?.copyWith(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: scheme.surface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(QuantaraRadius.card),
+          side: BorderSide(color: scheme.outline.withValues(alpha: 0.78)),
+        ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: scheme.outline.withValues(alpha: 0.72),
+        thickness: 0.8,
+        space: 1,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: scheme.surfaceContainerHighest,
+        selectedColor: scheme.primary.withValues(alpha: 0.14),
+        side: BorderSide(color: scheme.outline.withValues(alpha: 0.75)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        labelStyle: baseText.labelMedium,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: scheme.surface,
+        fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
           borderSide: BorderSide(color: scheme.outline),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
           borderSide: BorderSide(color: scheme.outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: scheme.primary, width: 1.5),
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
+          borderSide: BorderSide(color: scheme.primary, width: 1.4),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(48, 48),
+          minimumSize: const Size(48, 46),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(QuantaraRadius.control),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 46),
+          side: BorderSide(color: scheme.outline),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(QuantaraRadius.control),
           ),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
@@ -140,19 +235,56 @@ abstract final class QuantaraTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(QuantaraRadius.control),
+          ),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size.square(44),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(QuantaraRadius.control),
           ),
         ),
       ),
       tooltipTheme: TooltipThemeData(
         waitDuration: const Duration(milliseconds: 500),
         decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: BorderRadius.circular(10),
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
           border: Border.all(color: scheme.outline),
         ),
         textStyle: TextStyle(color: scheme.onSurface),
       ),
+      extensions: const <ThemeExtension<dynamic>>[
+        QuantaraMarketTypography(numericFeatures: numericFeatures),
+      ],
     );
+  }
+}
+
+@immutable
+class QuantaraMarketTypography
+    extends ThemeExtension<QuantaraMarketTypography> {
+  const QuantaraMarketTypography({required this.numericFeatures});
+
+  final List<FontFeature> numericFeatures;
+
+  TextStyle numeric(TextStyle? base) =>
+      (base ?? const TextStyle()).copyWith(fontFeatures: numericFeatures);
+
+  @override
+  QuantaraMarketTypography copyWith({List<FontFeature>? numericFeatures}) {
+    return QuantaraMarketTypography(
+      numericFeatures: numericFeatures ?? this.numericFeatures,
+    );
+  }
+
+  @override
+  QuantaraMarketTypography lerp(
+    covariant QuantaraMarketTypography? other,
+    double t,
+  ) {
+    return other ?? this;
   }
 }
