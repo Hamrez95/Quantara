@@ -397,14 +397,16 @@ abstract final class AdvancedStrategyEngine {
     double price,
     double maximumDistance,
   ) {
-    final candidates = zones
-        .where((zone) => zone.role == role)
-        .where((zone) => (zone.center - price).abs() <= maximumDistance)
-        .toList(growable: false)
-      ..sort(
-        (left, right) =>
-            (left.center - price).abs().compareTo((right.center - price).abs()),
-      );
+    final candidates =
+        zones
+            .where((zone) => zone.role == role)
+            .where((zone) => (zone.center - price).abs() <= maximumDistance)
+            .toList(growable: false)
+          ..sort(
+            (left, right) => (left.center - price).abs().compareTo(
+              (right.center - price).abs(),
+            ),
+          );
     return candidates.isEmpty ? null : candidates.first;
   }
 
@@ -490,9 +492,7 @@ abstract final class AdvancedStrategyEngine {
     final notional = positionSize * entry;
     final targets = [
       for (final multiple in targetMultiples)
-        long
-            ? entry + riskPerUnit * multiple
-            : entry - riskPerUnit * multiple,
+        long ? entry + riskPerUnit * multiple : entry - riskPerUnit * multiple,
     ];
     if (targets.any((target) => target <= 0 || !target.isFinite)) return null;
 
