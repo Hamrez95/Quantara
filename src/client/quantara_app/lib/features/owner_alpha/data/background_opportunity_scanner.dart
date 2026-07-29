@@ -142,9 +142,7 @@ void quantaraBackgroundDispatcher() {
         final direction = language == 'en'
             ? (idea.direction == TradeDirection.long ? 'Long' : 'Short')
             : (idea.direction == TradeDirection.long ? 'خرید' : 'فروش');
-        final title = language == 'en'
-            ? '${idea.symbol} · $direction · ${idea.timeframe}'
-            : '${idea.symbol} · $direction · ${idea.timeframe}';
+        final title = '${idea.symbol} · $direction · ${idea.timeframe}';
         final localExpiry = idea.validUntil.toLocal();
         final minute = localExpiry.minute.toString().padLeft(2, '0');
         final body = language == 'en'
@@ -202,7 +200,13 @@ int _stableNotificationId(String value) {
 }
 
 abstract final class BackgroundOpportunityScanner {
-  static Future<void> initialize() async {
+  static Future<void>? _initialization;
+
+  static Future<void> initialize() {
+    return _initialization ??= _initializeOnce();
+  }
+
+  static Future<void> _initializeOnce() async {
     try {
       await Workmanager().initialize(quantaraBackgroundDispatcher);
     } on Object {
@@ -221,6 +225,7 @@ final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
     required String languageCode,
   }) async {
     try {
+      await BackgroundOpportunityScanner.initialize();
       if (!enabled) {
         await Workmanager().cancelByUniqueName(_backgroundUniqueName);
         await Workmanager().cancelByUniqueName(_backgroundImmediateName);
