@@ -20,7 +20,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -64,6 +64,21 @@ jobs:
           set -euo pipefail
           dart format lib test
           git diff --stat -- lib test pubspec.lock || true
+
+      - name: Commit canonical formatting and lockfile
+        if: github.event_name == 'push'
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/client/quantara_app/lib src/client/quantara_app/test src/client/quantara_app/pubspec.lock; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib src/client/quantara_app/test src/client/quantara_app/pubspec.lock
+          git commit -m "style: apply Dart formatter and lock dependencies"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload formatted source snapshot
         uses: actions/upload-artifact@v4
