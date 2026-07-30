@@ -42,24 +42,19 @@ public sealed class BitunixRequestSignerTests
     }
 
     [Fact]
-    public void WebSocketSignatureSortsParametersAndExcludesSign()
+    public void FuturesWebSocketLoginUsesNonceTimestampAndApiKeyOnly()
     {
-        var signature = BitunixRequestSigner.CreateWebSocketSignature(
+        var signature = BitunixRequestSigner.CreateWebSocketLoginSignature(
             "123456",
             "1724285700000",
             "9a25209b66004da404d9ddcb48d1e11f",
-            "secret",
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["symbol"] = "BTC",
-                ["sign"] = "must-not-be-signed"
-            });
+            "secret");
 
         Assert.Equal(
-            "493a2e724afc59e0f1cf911b40c3a12fa520bb0abd950b3409142de72e31313f",
+            "fd2f7092a756fd96c95f17fc04dde64f6d68785769afeda2812d46d7151d237e",
             signature.Digest);
         Assert.Equal(
-            "c1171b1ed0d500ce3dcaa0f9996a3c9677e8681df18f4fa23857101c4bb97eb8",
+            "b0936739fe4863f5dc5ab53ce77ab3c3f75ff739b2587531e4852a82e2641a65",
             signature.Sign);
     }
 }
