@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -30,6 +29,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
   String? get error => _error;
   bool get isBusy => _busy;
   bool get isRunning => _status.isRunning;
+  bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   Future<void> initialize() async {
     FlutterForegroundTask.addTaskDataCallback(_onTaskData);
@@ -38,9 +39,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
     );
     if (_disposed) return;
     if (raw != null) _applyStatus(raw);
-    final running = !kIsWeb &&
-        Platform.isAndroid &&
-        await FlutterForegroundTask.isRunningService;
+    final running = _isAndroid && await FlutterForegroundTask.isRunningService;
     if (!running && _status.isRunning) {
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.stopped,
@@ -63,7 +62,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
     notifyListeners();
     try {
       configuration.validate();
-      if (kIsWeb || !Platform.isAndroid) {
+      if (!_isAndroid) {
         throw const LocalLiveTradeSafeException(
           'Guarded local live trading is available only on Android.',
         );
@@ -74,7 +73,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'Connect and validate the Bitunix account before starting local live trading.',
         );
       }
-      final permission = await FlutterForegroundTask.checkNotificationPermission();
+      final permission =
+          await FlutterForegroundTask.checkNotificationPermission();
       if (permission != NotificationPermission.granted) {
         final requested =
             await FlutterForegroundTask.requestNotificationPermission();
@@ -115,7 +115,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
       if (await FlutterForegroundTask.isRunningService) {
         await FlutterForegroundTask.restartService();
       } else {
-        await FlutterForegroundTask.startService(
+        final result = await FlutterForegroundTask.startService(
           serviceId: 74013,
           serviceTypes: const [ForegroundServiceTypes.specialUse],
           notificationTitle: 'Quantara · Starting local live canary',
@@ -126,6 +126,12 @@ final class LocalLiveTradeController extends ChangeNotifier {
           notificationInitialRoute: '/',
           callback: quantaraLocalLiveStartCallback,
         );
+        if (!result.success) {
+          throw LocalLiveTradeSafeException(
+            result.error?.message ??
+                'Android rejected the local execution service start.',
+          );
+        }
       }
       await Future<void>.delayed(const Duration(milliseconds: 700));
       FlutterForegroundTask.sendDataToTask(
@@ -147,10 +153,11 @@ final class LocalLiveTradeController extends ChangeNotifier {
       _error = error.message;
       return false;
     } on FormatException catch (error) {
-      _error = error.message;
+      _error = error.message.toString();
       return false;
     } on Object catch (error) {
-      _error = 'Local live service could not start safely (${error.runtimeType}).';
+      _error =
+          'Local live service could not start safely (${error.runtimeType}).';
       return false;
     } finally {
       if (!_disposed) {
@@ -166,9 +173,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final running = !kIsWeb &&
-          Platform.isAndroid &&
-          await FlutterForegroundTask.isRunningService;
+      final running = _isAndroid && await FlutterForegroundTask.isRunningService;
       if (!running) {
         _status = LocalLiveTradeStatus(
           state: LocalLiveTradeState.stopped,
@@ -187,10 +192,15 @@ final class LocalLiveTradeController extends ChangeNotifier {
       );
       await Future<void>.delayed(
         policy == LocalLiveStopPolicy.emergencyClose
-            ? const Duration(seconds: 8)
-            : const Duration(seconds: 2),
+            ? const Duration(seconds: 10)
+            : const Duration(seconds: 5),
       );
-      await FlutterForegroundTask.stopService();
+      final result = await FlutterForegroundTask.stopService();
+      if (!result.success) {
+        throw LocalLiveTradeSafeException(
+          result.error?.message ?? 'Android rejected the local service stop.',
+        );
+      }
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.stopped,
         updatedAt: DateTime.now().toUtc(),
@@ -203,6 +213,9 @@ final class LocalLiveTradeController extends ChangeNotifier {
         entriesEnabled: false,
       );
       return true;
+    } on LocalLiveTradeSafeException catch (error) {
+      _error = error.message;
+      return false;
     } on Object catch (error) {
       _error = 'The local stop request failed (${error.runtimeType}).';
       return false;
