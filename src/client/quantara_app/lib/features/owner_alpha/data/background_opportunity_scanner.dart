@@ -9,6 +9,7 @@ import '../domain/owner_alpha_models.dart';
 import 'bitunix_owner_alpha_repository.dart';
 import 'platform_opportunity_services.dart';
 import 'signal_outcome_evaluator.dart';
+import 'signal_sizing_reconciler.dart';
 import 'trade_idea_factory.dart';
 
 const _backgroundTask = 'quantara.opportunity-scan.v1';
@@ -83,14 +84,12 @@ void quantaraBackgroundDispatcher() {
         for (final entry in existingJournal) entry.setupId: entry,
       };
       for (final idea in ideas) {
-        final existing = journalById[idea.setupId];
-        if (existing == null) {
-          journalById[idea.setupId] = SignalJournalEntry.fromIdea(idea);
-        } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {
-          journalById[idea.setupId] = SignalJournalEntry.fromIdea(
-            idea,
-          ).copyWith(note: existing.note, closed: existing.closed);
-        }
+        journalById[idea.setupId] = SignalSizingReconciler.merge(
+          idea: idea,
+          sizingCapital: capital,
+          riskPercent: risk,
+          existing: journalById[idea.setupId],
+        );
       }
       final analyses = <String, List<ChartCandle>>{
         for (final result in snapshot.radar)

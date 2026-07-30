@@ -18,6 +18,9 @@ void main() {
         contains('class _LeverageControl extends StatefulWidget'),
       );
       expect(signals, isNot(contains('DropdownButtonFormField<int>')));
+      expect(signals, isNot(contains('Slider(')));
+      expect(signals, contains(r"ValueKey('leverage-${entry.setupId}')"));
+      expect(signals, contains('IconButton.filledTonal'));
       expect(analysis, isNot(contains('DropdownButtonFormField<int>')));
       expect(analysis, contains('SegmentedButton<String>'));
     },

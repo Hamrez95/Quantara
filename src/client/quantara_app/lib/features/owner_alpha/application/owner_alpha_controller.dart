@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../data/bitunix_owner_alpha_repository.dart';
 import '../data/signal_outcome_evaluator.dart';
+import '../data/signal_sizing_reconciler.dart';
 import '../data/trade_idea_factory.dart';
 import '../domain/owner_alpha_models.dart';
 
@@ -453,6 +454,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         diagnostics: current.diagnostics,
         generatedAt: current.generatedAt,
       );
+      await _captureOpportunities(_snapshot!.opportunities);
     }
     notifyListeners();
   }
@@ -715,14 +717,12 @@ final class OwnerAlphaController extends ChangeNotifier {
       for (final item in _opportunityState.journal) item.setupId: item,
     };
     for (final idea in ideas) {
-      final existing = byId[idea.setupId];
-      if (existing == null) {
-        byId[idea.setupId] = SignalJournalEntry.fromIdea(idea);
-      } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {
-        byId[idea.setupId] = SignalJournalEntry.fromIdea(
-          idea,
-        ).copyWith(note: existing.note, closed: existing.closed);
-      }
+      byId[idea.setupId] = SignalSizingReconciler.merge(
+        idea: idea,
+        sizingCapital: _capital,
+        riskPercent: _riskPercent,
+        existing: byId[idea.setupId],
+      );
     }
     final journal = byId.values.toList()
       ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
