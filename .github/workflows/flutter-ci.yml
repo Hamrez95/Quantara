@@ -106,6 +106,17 @@ jobs:
       - name: Build universal Android release APK
         run: flutter build apk --release
 
+      - name: Verify universal APK manifest safety declarations
+        shell: bash
+        run: |
+          set -euo pipefail
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          test -x "$apkanalyzer_path"
+          "$apkanalyzer_path" manifest print build/app/outputs/flutter-apk/app-release.apk > merged-manifest.xml
+          grep -q "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
+          grep -q "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
+          grep -q "android:foregroundServiceType=\"specialUse\"" merged-manifest.xml
+
       - name: Verify universal APK 16KB ZIP alignment
         shell: bash
         run: |
@@ -159,7 +170,7 @@ jobs:
           name: quantara-android-0.13.0-local-live-canary
           path: apk
 
-      - name: Boot emulator and verify local-live declaration
+      - name: Boot emulator and verify cold start
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
@@ -177,8 +188,6 @@ jobs:
             adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt
             cat android-pid.txt
             test -s android-pid.txt
-            adb shell dumpsys package "$ANDROID_PACKAGE" | grep -q "com.pravera.flutter_foreground_task.service.ForegroundService"
-            adb shell dumpsys package "$ANDROID_PACKAGE" | grep -q "android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
             adb logcat -d > android-logcat.txt
             adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
             ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
