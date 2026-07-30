@@ -53,7 +53,7 @@ replace(
 replace(
     page,
     "  4 => strings.strategyLab,\n  5 => strings.profile,",
-    "  4 => strings.strategyLab,\n  5 => strings.locale.languageCode == 'fa' ? 'ترید خودکار' : 'Auto Trade',\n  6 => strings.profile,",
+    "  4 => strings.strategyLab,\n  5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',\n  6 => strings.profile,",
 )
 replace(
     page,
@@ -72,11 +72,7 @@ replace(
 )
 
 pubspec = "src/client/quantara_app/pubspec.yaml"
-replace(
-    pubspec,
-    "version: 0.11.2+14",
-    "version: 0.12.0+15",
-)
+replace(pubspec, "version: 0.11.2+14", "version: 0.12.0+15")
 replace(
     pubspec,
     "  http: ^1.6.0\n",
@@ -87,8 +83,7 @@ build_gradle = "src/client/quantara_app/android/app/build.gradle.kts"
 replace(build_gradle, "        minSdk = flutter.minSdkVersion", "        minSdk = 23")
 
 workflow_path = Path(".github/workflows/flutter-ci.yml")
-workflow = workflow_path.read_text().replace("0.11.2", "0.12.0")
-workflow_path.write_text(workflow)
+workflow_path.write_text(workflow_path.read_text().replace("0.11.2", "0.12.0"))
 
 Path("src/client/quantara_app/test/bitunix_request_signer_test.dart").write_text(
     """import 'package:flutter_test/flutter_test.dart';
@@ -104,7 +99,6 @@ void main() {
       query: const {'uid': '200', 'id': '1'},
       body: '{"uid":"2899","arr":[{"id":1,"name":"maple"},{"id":2,"name":"lily"}]}',
     );
-
     expect(
       result.digest,
       '75099831ac6803e9c5b79dd3cde2c3c529b4750bd3508186afdde0dd13599b38',
@@ -134,7 +128,6 @@ void main() {
     final client = File(
       'lib/features/auto_trade/data/bitunix_private_api_client.dart',
     ).readAsStringSync();
-
     expect(page, contains("part 'owner_alpha_auto_trade.dart';"));
     expect(page, contains("'ترید خودکار'"));
     expect(view, contains('نسخه 0.12A فقط خواندنی است'));
