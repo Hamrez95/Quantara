@@ -74,76 +74,60 @@ public sealed class BitunixLiveRestClient
             new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
-    public async Task<JsonElement> GetAccountAsync(
+    public Task<JsonElement> GetAccountAsync(
         BitunixCredentials credentials,
         CancellationToken cancellationToken) =>
-        await SendSignedAsync(
-                HttpMethod.Get,
-                "/api/v1/futures/account",
-                new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["marginCoin"] = "USDT"
-                },
-                null,
-                credentials,
-                cancellationToken)
-            .ConfigureAwait(false);
+        SendSignedAsync(
+            HttpMethod.Get,
+            "/api/v1/futures/account",
+            Query(("marginCoin", "USDT")),
+            null,
+            credentials,
+            cancellationToken);
 
-    public async Task<JsonElement> GetPendingPositionsAsync(
+    public Task<JsonElement> GetPendingPositionsAsync(
         BitunixCredentials credentials,
         CancellationToken cancellationToken) =>
-        await SendSignedAsync(
-                HttpMethod.Get,
-                "/api/v1/futures/position/get_pending_positions",
-                null,
-                null,
-                credentials,
-                cancellationToken)
-            .ConfigureAwait(false);
+        SendSignedAsync(
+            HttpMethod.Get,
+            "/api/v1/futures/position/get_pending_positions",
+            null,
+            null,
+            credentials,
+            cancellationToken);
 
-    public async Task<JsonElement> GetPendingOrdersAsync(
+    public Task<JsonElement> GetPendingOrdersAsync(
         BitunixCredentials credentials,
         CancellationToken cancellationToken) =>
-        await SendSignedAsync(
-                HttpMethod.Get,
-                "/api/v1/futures/trade/get_pending_orders",
-                new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["limit"] = "100"
-                },
-                null,
-                credentials,
-                cancellationToken)
-            .ConfigureAwait(false);
+        SendSignedAsync(
+            HttpMethod.Get,
+            "/api/v1/futures/trade/get_pending_orders",
+            Query(("limit", "100")),
+            null,
+            credentials,
+            cancellationToken);
 
-    public async Task<JsonElement> GetLeverageAndMarginModeAsync(
+    public Task<JsonElement> GetLeverageAndMarginModeAsync(
         string symbol,
         BitunixCredentials credentials,
         CancellationToken cancellationToken) =>
-        await SendSignedAsync(
-                HttpMethod.Get,
-                "/api/v1/futures/account/get_leverage_margin_mode",
-                new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["marginCoin"] = "USDT",
-                    ["symbol"] = NormalizeSymbol(symbol)
-                },
-                null,
-                credentials,
-                cancellationToken)
-            .ConfigureAwait(false);
+        SendSignedAsync(
+            HttpMethod.Get,
+            "/api/v1/futures/account/get_leverage_margin_mode",
+            Query(("marginCoin", "USDT"), ("symbol", NormalizeSymbol(symbol))),
+            null,
+            credentials,
+            cancellationToken);
 
     public async Task ChangeMarginModeToIsolatedAsync(
         string symbol,
         BitunixCredentials credentials,
         CancellationToken cancellationToken)
     {
-        var body = new SortedDictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["marginCoin"] = "USDT",
-            ["marginMode"] = "ISOLATION",
-            ["symbol"] = NormalizeSymbol(symbol)
-        };
+        var body = Body(
+            ("marginCoin", "USDT"),
+            ("marginMode", "ISOLATION"),
+            ("symbol", NormalizeSymbol(symbol)));
         _ = await SendSignedAsync(
                 HttpMethod.Post,
                 "/api/v1/futures/account/change_margin_mode",
@@ -167,12 +151,10 @@ public sealed class BitunixLiveRestClient
                 "Leverage must be between 1 and 125.");
         }
 
-        var body = new SortedDictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["leverage"] = leverage,
-            ["marginCoin"] = "USDT",
-            ["symbol"] = NormalizeSymbol(symbol)
-        };
+        var body = Body(
+            ("leverage", leverage),
+            ("marginCoin", "USDT"),
+            ("symbol", NormalizeSymbol(symbol)));
         _ = await SendSignedAsync(
                 HttpMethod.Post,
                 "/api/v1/futures/account/change_leverage",
@@ -190,31 +172,18 @@ public sealed class BitunixLiveRestClient
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateOrder(request);
-        var body = new SortedDictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["clientId"] = request.ClientId.Trim(),
-            ["orderType"] = request.OrderType.Trim().ToUpperInvariant(),
-            ["qty"] = FormatDecimal(request.Quantity),
-            ["reduceOnly"] = request.ReduceOnly,
-            ["side"] = request.Side.Trim().ToUpperInvariant(),
-            ["symbol"] = NormalizeSymbol(request.Symbol),
-            ["tradeSide"] = request.TradeSide.Trim().ToUpperInvariant()
-        };
+        var body = Body(
+            ("clientId", request.ClientId.Trim()),
+            ("orderType", request.OrderType.Trim().ToUpperInvariant()),
+            ("qty", FormatDecimal(request.Quantity)),
+            ("reduceOnly", request.ReduceOnly),
+            ("side", request.Side.Trim().ToUpperInvariant()),
+            ("symbol", NormalizeSymbol(request.Symbol)),
+            ("tradeSide", request.TradeSide.Trim().ToUpperInvariant()));
         AddOptional(body, "effect", request.Effect?.Trim().ToUpperInvariant());
         AddOptional(body, "price", request.Price);
-        if (request.TakeProfitPrice is not null)
-        {
-            body["tpOrderType"] = "MARKET";
-            body["tpPrice"] = FormatDecimal(request.TakeProfitPrice.Value);
-            body["tpStopType"] = "MARK_PRICE";
-        }
-
-        if (request.StopLossPrice is not null)
-        {
-            body["slOrderType"] = "MARKET";
-            body["slPrice"] = FormatDecimal(request.StopLossPrice.Value);
-            body["slStopType"] = "MARK_PRICE";
-        }
+        AddProtection(body, "tp", request.TakeProfitPrice);
+        AddProtection(body, "sl", request.StopLossPrice);
 
         var data = await SendSignedAsync(
                 HttpMethod.Post,
@@ -224,9 +193,9 @@ public sealed class BitunixLiveRestClient
                 credentials,
                 cancellationToken)
             .ConfigureAwait(false);
-        var orderId = GetRequiredString(data, "orderId");
-        var clientId = GetRequiredString(data, "clientId");
-        return new BitunixPlacedOrder(orderId, clientId);
+        return new BitunixPlacedOrder(
+            GetRequiredString(data, "orderId"),
+            GetRequiredString(data, "clientId"));
     }
 
     internal async Task<JsonElement> SendSignedAsync(
@@ -238,14 +207,13 @@ public sealed class BitunixLiveRestClient
         CancellationToken cancellationToken)
     {
         credentials.Validate();
-        if (string.IsNullOrWhiteSpace(path) || !path.StartsWith('/', StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(path)
+            || !path.StartsWith("/", StringComparison.Ordinal))
         {
             throw new ArgumentException("A root-relative API path is required.", nameof(path));
         }
 
-        var sortedQuery = query is null
-            ? null
-            : new SortedDictionary<string, string>(query, StringComparer.Ordinal);
+        var sortedQuery = CopySortedQuery(query);
         var compactBody = body is null
             ? string.Empty
             : JsonSerializer.Serialize(body, JsonOptions);
@@ -261,9 +229,8 @@ public sealed class BitunixLiveRestClient
             credentials.SecretKey,
             sortedQuery,
             compactBody);
-        var uri = BuildUri(path, sortedQuery);
 
-        using var request = new HttpRequestMessage(method, uri);
+        using var request = new HttpRequestMessage(method, BuildUri(path, sortedQuery));
         request.Headers.TryAddWithoutValidation("api-key", credentials.ApiKey);
         request.Headers.TryAddWithoutValidation("nonce", nonce);
         request.Headers.TryAddWithoutValidation("timestamp", timestamp);
@@ -271,10 +238,7 @@ public sealed class BitunixLiveRestClient
         request.Headers.TryAddWithoutValidation("language", "en-US");
         if (body is not null)
         {
-            request.Content = new StringContent(
-                compactBody,
-                Encoding.UTF8,
-                "application/json");
+            request.Content = new StringContent(compactBody, Encoding.UTF8, "application/json");
         }
 
         using var response = await _httpClient
@@ -293,7 +257,7 @@ public sealed class BitunixLiveRestClient
         {
             document = JsonDocument.Parse(content);
         }
-        catch (JsonException exception)
+        catch (JsonException)
         {
             throw new BitunixSafeException(
                 "Bitunix returned an unreadable response.",
@@ -325,12 +289,53 @@ public sealed class BitunixLiveRestClient
         if (query is not null && query.Count > 0)
         {
             builder.Query = string.Join(
-                '&',
+                "&",
                 query.Select(pair =>
                     $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}"));
         }
 
         return builder.Uri;
+    }
+
+    private static SortedDictionary<string, string>? CopySortedQuery(
+        IReadOnlyDictionary<string, string>? query)
+    {
+        if (query is null)
+        {
+            return null;
+        }
+
+        var sorted = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in query)
+        {
+            sorted[pair.Key] = pair.Value;
+        }
+
+        return sorted;
+    }
+
+    private static SortedDictionary<string, string> Query(
+        params (string Key, string Value)[] values)
+    {
+        var query = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var value in values)
+        {
+            query[value.Key] = value.Value;
+        }
+
+        return query;
+    }
+
+    private static SortedDictionary<string, object?> Body(
+        params (string Key, object? Value)[] values)
+    {
+        var body = new SortedDictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var value in values)
+        {
+            body[value.Key] = value.Value;
+        }
+
+        return body;
     }
 
     private static void ValidateOrder(BitunixPlaceOrderRequest request)
@@ -339,15 +344,16 @@ public sealed class BitunixLiveRestClient
         if (request.Quantity <= 0m)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(request),
+                nameof(request.Quantity),
                 "Order quantity must be positive.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.ClientId) || request.ClientId.Trim().Length > 64)
+        if (string.IsNullOrWhiteSpace(request.ClientId)
+            || request.ClientId.Trim().Length > 64)
         {
             throw new ArgumentException(
                 "Client ID is required and must be at most 64 characters.",
-                nameof(request));
+                nameof(request.ClientId));
         }
 
         if (string.Equals(request.OrderType, "LIMIT", StringComparison.OrdinalIgnoreCase)
@@ -355,7 +361,7 @@ public sealed class BitunixLiveRestClient
         {
             throw new ArgumentException(
                 "Limit orders require a price.",
-                nameof(request));
+                nameof(request.Price));
         }
     }
 
@@ -399,6 +405,21 @@ public sealed class BitunixLiveRestClient
         {
             body[key] = FormatDecimal(value.Value);
         }
+    }
+
+    private static void AddProtection(
+        IDictionary<string, object?> body,
+        string prefix,
+        decimal? price)
+    {
+        if (price is null)
+        {
+            return;
+        }
+
+        body[$"{prefix}OrderType"] = "MARKET";
+        body[$"{prefix}Price"] = FormatDecimal(price.Value);
+        body[$"{prefix}StopType"] = "MARK_PRICE";
     }
 
     private static string GetRequiredString(JsonElement element, string propertyName)
@@ -449,5 +470,8 @@ public sealed class BitunixLiveRestClient
     }
 
     private static string CreateNonce() =>
-        Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        string.Concat(
+            RandomNumberGenerator
+                .GetBytes(16)
+                .Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
 }
