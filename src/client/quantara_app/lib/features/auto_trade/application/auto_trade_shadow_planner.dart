@@ -22,10 +22,12 @@ abstract final class AutoTradeShadowPlanner {
       case AutoTradeOperatingMode.paused:
       case AutoTradeOperatingMode.circuitBreaker:
         rejections.add(AutoTradeRejectionCode.circuitBreaker);
+        break;
       case AutoTradeOperatingMode.readOnly:
       case AutoTradeOperatingMode.liveCanary:
       case AutoTradeOperatingMode.restrictedAuto:
         rejections.add(AutoTradeRejectionCode.unsupportedMode);
+        break;
     }
 
     if (!context.privateStreamHealthy) {
