@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Quantara.Api.AutoTrading;
 using Quantara.Api.Cockpit;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +12,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ICockpitSnapshotProvider, DeterministicCockpitSnapshotProvider>();
+builder.Services.AddSingleton<IAutoTradeExecutionCapability, DisabledAutoTradeExecutionCapability>();
+builder.Services.AddSingleton<IAutoTradePreflightService, ConfigurationAutoTradePreflightService>();
+builder.Services.AddSingleton<IAutoTradeControlCoordinator, InMemoryAutoTradeControlCoordinator>();
 
 var allowedOrigins = builder.Configuration["QUANTARA_ALLOWED_ORIGINS"]?
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -23,8 +27,11 @@ if (allowedOrigins.Length > 0)
             "quantara-client",
             policy => policy
                 .WithOrigins(allowedOrigins)
-                .WithMethods("GET")
-                .WithHeaders("Accept", "Content-Type"));
+                .WithMethods("GET", "POST")
+                .WithHeaders(
+                    "Accept",
+                    "Content-Type",
+                    "X-Quantara-Control-Token"));
     });
 }
 
@@ -71,6 +78,8 @@ app.MapGet(
         Results.Json(provider.Create(timeProvider.GetUtcNow())))
     .WithName("CockpitSnapshot")
     .Produces<CockpitResponseContract>(StatusCodes.Status200OK);
+
+app.MapAutoTradeEndpoints();
 
 app.Run();
 
