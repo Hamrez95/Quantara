@@ -1,9 +1,9 @@
 name: Apply 0.11.2 video regression patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/63-64-video-regressions
+      - main
     paths:
       - '.github/workflows/apply-video-regression-patch.yml'
 
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,54 +34,19 @@ jobs:
               file.write_text(text.replace(old, new, 1))
 
           models = 'src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart'
-          replace(
-              models,
-              "    required this.summary,\n    required this.invalidation,\n    this.outcome = SignalOutcome.pendingEntry,",
-              "    required this.summary,\n    required this.invalidation,\n    this.sizingCapital = 0,\n    this.outcome = SignalOutcome.pendingEntry,",
-          )
-          replace(
-              models,
-              "  factory SignalJournalEntry.fromIdea(TradeIdea idea) => SignalJournalEntry(\n",
-              "  factory SignalJournalEntry.fromIdea(\n    TradeIdea idea, {\n    double sizingCapital = 0,\n  }) => SignalJournalEntry(\n",
-          )
-          replace(
-              models,
-              "    summary: idea.summary,\n    invalidation: idea.invalidation,\n  );",
-              "    summary: idea.summary,\n    invalidation: idea.invalidation,\n    sizingCapital: sizingCapital,\n  );",
-          )
-          replace(
-              models,
-              "  final String summary;\n  final String invalidation;\n  final SignalOutcome outcome;",
-              "  final String summary;\n  final String invalidation;\n  final double sizingCapital;\n  final SignalOutcome outcome;",
-          )
-          replace(
-              models,
-              "  double get selectedMargin => notionalValue / selectedLeverage;\n\n  bool get hasTerminalOutcome =>",
-              "  double get selectedMargin => notionalValue / selectedLeverage;\n\n  double get sizingRiskPercent =>\n      sizingCapital <= 0 ? 0 : maximumLoss / sizingCapital * 100;\n\n  bool get canRefreshSizing =>\n      outcome == SignalOutcome.pendingEntry &&\n      activatedAt == null &&\n      !closed;\n\n  bool get hasTerminalOutcome =>",
-          )
-          replace(
-              models,
-              "    summary: summary,\n    invalidation: invalidation,\n    outcome: outcome ?? this.outcome,",
-              "    summary: summary,\n    invalidation: invalidation,\n    sizingCapital: sizingCapital,\n    outcome: outcome ?? this.outcome,",
-          )
-          replace(
-              models,
-              "    'summary': summary,\n    'invalidation': invalidation,\n    'outcome': outcome.name,",
-              "    'summary': summary,\n    'invalidation': invalidation,\n    'sizingCapital': sizingCapital,\n    'outcome': outcome.name,",
-          )
-          replace(
-              models,
-              "        recommendedLeverage: recommendedLeverage.clamp(1, 100).toInt(),\n        maximumSafeLeverage: maximumSafeLeverage.clamp(1, 100).toInt(),\n        selectedLeverage: selectedLeverage\n            .clamp(1, maximumSafeLeverage.clamp(1, 100))\n            .toInt(),\n        summary: value['summary'] as String,\n        invalidation: value['invalidation'] as String,",
-              "        recommendedLeverage: recommendedLeverage\n            .clamp(1, TradeIdea.maximumManualLeverage)\n            .toInt(),\n        maximumSafeLeverage: maximumSafeLeverage\n            .clamp(1, TradeIdea.maximumManualLeverage)\n            .toInt(),\n        selectedLeverage: selectedLeverage\n            .clamp(1, TradeIdea.maximumManualLeverage)\n            .toInt(),\n        summary: value['summary'] as String,\n        invalidation: value['invalidation'] as String,\n        sizingCapital: (value['sizingCapital'] as num?)?.toDouble() ?? 0,",
-          )
+          replace(models, "    required this.summary,\n    required this.invalidation,\n    this.outcome = SignalOutcome.pendingEntry,", "    required this.summary,\n    required this.invalidation,\n    this.sizingCapital = 0,\n    this.outcome = SignalOutcome.pendingEntry,")
+          replace(models, "  factory SignalJournalEntry.fromIdea(TradeIdea idea) => SignalJournalEntry(\n", "  factory SignalJournalEntry.fromIdea(\n    TradeIdea idea, {\n    double sizingCapital = 0,\n  }) => SignalJournalEntry(\n")
+          replace(models, "    summary: idea.summary,\n    invalidation: idea.invalidation,\n  );", "    summary: idea.summary,\n    invalidation: idea.invalidation,\n    sizingCapital: sizingCapital,\n  );")
+          replace(models, "  final String summary;\n  final String invalidation;\n  final SignalOutcome outcome;", "  final String summary;\n  final String invalidation;\n  final double sizingCapital;\n  final SignalOutcome outcome;")
+          replace(models, "  double get selectedMargin => notionalValue / selectedLeverage;\n\n  bool get hasTerminalOutcome =>", "  double get selectedMargin => notionalValue / selectedLeverage;\n\n  double get sizingRiskPercent =>\n      sizingCapital <= 0 ? 0 : maximumLoss / sizingCapital * 100;\n\n  bool get canRefreshSizing =>\n      outcome == SignalOutcome.pendingEntry &&\n      activatedAt == null &&\n      !closed;\n\n  bool get hasTerminalOutcome =>")
+          replace(models, "    summary: summary,\n    invalidation: invalidation,\n    outcome: outcome ?? this.outcome,", "    summary: summary,\n    invalidation: invalidation,\n    sizingCapital: sizingCapital,\n    outcome: outcome ?? this.outcome,")
+          replace(models, "    'summary': summary,\n    'invalidation': invalidation,\n    'outcome': outcome.name,", "    'summary': summary,\n    'invalidation': invalidation,\n    'sizingCapital': sizingCapital,\n    'outcome': outcome.name,")
+          replace(models, "        recommendedLeverage: recommendedLeverage.clamp(1, 100).toInt(),\n        maximumSafeLeverage: maximumSafeLeverage.clamp(1, 100).toInt(),\n        selectedLeverage: selectedLeverage\n            .clamp(1, maximumSafeLeverage.clamp(1, 100))\n            .toInt(),\n        summary: value['summary'] as String,\n        invalidation: value['invalidation'] as String,", "        recommendedLeverage: recommendedLeverage\n            .clamp(1, TradeIdea.maximumManualLeverage)\n            .toInt(),\n        maximumSafeLeverage: maximumSafeLeverage\n            .clamp(1, TradeIdea.maximumManualLeverage)\n            .toInt(),\n        selectedLeverage: selectedLeverage\n            .clamp(1, TradeIdea.maximumManualLeverage)\n            .toInt(),\n        summary: value['summary'] as String,\n        invalidation: value['invalidation'] as String,\n        sizingCapital: (value['sizingCapital'] as num?)?.toDouble() ?? 0,")
 
-          reconciler = Path('src/client/quantara_app/lib/features/owner_alpha/data/signal_sizing_reconciler.dart')
-          reconciler.write_text("""import '../domain/owner_alpha_models.dart';
+          Path('src/client/quantara_app/lib/features/owner_alpha/data/signal_sizing_reconciler.dart').write_text("""import '../domain/owner_alpha_models.dart';
 
 /// Reconciles a fresh deterministic idea with a durable journal entry.
-///
-/// An entry that has not activated may be re-sized when account capital or
-/// risk settings change. Once entry is active, historical sizing is immutable.
+/// Pending entries may be re-sized after capital/risk changes; active history is immutable.
 abstract final class SignalSizingReconciler {
   static SignalJournalEntry merge({
     required TradeIdea idea,
@@ -88,12 +54,8 @@ abstract final class SignalSizingReconciler {
     required double riskPercent,
     SignalJournalEntry? existing,
   }) {
-    final fresh = SignalJournalEntry.fromIdea(
-      idea,
-      sizingCapital: sizingCapital,
-    );
+    final fresh = SignalJournalEntry.fromIdea(idea, sizingCapital: sizingCapital);
     if (existing == null) return fresh;
-
     final sizingChanged =
         (existing.sizingCapital - sizingCapital).abs() > 0.0001 ||
         (existing.maximumLoss - idea.maximumLoss).abs() > 0.0001 ||
@@ -102,7 +64,6 @@ abstract final class SignalSizingReconciler {
         (existing.sizingCapital > 0 &&
             (existing.sizingRiskPercent - riskPercent).abs() > 0.0001);
     if (!existing.canRefreshSizing || !sizingChanged) return existing;
-
     return fresh.copyWith(
       note: existing.note,
       closed: existing.closed,
@@ -116,85 +77,31 @@ abstract final class SignalSizingReconciler {
 """)
 
           controller = 'src/client/quantara_app/lib/features/owner_alpha/application/owner_alpha_controller.dart'
-          replace(
-              controller,
-              "import '../data/signal_outcome_evaluator.dart';\nimport '../data/trade_idea_factory.dart';",
-              "import '../data/signal_outcome_evaluator.dart';\nimport '../data/signal_sizing_reconciler.dart';\nimport '../data/trade_idea_factory.dart';",
-          )
-          replace(
-              controller,
-              "      _snapshot = OwnerAlphaSnapshot(\n        radar: [",
-              "      _snapshot = OwnerAlphaSnapshot(\n        radar: [",
-          )
-          replace(
-              controller,
-              "        generatedAt: current.generatedAt,\n      );\n    }\n    notifyListeners();\n  }\n\n  static String? _normalizeSymbol",
-              "        generatedAt: current.generatedAt,\n      );\n      await _captureOpportunities(_snapshot!.opportunities);\n    }\n    notifyListeners();\n  }\n\n  static String? _normalizeSymbol",
-          )
-          replace(
-              controller,
-              "    for (final idea in ideas) {\n      final existing = byId[idea.setupId];\n      if (existing == null) {\n        byId[idea.setupId] = SignalJournalEntry.fromIdea(idea);\n      } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {\n        byId[idea.setupId] = SignalJournalEntry.fromIdea(\n          idea,\n        ).copyWith(note: existing.note, closed: existing.closed);\n      }\n    }",
-              "    for (final idea in ideas) {\n      byId[idea.setupId] = SignalSizingReconciler.merge(\n        idea: idea,\n        sizingCapital: _capital,\n        riskPercent: _riskPercent,\n        existing: byId[idea.setupId],\n      );\n    }",
-          )
+          replace(controller, "import '../data/signal_outcome_evaluator.dart';\nimport '../data/trade_idea_factory.dart';", "import '../data/signal_outcome_evaluator.dart';\nimport '../data/signal_sizing_reconciler.dart';\nimport '../data/trade_idea_factory.dart';")
+          replace(controller, "        generatedAt: current.generatedAt,\n      );\n    }\n    notifyListeners();\n  }\n\n  static String? _normalizeSymbol", "        generatedAt: current.generatedAt,\n      );\n      await _captureOpportunities(_snapshot!.opportunities);\n    }\n    notifyListeners();\n  }\n\n  static String? _normalizeSymbol")
+          replace(controller, "    for (final idea in ideas) {\n      final existing = byId[idea.setupId];\n      if (existing == null) {\n        byId[idea.setupId] = SignalJournalEntry.fromIdea(idea);\n      } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {\n        byId[idea.setupId] = SignalJournalEntry.fromIdea(\n          idea,\n        ).copyWith(note: existing.note, closed: existing.closed);\n      }\n    }", "    for (final idea in ideas) {\n      byId[idea.setupId] = SignalSizingReconciler.merge(\n        idea: idea,\n        sizingCapital: _capital,\n        riskPercent: _riskPercent,\n        existing: byId[idea.setupId],\n      );\n    }")
 
           background = 'src/client/quantara_app/lib/features/owner_alpha/data/background_opportunity_scanner.dart'
-          replace(
-              background,
-              "import 'signal_outcome_evaluator.dart';\nimport 'trade_idea_factory.dart';",
-              "import 'signal_outcome_evaluator.dart';\nimport 'signal_sizing_reconciler.dart';\nimport 'trade_idea_factory.dart';",
-          )
-          replace(
-              background,
-              "      for (final idea in ideas) {\n        final existing = journalById[idea.setupId];\n        if (existing == null) {\n          journalById[idea.setupId] = SignalJournalEntry.fromIdea(idea);\n        } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {\n          journalById[idea.setupId] = SignalJournalEntry.fromIdea(\n            idea,\n          ).copyWith(note: existing.note, closed: existing.closed);\n        }\n      }",
-              "      for (final idea in ideas) {\n        journalById[idea.setupId] = SignalSizingReconciler.merge(\n          idea: idea,\n          sizingCapital: capital,\n          riskPercent: risk,\n          existing: journalById[idea.setupId],\n        );\n      }",
-          )
+          replace(background, "import 'signal_outcome_evaluator.dart';\nimport 'trade_idea_factory.dart';", "import 'signal_outcome_evaluator.dart';\nimport 'signal_sizing_reconciler.dart';\nimport 'trade_idea_factory.dart';")
+          replace(background, "      for (final idea in ideas) {\n        final existing = journalById[idea.setupId];\n        if (existing == null) {\n          journalById[idea.setupId] = SignalJournalEntry.fromIdea(idea);\n        } else if (existing.positionSize <= 0 || existing.notionalValue <= 0) {\n          journalById[idea.setupId] = SignalJournalEntry.fromIdea(\n            idea,\n          ).copyWith(note: existing.note, closed: existing.closed);\n        }\n      }", "      for (final idea in ideas) {\n        journalById[idea.setupId] = SignalSizingReconciler.merge(\n          idea: idea,\n          sizingCapital: capital,\n          riskPercent: risk,\n          existing: journalById[idea.setupId],\n        );\n      }")
 
           signals = 'src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_signals.dart'
-          replace(
-              signals,
-              "            _LeverageControl(\n              selected: entry.selectedLeverage,",
-              "            _LeverageControl(\n              key: ValueKey('leverage-${entry.setupId}'),\n              selected: entry.selectedLeverage,",
-          )
-          replace(
-              signals,
-              "                MetricTile(\n                  label: _t(context, 'ارزش پوزیشن', 'Position notional'),",
-              "                if (entry.sizingCapital > 0)\n                  MetricTile(\n                    label: _t(context, 'سرمایه مبنای محاسبه', 'Sizing capital'),\n                    value: QuantaraNumberFormat.marketValue(\n                      entry.sizingCapital,\n                      unit: 'USDT',\n                    ),\n                  ),\n                MetricTile(\n                  label: _t(\n                    context,\n                    'بودجه ریسک (${entry.sizingRiskPercent.toStringAsFixed(2)}٪)',\n                    'Risk budget (${entry.sizingRiskPercent.toStringAsFixed(2)}%)',\n                  ),\n                  value: QuantaraNumberFormat.marketValue(\n                    entry.maximumLoss,\n                    unit: 'USDT',\n                  ),\n                  valueColor: QuantaraColors.warning,\n                ),\n                MetricTile(\n                  label: _t(context, 'ارزش پوزیشن', 'Position notional'),",
-          )
-          replace(
-              signals,
-              "class _LeverageControl extends StatefulWidget {\n  const _LeverageControl({\n    required this.selected,",
-              "class _LeverageControl extends StatefulWidget {\n  const _LeverageControl({\n    super.key,\n    required this.selected,",
-          )
-          replace(
-              signals,
-              "  bool get _persian => Directionality.of(context) == TextDirection.rtl;\n\n  @override",
-              "  bool get _persian => Directionality.of(context) == TextDirection.rtl;\n\n  void _commit(int value) {\n    final normalized = value\n        .clamp(1, TradeIdea.maximumManualLeverage)\n        .toInt();\n    setState(() => _draft = normalized.toDouble());\n    widget.onChanged(normalized);\n  }\n\n  @override",
-          )
-          replace(
-              signals,
-              "    return DecoratedBox(\n      decoration: BoxDecoration(",
-              "    return Container(\n      clipBehavior: Clip.hardEdge,\n      decoration: BoxDecoration(",
-          )
-          replace(
-              signals,
-              "                      onSelected: (_) {\n                        setState(() => _draft = leverage.toDouble());\n                        widget.onChanged(leverage);\n                      },",
-              "                      onSelected: (_) => _commit(leverage),",
-          )
-          replace(
-              signals,
-              "            const SizedBox(height: 8),\n            Row(\n              children: [\n                const Text('1x', textDirection: TextDirection.ltr),\n                Expanded(\n                  child: Slider(\n                    value: selected.toDouble(),\n                    min: 1,\n                    max: TradeIdea.maximumManualLeverage.toDouble(),\n                    divisions: TradeIdea.maximumManualLeverage - 1,\n                    label: '${selected}x',\n                    onChanged: (value) => setState(() => _draft = value),\n                    onChangeEnd: (value) => widget.onChanged(value.round()),\n                  ),\n                ),\n                Text(\n                  '${TradeIdea.maximumManualLeverage}x',\n                  textDirection: TextDirection.ltr,\n                ),\n              ],\n            ),",
-              "            const SizedBox(height: 10),\n            Row(\n              children: [\n                IconButton.filledTonal(\n                  key: ValueKey('leverage-decrease-$selected'),\n                  tooltip: _persian ? 'یک واحد کمتر' : 'Decrease by one',\n                  onPressed: selected > 1 ? () => _commit(selected - 1) : null,\n                  icon: const Icon(Icons.remove_rounded),\n                ),\n                Expanded(\n                  child: Column(\n                    children: [\n                      Text(\n                        '${selected}x',\n                        textDirection: TextDirection.ltr,\n                        style: Theme.of(context).textTheme.titleLarge?.copyWith(\n                          fontWeight: FontWeight.w900,\n                        ),\n                      ),\n                      Text(\n                        _persian\n                            ? 'برای مقدار دقیق از دکمه‌های کم و زیاد استفاده کن.'\n                            : 'Use the step buttons for an exact value.',\n                        textAlign: TextAlign.center,\n                        style: Theme.of(context).textTheme.bodySmall,\n                      ),\n                    ],\n                  ),\n                ),\n                IconButton.filledTonal(\n                  key: ValueKey('leverage-increase-$selected'),\n                  tooltip: _persian ? 'یک واحد بیشتر' : 'Increase by one',\n                  onPressed: selected < TradeIdea.maximumManualLeverage\n                      ? () => _commit(selected + 1)\n                      : null,\n                  icon: const Icon(Icons.add_rounded),\n                ),\n              ],\n            ),",
-          )
+          replace(signals, "            _LeverageControl(\n              selected: entry.selectedLeverage,", "            _LeverageControl(\n              key: ValueKey('leverage-${entry.setupId}'),\n              selected: entry.selectedLeverage,")
+          replace(signals, "                MetricTile(\n                  label: _t(context, 'ارزش پوزیشن', 'Position notional'),", "                if (entry.sizingCapital > 0)\n                  MetricTile(\n                    label: _t(context, 'سرمایه مبنای محاسبه', 'Sizing capital'),\n                    value: QuantaraNumberFormat.marketValue(\n                      entry.sizingCapital,\n                      unit: 'USDT',\n                    ),\n                  ),\n                MetricTile(\n                  label: _t(\n                    context,\n                    'بودجه ریسک (${entry.sizingRiskPercent.toStringAsFixed(2)}٪)',\n                    'Risk budget (${entry.sizingRiskPercent.toStringAsFixed(2)}%)',\n                  ),\n                  value: QuantaraNumberFormat.marketValue(\n                    entry.maximumLoss,\n                    unit: 'USDT',\n                  ),\n                  valueColor: QuantaraColors.warning,\n                ),\n                MetricTile(\n                  label: _t(context, 'ارزش پوزیشن', 'Position notional'),")
+          replace(signals, "class _LeverageControl extends StatefulWidget {\n  const _LeverageControl({\n    required this.selected,", "class _LeverageControl extends StatefulWidget {\n  const _LeverageControl({\n    super.key,\n    required this.selected,")
+          replace(signals, "  bool get _persian => Directionality.of(context) == TextDirection.rtl;\n\n  @override", "  bool get _persian => Directionality.of(context) == TextDirection.rtl;\n\n  void _commit(int value) {\n    final normalized = value\n        .clamp(1, TradeIdea.maximumManualLeverage)\n        .toInt();\n    setState(() => _draft = normalized.toDouble());\n    widget.onChanged(normalized);\n  }\n\n  @override")
+          replace(signals, "    return DecoratedBox(\n      decoration: BoxDecoration(", "    return Container(\n      clipBehavior: Clip.hardEdge,\n      decoration: BoxDecoration(")
+          replace(signals, "                      onSelected: (_) {\n                        setState(() => _draft = leverage.toDouble());\n                        widget.onChanged(leverage);\n                      },", "                      onSelected: (_) => _commit(leverage),")
+          replace(signals, "            const SizedBox(height: 8),\n            Row(\n              children: [\n                const Text('1x', textDirection: TextDirection.ltr),\n                Expanded(\n                  child: Slider(\n                    value: selected.toDouble(),\n                    min: 1,\n                    max: TradeIdea.maximumManualLeverage.toDouble(),\n                    divisions: TradeIdea.maximumManualLeverage - 1,\n                    label: '${selected}x',\n                    onChanged: (value) => setState(() => _draft = value),\n                    onChangeEnd: (value) => widget.onChanged(value.round()),\n                  ),\n                ),\n                Text(\n                  '${TradeIdea.maximumManualLeverage}x',\n                  textDirection: TextDirection.ltr,\n                ),\n              ],\n            ),", "            const SizedBox(height: 10),\n            Row(\n              children: [\n                IconButton.filledTonal(\n                  key: ValueKey('leverage-decrease-$selected'),\n                  tooltip: _persian ? 'یک واحد کمتر' : 'Decrease by one',\n                  onPressed: selected > 1 ? () => _commit(selected - 1) : null,\n                  icon: const Icon(Icons.remove_rounded),\n                ),\n                Expanded(\n                  child: Column(\n                    children: [\n                      Text(\n                        '${selected}x',\n                        textDirection: TextDirection.ltr,\n                        style: Theme.of(context).textTheme.titleLarge?.copyWith(\n                          fontWeight: FontWeight.w900,\n                        ),\n                      ),\n                      Text(\n                        _persian\n                            ? 'برای مقدار دقیق از دکمه‌های کم و زیاد استفاده کن.'\n                            : 'Use the step buttons for an exact value.',\n                        textAlign: TextAlign.center,\n                        style: Theme.of(context).textTheme.bodySmall,\n                      ),\n                    ],\n                  ),\n                ),\n                IconButton.filledTonal(\n                  key: ValueKey('leverage-increase-$selected'),\n                  tooltip: _persian ? 'یک واحد بیشتر' : 'Increase by one',\n                  onPressed: selected < TradeIdea.maximumManualLeverage\n                      ? () => _commit(selected + 1)\n                      : null,\n                  icon: const Icon(Icons.add_rounded),\n                ),\n              ],\n            ),")
 
           source_test = Path('src/client/quantara_app/test/signal_leverage_ui_source_test.dart')
-          text = source_test.read_text()
-          text = text.replace(
+          source_text = source_test.read_text().replace(
               "      expect(signals, isNot(contains('DropdownButtonFormField<int>')));",
-              "      expect(signals, isNot(contains('DropdownButtonFormField<int>')));\n      expect(signals, isNot(contains('Slider(')));\n      expect(signals, contains(\"ValueKey('leverage-${entry.setupId}')\"));\n      expect(signals, contains('IconButton.filledTonal'));")
-          source_test.write_text(text)
+              "      expect(signals, isNot(contains('DropdownButtonFormField<int>')));\n      expect(signals, isNot(contains('Slider(')));\n      expect(signals, contains(\"ValueKey('leverage-${entry.setupId}')\"));\n      expect(signals, contains('IconButton.filledTonal'));",
+          )
+          source_test.write_text(source_text)
 
-          sizing_test = Path('src/client/quantara_app/test/signal_sizing_reconciler_test.dart')
-          sizing_test.write_text("""import 'package:flutter_test/flutter_test.dart';
+          Path('src/client/quantara_app/test/signal_sizing_reconciler_test.dart').write_text("""import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/owner_alpha/data/signal_sizing_reconciler.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
@@ -204,14 +111,12 @@ void main() {
       _idea(maximumLoss: 100, positionSize: 10, notionalValue: 10000),
       sizingCapital: 10000,
     ).copyWith(selectedLeverage: 20, note: 'keep me');
-
     final resized = SignalSizingReconciler.merge(
       idea: _idea(maximumLoss: 8, positionSize: 0.8, notionalValue: 800),
       sizingCapital: 800,
       riskPercent: 1,
       existing: old,
     );
-
     expect(resized.sizingCapital, 800);
     expect(resized.maximumLoss, 8);
     expect(resized.sizingRiskPercent, closeTo(1, 0.0001));
@@ -229,14 +134,12 @@ void main() {
       outcome: SignalOutcome.active,
       activatedAt: DateTime.utc(2026, 7, 30, 10),
     );
-
     final result = SignalSizingReconciler.merge(
       idea: _idea(maximumLoss: 8, positionSize: 0.8, notionalValue: 800),
       sizingCapital: 800,
       riskPercent: 1,
       existing: active,
     );
-
     expect(identical(result, active), isTrue);
     expect(result.sizingCapital, 10000);
     expect(result.maximumLoss, 100);
@@ -247,9 +150,7 @@ void main() {
       _idea(maximumLoss: 8, positionSize: 0.8, notionalValue: 800),
       sizingCapital: 800,
     ).copyWith(selectedLeverage: 125);
-
     final decoded = SignalJournalEntry.tryFromJson(entry.toJson());
-
     expect(decoded, isNotNull);
     expect(decoded!.selectedLeverage, 125);
     expect(decoded.sizingCapital, 800);
@@ -285,8 +186,7 @@ TradeIdea _idea({
 );
 """)
 
-          integration_test = Path('src/client/quantara_app/test/video_regression_source_test.dart')
-          integration_test.write_text("""import 'dart:io';
+          Path('src/client/quantara_app/test/video_regression_source_test.dart').write_text("""import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -301,7 +201,6 @@ void main() {
     final background = File(
       'lib/features/owner_alpha/data/background_opportunity_scanner.dart',
     ).readAsStringSync();
-
     expect(signals, isNot(contains('Slider(')));
     expect(signals, contains('سرمایه مبنای محاسبه'));
     expect(signals, contains('بودجه ریسک'));
@@ -312,15 +211,9 @@ void main() {
 }
 """)
 
-          replace(
-              'src/client/quantara_app/pubspec.yaml',
-              'version: 0.11.1+13',
-              'version: 0.11.2+14',
-          )
+          replace('src/client/quantara_app/pubspec.yaml', 'version: 0.11.1+13', 'version: 0.11.2+14')
           workflow = Path('.github/workflows/flutter-ci.yml')
-          workflow_text = workflow.read_text().replace('0.11.1', '0.11.2')
-          workflow.write_text(workflow_text)
-
+          workflow.write_text(workflow.read_text().replace('0.11.1', '0.11.2'))
           release = Path('docs/releases/v0.11.2-video-regressions.md')
           release.parent.mkdir(parents=True, exist_ok=True)
           release.write_text("""# Quantara 0.11.2 video regression gate
@@ -328,21 +221,14 @@ void main() {
 This candidate fixes the Samsung Android 16 setup-screen grey surface and stale
 capital sizing reported in the user screen recording.
 
-## Safety behavior
-
 - leverage uses bounded preset and step controls; no Slider or dropdown overlay;
 - pending, untriggered setups are re-sized after capital/risk changes;
 - active and resolved setups keep immutable historical sizing;
 - foreground and background scans share the same sizing reconciler;
-- every setup displays sizing capital and risk budget separately from leveraged
-  position notional and required margin;
+- setup cards display sizing capital and risk budget separately from notional;
 - manual leverage up to 125x persists across restart.
 
-## Release gate
-
-Do not call this Stable until format, analyzer, all Flutter tests, web/Android
-builds, 16 KB alignment, Android 14/15/16 cold-start smoke, and physical Samsung
-validation are green.
+Do not call this Stable until all CI, Android 14/15/16 and physical Samsung gates pass.
 """)
           PY
 
