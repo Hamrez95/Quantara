@@ -1,10 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quantara_app/features/auto_trade/data/unattended_auto_trade_api_client.dart';
 import 'package:quantara_app/features/auto_trade/domain/unattended_auto_trade_models.dart';
-import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const token = '0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -97,19 +97,21 @@ void main() {
 
   test('server safety rejection exposes reasons without control token', () async {
     final client = UnattendedAutoTradeApiClient(
-      client: MockClient((request) async => http.Response(
-        jsonEncode({
-          'code': 'invalidConfiguration',
-          'errors': [
-            'Server live-execution feature flag is disabled.',
-            'A reconciled live Bitunix execution cycle is not registered.',
-          ],
-        }),
-        400,
-      )),
+      client: MockClient(
+        (request) async => http.Response(
+          jsonEncode({
+            'code': 'invalidConfiguration',
+            'errors': [
+              'Server live-execution feature flag is disabled.',
+              'A reconciled live Bitunix execution cycle is not registered.',
+            ],
+          }),
+          400,
+        ),
+      ),
     );
 
-    final exception = await expectLater(
+    await expectLater(
       () => client.start(
         serverConfig: serverConfig,
         requestId: 'start-1',
@@ -128,9 +130,13 @@ void main() {
           maximumSignalAgeSeconds: 1200,
         ),
       ),
-      throwsA(isA<UnattendedAutoTradeSafeException>()),
+      throwsA(
+        isA<UnattendedAutoTradeSafeException>().having(
+          (error) => error.message,
+          'message',
+          contains('feature flag'),
+        ),
+      ),
     );
-
-    expect(exception, isNull);
   });
 }
