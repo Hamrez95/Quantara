@@ -261,9 +261,9 @@ final class BitunixLocalLiveApiClient {
       symbol == null ? const {} : {'symbol': symbol},
       credentials,
     );
-    return _mapList(response['data']).map(_positionFromJson).toList(
-      growable: false,
-    );
+    return _mapList(
+      response['data'],
+    ).map(_positionFromJson).toList(growable: false);
   }
 
   Future<List<BitunixPendingProtection>> fetchPendingProtection(

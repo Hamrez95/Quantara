@@ -109,8 +109,7 @@ final class LocalLiveTradeConfiguration {
         orElse: () => SignalCadence.balanced,
       ),
       languageCode: json['languageCode'] == 'en' ? 'en' : 'fa',
-      scanIntervalSeconds:
-          (json['scanIntervalSeconds'] as num?)?.toInt() ?? 60,
+      scanIntervalSeconds: (json['scanIntervalSeconds'] as num?)?.toInt() ?? 60,
     );
     result.validate();
     return result;
@@ -209,8 +208,8 @@ final class LocalLiveManagedPosition {
             .map((item) => item.toDouble())
             .toList(growable: false),
         leverage: (json['leverage'] as num?)?.toInt() ?? 1,
-        openedAt: DateTime.tryParse(json['openedAt']?.toString() ?? '')
-                ?.toUtc() ??
+        openedAt:
+            DateTime.tryParse(json['openedAt']?.toString() ?? '')?.toUtc() ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         stopOrderId: json['stopOrderId']?.toString(),
         stage: (json['stage'] as num?)?.toInt() ?? 0,
@@ -251,8 +250,9 @@ final class LocalLiveTradeStatus {
     'updatedAt': updatedAt.toUtc().toIso8601String(),
     'message': message,
     'lastScanAt': lastScanAt?.toUtc().toIso8601String(),
-    'lastSuccessfulExchangeSync':
-        lastSuccessfulExchangeSync?.toUtc().toIso8601String(),
+    'lastSuccessfulExchangeSync': lastSuccessfulExchangeSync
+        ?.toUtc()
+        .toIso8601String(),
     'openPositionCount': openPositionCount,
     'closedPositionCount': closedPositionCount,
     'realizedPnl': realizedPnl,
@@ -260,29 +260,29 @@ final class LocalLiveTradeStatus {
     'entriesEnabled': entriesEnabled,
   };
 
-  factory LocalLiveTradeStatus.fromJson(Map<String, Object?> json) =>
-      LocalLiveTradeStatus(
-        state: LocalLiveTradeState.values.firstWhere(
-          (item) => item.name == json['state'],
-          orElse: () => LocalLiveTradeState.error,
-        ),
-        updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '')
-                ?.toUtc() ??
-            DateTime.now().toUtc(),
-        message: json['message']?.toString() ?? '',
-        lastScanAt:
-            DateTime.tryParse(json['lastScanAt']?.toString() ?? '')?.toUtc(),
-        lastSuccessfulExchangeSync: DateTime.tryParse(
-          json['lastSuccessfulExchangeSync']?.toString() ?? '',
-        )?.toUtc(),
-        openPositionCount: (json['openPositionCount'] as num?)?.toInt() ?? 0,
-        closedPositionCount:
-            (json['closedPositionCount'] as num?)?.toInt() ?? 0,
-        realizedPnl: (json['realizedPnl'] as num?)?.toDouble() ?? 0,
-        consecutiveFailures:
-            (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
-        entriesEnabled: json['entriesEnabled'] == true,
-      );
+  factory LocalLiveTradeStatus.fromJson(
+    Map<String, Object?> json,
+  ) => LocalLiveTradeStatus(
+    state: LocalLiveTradeState.values.firstWhere(
+      (item) => item.name == json['state'],
+      orElse: () => LocalLiveTradeState.error,
+    ),
+    updatedAt:
+        DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toUtc() ??
+        DateTime.now().toUtc(),
+    message: json['message']?.toString() ?? '',
+    lastScanAt: DateTime.tryParse(
+      json['lastScanAt']?.toString() ?? '',
+    )?.toUtc(),
+    lastSuccessfulExchangeSync: DateTime.tryParse(
+      json['lastSuccessfulExchangeSync']?.toString() ?? '',
+    )?.toUtc(),
+    openPositionCount: (json['openPositionCount'] as num?)?.toInt() ?? 0,
+    closedPositionCount: (json['closedPositionCount'] as num?)?.toInt() ?? 0,
+    realizedPnl: (json['realizedPnl'] as num?)?.toDouble() ?? 0,
+    consecutiveFailures: (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
+    entriesEnabled: json['entriesEnabled'] == true,
+  );
 }
 
 final class LocalLiveAuditEvent {
@@ -307,7 +307,8 @@ final class LocalLiveAuditEvent {
 
   factory LocalLiveAuditEvent.fromJson(Map<String, Object?> json) =>
       LocalLiveAuditEvent(
-        at: DateTime.tryParse(json['at']?.toString() ?? '')?.toUtc() ??
+        at:
+            DateTime.tryParse(json['at']?.toString() ?? '')?.toUtc() ??
             DateTime.now().toUtc(),
         type: json['type']?.toString() ?? 'unknown',
         message: json['message']?.toString() ?? '',

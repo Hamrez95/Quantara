@@ -175,7 +175,10 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
                         height: 50,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [QuantaraColors.violet, QuantaraColors.cyan],
+                            colors: [
+                              QuantaraColors.violet,
+                              QuantaraColors.cyan,
+                            ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -247,8 +250,8 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
                 onRefresh: widget.controller.isBusy
                     ? null
                     : widget.controller.refresh,
-                onDisconnect: widget.controller.isBusy ||
-                        _localController.isRunning
+                onDisconnect:
+                    widget.controller.isBusy || _localController.isRunning
                     ? null
                     : () => _confirmDisconnect(),
               ),
@@ -272,25 +275,25 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
   Widget _connectionPill() {
     return switch (widget.controller.state) {
       AutoTradeConnectionState.connecting => StatusPill(
-          label: _t('در حال اتصال', 'Connecting'),
-          color: QuantaraColors.warning,
-          icon: Icons.sync_rounded,
-        ),
+        label: _t('در حال اتصال', 'Connecting'),
+        color: QuantaraColors.warning,
+        icon: Icons.sync_rounded,
+      ),
       AutoTradeConnectionState.readOnly => StatusPill(
-          label: _t('متصل', 'Connected'),
-          color: QuantaraColors.success,
-          icon: Icons.verified_user_outlined,
-        ),
+        label: _t('متصل', 'Connected'),
+        color: QuantaraColors.success,
+        icon: Icons.verified_user_outlined,
+      ),
       AutoTradeConnectionState.error => StatusPill(
-          label: _t('خطا', 'Error'),
-          color: QuantaraColors.danger,
-          icon: Icons.error_outline_rounded,
-        ),
+        label: _t('خطا', 'Error'),
+        color: QuantaraColors.danger,
+        icon: Icons.error_outline_rounded,
+      ),
       AutoTradeConnectionState.disconnected => StatusPill(
-          label: _t('قطع', 'Disconnected'),
-          color: QuantaraColors.warning,
-          icon: Icons.link_off_rounded,
-        ),
+        label: _t('قطع', 'Disconnected'),
+        color: QuantaraColors.warning,
+        icon: Icons.link_off_rounded,
+      ),
     };
   }
 
@@ -363,8 +366,8 @@ class _LocalLiveTradeControlCardState
     final color = breaker
         ? QuantaraColors.danger
         : running
-            ? QuantaraColors.success
-            : QuantaraColors.cyan;
+        ? QuantaraColors.success
+        : QuantaraColors.cyan;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,8 +399,8 @@ class _LocalLiveTradeControlCardState
                         'Guarded local live · Canary',
                       ),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     Text(
                       _t(
@@ -475,8 +478,8 @@ class _LocalLiveTradeControlCardState
                   Text(
                     _t('نمادهای مجاز', 'Allowed symbols'),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -485,10 +488,7 @@ class _LocalLiveTradeControlCardState
                     children: [
                       for (final symbol in widget.analysisController.symbols)
                         FilterChip(
-                          label: Text(
-                            symbol,
-                            textDirection: TextDirection.ltr,
-                          ),
+                          label: Text(symbol, textDirection: TextDirection.ltr),
                           selected: _enabledSymbols.contains(symbol),
                           onSelected: (selected) => setState(() {
                             if (selected) {
@@ -504,8 +504,8 @@ class _LocalLiveTradeControlCardState
                   Text(
                     _t('تایم‌فریم‌های مجاز', 'Allowed timeframes'),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -532,9 +532,8 @@ class _LocalLiveTradeControlCardState
                   _numberRow(
                     label: _t('اهرم عمومی', 'Global leverage'),
                     value: '${_leverage}x',
-                    onMinus: () => setState(
-                      () => _leverage = math.max(1, _leverage - 1),
-                    ),
+                    onMinus: () =>
+                        setState(() => _leverage = math.max(1, _leverage - 1)),
                     onPlus: () => setState(
                       () => _leverage = math.min(125, _leverage + 1),
                     ),
@@ -553,12 +552,14 @@ class _LocalLiveTradeControlCardState
                     label: _t('سقف ضرر روزانه', 'Daily loss cap'),
                     value: '${_dailyLossLimit.toStringAsFixed(2)}%',
                     onMinus: () => setState(
-                      () => _dailyLossLimit =
-                          math.max(0.25, _dailyLossLimit - 0.25),
+                      () => _dailyLossLimit = math.max(
+                        0.25,
+                        _dailyLossLimit - 0.25,
+                      ),
                     ),
                     onPlus: () => setState(
-                      () => _dailyLossLimit =
-                          math.min(2, _dailyLossLimit + 0.25),
+                      () =>
+                          _dailyLossLimit = math.min(2, _dailyLossLimit + 0.25),
                     ),
                   ),
                 ],
@@ -785,20 +786,16 @@ class _LocalLiveTradeControlCardState
             child: Text(_t('لغو', 'Cancel')),
           ),
           OutlinedButton(
-            onPressed: () => Navigator.pop(
-              context,
-              LocalLiveStopPolicy.protectAndStop,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, LocalLiveStopPolicy.protectAndStop),
             child: Text(_t('توقف عادی', 'Protect & stop')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: QuantaraColors.danger,
             ),
-            onPressed: () => Navigator.pop(
-              context,
-              LocalLiveStopPolicy.emergencyClose,
-            ),
+            onPressed: () =>
+                Navigator.pop(context, LocalLiveStopPolicy.emergencyClose),
             child: Text(_t('بستن اضطراری', 'Emergency close')),
           ),
         ],
@@ -817,7 +814,9 @@ class _LocalLiveTradeControlCardState
         child: events.isEmpty
             ? Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(_t('هنوز رویدادی ثبت نشده.', 'No events recorded yet.')),
+                child: Text(
+                  _t('هنوز رویدادی ثبت نشده.', 'No events recorded yet.'),
+                ),
               )
             : ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -840,13 +839,13 @@ class _LocalLiveTradeControlCardState
   }
 
   String _stateLabel(LocalLiveTradeState state) => switch (state) {
-        LocalLiveTradeState.stopped => _t('متوقف', 'Stopped'),
-        LocalLiveTradeState.starting => _t('در حال شروع', 'Starting'),
-        LocalLiveTradeState.running => _t('فعال', 'Running'),
-        LocalLiveTradeState.managingOnly => _t('فقط مدیریت', 'Managing only'),
-        LocalLiveTradeState.circuitBreaker => _t('مدار ایمنی', 'Circuit breaker'),
-        LocalLiveTradeState.error => _t('خطا', 'Error'),
-      };
+    LocalLiveTradeState.stopped => _t('متوقف', 'Stopped'),
+    LocalLiveTradeState.starting => _t('در حال شروع', 'Starting'),
+    LocalLiveTradeState.running => _t('فعال', 'Running'),
+    LocalLiveTradeState.managingOnly => _t('فقط مدیریت', 'Managing only'),
+    LocalLiveTradeState.circuitBreaker => _t('مدار ایمنی', 'Circuit breaker'),
+    LocalLiveTradeState.error => _t('خطا', 'Error'),
+  };
 }
 
 class _LockedServerModeCard extends StatelessWidget {
@@ -885,8 +884,8 @@ class _LockedServerModeCard extends StatelessWidget {
                           ? 'ترید شبانه سروری · قفل'
                           : 'Always-on server trading · Locked',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     Text(
                       fa

@@ -126,7 +126,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         final apiKey = message['apiKey']?.toString().trim() ?? '';
         final secretKey = message['secretKey']?.toString().trim() ?? '';
         if (apiKey.length < 8 || secretKey.length < 8) {
-          await _trip('Bitunix credentials were unavailable to the local service.');
+          await _trip(
+            'Bitunix credentials were unavailable to the local service.',
+          );
           return;
         }
         _configuration = configuration;
@@ -175,7 +177,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     final configuration = _configuration;
     final credentials = _credentials;
     final exchange = _exchange;
-    if (configuration == null || credentials == null || exchange == null) return;
+    if (configuration == null || credentials == null || exchange == null)
+      return;
     _cycleRunning = true;
     try {
       final account = await exchange.fetchAccountSnapshot(credentials);
@@ -189,7 +192,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
       }
       await _reconcileManagedPositions(positions);
-      final lossPercent = _sessionStartEquity == null || _sessionStartEquity! <= 0
+      final lossPercent =
+          _sessionStartEquity == null || _sessionStartEquity! <= 0
           ? 0
           : math.max(
               0,
@@ -297,8 +301,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .toInt();
       final entryPrice = rules.roundPrice(markPrice);
       final stopLoss = rules.roundPrice(idea.stopLoss!);
-      final riskPerUnit =
-          (entryPrice - stopLoss).abs() + entryPrice * 0.0017;
+      final riskPerUnit = (entryPrice - stopLoss).abs() + entryPrice * 0.0017;
       final riskBudget =
           account.estimatedEquity * configuration.riskPercent / 100;
       var quantity = rules.roundQuantityDown(riskBudget / riskPerUnit);
@@ -569,17 +572,19 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           : timeframes.contains('1h')
           ? '1h'
           : '15m';
-      final sameTimeframe = group
-          .where((item) => item.timeframe == preferred)
-          .toList(growable: false)
-        ..sort(
-          (left, right) =>
-              right.confidencePercent.compareTo(left.confidencePercent),
-        );
+      final sameTimeframe =
+          group
+              .where((item) => item.timeframe == preferred)
+              .toList(growable: false)
+            ..sort(
+              (left, right) =>
+                  right.confidencePercent.compareTo(left.confidencePercent),
+            );
       if (sameTimeframe.isNotEmpty) candidates.add(sameTimeframe.first);
     }
     candidates.sort(
-      (left, right) => right.confidencePercent.compareTo(left.confidencePercent),
+      (left, right) =>
+          right.confidencePercent.compareTo(left.confidencePercent),
     );
     return candidates.firstOrNull;
   }
@@ -625,15 +630,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           _managed
             ..clear()
             ..addAll(
-              decoded
-                  .whereType<Map<Object?, Object?>>()
-                  .map(
-                    (item) => LocalLiveManagedPosition.fromJson(
-                      item.map(
-                        (key, value) => MapEntry(key.toString(), value),
-                      ),
-                    ),
-                  ),
+              decoded.whereType<Map<Object?, Object?>>().map(
+                (item) => LocalLiveManagedPosition.fromJson(
+                  item.map((key, value) => MapEntry(key.toString(), value)),
+                ),
+              ),
             );
         }
       } on Object {

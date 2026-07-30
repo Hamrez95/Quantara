@@ -168,7 +168,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final running = _isAndroid && await FlutterForegroundTask.isRunningService;
+      final running =
+          _isAndroid && await FlutterForegroundTask.isRunningService;
       if (!running) {
         _status = LocalLiveTradeStatus(
           state: LocalLiveTradeState.stopped,
