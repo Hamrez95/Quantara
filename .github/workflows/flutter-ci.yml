@@ -10,6 +10,7 @@ on:
       - 'release/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'tools/apply_local_live_migration.py'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
@@ -17,6 +18,7 @@ on:
       - dev
     paths:
       - 'src/client/quantara_app/**'
+      - 'tools/apply_local_live_migration.py'
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
@@ -62,88 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          page = Path('lib/features/owner_alpha/presentation/owner_alpha_page.dart')
-          text = page.read_text()
-          marker = "part 'owner_alpha_auto_trade.dart';"
-          support = "part 'owner_alpha_auto_trade_support.dart';"
-          if support not in text:
-              text = text.replace(marker, marker + "\n" + support)
-          page.write_text(text)
-
-          auto_trade = Path('lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart')
-          text = auto_trade.read_text().replace(
-              'Icons.cloud_lock_outlined',
-              'Icons.cloud_off_outlined',
-          )
-          auto_trade.write_text(text)
-
-          client = Path('lib/features/auto_trade/data/bitunix_local_live_api_client.dart')
-          text = client.read_text()
-          old = '''  Future<BitunixPlacedOrder> closePositionReduceOnly({
-            required BitunixLivePosition position,
-            required String clientId,
-            required BitunixApiCredentials credentials,
-          }) async {
-            final response = await _signedPost(
-              '/api/v1/futures/trade/place_order',
-              SplayTreeMap<String, Object?>.from({
-                'clientId': clientId,
-                'orderType': 'MARKET',
-                'positionId': position.positionId,
-                'qty': _decimal(position.quantity.abs()),
-                'reduceOnly': true,
-                'side': position.side.toUpperCase() == 'LONG' ? 'SELL' : 'BUY',
-                'symbol': position.symbol,
-                'tradeSide': 'CLOSE',
-              }),
-              credentials,
-            );
-            final data = _firstMap(response['data']);
-            if (data == null) {
-              throw const LocalLiveTradeSafeException(
-                'Bitunix did not return an emergency close order ID.',
-              );
-            }
-            return BitunixPlacedOrder(
-              orderId: _string(data['orderId']),
-              clientId: _string(data['clientId'], fallback: clientId),
-            );
-          }
-          '''
-          new = '''  Future<BitunixPlacedOrder> closePositionReduceOnly({
-            required BitunixLivePosition position,
-            required String clientId,
-            required BitunixApiCredentials credentials,
-          }) async {
-            final response = await _signedPost(
-              '/api/v1/futures/trade/flash_close_position',
-              SplayTreeMap<String, Object?>.from({
-                'positionId': position.positionId,
-              }),
-              credentials,
-            );
-            final data = _firstMap(response['data']);
-            final positionId = _string(data?['positionId']);
-            if (positionId.isEmpty) {
-              throw const LocalLiveTradeSafeException(
-                'Bitunix did not confirm the emergency position close.',
-              );
-            }
-            return BitunixPlacedOrder(
-              orderId: positionId,
-              clientId: clientId,
-            );
-          }
-          '''
-          if old in text:
-              text = text.replace(old, new)
-          elif '/api/v1/futures/trade/flash_close_position' not in text:
-              raise SystemExit('Emergency-close source block was not found.')
-          client.write_text(text)
-          PY
+          python3 ../../../tools/apply_local_live_migration.py
           dart fix --apply
           dart format lib test
           git diff --stat -- lib test pubspec.lock || true
@@ -160,7 +81,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/client/quantara_app/lib src/client/quantara_app/test src/client/quantara_app/pubspec.lock
-          git commit -m "fix: apply local live Bitunix contract migration"
+          git commit -m "fix: apply local live Bitunix safety migration"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload formatted source snapshot
