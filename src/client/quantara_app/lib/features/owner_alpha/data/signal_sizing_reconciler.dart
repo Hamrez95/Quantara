@@ -24,10 +24,9 @@ abstract final class SignalSizingReconciler {
     return fresh.copyWith(
       note: existing.note,
       closed: existing.closed,
-      selectedLeverage: existing.selectedLeverage.clamp(
-        1,
-        TradeIdea.maximumManualLeverage,
-      ),
+      selectedLeverage: existing.selectedLeverage
+          .clamp(1, TradeIdea.maximumManualLeverage)
+          .toInt(),
     );
   }
 }
