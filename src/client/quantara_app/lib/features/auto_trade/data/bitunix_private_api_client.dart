@@ -11,11 +11,7 @@ final class BitunixPrivateApiClient {
     required http.Client client,
     DateTime Function()? utcNow,
     Random? secureRandom,
-  }) : this._(
-         client,
-         utcNow ?? DateTime.now,
-         secureRandom ?? Random.secure(),
-       );
+  }) : this._(client, utcNow ?? DateTime.now, secureRandom ?? Random.secure());
 
   BitunixPrivateApiClient._(this._client, this._utcNow, this._random);
 
