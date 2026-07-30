@@ -1,7 +1,7 @@
 name: quantara_app
-description: Quantara explainable market research and paper-trading cockpit.
+description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
-version: 0.12.0+15
+version: 0.13.0+16
 
 environment:
   sdk: ^3.12.2
@@ -15,6 +15,7 @@ dependencies:
   crypto: ^3.0.7
   flutter_secure_storage: ^10.3.1
   flutter_local_notifications: ^22.2.0
+  flutter_foreground_task: ^10.0.0
   shared_preferences: ^2.5.3
   workmanager: ^0.9.0+3
 
