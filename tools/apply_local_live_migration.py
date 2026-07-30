@@ -1,6 +1,7 @@
 from pathlib import Path
 
-CLIENT = Path('src/client/quantara_app')
+ROOT = Path(__file__).resolve().parents[1]
+CLIENT = ROOT / 'src/client/quantara_app'
 
 
 def replace_once(path: Path, old: str, new: str, already_present: str) -> None:
