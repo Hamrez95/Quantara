@@ -207,8 +207,7 @@ public sealed class BitunixLiveRestClient
         CancellationToken cancellationToken)
     {
         credentials.Validate();
-        if (string.IsNullOrWhiteSpace(path)
-            || !path.StartsWith("/", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(path) || path[0] != '/')
         {
             throw new ArgumentException("A root-relative API path is required.", nameof(path));
         }
@@ -343,9 +342,9 @@ public sealed class BitunixLiveRestClient
         _ = NormalizeSymbol(request.Symbol);
         if (request.Quantity <= 0m)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(request.Quantity),
-                "Order quantity must be positive.");
+            throw new ArgumentException(
+                "Order quantity must be positive.",
+                nameof(request));
         }
 
         if (string.IsNullOrWhiteSpace(request.ClientId)
@@ -353,7 +352,7 @@ public sealed class BitunixLiveRestClient
         {
             throw new ArgumentException(
                 "Client ID is required and must be at most 64 characters.",
-                nameof(request.ClientId));
+                nameof(request));
         }
 
         if (string.Equals(request.OrderType, "LIMIT", StringComparison.OrdinalIgnoreCase)
@@ -361,7 +360,7 @@ public sealed class BitunixLiveRestClient
         {
             throw new ArgumentException(
                 "Limit orders require a price.",
-                nameof(request.Price));
+                nameof(request));
         }
     }
 
