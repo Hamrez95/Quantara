@@ -24,10 +24,7 @@ abstract final class BitunixRequestSigner {
         .map((entry) => '${entry.key}${entry.value}')
         .join();
     final digest = _sha256('$nonce$timestamp$apiKey$queryString$body');
-    return BitunixSignature(
-      digest: digest,
-      sign: _sha256('$digest$secretKey'),
-    );
+    return BitunixSignature(digest: digest, sign: _sha256('$digest$secretKey'));
   }
 
   static String _sha256(String value) =>

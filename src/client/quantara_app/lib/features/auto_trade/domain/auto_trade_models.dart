@@ -1,15 +1,7 @@
-enum AutoTradeConnectionState {
-  disconnected,
-  connecting,
-  readOnly,
-  error,
-}
+enum AutoTradeConnectionState { disconnected, connecting, readOnly, error }
 
 final class BitunixApiCredentials {
-  const BitunixApiCredentials({
-    required this.apiKey,
-    required this.secretKey,
-  });
+  const BitunixApiCredentials({required this.apiKey, required this.secretKey});
 
   final String apiKey;
   final String secretKey;
@@ -45,8 +37,7 @@ final class AutoTradeAccountSnapshot {
   final List<AutoTradeOrder> orders;
   final DateTime syncedAt;
 
-  double get totalUnrealizedPnl =>
-      crossUnrealizedPnl + isolatedUnrealizedPnl;
+  double get totalUnrealizedPnl => crossUnrealizedPnl + isolatedUnrealizedPnl;
 
   double get estimatedEquity =>
       available + frozen + positionMargin + totalUnrealizedPnl;

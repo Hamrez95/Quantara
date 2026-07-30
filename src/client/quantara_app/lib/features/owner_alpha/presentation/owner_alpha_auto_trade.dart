@@ -162,9 +162,7 @@ class _AutoTradeView extends StatelessWidget {
                           children: [
                             Text(
                               _t(context, 'ترید خودکار', 'Auto Trade'),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
+                              style: Theme.of(context).textTheme.headlineSmall
                                   ?.copyWith(fontWeight: FontWeight.w900),
                             ),
                             Text(
@@ -246,9 +244,7 @@ class _AutoTradeView extends StatelessWidget {
                     : () => _confirmDisconnect(context),
               ),
               const SizedBox(height: 16),
-              _AutoTradeUniversePreview(
-                symbols: analysisController.symbols,
-              ),
+              _AutoTradeUniversePreview(symbols: analysisController.symbols),
               const SizedBox(height: 16),
               _OpenPositionsCard(snapshot: snapshot),
               const SizedBox(height: 16),
@@ -265,25 +261,25 @@ class _AutoTradeView extends StatelessWidget {
   Widget _connectionPill(BuildContext context) {
     return switch (controller.state) {
       AutoTradeConnectionState.connecting => StatusPill(
-          label: _t(context, 'در حال اتصال', 'Connecting'),
-          color: QuantaraColors.warning,
-          icon: Icons.sync_rounded,
-        ),
+        label: _t(context, 'در حال اتصال', 'Connecting'),
+        color: QuantaraColors.warning,
+        icon: Icons.sync_rounded,
+      ),
       AutoTradeConnectionState.readOnly => StatusPill(
-          label: _t(context, 'فقط خواندنی', 'Read-only'),
-          color: QuantaraColors.success,
-          icon: Icons.verified_user_outlined,
-        ),
+        label: _t(context, 'فقط خواندنی', 'Read-only'),
+        color: QuantaraColors.success,
+        icon: Icons.verified_user_outlined,
+      ),
       AutoTradeConnectionState.error => StatusPill(
-          label: _t(context, 'خطا', 'Error'),
-          color: QuantaraColors.danger,
-          icon: Icons.error_outline_rounded,
-        ),
+        label: _t(context, 'خطا', 'Error'),
+        color: QuantaraColors.danger,
+        icon: Icons.error_outline_rounded,
+      ),
       AutoTradeConnectionState.disconnected => StatusPill(
-          label: _t(context, 'قطع', 'Disconnected'),
-          color: QuantaraColors.warning,
-          icon: Icons.link_off_rounded,
-        ),
+        label: _t(context, 'قطع', 'Disconnected'),
+        color: QuantaraColors.warning,
+        icon: Icons.link_off_rounded,
+      ),
     };
   }
 
@@ -316,10 +312,7 @@ class _AutoTradeView extends StatelessWidget {
 }
 
 class _DisconnectedAccountCard extends StatelessWidget {
-  const _DisconnectedAccountCard({
-    required this.busy,
-    required this.onConnect,
-  });
+  const _DisconnectedAccountCard({required this.busy, required this.onConnect});
 
   final bool busy;
   final VoidCallback onConnect;

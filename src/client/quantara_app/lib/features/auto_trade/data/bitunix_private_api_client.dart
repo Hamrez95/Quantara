@@ -24,11 +24,9 @@ final class BitunixPrivateApiClient {
   Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
-    final accountResponse = await _signedGet(
-      '/api/v1/futures/account',
-      const {'marginCoin': 'USDT'},
-      credentials,
-    );
+    final accountResponse = await _signedGet('/api/v1/futures/account', const {
+      'marginCoin': 'USDT',
+    }, credentials);
     final positionsResponse = await _signedGet(
       '/api/v1/futures/position/get_pending_positions',
       const {},
@@ -184,9 +182,8 @@ final class BitunixPrivateApiClient {
     return value
         .whereType<Map<Object?, Object?>>()
         .map(
-          (item) => item.map(
-            (key, itemValue) => MapEntry(key.toString(), itemValue),
-          ),
+          (item) =>
+              item.map((key, itemValue) => MapEntry(key.toString(), itemValue)),
         )
         .toList(growable: false);
   }
