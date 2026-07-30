@@ -20,7 +20,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -42,6 +42,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -54,6 +57,21 @@ jobs:
         run: |
           flutter --version
           dart --version
+
+      # BEGIN ONE-TIME VIDEO PATCH
+      - name: Apply one-time video regression patch
+        if: ${{ hashFiles('.github/scripts/apply_video_regression_patch.py') != '' }}
+        working-directory: .
+        shell: bash
+        run: |
+          python3 .github/scripts/apply_video_regression_patch.py
+          (cd src/client/quantara_app && dart format lib test)
+          git config user.name "Quantara CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: bound setup UI and reconcile saved capital [patch-applied]"
+          git push origin HEAD:fix/63-64-video-regressions
+      # END ONE-TIME VIDEO PATCH
 
       - name: Restore packages
         run: flutter pub get
