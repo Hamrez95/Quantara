@@ -67,8 +67,8 @@ replace(
 )
 replace(
     page,
-    "                   if (destination == 5)\n                     _ProfileView(\n                       controller: controller,\n                       themeMode: themeMode,\n                       locale: locale,\n                       onToggleTheme: onToggleTheme,\n                       onLocaleChanged: onLocaleChanged,\n                     )\n                   else if (controller.snapshot == null)",
-    "                   if (destination == 6)\n                     _ProfileView(\n                       controller: controller,\n                       themeMode: themeMode,\n                       locale: locale,\n                       onToggleTheme: onToggleTheme,\n                       onLocaleChanged: onLocaleChanged,\n                     )\n                   else if (destination == 5)\n                     _AutoTradeView(\n                       controller: autoTradeController,\n                       analysisController: controller,\n                     )\n                   else if (controller.snapshot == null)",
+    "if (destination == 5)\n                    _ProfileView(\n                      controller: controller,\n                      themeMode: themeMode,\n                      locale: locale,\n                      onToggleTheme: onToggleTheme,\n                      onLocaleChanged: onLocaleChanged,\n                    )\n                  else if (controller.snapshot == null)",
+    "if (destination == 6)\n                    _ProfileView(\n                      controller: controller,\n                      themeMode: themeMode,\n                      locale: locale,\n                      onToggleTheme: onToggleTheme,\n                      onLocaleChanged: onLocaleChanged,\n                    )\n                  else if (destination == 5)\n                    _AutoTradeView(\n                      controller: autoTradeController,\n                      analysisController: controller,\n                    )\n                  else if (controller.snapshot == null)",
 )
 
 pubspec = "src/client/quantara_app/pubspec.yaml"
