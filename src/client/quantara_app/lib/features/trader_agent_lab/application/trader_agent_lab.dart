@@ -76,7 +76,7 @@ final class TraderAgentFailure implements Exception {
 }
 
 final class TraderAgentLab {
-  const TraderAgentLab({
+  TraderAgentLab({
     this.stepTimeout = const Duration(seconds: 20),
     DateTime Function()? utcNow,
   }) : _utcNow = utcNow ?? DateTime.now;
