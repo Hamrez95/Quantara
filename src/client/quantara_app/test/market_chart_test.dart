@@ -66,7 +66,7 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('تحلیل'));
+    await tester.tap(find.byIcon(Icons.candlestick_chart_outlined));
     await tester.pumpAndSettle();
     final chartFinder = find.byType(QuantaraCandlestickChart);
     expect(chartFinder, findsOneWidget);
@@ -92,7 +92,7 @@ void main() {
 
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('تحلیل'));
+    await tester.tap(find.byIcon(Icons.candlestick_chart_outlined));
     await tester.pumpAndSettle();
 
     for (var attempt = 0; attempt < 4; attempt++) {
