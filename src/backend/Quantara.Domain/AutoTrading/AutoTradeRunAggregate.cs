@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -5,7 +6,8 @@ namespace Quantara.Domain.AutoTrading;
 
 public sealed class AutoTradeRunAggregate
 {
-    private readonly Dictionary<string, string> _requestSignatures = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ProcessedRequest> _processedRequests =
+        new(StringComparer.Ordinal);
 
     private AutoTradeRunAggregate(string runId, DateTimeOffset createdAt)
     {
@@ -39,36 +41,41 @@ public sealed class AutoTradeRunAggregate
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var signature = Signature("start", configuration);
-        var duplicate = CheckDuplicate(requestId, signature);
+        var duplicate = GetDuplicate(requestId, signature);
         if (duplicate is not null)
         {
-            return duplicate.Value
-                ? Result(AutoTradeTransitionCode.AlreadyStarted)
-                : Result(AutoTradeTransitionCode.ConflictingRequest, ["Request ID was reused with different start content."]);
+            return duplicate.Code == AutoTradeTransitionCode.ConflictingRequest
+                ? Result(duplicate.Code, ["Request ID was reused with different start content."])
+                : Result(duplicate.Code, duplicate.Errors);
         }
 
         var errors = configuration.Validate();
         if (errors.Count > 0)
         {
-            Remember(requestId, signature);
+            Remember(requestId, signature, AutoTradeTransitionCode.InvalidConfiguration, errors);
             return Result(AutoTradeTransitionCode.InvalidConfiguration, errors);
         }
 
         if (Snapshot.State == AutoTradeRunState.Armed)
         {
-            Remember(requestId, signature);
+            Remember(requestId, signature, AutoTradeTransitionCode.AlreadyStarted);
             return Result(AutoTradeTransitionCode.AlreadyStarted);
         }
 
         if (Snapshot.State != AutoTradeRunState.Disarmed)
         {
-            Remember(requestId, signature);
-            return Result(
+            var transitionErrors = new[]
+            {
+                $"Cannot start auto trade while state is {Snapshot.State}."
+            };
+            Remember(
+                requestId,
+                signature,
                 AutoTradeTransitionCode.InvalidTransition,
-                [$"Cannot start auto trade while state is {Snapshot.State}."]);
+                transitionErrors);
+            return Result(AutoTradeTransitionCode.InvalidTransition, transitionErrors);
         }
 
-        Remember(requestId, signature);
         var at = occurredAt.ToUniversalTime();
         Snapshot = Snapshot with
         {
@@ -82,6 +89,7 @@ public sealed class AutoTradeRunAggregate
             LastRequestId = requestId.Trim(),
             UpdatedAt = at
         };
+        Remember(requestId, signature, AutoTradeTransitionCode.AlreadyStarted);
         return Result(AutoTradeTransitionCode.Started);
     }
 
@@ -98,29 +106,34 @@ public sealed class AutoTradeRunAggregate
         var signature = Signature(
             "stop",
             $"{policy}|{hasOpenPositionsOrOrders}|{normalizedReason}");
-        var duplicate = CheckDuplicate(requestId, signature);
+        var duplicate = GetDuplicate(requestId, signature);
         if (duplicate is not null)
         {
-            return duplicate.Value
-                ? Result(AutoTradeTransitionCode.AlreadyStopped)
-                : Result(AutoTradeTransitionCode.ConflictingRequest, ["Request ID was reused with different stop content."]);
+            return duplicate.Code == AutoTradeTransitionCode.ConflictingRequest
+                ? Result(duplicate.Code, ["Request ID was reused with different stop content."])
+                : Result(duplicate.Code, duplicate.Errors);
         }
 
         if (Snapshot.State == AutoTradeRunState.Disarmed)
         {
-            Remember(requestId, signature);
+            Remember(requestId, signature, AutoTradeTransitionCode.AlreadyStopped);
             return Result(AutoTradeTransitionCode.AlreadyStopped);
         }
 
         if (Snapshot.State is AutoTradeRunState.Arming or AutoTradeRunState.Stopping)
         {
-            Remember(requestId, signature);
-            return Result(
+            var transitionErrors = new[]
+            {
+                $"Cannot stop auto trade while state is {Snapshot.State}."
+            };
+            Remember(
+                requestId,
+                signature,
                 AutoTradeTransitionCode.InvalidTransition,
-                [$"Cannot stop auto trade while state is {Snapshot.State}."]);
+                transitionErrors);
+            return Result(AutoTradeTransitionCode.InvalidTransition, transitionErrors);
         }
 
-        Remember(requestId, signature);
         var at = occurredAt.ToUniversalTime();
         var nextState = policy == AutoTradeStopPolicy.ProtectAndManage && hasOpenPositionsOrOrders
             ? AutoTradeRunState.ManagingExistingPositions
@@ -135,6 +148,7 @@ public sealed class AutoTradeRunAggregate
             LastRequestId = requestId.Trim(),
             UpdatedAt = at
         };
+        Remember(requestId, signature, AutoTradeTransitionCode.AlreadyStopped);
         return Result(AutoTradeTransitionCode.Stopped);
     }
 
@@ -147,29 +161,34 @@ public sealed class AutoTradeRunAggregate
             ? "All Quantara-owned positions and orders reached a terminal state."
             : reason.Trim();
         var signature = Signature("complete-management", normalizedReason);
-        var duplicate = CheckDuplicate(requestId, signature);
+        var duplicate = GetDuplicate(requestId, signature);
         if (duplicate is not null)
         {
-            return duplicate.Value
-                ? Result(AutoTradeTransitionCode.AlreadyStopped)
-                : Result(AutoTradeTransitionCode.ConflictingRequest, ["Request ID was reused with different completion content."]);
+            return duplicate.Code == AutoTradeTransitionCode.ConflictingRequest
+                ? Result(duplicate.Code, ["Request ID was reused with different completion content."])
+                : Result(duplicate.Code, duplicate.Errors);
         }
 
         if (Snapshot.State == AutoTradeRunState.Disarmed)
         {
-            Remember(requestId, signature);
+            Remember(requestId, signature, AutoTradeTransitionCode.AlreadyStopped);
             return Result(AutoTradeTransitionCode.AlreadyStopped);
         }
 
         if (Snapshot.State != AutoTradeRunState.ManagingExistingPositions)
         {
-            Remember(requestId, signature);
-            return Result(
+            var transitionErrors = new[]
+            {
+                "Existing-position management can complete only from ManagingExistingPositions."
+            };
+            Remember(
+                requestId,
+                signature,
                 AutoTradeTransitionCode.InvalidTransition,
-                ["Existing-position management can complete only from ManagingExistingPositions."]);
+                transitionErrors);
+            return Result(AutoTradeTransitionCode.InvalidTransition, transitionErrors);
         }
 
-        Remember(requestId, signature);
         var at = occurredAt.ToUniversalTime();
         Snapshot = Snapshot with
         {
@@ -179,6 +198,7 @@ public sealed class AutoTradeRunAggregate
             LastRequestId = requestId.Trim(),
             UpdatedAt = at
         };
+        Remember(requestId, signature, AutoTradeTransitionCode.AlreadyStopped);
         return Result(AutoTradeTransitionCode.Stopped);
     }
 
@@ -191,15 +211,14 @@ public sealed class AutoTradeRunAggregate
             ? "A fail-closed circuit breaker was activated."
             : reason.Trim();
         var signature = Signature("circuit-breaker", normalizedReason);
-        var duplicate = CheckDuplicate(requestId, signature);
+        var duplicate = GetDuplicate(requestId, signature);
         if (duplicate is not null)
         {
-            return duplicate.Value
-                ? Result(AutoTradeTransitionCode.CircuitBreakerTripped)
-                : Result(AutoTradeTransitionCode.ConflictingRequest, ["Request ID was reused with different circuit-breaker content."]);
+            return duplicate.Code == AutoTradeTransitionCode.ConflictingRequest
+                ? Result(duplicate.Code, ["Request ID was reused with different circuit-breaker content."])
+                : Result(duplicate.Code, duplicate.Errors);
         }
 
-        Remember(requestId, signature);
         var at = occurredAt.ToUniversalTime();
         Snapshot = Snapshot with
         {
@@ -209,6 +228,7 @@ public sealed class AutoTradeRunAggregate
             LastRequestId = requestId.Trim(),
             UpdatedAt = at
         };
+        Remember(requestId, signature, AutoTradeTransitionCode.CircuitBreakerTripped);
         return Result(AutoTradeTransitionCode.CircuitBreakerTripped);
     }
 
@@ -217,16 +237,31 @@ public sealed class AutoTradeRunAggregate
         IReadOnlyList<string>? errors = null) =>
         new(code, Snapshot, errors ?? Array.Empty<string>());
 
-    private bool? CheckDuplicate(string requestId, string signature)
+    private ProcessedRequest? GetDuplicate(string requestId, string signature)
     {
         ValidateRequestId(requestId);
-        return _requestSignatures.TryGetValue(requestId.Trim(), out var previous)
-            ? string.Equals(previous, signature, StringComparison.Ordinal)
-            : null;
+        if (!_processedRequests.TryGetValue(requestId.Trim(), out var previous))
+        {
+            return null;
+        }
+
+        return string.Equals(previous.Signature, signature, StringComparison.Ordinal)
+            ? previous
+            : new ProcessedRequest(
+                signature,
+                AutoTradeTransitionCode.ConflictingRequest,
+                Array.Empty<string>());
     }
 
-    private void Remember(string requestId, string signature) =>
-        _requestSignatures[requestId.Trim()] = signature;
+    private void Remember(
+        string requestId,
+        string signature,
+        AutoTradeTransitionCode duplicateCode,
+        IReadOnlyList<string>? errors = null) =>
+        _processedRequests[requestId.Trim()] = new ProcessedRequest(
+            signature,
+            duplicateCode,
+            errors ?? Array.Empty<string>());
 
     private static void ValidateRequestId(string requestId)
     {
@@ -240,25 +275,26 @@ public sealed class AutoTradeRunAggregate
 
     private static string Signature(string action, AutoTradeRunConfiguration configuration)
     {
-        var canonical = string.Join(
-            '|',
+        var fields = new[]
+        {
             action,
             configuration.ConfigurationVersion.Trim(),
             string.Join(',', configuration.AllowedSymbols.Order(StringComparer.Ordinal)),
             string.Join(',', configuration.AllowedStrategies.Order(StringComparer.Ordinal)),
             string.Join(',', configuration.AllowedTimeframes.Order(StringComparer.Ordinal)),
-            configuration.GlobalLeverage,
-            configuration.RiskPerTradePercent,
-            configuration.MaximumDailyLossPercent,
-            configuration.MaximumWeeklyLossPercent,
-            configuration.MaximumConcurrentPositions,
-            configuration.MaximumMarginUsagePercent,
-            configuration.MaximumCorrelatedExposurePercent,
-            configuration.MaximumSlippagePercent,
-            configuration.MaximumSignalAge.Ticks,
-            configuration.RequireIsolatedMargin,
-            configuration.DefaultStopPolicy);
-        return Signature(action, canonical);
+            configuration.GlobalLeverage.ToString(CultureInfo.InvariantCulture),
+            configuration.RiskPerTradePercent.ToString(CultureInfo.InvariantCulture),
+            configuration.MaximumDailyLossPercent.ToString(CultureInfo.InvariantCulture),
+            configuration.MaximumWeeklyLossPercent.ToString(CultureInfo.InvariantCulture),
+            configuration.MaximumConcurrentPositions.ToString(CultureInfo.InvariantCulture),
+            configuration.MaximumMarginUsagePercent.ToString(CultureInfo.InvariantCulture),
+            configuration.MaximumCorrelatedExposurePercent.ToString(CultureInfo.InvariantCulture),
+            configuration.MaximumSlippagePercent.ToString(CultureInfo.InvariantCulture),
+            configuration.MaximumSignalAge.Ticks.ToString(CultureInfo.InvariantCulture),
+            configuration.RequireIsolatedMargin.ToString(CultureInfo.InvariantCulture),
+            configuration.DefaultStopPolicy.ToString()
+        };
+        return Signature(action, string.Join('|', fields));
     }
 
     private static string Signature(string action, string content)
@@ -266,4 +302,9 @@ public sealed class AutoTradeRunAggregate
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{action}|{content}"));
         return Convert.ToHexString(bytes);
     }
+
+    private sealed record ProcessedRequest(
+        string Signature,
+        AutoTradeTransitionCode Code,
+        IReadOnlyList<string> Errors);
 }
