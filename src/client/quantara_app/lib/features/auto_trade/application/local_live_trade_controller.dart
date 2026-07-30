@@ -9,9 +9,8 @@ import 'local_live_trade_service.dart';
 
 final class LocalLiveTradeController extends ChangeNotifier {
   LocalLiveTradeController({
-    AutoTradeCredentialsStore credentialsStore =
-        const SecureAutoTradeCredentialsStore(),
-  }) : _credentialsStore = credentialsStore;
+    this._credentialsStore = const SecureAutoTradeCredentialsStore(),
+  });
 
   final AutoTradeCredentialsStore _credentialsStore;
 

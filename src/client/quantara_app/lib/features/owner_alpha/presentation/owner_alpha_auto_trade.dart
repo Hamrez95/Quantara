@@ -870,7 +870,7 @@ class _LockedServerModeCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: const Icon(
-                  Icons.cloud_lock_outlined,
+                  Icons.cloud_off_outlined,
                   color: QuantaraColors.violet,
                 ),
               ),

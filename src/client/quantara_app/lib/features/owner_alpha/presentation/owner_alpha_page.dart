@@ -30,6 +30,7 @@ part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_auto_trade.dart';
+part 'owner_alpha_auto_trade_support.dart';
 part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';

@@ -177,8 +177,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     final configuration = _configuration;
     final credentials = _credentials;
     final exchange = _exchange;
-    if (configuration == null || credentials == null || exchange == null)
+    if (configuration == null || credentials == null || exchange == null) {
       return;
+    }
     _cycleRunning = true;
     try {
       final account = await exchange.fetchAccountSnapshot(credentials);
@@ -362,7 +363,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       if (quantity < rules.minimumQuantity * 3) {
         await exchange.closePositionReduceOnly(
           position: position,
-          clientId: '${clientId}-small-close',
+          clientId: '$clientId-small-close',
           credentials: credentials,
         );
         throw const LocalLiveTradeSafeException(
@@ -392,7 +393,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       if (!protections.any((item) => item.stopLossPrice > 0)) {
         await exchange.closePositionReduceOnly(
           position: position,
-          clientId: '${clientId}-unprotected-close',
+          clientId: '$clientId-unprotected-close',
           credentials: credentials,
         );
         throw const LocalLiveTradeSafeException(

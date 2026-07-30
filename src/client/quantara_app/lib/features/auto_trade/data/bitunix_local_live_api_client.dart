@@ -144,11 +144,10 @@ final class BitunixClosedPosition {
 
 final class BitunixLocalLiveApiClient {
   BitunixLocalLiveApiClient({
-    required http.Client client,
+    required this._client,
     DateTime Function()? utcNow,
     Random? secureRandom,
-  }) : _client = client,
-       _utcNow = utcNow ?? DateTime.now,
+  }) : _utcNow = utcNow ?? DateTime.now,
        _random = secureRandom ?? Random.secure();
 
   static const _host = 'fapi.bitunix.com';
