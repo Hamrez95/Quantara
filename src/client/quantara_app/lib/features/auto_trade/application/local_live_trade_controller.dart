@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -113,9 +112,10 @@ final class LocalLiveTradeController extends ChangeNotifier {
         value: jsonEncode(configuration.toJson()),
       );
       if (await FlutterForegroundTask.isRunningService) {
-        await FlutterForegroundTask.restartService();
+        final restartResult = await FlutterForegroundTask.restartService();
+        _throwOnServiceFailure(restartResult, 'restart');
       } else {
-        final result = await FlutterForegroundTask.startService(
+        final startResult = await FlutterForegroundTask.startService(
           serviceId: 74013,
           serviceTypes: const [ForegroundServiceTypes.specialUse],
           notificationTitle: 'Quantara · Starting local live canary',
@@ -126,12 +126,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
           notificationInitialRoute: '/',
           callback: quantaraLocalLiveStartCallback,
         );
-        if (!result.success) {
-          throw LocalLiveTradeSafeException(
-            result.error?.message ??
-                'Android rejected the local execution service start.',
-          );
-        }
+        _throwOnServiceFailure(startResult, 'start');
       }
       await Future<void>.delayed(const Duration(milliseconds: 700));
       FlutterForegroundTask.sendDataToTask(
@@ -195,12 +190,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
             ? const Duration(seconds: 10)
             : const Duration(seconds: 5),
       );
-      final result = await FlutterForegroundTask.stopService();
-      if (!result.success) {
-        throw LocalLiveTradeSafeException(
-          result.error?.message ?? 'Android rejected the local service stop.',
-        );
-      }
+      final stopResult = await FlutterForegroundTask.stopService();
+      _throwOnServiceFailure(stopResult, 'stop');
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.stopped,
         updatedAt: DateTime.now().toUtc(),
@@ -257,6 +248,17 @@ final class LocalLiveTradeController extends ChangeNotifier {
           .toList(growable: false);
     } on FormatException {
       return const [];
+    }
+  }
+
+  static void _throwOnServiceFailure(
+    ServiceRequestResult result,
+    String action,
+  ) {
+    if (result is ServiceRequestFailure) {
+      throw LocalLiveTradeSafeException(
+        'Android foreground service $action failed: ${result.error}',
+      );
     }
   }
 
