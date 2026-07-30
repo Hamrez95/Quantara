@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Quantara.Api.AutoTrading;
 using Quantara.Api.Cockpit;
 
@@ -9,6 +10,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.SerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ICockpitSnapshotProvider, DeterministicCockpitSnapshotProvider>();
