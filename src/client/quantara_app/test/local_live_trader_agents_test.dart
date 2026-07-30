@@ -219,7 +219,8 @@ void main() {
           serviceSource,
           contains('The complete SL/TP ladder was not confirmed'),
         );
-        expect(serviceSource, contains('maximumConcurrentPositions'));
+        expect(serviceSource, contains('_managed.isEmpty'));
+        expect(serviceSource, contains('positions.isEmpty'));
         expect(manifest, contains('FOREGROUND_SERVICE_SPECIAL_USE'));
       },
     );
