@@ -113,9 +113,19 @@ jobs:
           apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
           test -x "$apkanalyzer_path"
           "$apkanalyzer_path" manifest print build/app/outputs/flutter-apk/app-release.apk > merged-manifest.xml
-          grep -q "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
-          grep -q "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
-          grep -q "android:foregroundServiceType=\"specialUse\"" merged-manifest.xml
+          grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
+          grep -Fq "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
+          grep -Eq "foregroundServiceType[^>]*specialUse|specialUse[^>]*foregroundServiceType" merged-manifest.xml
+          grep -Fq "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" merged-manifest.xml
+
+      - name: Upload merged Android manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-merged-manifest-0.13.0
+          path: src/client/quantara_app/merged-manifest.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Verify universal APK 16KB ZIP alignment
         shell: bash
