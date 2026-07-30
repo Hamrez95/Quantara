@@ -6,12 +6,10 @@ import '../domain/unattended_auto_trade_models.dart';
 
 final class UnattendedAutoTradeController extends ChangeNotifier {
   UnattendedAutoTradeController({
-    required UnattendedAutoTradeApiClient apiClient,
-    required AutoTradeServerConfigStore configStore,
+    required this._apiClient,
+    required this._configStore,
     DateTime Function()? utcNow,
-  }) : _apiClient = apiClient,
-       _configStore = configStore,
-       _utcNow = utcNow ?? DateTime.now;
+  }) : _utcNow = utcNow ?? DateTime.now;
 
   final UnattendedAutoTradeApiClient _apiClient;
   final AutoTradeServerConfigStore _configStore;
