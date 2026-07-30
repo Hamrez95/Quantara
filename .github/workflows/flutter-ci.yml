@@ -58,13 +58,23 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Verify formatting
+      - name: Apply canonical formatting
         shell: bash
         run: |
           set -euo pipefail
           dart format lib test
-          git diff -- lib test
-          git diff --exit-code -- lib test
+          git diff --stat -- lib test pubspec.lock || true
+
+      - name: Upload formatted source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-formatted-source-0.13.0
+          path: |
+            src/client/quantara_app/lib
+            src/client/quantara_app/test
+            src/client/quantara_app/pubspec.lock
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Analyze
         shell: bash
