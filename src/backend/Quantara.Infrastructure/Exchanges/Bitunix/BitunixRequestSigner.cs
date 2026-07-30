@@ -22,35 +22,14 @@ public static class BitunixRequestSigner
         return new BitunixSignature(digest, Sha256Hex($"{digest}{secretKey}"));
     }
 
-    public static BitunixSignature CreateWebSocketSignature(
+    public static BitunixSignature CreateWebSocketLoginSignature(
         string nonce,
         string timestamp,
         string apiKey,
-        string secretKey,
-        IReadOnlyDictionary<string, string>? additionalParameters = null)
+        string secretKey)
     {
         ValidateSecrets(nonce, timestamp, apiKey, secretKey);
-        var parameters = new SortedDictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["apiKey"] = apiKey,
-            ["nonce"] = nonce,
-            ["timestamp"] = timestamp
-        };
-        if (additionalParameters is not null)
-        {
-            foreach (var pair in additionalParameters)
-            {
-                if (string.Equals(pair.Key, "sign", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                parameters[pair.Key] = pair.Value;
-            }
-        }
-
-        var canonical = string.Concat(parameters.Select(pair => pair.Key + pair.Value));
-        var digest = Sha256Hex($"{nonce}{timestamp}{apiKey}{canonical}");
+        var digest = Sha256Hex($"{nonce}{timestamp}{apiKey}");
         return new BitunixSignature(digest, Sha256Hex($"{digest}{secretKey}"));
     }
 
