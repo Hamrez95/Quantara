@@ -10,7 +10,7 @@ public sealed class BitunixPrivateWebSocketProtocolTests
     {
         var credentials = new BitunixCredentials(
             "9a25209b66004da404d9ddcb48d1e11f",
-            "secret");
+            "secret-123");
 
         var message = BitunixPrivateWebSocketProtocol.CreateLoginMessage(
             credentials,
@@ -24,7 +24,7 @@ public sealed class BitunixPrivateWebSocketProtocolTests
         Assert.Equal(1724285700000, argument.GetProperty("timestamp").GetInt64());
         Assert.Equal("123456", argument.GetProperty("nonce").GetString());
         Assert.Equal(
-            "b0936739fe4863f5dc5ab53ce77ab3c3f75ff739b2587531e4852a82e2641a65",
+            "f420c2c520ba97572e512a7b460773dd1afa2a8b3ff92e734e62753f5feb0a57",
             argument.GetProperty("sign").GetString());
         Assert.DoesNotContain(credentials.SecretKey, message, StringComparison.Ordinal);
     }
@@ -41,7 +41,9 @@ public sealed class BitunixPrivateWebSocketProtocolTests
             .Select(value => value.GetProperty("ch").GetString())
             .ToArray();
 
-        Assert.Equal(["balance", "order", "position"], channels);
+        Assert.Equal<string?>(
+            ["balance", "order", "position"],
+            channels);
     }
 
     [Fact]
