@@ -7,7 +7,7 @@ namespace Quantara.Domain.Tests.AutoTrading;
 public sealed class AutoTradeControlCoordinatorTests
 {
     [Fact]
-    public async Task Preflight_LiveFeatureDisabled_RejectsArming()
+    public async Task DisabledLiveFeatureRejectsArming()
     {
         var configuration = BuildConfiguration(liveEnabled: false);
         var preflight = new ConfigurationAutoTradePreflightService(
@@ -29,7 +29,7 @@ public sealed class AutoTradeControlCoordinatorTests
     }
 
     [Fact]
-    public async Task Preflight_MissingExecutionCapability_RejectsArming()
+    public async Task MissingExecutionCapabilityRejectsArming()
     {
         var configuration = BuildConfiguration(liveEnabled: true);
         var preflight = new ConfigurationAutoTradePreflightService(
@@ -50,7 +50,7 @@ public sealed class AutoTradeControlCoordinatorTests
     }
 
     [Fact]
-    public async Task Preflight_AllServerGatesPresent_ArmsAndStopsRun()
+    public async Task AllServerGatesPresentArmAndStopRun()
     {
         var configuration = BuildConfiguration(liveEnabled: true);
         var preflight = new ConfigurationAutoTradePreflightService(
