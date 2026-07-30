@@ -490,29 +490,18 @@ final class BitunixLocalLiveApiClient {
     required BitunixApiCredentials credentials,
   }) async {
     final response = await _signedPost(
-      '/api/v1/futures/trade/place_order',
-      SplayTreeMap<String, Object?>.from({
-        'clientId': clientId,
-        'orderType': 'MARKET',
-        'positionId': position.positionId,
-        'qty': _decimal(position.quantity.abs()),
-        'reduceOnly': true,
-        'side': position.side.toUpperCase() == 'LONG' ? 'SELL' : 'BUY',
-        'symbol': position.symbol,
-        'tradeSide': 'CLOSE',
-      }),
+      '/api/v1/futures/trade/flash_close_position',
+      SplayTreeMap<String, Object?>.from({'positionId': position.positionId}),
       credentials,
     );
     final data = _firstMap(response['data']);
-    if (data == null) {
+    final positionId = _string(data?['positionId']);
+    if (positionId.isEmpty) {
       throw const LocalLiveTradeSafeException(
-        'Bitunix did not return an emergency close order ID.',
+        'Bitunix did not confirm the emergency position close.',
       );
     }
-    return BitunixPlacedOrder(
-      orderId: _string(data['orderId']),
-      clientId: _string(data['clientId'], fallback: clientId),
-    );
+    return BitunixPlacedOrder(orderId: positionId, clientId: clientId);
   }
 
   Future<Map<String, Object?>> _publicGet(

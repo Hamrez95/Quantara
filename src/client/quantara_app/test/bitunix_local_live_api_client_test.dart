@@ -60,44 +60,47 @@ void main() {
     expect(rules.apiSupported, isTrue);
   });
 
-  test('submits market entry with deterministic client ID and protective stop', () async {
-    final api = client((request) async {
-      expect(request.method, 'POST');
-      expect(request.url.path, '/api/v1/futures/trade/place_order');
-      expect(request.headers['api-key'], credentials.apiKey);
-      expect(request.headers['sign'], isNotEmpty);
-      final body = jsonDecode(request.body) as Map<String, Object?>;
-      expect(body['symbol'], 'BTCUSDT');
-      expect(body['side'], 'BUY');
-      expect(body['tradeSide'], 'OPEN');
-      expect(body['orderType'], 'MARKET');
-      expect(body['reduceOnly'], false);
-      expect(body['clientId'], 'q-local-test');
-      expect(body['slPrice'], '59000');
-      expect(body['slStopType'], 'MARK_PRICE');
-      expect(body['slOrderType'], 'MARKET');
-      return http.Response(
-        jsonEncode({
-          'code': 0,
-          'msg': 'Success',
-          'data': {'orderId': 'entry-1', 'clientId': 'q-local-test'},
-        }),
-        200,
+  test(
+    'submits market entry with deterministic client ID and protective stop',
+    () async {
+      final api = client((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/futures/trade/place_order');
+        expect(request.headers['api-key'], credentials.apiKey);
+        expect(request.headers['sign'], isNotEmpty);
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        expect(body['symbol'], 'BTCUSDT');
+        expect(body['side'], 'BUY');
+        expect(body['tradeSide'], 'OPEN');
+        expect(body['orderType'], 'MARKET');
+        expect(body['reduceOnly'], false);
+        expect(body['clientId'], 'q-local-test');
+        expect(body['slPrice'], '59000');
+        expect(body['slStopType'], 'MARK_PRICE');
+        expect(body['slOrderType'], 'MARKET');
+        return http.Response(
+          jsonEncode({
+            'code': 0,
+            'msg': 'Success',
+            'data': {'orderId': 'entry-1', 'clientId': 'q-local-test'},
+          }),
+          200,
+        );
+      });
+
+      final placed = await api.placeMarketEntry(
+        symbol: 'BTCUSDT',
+        quantity: 0.01,
+        long: true,
+        clientId: 'q-local-test',
+        stopLoss: 59000,
+        credentials: credentials,
       );
-    });
 
-    final placed = await api.placeMarketEntry(
-      symbol: 'BTCUSDT',
-      quantity: 0.01,
-      long: true,
-      clientId: 'q-local-test',
-      stopLoss: 59000,
-      credentials: credentials,
-    );
-
-    expect(placed.orderId, 'entry-1');
-    expect(placed.clientId, 'q-local-test');
-  });
+      expect(placed.orderId, 'entry-1');
+      expect(placed.clientId, 'q-local-test');
+    },
+  );
 
   test('emergency close uses position-id flash close contract', () async {
     final api = client((request) async {
@@ -140,16 +143,15 @@ void main() {
   });
 
   test('maps rejected private response to a redacted safe exception', () async {
-    final api = client((request) async => http.Response(
-      jsonEncode({'code': 10004, 'msg': 'Signature error'}),
-      401,
-    ));
+    final api = client(
+      (request) async => http.Response(
+        jsonEncode({'code': 10004, 'msg': 'Signature error'}),
+        401,
+      ),
+    );
 
     expect(
-      () => api.fetchOrderDetail(
-        orderId: 'order-1',
-        credentials: credentials,
-      ),
+      () => api.fetchOrderDetail(orderId: 'order-1', credentials: credentials),
       throwsA(
         isA<LocalLiveTradeSafeException>().having(
           (error) => error.message,
