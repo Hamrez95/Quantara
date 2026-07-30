@@ -15,7 +15,9 @@ final class SecureAutoTradeCredentialsStore
     implements AutoTradeCredentialsStore {
   const SecureAutoTradeCredentialsStore({
     FlutterSecureStorage storage = const FlutterSecureStorage(),
-  }) : _storage = storage;
+  }) : this._(storage);
+
+  const SecureAutoTradeCredentialsStore._(this._storage);
 
   static const _apiKeyKey = 'quantara.autotrade.bitunix.api-key';
   static const _secretKeyKey = 'quantara.autotrade.bitunix.secret-key';
