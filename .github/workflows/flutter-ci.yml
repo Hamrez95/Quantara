@@ -58,10 +58,28 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Apply canonical formatting
+      - name: Apply canonical source migration and formatting
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          page = Path('lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          text = page.read_text()
+          marker = "part 'owner_alpha_auto_trade.dart';"
+          support = "part 'owner_alpha_auto_trade_support.dart';"
+          if support not in text:
+              text = text.replace(marker, marker + "\n" + support)
+          page.write_text(text)
+
+          auto_trade = Path('lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart')
+          text = auto_trade.read_text().replace(
+              'Icons.cloud_lock_outlined',
+              'Icons.cloud_off_outlined',
+          )
+          auto_trade.write_text(text)
+          PY
+          dart fix --apply
           dart format lib test
           git diff --stat -- lib test pubspec.lock || true
 
@@ -77,7 +95,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/client/quantara_app/lib src/client/quantara_app/test src/client/quantara_app/pubspec.lock
-          git commit -m "style: apply Dart formatter and lock dependencies"
+          git commit -m "style: apply local live source migration and Dart fixes"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload formatted source snapshot
