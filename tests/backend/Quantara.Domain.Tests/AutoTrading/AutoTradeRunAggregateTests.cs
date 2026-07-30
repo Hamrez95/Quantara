@@ -8,7 +8,7 @@ public sealed class AutoTradeRunAggregateTests
         new(2026, 7, 30, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Start_ValidConfiguration_ArmsRunAndAllowsNewEntries()
+    public void StartWithValidConfigurationArmsRunAndAllowsNewEntries()
     {
         var aggregate = AutoTradeRunAggregate.Create("owner-run", BaseTime);
 
@@ -23,7 +23,7 @@ public sealed class AutoTradeRunAggregateTests
     }
 
     [Fact]
-    public void Start_DuplicateRequest_IsIdempotentWithoutVersionChange()
+    public void DuplicateStartRequestIsIdempotentWithoutVersionChange()
     {
         var aggregate = AutoTradeRunAggregate.Create("owner-run", BaseTime);
         var configuration = ValidConfiguration();
@@ -36,7 +36,7 @@ public sealed class AutoTradeRunAggregateTests
     }
 
     [Fact]
-    public void Start_ReusedRequestWithDifferentConfiguration_FailsClosed()
+    public void ReusedStartRequestWithDifferentConfigurationFailsClosed()
     {
         var aggregate = AutoTradeRunAggregate.Create("owner-run", BaseTime);
         aggregate.Start("start-1", ValidConfiguration(), BaseTime.AddMinutes(1));
@@ -51,7 +51,7 @@ public sealed class AutoTradeRunAggregateTests
     }
 
     [Fact]
-    public void Start_InvalidLiveConfiguration_RemainsDisarmed()
+    public void InvalidLiveConfigurationRemainsDisarmed()
     {
         var aggregate = AutoTradeRunAggregate.Create("owner-run", BaseTime);
         var invalid = ValidConfiguration() with
@@ -70,7 +70,7 @@ public sealed class AutoTradeRunAggregateTests
     }
 
     [Fact]
-    public void Stop_ProtectAndManageWithExposure_DisarmsNewEntriesButKeepsManagement()
+    public void ProtectAndManageStopDisarmsEntriesButKeepsPositionManagement()
     {
         var aggregate = AutoTradeRunAggregate.Create("owner-run", BaseTime);
         aggregate.Start("start-1", ValidConfiguration(), BaseTime.AddMinutes(1));
@@ -89,7 +89,7 @@ public sealed class AutoTradeRunAggregateTests
     }
 
     [Fact]
-    public void Stop_EmergencyClose_DisarmsImmediately()
+    public void EmergencyCloseStopDisarmsImmediately()
     {
         var aggregate = AutoTradeRunAggregate.Create("owner-run", BaseTime);
         aggregate.Start("start-1", ValidConfiguration(), BaseTime.AddMinutes(1));
@@ -107,7 +107,7 @@ public sealed class AutoTradeRunAggregateTests
     }
 
     [Fact]
-    public void CircuitBreaker_FailsClosedAndBlocksRestart()
+    public void CircuitBreakerFailsClosedAndBlocksRestart()
     {
         var aggregate = AutoTradeRunAggregate.Create("owner-run", BaseTime);
         aggregate.Start("start-1", ValidConfiguration(), BaseTime.AddMinutes(1));
