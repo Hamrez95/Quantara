@@ -10,7 +10,6 @@ on:
       - 'release/**'
     paths:
       - 'src/client/quantara_app/**'
-      - 'tools/apply_local_live_migration.py'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
@@ -18,11 +17,10 @@ on:
       - dev
     paths:
       - 'src/client/quantara_app/**'
-      - 'tools/apply_local_live_migration.py'
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -60,40 +58,8 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Apply canonical source migration and formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 ../../../tools/apply_local_live_migration.py
-          dart fix --apply
-          dart format lib test
-          git diff --stat -- lib test pubspec.lock || true
-
-      - name: Commit canonical formatting and lockfile
-        if: github.event_name == 'push'
-        shell: bash
-        working-directory: .
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- src/client/quantara_app/lib src/client/quantara_app/test src/client/quantara_app/pubspec.lock; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/client/quantara_app/lib src/client/quantara_app/test src/client/quantara_app/pubspec.lock
-          git commit -m "fix: apply local live Bitunix safety migration"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-
-      - name: Upload formatted source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: quantara-formatted-source-0.13.0
-          path: |
-            src/client/quantara_app/lib
-            src/client/quantara_app/test
-            src/client/quantara_app/pubspec.lock
-          if-no-files-found: error
-          retention-days: 3
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         shell: bash
@@ -104,7 +70,7 @@ jobs:
           cat flutter-analyze.log
           exit $status
 
-      - name: Run widget tests
+      - name: Run widget and safety tests
         shell: bash
         run: |
           set +e
@@ -117,7 +83,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics
+          name: flutter-diagnostics-0.13.0
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
@@ -193,7 +159,7 @@ jobs:
           name: quantara-android-0.13.0-local-live-canary
           path: apk
 
-      - name: Boot emulator and verify deferred background launch
+      - name: Boot emulator and verify local-live declaration
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
@@ -212,6 +178,7 @@ jobs:
             cat android-pid.txt
             test -s android-pid.txt
             adb shell dumpsys package "$ANDROID_PACKAGE" | grep -q "com.pravera.flutter_foreground_task.service.ForegroundService"
+            adb shell dumpsys package "$ANDROID_PACKAGE" | grep -q "android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
             adb logcat -d > android-logcat.txt
             adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
             ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
