@@ -40,10 +40,14 @@ final class SecureAutoTradeServerConfigStore
   @override
   Future<void> save(AutoTradeServerConfig config) async {
     if (kIsWeb) {
-      throw StateError('Unattended private trading is disabled on the web build.');
+      throw StateError(
+        'Unattended private trading is disabled on the web build.',
+      );
     }
     if (!_validBaseUrl(config.baseUrl) || config.controlToken.length < 32) {
-      throw ArgumentError('A secure HTTPS server and strong control token are required.');
+      throw ArgumentError(
+        'A secure HTTPS server and strong control token are required.',
+      );
     }
     await _storage.write(key: _baseUrlKey, value: config.baseUrl.toString());
     await _storage.write(key: _controlTokenKey, value: config.controlToken);
@@ -57,7 +61,8 @@ final class SecureAutoTradeServerConfigStore
   }
 
   static bool _validBaseUrl(Uri uri) {
-    if (!uri.hasScheme || uri.host.isEmpty || uri.userInfo.isNotEmpty) return false;
+    if (!uri.hasScheme || uri.host.isEmpty || uri.userInfo.isNotEmpty)
+      return false;
     if (uri.scheme == 'https') return true;
     return kDebugMode &&
         uri.scheme == 'http' &&

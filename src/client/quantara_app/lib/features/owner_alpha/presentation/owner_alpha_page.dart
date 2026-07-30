@@ -9,9 +9,13 @@ import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
+import '../../auto_trade/application/unattended_auto_trade_controller.dart';
 import '../../auto_trade/data/bitunix_private_api_client.dart';
 import '../../auto_trade/data/secure_auto_trade_credentials_store.dart';
+import '../../auto_trade/data/secure_auto_trade_server_config_store.dart';
+import '../../auto_trade/data/unattended_auto_trade_api_client.dart';
 import '../../auto_trade/domain/auto_trade_models.dart';
+import '../../auto_trade/domain/unattended_auto_trade_models.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../strategy_lab/data/strategy_lab_runner.dart';
@@ -26,6 +30,7 @@ part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_auto_trade.dart';
+part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
 part 'owner_alpha_strategy_lab.dart';
@@ -64,6 +69,11 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     apiClient: BitunixPrivateApiClient(client: _autoTradeHttpClient),
     credentialsStore: const SecureAutoTradeCredentialsStore(),
   );
+  late final UnattendedAutoTradeController _unattendedAutoTradeController =
+      UnattendedAutoTradeController(
+        apiClient: UnattendedAutoTradeApiClient(client: _autoTradeHttpClient),
+        configStore: const SecureAutoTradeServerConfigStore(),
+      );
   late final OwnerAlphaController _controller = OwnerAlphaController(
     repository: widget.repository,
     settingsStore: widget.settingsStore,
@@ -79,12 +89,14 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     super.initState();
     unawaited(_controller.initialize());
     unawaited(_autoTradeController.initialize());
+    unawaited(_unattendedAutoTradeController.initialize());
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _autoTradeController.dispose();
+    _unattendedAutoTradeController.dispose();
     _autoTradeHttpClient.close();
     super.dispose();
   }
@@ -130,6 +142,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           builder: (context, _) => _OwnerAlphaBody(
             controller: _controller,
             autoTradeController: _autoTradeController,
+            unattendedAutoTradeController: _unattendedAutoTradeController,
             destination: _destination,
             themeMode: widget.themeMode,
             locale: widget.locale,
@@ -305,6 +318,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   const _OwnerAlphaBody({
     required this.controller,
     required this.autoTradeController,
+    required this.unattendedAutoTradeController,
     required this.destination,
     required this.themeMode,
     required this.locale,
@@ -317,6 +331,7 @@ class _OwnerAlphaBody extends StatelessWidget {
 
   final OwnerAlphaController controller;
   final AutoTradeController autoTradeController;
+  final UnattendedAutoTradeController unattendedAutoTradeController;
   final int destination;
   final ThemeMode themeMode;
   final Locale locale;
@@ -369,6 +384,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                   else if (destination == 5)
                     _AutoTradeView(
                       controller: autoTradeController,
+                      unattendedController: unattendedAutoTradeController,
                       analysisController: controller,
                     )
                   else if (controller.snapshot == null)

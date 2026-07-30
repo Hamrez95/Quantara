@@ -12,7 +12,10 @@ enum UnattendedRunState {
 enum UnattendedStopPolicy { protectAndManage, emergencyReduceOnlyClose }
 
 final class AutoTradeServerConfig {
-  const AutoTradeServerConfig({required this.baseUrl, required this.controlToken});
+  const AutoTradeServerConfig({
+    required this.baseUrl,
+    required this.controlToken,
+  });
 
   final Uri baseUrl;
   final String controlToken;
@@ -70,17 +73,23 @@ final class UnattendedRunConfiguration {
       errors.add('Risk per trade must be greater than 0% and no more than 2%.');
     }
     if (maximumDailyLossPercent <= 0 || maximumDailyLossPercent > 10) {
-      errors.add('Daily loss limit must be greater than 0% and no more than 10%.');
+      errors.add(
+        'Daily loss limit must be greater than 0% and no more than 10%.',
+      );
     }
     if (maximumWeeklyLossPercent < maximumDailyLossPercent ||
         maximumWeeklyLossPercent > 20) {
-      errors.add('Weekly loss limit must be at least the daily limit and no more than 20%.');
+      errors.add(
+        'Weekly loss limit must be at least the daily limit and no more than 20%.',
+      );
     }
     if (maximumConcurrentPositions < 1 || maximumConcurrentPositions > 20) {
       errors.add('Concurrent positions must be between 1 and 20.');
     }
     if (maximumMarginUsagePercent <= 0 || maximumMarginUsagePercent > 80) {
-      errors.add('Maximum margin usage must be greater than 0% and no more than 80%.');
+      errors.add(
+        'Maximum margin usage must be greater than 0% and no more than 80%.',
+      );
     }
     if (!requireIsolatedMargin) {
       errors.add('The first live release requires isolated margin.');
@@ -143,7 +152,8 @@ final class UnattendedRunSnapshot {
         startedAt: _date(json['startedAt']),
         stoppedAt: _date(json['stoppedAt']),
         lastReason: _string(json['lastReason']),
-        updatedAt: _date(json['updatedAt']) ??
+        updatedAt:
+            _date(json['updatedAt']) ??
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       );
 }
@@ -156,8 +166,7 @@ extension on UnattendedRunState {
     UnattendedRunState.paused => 'paused',
     UnattendedRunState.circuitBreaker => 'circuitBreaker',
     UnattendedRunState.stopping => 'stopping',
-    UnattendedRunState.managingExistingPositions =>
-      'managingExistingPositions',
+    UnattendedRunState.managingExistingPositions => 'managingExistingPositions',
     UnattendedRunState.unavailable => 'unavailable',
   };
 }
@@ -165,8 +174,7 @@ extension on UnattendedRunState {
 extension UnattendedStopPolicyWireName on UnattendedStopPolicy {
   String get serverName => switch (this) {
     UnattendedStopPolicy.protectAndManage => 'protectAndManage',
-    UnattendedStopPolicy.emergencyReduceOnlyClose =>
-      'emergencyReduceOnlyClose',
+    UnattendedStopPolicy.emergencyReduceOnlyClose => 'emergencyReduceOnlyClose',
   };
 }
 

@@ -44,7 +44,9 @@ final class UnattendedAutoTradeController extends ChangeNotifier {
   }) async {
     final uri = Uri.tryParse(baseUrl.trim());
     if (uri == null || controlToken.trim().length < 32) {
-      _setError('A secure server URL and control token of at least 32 characters are required.');
+      _setError(
+        'A secure server URL and control token of at least 32 characters are required.',
+      );
       return false;
     }
     final config = AutoTradeServerConfig(

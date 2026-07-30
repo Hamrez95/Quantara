@@ -83,10 +83,12 @@ class _UnattendedAutoTradeControlCardState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _t('اجرای شبانه و بدون نیاز به گوشی', 'Unattended overnight execution'),
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
+                          _t(
+                            'اجرای شبانه و بدون نیاز به گوشی',
+                            'Unattended overnight execution',
                           ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                         Text(
                           _t(
@@ -149,13 +151,18 @@ class _UnattendedAutoTradeControlCardState
                           minimumSize: const Size.fromHeight(52),
                         ),
                         onPressed:
-                            widget.controller.isBusy || armed || managing || breaker
+                            widget.controller.isBusy ||
+                                armed ||
+                                managing ||
+                                breaker
                             ? null
                             : _confirmStart,
                         icon: widget.controller.isBusy
                             ? const SizedBox.square(
                                 dimension: 19,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.play_arrow_rounded),
                         label: Text(
@@ -201,7 +208,9 @@ class _UnattendedAutoTradeControlCardState
                           ? null
                           : widget.controller.disconnectServer,
                       icon: const Icon(Icons.link_off_rounded),
-                      label: Text(_t('حذف اتصال سرور', 'Remove server connection')),
+                      label: Text(
+                        _t('حذف اتصال سرور', 'Remove server connection'),
+                      ),
                     ),
                   ],
                 ),
@@ -240,7 +249,10 @@ class _UnattendedAutoTradeControlCardState
               '${_t('آخرین وضعیت', 'Last status')}: ${_stateLabel(snapshot.state)} · v${snapshot.version}',
             ),
           if (snapshot?.lastReason.isNotEmpty == true)
-            Text(snapshot!.lastReason, style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              snapshot!.lastReason,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
         ],
       ),
     );
@@ -253,9 +265,9 @@ class _UnattendedAutoTradeControlCardState
       children: [
         Text(
           _t('نمادهای مجاز برای اجرای خودکار', 'Allowed auto-trade symbols'),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -279,9 +291,9 @@ class _UnattendedAutoTradeControlCardState
         const SizedBox(height: 14),
         Text(
           _t('تایم‌فریم‌های اجرای مجاز', 'Allowed execution timeframes'),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -307,7 +319,8 @@ class _UnattendedAutoTradeControlCardState
           value: '${_leverage}x',
           enabled: enabled,
           onMinus: () => setState(() => _leverage = math.max(1, _leverage - 1)),
-          onPlus: () => setState(() => _leverage = math.min(125, _leverage + 1)),
+          onPlus: () =>
+              setState(() => _leverage = math.min(125, _leverage + 1)),
         ),
         _numberRow(
           label: _t('سقف ضرر روزانه', 'Daily loss limit'),
@@ -387,7 +400,9 @@ class _UnattendedAutoTradeControlCardState
         barrierDismissible: false,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
-            title: Text(_t('اتصال سرور اجرای ترید', 'Connect execution server')),
+            title: Text(
+              _t('اتصال سرور اجرای ترید', 'Connect execution server'),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -411,9 +426,8 @@ class _UnattendedAutoTradeControlCardState
                     decoration: InputDecoration(
                       labelText: 'Control Token',
                       suffixIcon: IconButton(
-                        onPressed: () => setDialogState(
-                          () => tokenVisible = !tokenVisible,
-                        ),
+                        onPressed: () =>
+                            setDialogState(() => tokenVisible = !tokenVisible),
                         icon: Icon(
                           tokenVisible
                               ? Icons.visibility_off_outlined
@@ -480,9 +494,9 @@ class _UnattendedAutoTradeControlCardState
     );
     final errors = configuration.validate();
     if (errors.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errors.join('\n'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errors.join('\n'))));
       return;
     }
     if (!widget.accountController.isConnected) {
@@ -507,14 +521,31 @@ class _UnattendedAutoTradeControlCardState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_t('پس از شروع، سرور بدون نیاز به بازبودن اپ کار می‌کند.', 'After Start, the server runs without the app remaining open.')),
+              Text(
+                _t(
+                  'پس از شروع، سرور بدون نیاز به بازبودن اپ کار می‌کند.',
+                  'After Start, the server runs without the app remaining open.',
+                ),
+              ),
               const SizedBox(height: 12),
-              Text('${_t('نمادها', 'Symbols')}: ${_enabledSymbols.join(', ')}', textDirection: TextDirection.ltr),
-              Text('${_t('تایم‌فریم‌ها', 'Timeframes')}: ${_enabledTimeframes.join(', ')}', textDirection: TextDirection.ltr),
+              Text(
+                '${_t('نمادها', 'Symbols')}: ${_enabledSymbols.join(', ')}',
+                textDirection: TextDirection.ltr,
+              ),
+              Text(
+                '${_t('تایم‌فریم‌ها', 'Timeframes')}: ${_enabledTimeframes.join(', ')}',
+                textDirection: TextDirection.ltr,
+              ),
               Text('${_t('اهرم', 'Leverage')}: ${_leverage}x'),
-              Text('${_t('ریسک هر معامله', 'Risk per trade')}: ${widget.analysisController.riskPercent.toStringAsFixed(1)}%'),
-              Text('${_t('سقف ضرر روزانه', 'Daily loss limit')}: ${_dailyLossLimit.toStringAsFixed(1)}%'),
-              Text('${_t('حداکثر پوزیشن', 'Maximum positions')}: $_maximumPositions'),
+              Text(
+                '${_t('ریسک هر معامله', 'Risk per trade')}: ${widget.analysisController.riskPercent.toStringAsFixed(1)}%',
+              ),
+              Text(
+                '${_t('سقف ضرر روزانه', 'Daily loss limit')}: ${_dailyLossLimit.toStringAsFixed(1)}%',
+              ),
+              Text(
+                '${_t('حداکثر پوزیشن', 'Maximum positions')}: $_maximumPositions',
+              ),
               const SizedBox(height: 12),
               Text(
                 _t(
@@ -559,10 +590,8 @@ class _UnattendedAutoTradeControlCardState
                   'Keep protecting and managing existing positions until terminal exits.',
                 ),
               ),
-              onTap: () => Navigator.pop(
-                context,
-                UnattendedStopPolicy.protectAndManage,
-              ),
+              onTap: () =>
+                  Navigator.pop(context, UnattendedStopPolicy.protectAndManage),
             ),
             ListTile(
               leading: const Icon(
@@ -601,8 +630,10 @@ class _UnattendedAutoTradeControlCardState
     UnattendedRunState.paused => _t('متوقف موقت', 'Paused'),
     UnattendedRunState.circuitBreaker => _t('مدار ایمنی', 'Circuit breaker'),
     UnattendedRunState.stopping => _t('در حال قطع', 'Stopping'),
-    UnattendedRunState.managingExistingPositions =>
-      _t('فقط مدیریت پوزیشن‌ها', 'Managing positions'),
+    UnattendedRunState.managingExistingPositions => _t(
+      'فقط مدیریت پوزیشن‌ها',
+      'Managing positions',
+    ),
     UnattendedRunState.disarmed => _t('خاموش', 'Disarmed'),
     UnattendedRunState.unavailable || null => _t('نامشخص', 'Unavailable'),
   };

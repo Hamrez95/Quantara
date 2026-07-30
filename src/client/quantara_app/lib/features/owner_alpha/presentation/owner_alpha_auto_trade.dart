@@ -3,10 +3,12 @@ part of 'owner_alpha_page.dart';
 class _AutoTradeView extends StatelessWidget {
   const _AutoTradeView({
     required this.controller,
+    required this.unattendedController,
     required this.analysisController,
   });
 
   final AutoTradeController controller;
+  final UnattendedAutoTradeController unattendedController;
   final OwnerAlphaController analysisController;
 
   bool _fa(BuildContext context) =>
@@ -132,6 +134,12 @@ class _AutoTradeView extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _UnattendedAutoTradeControlCard(
+              controller: unattendedController,
+              accountController: controller,
+              analysisController: analysisController,
+            ),
+            const SizedBox(height: 16),
             SectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
