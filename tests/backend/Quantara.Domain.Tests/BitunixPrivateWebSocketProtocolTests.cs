@@ -41,9 +41,11 @@ public sealed class BitunixPrivateWebSocketProtocolTests
             .Select(value => value.GetProperty("ch").GetString())
             .ToArray();
 
-        Assert.Equal<string?>(
-            ["balance", "order", "position"],
-            channels);
+        Assert.Collection(
+            channels,
+            value => Assert.Equal("balance", value),
+            value => Assert.Equal("order", value),
+            value => Assert.Equal("position", value));
     }
 
     [Fact]
