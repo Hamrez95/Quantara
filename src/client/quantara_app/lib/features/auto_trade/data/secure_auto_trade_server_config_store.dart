@@ -14,8 +14,8 @@ abstract interface class AutoTradeServerConfigStore {
 final class SecureAutoTradeServerConfigStore
     implements AutoTradeServerConfigStore {
   const SecureAutoTradeServerConfigStore({
-    FlutterSecureStorage storage = const FlutterSecureStorage(),
-  }) : _storage = storage;
+    this._storage = const FlutterSecureStorage(),
+  });
 
   static const _baseUrlKey = 'quantara.autotrade.server.base-url';
   static const _controlTokenKey = 'quantara.autotrade.server.control-token';
@@ -61,8 +61,9 @@ final class SecureAutoTradeServerConfigStore
   }
 
   static bool _validBaseUrl(Uri uri) {
-    if (!uri.hasScheme || uri.host.isEmpty || uri.userInfo.isNotEmpty)
+    if (!uri.hasScheme || uri.host.isEmpty || uri.userInfo.isNotEmpty) {
       return false;
+    }
     if (uri.scheme == 'https') return true;
     return kDebugMode &&
         uri.scheme == 'http' &&
