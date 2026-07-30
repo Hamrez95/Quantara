@@ -1,3 +1,6 @@
+export '../domain/local_live_trade_models.dart';
+export 'local_live_trade_controller.dart';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/secure_auto_trade_server_config_store.dart';
