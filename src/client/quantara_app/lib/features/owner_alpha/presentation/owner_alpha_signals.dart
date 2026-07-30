@@ -515,6 +515,26 @@ class _SignalJournalCard extends StatelessWidget {
                     ),
                     valueColor: QuantaraColors.success,
                   ),
+                if (entry.sizingCapital > 0)
+                  MetricTile(
+                    label: _t(context, 'سرمایه مبنای محاسبه', 'Sizing capital'),
+                    value: QuantaraNumberFormat.marketValue(
+                      entry.sizingCapital,
+                      unit: 'USDT',
+                    ),
+                  ),
+                MetricTile(
+                  label: _t(
+                    context,
+                    'بودجه ریسک (${entry.sizingRiskPercent.toStringAsFixed(2)}٪)',
+                    'Risk budget (${entry.sizingRiskPercent.toStringAsFixed(2)}%)',
+                  ),
+                  value: QuantaraNumberFormat.marketValue(
+                    entry.maximumLoss,
+                    unit: 'USDT',
+                  ),
+                  valueColor: QuantaraColors.warning,
+                ),
                 MetricTile(
                   label: _t(context, 'ارزش پوزیشن', 'Position notional'),
                   value: QuantaraNumberFormat.marketValue(
@@ -533,6 +553,7 @@ class _SignalJournalCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _LeverageControl(
+              key: ValueKey('leverage-${entry.setupId}'),
               selected: entry.selectedLeverage,
               recommended: entry.recommendedLeverage,
               safeCap: entry.maximumSafeLeverage,
@@ -716,7 +737,8 @@ class _SignalPerformancePanel extends StatelessWidget {
         : positive
         ? QuantaraColors.success
         : QuantaraColors.danger;
-    return DecoratedBox(
+    return Container(
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
@@ -821,6 +843,7 @@ class _TimeLine extends StatelessWidget {
 
 class _LeverageControl extends StatefulWidget {
   const _LeverageControl({
+    super.key,
     required this.selected,
     required this.recommended,
     required this.safeCap,
@@ -848,6 +871,12 @@ class _LeverageControlState extends State<_LeverageControl> {
   }
 
   bool get _persian => Directionality.of(context) == TextDirection.rtl;
+
+  void _commit(int value) {
+    final normalized = value.clamp(1, TradeIdea.maximumManualLeverage).toInt();
+    setState(() => _draft = normalized.toDouble());
+    widget.onChanged(normalized);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -924,34 +953,49 @@ class _LeverageControlState extends State<_LeverageControl> {
                       showCheckmark: false,
                       selected: leverage == selected,
                       label: Text('${leverage}x'),
-                      onSelected: (_) {
-                        setState(() => _draft = leverage.toDouble());
-                        widget.onChanged(leverage);
-                      },
+                      onSelected: (_) => _commit(leverage),
                     ),
                     const SizedBox(width: 8),
                   ],
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
-                const Text('1x', textDirection: TextDirection.ltr),
+                IconButton.filledTonal(
+                  key: ValueKey('leverage-decrease-$selected'),
+                  tooltip: _persian ? 'یک واحد کمتر' : 'Decrease by one',
+                  onPressed: selected > 1 ? () => _commit(selected - 1) : null,
+                  icon: const Icon(Icons.remove_rounded),
+                ),
                 Expanded(
-                  child: Slider(
-                    value: selected.toDouble(),
-                    min: 1,
-                    max: TradeIdea.maximumManualLeverage.toDouble(),
-                    divisions: TradeIdea.maximumManualLeverage - 1,
-                    label: '${selected}x',
-                    onChanged: (value) => setState(() => _draft = value),
-                    onChangeEnd: (value) => widget.onChanged(value.round()),
+                  child: Column(
+                    children: [
+                      Text(
+                        '${selected}x',
+                        textDirection: TextDirection.ltr,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        _persian
+                            ? 'برای مقدار دقیق از دکمه‌های کم و زیاد استفاده کن.'
+                            : 'Use the step buttons for an exact value.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  '${TradeIdea.maximumManualLeverage}x',
-                  textDirection: TextDirection.ltr,
+                IconButton.filledTonal(
+                  key: ValueKey('leverage-increase-$selected'),
+                  tooltip: _persian ? 'یک واحد بیشتر' : 'Increase by one',
+                  onPressed: selected < TradeIdea.maximumManualLeverage
+                      ? () => _commit(selected + 1)
+                      : null,
+                  icon: const Icon(Icons.add_rounded),
                 ),
               ],
             ),

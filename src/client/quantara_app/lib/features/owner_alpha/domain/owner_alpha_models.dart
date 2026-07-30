@@ -326,6 +326,7 @@ final class SignalJournalEntry {
     required this.selectedLeverage,
     required this.summary,
     required this.invalidation,
+    this.sizingCapital = 0,
     this.outcome = SignalOutcome.pendingEntry,
     this.highestTargetHit = 0,
     this.activatedAt,
@@ -337,7 +338,10 @@ final class SignalJournalEntry {
     this.closed = false,
   });
 
-  factory SignalJournalEntry.fromIdea(TradeIdea idea) => SignalJournalEntry(
+  factory SignalJournalEntry.fromIdea(
+    TradeIdea idea, {
+    double sizingCapital = 0,
+  }) => SignalJournalEntry(
     setupId: idea.setupId,
     symbol: idea.symbol,
     timeframe: idea.timeframe,
@@ -359,6 +363,7 @@ final class SignalJournalEntry {
     selectedLeverage: idea.recommendedLeverage!,
     summary: idea.summary,
     invalidation: idea.invalidation,
+    sizingCapital: sizingCapital,
   );
 
   final String setupId;
@@ -382,6 +387,7 @@ final class SignalJournalEntry {
   final int selectedLeverage;
   final String summary;
   final String invalidation;
+  final double sizingCapital;
   final SignalOutcome outcome;
   final int highestTargetHit;
   final DateTime? activatedAt;
@@ -393,6 +399,12 @@ final class SignalJournalEntry {
   final bool closed;
 
   double get selectedMargin => notionalValue / selectedLeverage;
+
+  double get sizingRiskPercent =>
+      sizingCapital <= 0 ? 0 : maximumLoss / sizingCapital * 100;
+
+  bool get canRefreshSizing =>
+      outcome == SignalOutcome.pendingEntry && activatedAt == null && !closed;
 
   bool get hasTerminalOutcome =>
       outcome == SignalOutcome.expiredUntriggered ||
@@ -448,6 +460,7 @@ final class SignalJournalEntry {
     selectedLeverage: selectedLeverage ?? this.selectedLeverage,
     summary: summary,
     invalidation: invalidation,
+    sizingCapital: sizingCapital,
     outcome: outcome ?? this.outcome,
     highestTargetHit: highestTargetHit ?? this.highestTargetHit,
     activatedAt: activatedAt ?? this.activatedAt,
@@ -481,6 +494,7 @@ final class SignalJournalEntry {
     'selectedLeverage': selectedLeverage,
     'summary': summary,
     'invalidation': invalidation,
+    'sizingCapital': sizingCapital,
     'outcome': outcome.name,
     'highestTargetHit': highestTargetHit,
     'activatedAt': activatedAt?.toIso8601String(),
@@ -539,13 +553,18 @@ final class SignalJournalEntry {
         notionalValue: (value['notionalValue'] as num?)?.toDouble() ?? 0,
         estimatedRoundTripCosts:
             (value['estimatedRoundTripCosts'] as num?)?.toDouble() ?? 0,
-        recommendedLeverage: recommendedLeverage.clamp(1, 100).toInt(),
-        maximumSafeLeverage: maximumSafeLeverage.clamp(1, 100).toInt(),
+        recommendedLeverage: recommendedLeverage
+            .clamp(1, TradeIdea.maximumManualLeverage)
+            .toInt(),
+        maximumSafeLeverage: maximumSafeLeverage
+            .clamp(1, TradeIdea.maximumManualLeverage)
+            .toInt(),
         selectedLeverage: selectedLeverage
-            .clamp(1, maximumSafeLeverage.clamp(1, 100))
+            .clamp(1, TradeIdea.maximumManualLeverage)
             .toInt(),
         summary: value['summary'] as String,
         invalidation: value['invalidation'] as String,
+        sizingCapital: (value['sizingCapital'] as num?)?.toDouble() ?? 0,
         outcome: outcome,
         highestTargetHit: ((value['highestTargetHit'] as num?)?.toInt() ?? 0)
             .clamp(0, 3)
