@@ -11,9 +11,13 @@ final class BitunixPrivateApiClient {
     required http.Client client,
     DateTime Function()? utcNow,
     Random? secureRandom,
-  }) : _client = client,
-       _utcNow = utcNow ?? DateTime.now,
-       _random = secureRandom ?? Random.secure();
+  }) : this._(
+         client,
+         utcNow ?? DateTime.now,
+         secureRandom ?? Random.secure(),
+       );
+
+  BitunixPrivateApiClient._(this._client, this._utcNow, this._random);
 
   static const _host = 'fapi.bitunix.com';
 
