@@ -8,8 +8,9 @@ final class AutoTradeController extends ChangeNotifier {
   AutoTradeController({
     required BitunixPrivateApiClient apiClient,
     required AutoTradeCredentialsStore credentialsStore,
-  }) : _apiClient = apiClient,
-       _credentialsStore = credentialsStore;
+  }) : this._(apiClient, credentialsStore);
+
+  AutoTradeController._(this._apiClient, this._credentialsStore);
 
   final BitunixPrivateApiClient _apiClient;
   final AutoTradeCredentialsStore _credentialsStore;
