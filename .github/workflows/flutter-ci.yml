@@ -133,15 +133,15 @@ jobs:
       - name: Upload web preview
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-preview-0.12.0
+          name: quantara-web-preview-0.13.0
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android 0.12.0 candidate
+      - name: Upload Android 0.13.0 local live candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-0.12.0
+          name: quantara-android-0.13.0-local-live-canary
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -161,7 +161,7 @@ jobs:
       - name: Download Android candidate
         uses: actions/download-artifact@v4
         with:
-          name: quantara-android-0.12.0
+          name: quantara-android-0.13.0-local-live-canary
           path: apk
 
       - name: Boot emulator and verify deferred background launch
@@ -182,6 +182,7 @@ jobs:
             adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt
             cat android-pid.txt
             test -s android-pid.txt
+            adb shell dumpsys package "$ANDROID_PACKAGE" | grep -q "com.pravera.flutter_foreground_task.service.ForegroundService"
             adb logcat -d > android-logcat.txt
             adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
             ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
