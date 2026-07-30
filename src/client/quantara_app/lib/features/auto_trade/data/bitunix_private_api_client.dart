@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
 import '../domain/auto_trade_models.dart';
+import 'bitunix_request_signer.dart';
 
 final class BitunixPrivateApiClient {
   BitunixPrivateApiClient({
@@ -77,15 +77,15 @@ final class BitunixPrivateApiClient {
     final sortedQuery = <String, String>{
       for (final entry in sortedEntries) entry.key: entry.value,
     };
-    final querySignature = sortedEntries
-        .map((entry) => '${entry.key}${entry.value}')
-        .join();
     final nonce = _nonce();
     final timestamp = _utcNow().toUtc().millisecondsSinceEpoch.toString();
-    final digest = _sha256(
-      '$nonce$timestamp${credentials.apiKey}$querySignature',
+    final signature = BitunixRequestSigner.create(
+      nonce: nonce,
+      timestamp: timestamp,
+      apiKey: credentials.apiKey,
+      secretKey: credentials.secretKey,
+      query: sortedQuery,
     );
-    final signature = _sha256('$digest${credentials.secretKey}');
     final uri = Uri.https(_host, path, sortedQuery);
 
     late final http.Response response;
@@ -97,7 +97,7 @@ final class BitunixPrivateApiClient {
               'api-key': credentials.apiKey,
               'nonce': nonce,
               'timestamp': timestamp,
-              'sign': signature,
+              'sign': signature.sign,
               'language': 'en-US',
               'Content-Type': 'application/json',
               'Accept': 'application/json',
@@ -143,9 +143,6 @@ final class BitunixPrivateApiClient {
     final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
     return bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
   }
-
-  static String _sha256(String value) =>
-      sha256.convert(utf8.encode(value)).toString();
 
   static AutoTradePosition _positionFromJson(Map<String, Object?> value) =>
       AutoTradePosition(
