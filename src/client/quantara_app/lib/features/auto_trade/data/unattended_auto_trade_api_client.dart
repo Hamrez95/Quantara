@@ -15,8 +15,7 @@ final class UnattendedAutoTradeSafeException implements Exception {
 }
 
 final class UnattendedAutoTradeApiClient {
-  const UnattendedAutoTradeApiClient({required http.Client client})
-    : _client = client;
+  const UnattendedAutoTradeApiClient({required this._client});
 
   final http.Client _client;
 
