@@ -230,7 +230,9 @@ class _OpenPositionsCard extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
                   child: Text(
-                    position.symbol.isEmpty ? '?' : position.symbol.substring(0, 1),
+                    position.symbol.isEmpty
+                        ? '?'
+                        : position.symbol.substring(0, 1),
                   ),
                 ),
                 title: Text(
