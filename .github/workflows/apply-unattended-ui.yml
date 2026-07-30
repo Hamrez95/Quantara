@@ -6,17 +6,28 @@ on:
       - feat/72-unattended-live-engine
     paths:
       - .github/workflows/apply-unattended-ui.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-unattended-ui.yml
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/72-unattended-live-engine
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
       - name: Patch owner UI integration
         shell: bash
         run: |
@@ -120,8 +131,7 @@ jobs:
           )
           auto_path.write_text(auto)
 
-          workflow = Path('.github/workflows/apply-unattended-ui.yml')
-          workflow.unlink()
+          Path('.github/workflows/apply-unattended-ui.yml').unlink()
           PY
           dart format src/client/quantara_app/lib/features/auto_trade src/client/quantara_app/lib/features/owner_alpha/presentation
       - name: Commit integration
