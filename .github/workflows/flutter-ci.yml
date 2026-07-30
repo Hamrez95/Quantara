@@ -66,6 +66,7 @@ jobs:
         run: |
           python3 .github/scripts/apply_video_regression_patch.py
           (cd src/client/quantara_app && dart format lib test)
+          git checkout HEAD -- .github/workflows/flutter-ci.yml .github/workflows/apply-video-regression-patch.yml .github/scripts/apply_video_regression_patch.py
           git config user.name "Quantara CI"
           git config user.email "actions@users.noreply.github.com"
           git add -A
