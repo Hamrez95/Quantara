@@ -95,48 +95,51 @@ void main() {
     expect(snapshot.state, UnattendedRunState.armed);
   });
 
-  test('server safety rejection exposes reasons without control token', () async {
-    final client = UnattendedAutoTradeApiClient(
-      client: MockClient(
-        (request) async => http.Response(
-          jsonEncode({
-            'code': 'invalidConfiguration',
-            'errors': [
-              'Server live-execution feature flag is disabled.',
-              'A reconciled live Bitunix execution cycle is not registered.',
-            ],
-          }),
-          400,
+  test(
+    'server safety rejection exposes reasons without control token',
+    () async {
+      final client = UnattendedAutoTradeApiClient(
+        client: MockClient(
+          (request) async => http.Response(
+            jsonEncode({
+              'code': 'invalidConfiguration',
+              'errors': [
+                'Server live-execution feature flag is disabled.',
+                'A reconciled live Bitunix execution cycle is not registered.',
+              ],
+            }),
+            400,
+          ),
         ),
-      ),
-    );
+      );
 
-    await expectLater(
-      () => client.start(
-        serverConfig: serverConfig,
-        requestId: 'start-1',
-        configuration: const UnattendedRunConfiguration(
-          allowedSymbols: ['BTCUSDT'],
-          allowedStrategies: ['trendPullback'],
-          allowedTimeframes: ['1h'],
-          globalLeverage: 10,
-          riskPerTradePercent: 0.5,
-          maximumDailyLossPercent: 2,
-          maximumWeeklyLossPercent: 5,
-          maximumConcurrentPositions: 1,
-          maximumMarginUsagePercent: 25,
-          maximumCorrelatedExposurePercent: 25,
-          maximumSlippagePercent: 0.2,
-          maximumSignalAgeSeconds: 1200,
+      await expectLater(
+        () => client.start(
+          serverConfig: serverConfig,
+          requestId: 'start-1',
+          configuration: const UnattendedRunConfiguration(
+            allowedSymbols: ['BTCUSDT'],
+            allowedStrategies: ['trendPullback'],
+            allowedTimeframes: ['1h'],
+            globalLeverage: 10,
+            riskPerTradePercent: 0.5,
+            maximumDailyLossPercent: 2,
+            maximumWeeklyLossPercent: 5,
+            maximumConcurrentPositions: 1,
+            maximumMarginUsagePercent: 25,
+            maximumCorrelatedExposurePercent: 25,
+            maximumSlippagePercent: 0.2,
+            maximumSignalAgeSeconds: 1200,
+          ),
         ),
-      ),
-      throwsA(
-        isA<UnattendedAutoTradeSafeException>().having(
-          (error) => error.message,
-          'message',
-          contains('feature flag'),
+        throwsA(
+          isA<UnattendedAutoTradeSafeException>().having(
+            (error) => error.message,
+            'message',
+            contains('feature flag'),
+          ),
         ),
-      ),
-    );
-  });
+      );
+    },
+  );
 }
