@@ -114,7 +114,7 @@ public sealed record AutoTradeRunConfiguration(
     private static void ValidateSet(
         IReadOnlySet<string>? values,
         string message,
-        ICollection<string> errors)
+        List<string> errors)
     {
         if (values is null || values.Count == 0 || values.Any(string.IsNullOrWhiteSpace))
         {
