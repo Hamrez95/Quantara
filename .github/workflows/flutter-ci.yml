@@ -20,7 +20,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -42,6 +42,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -54,6 +57,20 @@ jobs:
         run: |
           flutter --version
           dart --version
+
+      - name: Apply one-time Auto Trade phase A integration
+        if: ${{ hashFiles('.github/scripts/apply_autotrade_readonly_patch.py') != '' }}
+        working-directory: .
+        shell: bash
+        run: |
+          python3 .github/scripts/apply_autotrade_readonly_patch.py
+          (cd src/client/quantara_app && flutter pub get && dart format lib test)
+          git checkout HEAD -- .github/workflows/flutter-ci.yml
+          git config user.name "Quantara CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add separate Bitunix read-only Auto Trade workspace [phase-a-applied]"
+          git push origin HEAD:feat/59-autotrade-readonly
 
       - name: Restore packages
         run: flutter pub get
