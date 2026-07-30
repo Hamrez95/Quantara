@@ -20,7 +20,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -42,9 +42,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -57,22 +54,6 @@ jobs:
         run: |
           flutter --version
           dart --version
-
-      # BEGIN ONE-TIME VIDEO PATCH
-      - name: Apply one-time video regression patch
-        if: ${{ hashFiles('.github/scripts/apply_video_regression_patch.py') != '' }}
-        working-directory: .
-        shell: bash
-        run: |
-          python3 .github/scripts/apply_video_regression_patch.py
-          (cd src/client/quantara_app && dart format lib test)
-          git checkout HEAD -- .github/workflows/flutter-ci.yml .github/workflows/apply-video-regression-patch.yml .github/scripts/apply_video_regression_patch.py
-          git config user.name "Quantara CI"
-          git config user.email "actions@users.noreply.github.com"
-          git add -A
-          git commit -m "fix: bound setup UI and reconcile saved capital [patch-applied]"
-          git push origin HEAD:fix/63-64-video-regressions
-      # END ONE-TIME VIDEO PATCH
 
       - name: Restore packages
         run: flutter pub get
@@ -152,15 +133,15 @@ jobs:
       - name: Upload web preview
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-preview-0.11.1
+          name: quantara-web-preview-0.11.2
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android 0.11.1 candidate
+      - name: Upload Android 0.11.2 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-0.11.1
+          name: quantara-android-0.11.2
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -180,7 +161,7 @@ jobs:
       - name: Download Android candidate
         uses: actions/download-artifact@v4
         with:
-          name: quantara-android-0.11.1
+          name: quantara-android-0.11.2
           path: apk
 
       - name: Boot emulator and verify deferred background launch
