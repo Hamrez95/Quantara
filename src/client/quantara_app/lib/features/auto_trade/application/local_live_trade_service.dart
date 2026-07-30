@@ -418,23 +418,36 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           'Filled quantity could not be split into three valid exchange targets and was closed.',
         );
       }
-      for (var index = 0; index < 3; index++) {
-        await exchange.placePartialTakeProfit(
-          symbol: idea.symbol,
-          positionId: position.positionId,
-          triggerPrice: rules.roundPrice(idea.targets[index]),
-          quantity: targetQuantities[index],
-          credentials: credentials,
-        );
-      }
-      List<BitunixPendingProtection> confirmedProtection = const [];
-      for (var attempt = 0; attempt < 6; attempt++) {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-        confirmedProtection = await exchange.fetchPendingProtection(
-          credentials,
-          symbol: idea.symbol,
-          positionId: position.positionId,
-        );
+      try {
+        for (var index = 0; index < 3; index++) {
+          await exchange.placePartialTakeProfit(
+            symbol: idea.symbol,
+            positionId: position.positionId,
+            triggerPrice: rules.roundPrice(idea.targets[index]),
+            quantity: targetQuantities[index],
+            credentials: credentials,
+          );
+        }
+        List<BitunixPendingProtection> confirmedProtection = const [];
+        for (var attempt = 0; attempt < 6; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+          confirmedProtection = await exchange.fetchPendingProtection(
+            credentials,
+            symbol: idea.symbol,
+            positionId: position.positionId,
+          );
+          final fullStopConfirmed = confirmedProtection.any(
+            (item) => item.stopLossPrice > 0,
+          );
+          final targetCount = confirmedProtection
+              .where(
+                (item) =>
+                    item.takeProfitPrice > 0 &&
+                    item.takeProfitQuantity >= rules.minimumQuantity,
+              )
+              .length;
+          if (fullStopConfirmed && targetCount >= 3) break;
+        }
         final fullStopConfirmed = confirmedProtection.any(
           (item) => item.stopLossPrice > 0,
         );
@@ -445,26 +458,20 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   item.takeProfitQuantity >= rules.minimumQuantity,
             )
             .length;
-        if (fullStopConfirmed && targetCount >= 3) break;
-      }
-      final fullStopConfirmed = confirmedProtection.any(
-        (item) => item.stopLossPrice > 0,
-      );
-      final targetCount = confirmedProtection
-          .where(
-            (item) =>
-                item.takeProfitPrice > 0 &&
-                item.takeProfitQuantity >= rules.minimumQuantity,
-          )
-          .length;
-      if (!fullStopConfirmed || targetCount < 3) {
+        if (!fullStopConfirmed || targetCount < 3) {
+          throw const LocalLiveTradeSafeException(
+            'The complete SL/TP ladder was not confirmed.',
+          );
+        }
+      } on Object catch (error) {
         await exchange.closePositionReduceOnly(
           position: position,
           clientId: '$clientId-incomplete-protection-close',
           credentials: credentials,
         );
+        if (error is LocalLiveTradeSafeException) rethrow;
         throw const LocalLiveTradeSafeException(
-          'The complete SL/TP ladder was not confirmed; emergency close was submitted.',
+          'TP ladder placement failed; emergency close was submitted.',
         );
       }
       _managed.add(
