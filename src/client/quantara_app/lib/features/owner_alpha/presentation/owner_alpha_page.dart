@@ -2,11 +2,16 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../core/formatting/number_formatters.dart';
 import '../../../core/localization/app_strings.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
+import '../../auto_trade/application/auto_trade_controller.dart';
+import '../../auto_trade/data/bitunix_private_api_client.dart';
+import '../../auto_trade/data/secure_auto_trade_credentials_store.dart';
+import '../../auto_trade/domain/auto_trade_models.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../strategy_lab/data/strategy_lab_runner.dart';
@@ -20,6 +25,7 @@ part 'owner_alpha_dashboard.dart';
 part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
+part 'owner_alpha_auto_trade.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
 part 'owner_alpha_strategy_lab.dart';
@@ -53,6 +59,11 @@ class OwnerAlphaPage extends StatefulWidget {
 }
 
 class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
+  late final http.Client _autoTradeHttpClient = http.Client();
+  late final AutoTradeController _autoTradeController = AutoTradeController(
+    apiClient: BitunixPrivateApiClient(client: _autoTradeHttpClient),
+    credentialsStore: const SecureAutoTradeCredentialsStore(),
+  );
   late final OwnerAlphaController _controller = OwnerAlphaController(
     repository: widget.repository,
     settingsStore: widget.settingsStore,
@@ -67,11 +78,14 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   void initState() {
     super.initState();
     unawaited(_controller.initialize());
+    unawaited(_autoTradeController.initialize());
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _autoTradeController.dispose();
+    _autoTradeHttpClient.close();
     super.dispose();
   }
 
@@ -115,6 +129,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           animation: _controller,
           builder: (context, _) => _OwnerAlphaBody(
             controller: _controller,
+            autoTradeController: _autoTradeController,
             destination: _destination,
             themeMode: widget.themeMode,
             locale: widget.locale,
@@ -264,16 +279,18 @@ const _destinations = [
   ),
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
   _Destination(Icons.science_outlined, Icons.science_rounded),
+  _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _mobileDestinationIndexes = [0, 1, 2, 3, 5];
+const _mobileDestinationIndexes = [0, 1, 2, 3, 5, 6];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
   2 => strings.analysis,
   3 => strings.watchlist,
   4 => strings.strategyLab,
-  5 => strings.profile,
+  5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',
+  6 => strings.profile,
   _ => strings.radar,
 };
 
@@ -287,6 +304,7 @@ final class _Destination {
 class _OwnerAlphaBody extends StatelessWidget {
   const _OwnerAlphaBody({
     required this.controller,
+    required this.autoTradeController,
     required this.destination,
     required this.themeMode,
     required this.locale,
@@ -298,6 +316,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   });
 
   final OwnerAlphaController controller;
+  final AutoTradeController autoTradeController;
   final int destination;
   final ThemeMode themeMode;
   final Locale locale;
@@ -339,13 +358,18 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  if (destination == 5)
+                  if (destination == 6)
                     _ProfileView(
                       controller: controller,
                       themeMode: themeMode,
                       locale: locale,
                       onToggleTheme: onToggleTheme,
                       onLocaleChanged: onLocaleChanged,
+                    )
+                  else if (destination == 5)
+                    _AutoTradeView(
+                      controller: autoTradeController,
+                      analysisController: controller,
                     )
                   else if (controller.snapshot == null)
                     _InitialLoading(controller: controller)
