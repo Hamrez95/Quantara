@@ -61,17 +61,17 @@ public interface IAutoTradeControlCoordinator
 }
 
 public sealed class ConfigurationAutoTradePreflightService(
-    IConfiguration configuration,
+    IConfiguration serverConfiguration,
     IAutoTradeExecutionCapability capability)
     : IAutoTradePreflightService
 {
     public Task<AutoTradePreflightResult> EvaluateAsync(
-        AutoTradeRunConfiguration runConfiguration,
+        AutoTradeRunConfiguration configuration,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var errors = new List<string>(runConfiguration.Validate());
-        if (!configuration.GetValue("QUANTARA_LIVE_EXECUTION_ENABLED", false))
+        var errors = new List<string>(configuration.Validate());
+        if (!serverConfiguration.GetValue("QUANTARA_LIVE_EXECUTION_ENABLED", false))
         {
             errors.Add("Server live-execution feature flag is disabled.");
         }
@@ -81,7 +81,7 @@ public sealed class ConfigurationAutoTradePreflightService(
             errors.Add("A reconciled live Bitunix execution cycle is not registered.");
         }
 
-        var token = configuration["QUANTARA_CONTROL_TOKEN"];
+        var token = serverConfiguration["QUANTARA_CONTROL_TOKEN"];
         if (string.IsNullOrWhiteSpace(token) || token.Length < 32)
         {
             errors.Add("A strong server control token is not configured.");
@@ -230,8 +230,8 @@ public sealed class InMemoryAutoTradeControlCoordinator : IAutoTradeControlCoord
             request.RequireIsolatedMargin,
             request.DefaultStopPolicy);
 
-    private static IReadOnlySet<string> NormalizeSet(IEnumerable<string> values) =>
-        new HashSet<string>(
+    private static HashSet<string> NormalizeSet(IEnumerable<string> values) =>
+        new(
             values
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value.Trim().ToUpperInvariant()),
