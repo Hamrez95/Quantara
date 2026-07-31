@@ -170,8 +170,8 @@ jobs:
   android-launch:
     name: Android ${{ matrix.api-level }} cold-start smoke
     needs: flutter
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
+    runs-on: macos-13
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -183,13 +183,14 @@ jobs:
           name: quantara-android-0.13.0-local-live-canary
           path: apk
 
-      - name: Boot emulator and verify cold start
+      - name: Boot hardware-accelerated emulator and verify cold start
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           profile: pixel_6
           disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
             set -eu
             adb install -r apk/app-release.apk
@@ -201,23 +202,23 @@ jobs:
             for attempt in 1 2 3; do
               echo "Cold-start attempt $attempt" | tee -a android-start.txt
               set +e
-              timeout 45s adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" >> android-start.txt 2>&1
+              adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" >> android-start.txt 2>&1
               start_status=$?
               set -e
               cat android-start.txt
-              sleep 10
+              sleep 8
               if adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt && test -s android-pid.txt; then
                 launched=true
                 break
               fi
               echo "Start command exited with $start_status and no live process; retrying." | tee -a android-start.txt
               adb shell am force-stop "$ANDROID_PACKAGE" || true
-              sleep 5
+              sleep 3
             done
 
             test "$launched" = true
             cat android-pid.txt
-            sleep 20
+            sleep 15
             adb shell pidof "$ANDROID_PACKAGE" > android-pid-after-settle.txt
             test -s android-pid-after-settle.txt
             adb logcat -d > android-logcat.txt
