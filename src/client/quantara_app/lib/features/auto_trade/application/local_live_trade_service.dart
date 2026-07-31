@@ -141,6 +141,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _exchange = BitunixLocalLiveApiClient(client: _httpClient!);
         _entriesEnabled = true;
         _destroyed = false;
+        _sessionStartEquity = null;
         await FlutterForegroundTask.saveData(
           key: localLiveConfigurationKey,
           value: jsonEncode(configuration.toJson()),
@@ -348,14 +349,63 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           credentials,
           symbol: idea.symbol,
         );
-        if (matches.isNotEmpty) position = matches.first;
-        if (detail.hasFill && position != null) break;
+        position = matches.firstOrNull;
+        if (detail.fullyFilled && position != null) break;
       }
-      if (detail == null || !detail.hasFill || position == null) {
+      if (detail == null || !detail.fullyFilled || position == null) {
         _entriesEnabled = false;
-        throw const LocalLiveTradeSafeException(
-          'Entry fill could not be reconciled with a Bitunix position.',
+        _auditEvent(
+          'entry_reconciliation',
+          'Entry was not fully reconciled; cancellation and fail-closed cleanup started.',
+          symbol: idea.symbol,
         );
+        try {
+          await exchange.cancelEntryOrder(
+            symbol: idea.symbol,
+            orderId: placed.orderId,
+            clientId: placed.clientId,
+            credentials: credentials,
+          );
+        } on Object catch (error) {
+          _auditEvent(
+            'entry_cancel_failed',
+            _safeError(error),
+            symbol: idea.symbol,
+          );
+        }
+        for (var attempt = 0; attempt < 10; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 750));
+          detail = await exchange.fetchOrderDetail(
+            orderId: placed.orderId,
+            credentials: credentials,
+          );
+          final matches = await exchange.fetchPositions(
+            credentials,
+            symbol: idea.symbol,
+          );
+          position = matches.firstOrNull;
+          if (detail.fullyFilled && position != null) break;
+          if (detail.status == 'CANCELED') break;
+        }
+        if (detail == null || !detail.fullyFilled || position == null) {
+          if (position != null && position.quantity > 0) {
+            await exchange.closePositionReduceOnly(
+              position: position,
+              clientId: '$clientId-partial-close',
+              credentials: credentials,
+            );
+            _auditEvent(
+              'partial_fill_closed',
+              'Unresolved partial fill was closed after entry cancellation.',
+              symbol: idea.symbol,
+            );
+          }
+          _executedSetupIds.add(idea.setupId);
+          await _persistState();
+          throw const LocalLiveTradeSafeException(
+            'Entry did not reach a confirmed full fill. The remainder was cancelled and any partial position was closed.',
+          );
+        }
       }
       quantity = rules.roundQuantityDown(
         math.min(detail.filledQuantity, position.quantity),

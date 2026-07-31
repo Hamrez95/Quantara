@@ -424,6 +424,33 @@ final class BitunixLocalLiveApiClient {
     );
   }
 
+  Future<void> cancelEntryOrder({
+    required String symbol,
+    required String orderId,
+    required String clientId,
+    required BitunixApiCredentials credentials,
+  }) async {
+    final response = await _signedPost(
+      '/api/v1/futures/trade/cancel_orders',
+      SplayTreeMap<String, Object?>.from({
+        'orderList': [
+          {'clientId': clientId, 'orderId': orderId},
+        ],
+        'symbol': symbol,
+      }),
+      credentials,
+    );
+    final data = response['data'];
+    final failures = data is Map<String, Object?>
+        ? _mapList(data['failureList'])
+        : const <Map<String, Object?>>[];
+    if (failures.isNotEmpty) {
+      throw const LocalLiveTradeSafeException(
+        'Bitunix did not confirm cancellation of the unresolved entry.',
+      );
+    }
+  }
+
   Future<String> placePositionStop({
     required String symbol,
     required String positionId,

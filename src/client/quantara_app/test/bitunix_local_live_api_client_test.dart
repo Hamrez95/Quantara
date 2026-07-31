@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -160,5 +161,48 @@ void main() {
         ),
       ),
     );
+  });
+
+  test(
+    'cancels an unresolved entry using the official batch contract',
+    () async {
+      final api = client((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/futures/trade/cancel_orders');
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        expect(body['symbol'], 'BTCUSDT');
+        expect(body['orderList'], [
+          {'clientId': 'q-local-test', 'orderId': 'entry-1'},
+        ]);
+        return http.Response(
+          jsonEncode({
+            'code': 0,
+            'msg': 'Success',
+            'data': {
+              'successList': ['entry-1'],
+              'failureList': [],
+            },
+          }),
+          200,
+        );
+      });
+
+      await api.cancelEntryOrder(
+        symbol: 'BTCUSDT',
+        orderId: 'entry-1',
+        clientId: 'q-local-test',
+        credentials: credentials,
+      );
+    },
+  );
+
+  test('service never treats a partial fill as a protected full entry', () {
+    final source = File(
+      'lib/features/auto_trade/application/local_live_trade_service.dart',
+    ).readAsStringSync();
+    expect(source, contains('detail.fullyFilled'));
+    expect(source, contains('cancelEntryOrder'));
+    expect(source, contains("detail.status == 'CANCELED'"));
+    expect(source.contains('if (detail.hasFill && position != null)'), isFalse);
   });
 }
