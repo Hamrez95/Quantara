@@ -195,12 +195,31 @@ jobs:
             adb install -r apk/app-release.apk
             adb logcat -c
             adb shell am force-stop "$ANDROID_PACKAGE"
-            adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" > android-start.txt
-            cat android-start.txt
-            sleep 20
-            adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt
+
+            : > android-start.txt
+            launched=false
+            for attempt in 1 2 3; do
+              echo "Cold-start attempt $attempt" | tee -a android-start.txt
+              set +e
+              timeout 45s adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" >> android-start.txt 2>&1
+              start_status=$?
+              set -e
+              cat android-start.txt
+              sleep 10
+              if adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt && test -s android-pid.txt; then
+                launched=true
+                break
+              fi
+              echo "Start command exited with $start_status and no live process; retrying." | tee -a android-start.txt
+              adb shell am force-stop "$ANDROID_PACKAGE" || true
+              sleep 5
+            done
+
+            test "$launched" = true
             cat android-pid.txt
-            test -s android-pid.txt
+            sleep 20
+            adb shell pidof "$ANDROID_PACKAGE" > android-pid-after-settle.txt
+            test -s android-pid-after-settle.txt
             adb logcat -d > android-logcat.txt
             adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
             ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
@@ -213,6 +232,7 @@ jobs:
           path: |
             android-start.txt
             android-pid.txt
+            android-pid-after-settle.txt
             android-logcat.txt
             android-jobscheduler.txt
           if-no-files-found: ignore
