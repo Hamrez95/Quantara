@@ -1,10 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quantara_app/features/app_update/application/app_update_controller.dart';
 import 'package:quantara_app/features/app_update/data/app_update_manifest_client.dart';
 import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
+
+String checksum(String character) => List.filled(64, character).join();
 
 Map<String, Object?> manifestJson({
   String channel = 'canary',
@@ -29,7 +32,7 @@ Map<String, Object?> manifestJson({
       'version': version,
       'buildNumber': buildNumber,
       'url': 'https://updates.quantara.app/releases/$version/quantara.apk',
-      'sha256': 'a' * 64,
+      'sha256': checksum('a'),
       'packageId': 'app.quantara.canary',
       'signingIdentity': 'sha256/example',
       'architecture': 'arm64-v8a',
@@ -39,7 +42,7 @@ Map<String, Object?> manifestJson({
       'buildNumber': buildNumber,
       'url':
           'https://updates.quantara.app/releases/$version/QuantaraSetup.exe',
-      'sha256': 'b' * 64,
+      'sha256': checksum('b'),
       'signingIdentity': 'Quantara',
       'architecture': 'x64',
     },
@@ -73,7 +76,8 @@ void main() {
 
   test('client rejects a channel mismatch', () async {
     final client = MockClient(
-      (_) async => Response(jsonEncode(manifestJson(channel: 'stable')), 200),
+      (_) async =>
+          http.Response(jsonEncode(manifestJson(channel: 'stable')), 200),
     );
     final manifestClient = AppUpdateManifestClient(
       client: client,
@@ -93,7 +97,7 @@ void main() {
 
   test('controller reports an available Android update', () async {
     final client = MockClient(
-      (_) async => Response(jsonEncode(manifestJson()), 200),
+      (_) async => http.Response(jsonEncode(manifestJson()), 200),
     );
     final controller = AppUpdateController(
       manifestClient: AppUpdateManifestClient(
@@ -120,7 +124,7 @@ void main() {
 
   test('revoked current build becomes a mandatory recovery update', () async {
     final client = MockClient(
-      (_) async => Response(
+      (_) async => http.Response(
         jsonEncode(
           manifestJson(
             version: '0.13.0',
