@@ -31,7 +31,18 @@ jobs:
           fetch-depth: 0
 
       - name: Apply safety patch
-        run: python3 .github/scripts/pr75_safety_patch.py
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/scripts/pr75_safety_patch.py')
+          source = path.read_text()
+          old = "    expect(source, isNot(contains('if (detail.hasFill && position != null)')));"
+          new = "    expect(source.contains('if (detail.hasFill && position != null)'), isFalse);"
+          if old not in source:
+              raise SystemExit('Regression-test correction anchor not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
+          python3 .github/scripts/pr75_safety_patch.py
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
