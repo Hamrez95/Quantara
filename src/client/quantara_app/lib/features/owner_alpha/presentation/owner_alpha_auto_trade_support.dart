@@ -18,7 +18,9 @@ class _DisconnectedAccountCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                fa ? 'حساب Bitunix متصل نیست' : 'Bitunix account is disconnected',
+                fa
+                    ? 'حساب Bitunix متصل نیست'
+                    : 'Bitunix account is disconnected',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
@@ -52,7 +54,9 @@ class _DisconnectedAccountCard extends StatelessWidget {
               FilledButton.icon(
                 onPressed: busy ? null : onConnect,
                 icon: AnimatedSwitcher(
-                  duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
                   child: busy
                       ? const SizedBox.square(
                           key: ValueKey('busy'),
@@ -172,7 +176,9 @@ class _SecureConnectionIllustration extends StatelessWidget {
                         boxShadow: [
                           BoxShadow(
                             blurRadius: 20,
-                            color: QuantaraColors.success.withValues(alpha: 0.24),
+                            color: QuantaraColors.success.withValues(
+                              alpha: 0.24,
+                            ),
                           ),
                         ],
                       ),
@@ -562,9 +568,9 @@ class _CompactEmptyState extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(message, style: Theme.of(context).textTheme.bodySmall),
