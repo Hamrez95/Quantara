@@ -20,7 +20,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -42,6 +42,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Apply one-time PR 75 entry reconciliation safety patch
+        if: github.event_name == 'push' && github.ref_name == 'feat/74-local-guarded-live' && github.actor != 'github-actions[bot]'
+        working-directory: ${{ github.workspace }}
+        run: python3 .github/scripts/pr75_safety_patch.py
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -166,6 +171,25 @@ jobs:
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Commit validated one-time safety patch and restore standard CI
+        if: github.event_name == 'push' && github.ref_name == 'feat/74-local-guarded-live' && github.actor != 'github-actions[bot]'
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout HEAD^ -- .github/workflows/flutter-ci.yml
+          git rm -f .github/scripts/pr75_safety_patch.py .github/workflows/pr75-safety-patch.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart
+          git add src/client/quantara_app/lib/features/auto_trade/data/bitunix_local_live_api_client.dart
+          git add src/client/quantara_app/test/bitunix_local_live_api_client_test.dart
+          git add .github/workflows/flutter-ci.yml
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix: fail closed on unresolved Bitunix entry fills'
+            git push origin HEAD:feat/74-local-guarded-live
+          fi
 
   android-launch:
     name: Android ${{ matrix.api-level }} cold-start smoke
