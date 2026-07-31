@@ -115,8 +115,11 @@ jobs:
           "$apkanalyzer_path" manifest print build/app/outputs/flutter-apk/app-release.apk > merged-manifest.xml
           grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
           grep -Fq "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
-          grep -Eq "foregroundServiceType[^>]*specialUse|specialUse[^>]*foregroundServiceType" merged-manifest.xml
+          grep -Eq 'android:foregroundServiceType="(specialUse|0x40000000)"' merged-manifest.xml
           grep -Fq "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" merged-manifest.xml
+          ! grep -Fq "android.permission.RECEIVE_BOOT_COMPLETED" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RebootReceiver" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
 
       - name: Upload merged Android manifest
         if: always()
