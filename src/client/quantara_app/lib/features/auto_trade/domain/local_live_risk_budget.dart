@@ -135,10 +135,13 @@ abstract final class LocalLiveRiskBudget {
     final realizedLoss = math.max(0, -input.realizedPnl).toDouble();
     final openStopRisk = input.openRisks.fold<double>(
       0,
-      (sum, risk) => sum + math.max(0, risk.worstCaseLoss),
+      (sum, risk) =>
+          sum + math.max(0, risk.worstCaseLoss).toDouble(),
     );
-    final pendingReservedRisk = math.max(0, input.pendingReservedRisk);
-    final additionalFeeReserve = math.max(0, input.additionalFeeReserve);
+    final pendingReservedRisk =
+        math.max(0, input.pendingReservedRisk).toDouble();
+    final additionalFeeReserve =
+        math.max(0, input.additionalFeeReserve).toDouble();
     final consumedRisk =
         realizedLoss +
         openStopRisk +
@@ -147,17 +150,17 @@ abstract final class LocalLiveRiskBudget {
     final remainingRisk = math.max(0, dailyBudget - consumedRisk).toDouble();
     final occupiedSlots =
         input.openPositionCount + input.pendingPositionCount;
-    final openSlots = math.max(
-      0,
-      input.maximumConcurrentPositions - occupiedSlots,
-    );
+    final openSlots = math
+        .max(0, input.maximumConcurrentPositions - occupiedSlots)
+        .toInt();
     final protectionVerified = input.openRisks.every(
       (risk) => risk.protectionVerified,
     );
 
     final userPerTradeCap =
         input.startEquity * input.riskPerTradePercent / 100;
-    final equalSlotAllocation = openSlots == 0 ? 0 : remainingRisk / openSlots;
+    final equalSlotAllocation =
+        openSlots == 0 ? 0.0 : remainingRisk / openSlots;
     final nextTradeAllocation = protectionVerified
         ? math.min(userPerTradeCap, equalSlotAllocation).toDouble()
         : 0.0;
