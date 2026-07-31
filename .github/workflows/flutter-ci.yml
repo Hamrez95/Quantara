@@ -35,12 +35,13 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           path = Path('.github/scripts/pr75_safety_patch.py')
-          source = path.read_text()
-          old = "    expect(source, isNot(contains('if (detail.hasFill && position != null)')));"
-          new = "    expect(source.contains('if (detail.hasFill && position != null)'), isFalse);"
-          if old not in source:
-              raise SystemExit('Regression-test correction anchor not found')
-          path.write_text(source.replace(old, new, 1))
+          lines = path.read_text().splitlines()
+          replacement = "    expect(source.contains('if (detail.hasFill && position != null)'), isFalse);"
+          matches = [i for i, line in enumerate(lines) if 'detail.hasFill && position != null' in line and 'expect(source' in line]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one regression-test line, found {len(matches)}')
+          lines[matches[0]] = replacement
+          path.write_text('\n'.join(lines) + '\n')
           PY
           python3 .github/scripts/pr75_safety_patch.py
 
