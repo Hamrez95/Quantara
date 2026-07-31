@@ -3,72 +3,238 @@ name: Flutter client CI
 on:
   push:
     branches:
-      - feat/74-local-guarded-live
+      - main
+      - dev
+      - 'feat/**'
+      - 'fix/**'
+      - 'release/**'
     paths:
+      - 'src/client/quantara_app/**'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
       - main
+      - dev
     paths:
+      - 'src/client/quantara_app/**'
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: pr75-entry-reconciliation-patch
+  group: flutter-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  patch-and-verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout candidate branch
-        uses: actions/checkout@v4
-        with:
-          ref: feat/74-local-guarded-live
-          fetch-depth: 0
+env:
+  FLUTTER_VERSION: '3.44.8'
+  ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+  ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
 
-      - name: Apply safety patch
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.github/scripts/pr75_safety_patch.py')
-          lines = path.read_text().splitlines()
-          replacement = "    expect(source.contains('if (detail.hasFill && position != null)'), isFalse);"
-          matches = [i for i, line in enumerate(lines) if 'detail.hasFill && position != null' in line and 'expect(source' in line]
-          if len(matches) != 1:
-              raise SystemExit(f'Expected one regression-test line, found {len(matches)}')
-          lines[matches[0]] = replacement
-          path.write_text('\n'.join(lines) + '\n')
-          PY
-          python3 .github/scripts/pr75_safety_patch.py
+jobs:
+  flutter:
+    name: Flutter format, analyze, test, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.44.8'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - name: Format, analyze, and run focused tests
-        working-directory: src/client/quantara_app
+      - name: Display tool versions
         run: |
-          flutter pub get
-          dart format lib/features/auto_trade/application/local_live_trade_service.dart \
-            lib/features/auto_trade/data/bitunix_local_live_api_client.dart \
-            test/bitunix_local_live_api_client_test.dart
-          flutter analyze --fatal-infos
-          flutter test test/bitunix_local_live_api_client_test.dart --reporter expanded
+          flutter --version
+          dart --version
 
-      - name: Commit validated source patch
+      - name: Restore packages
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --fatal-infos > flutter-analyze.log 2>&1
+          status=$?
+          cat flutter-analyze.log
+          exit $status
+
+      - name: Run widget and safety tests
+        shell: bash
+        run: |
+          set +e
+          flutter test --reporter expanded > flutter-test.log 2>&1
+          status=$?
+          cat flutter-test.log
+          exit $status
+
+      - name: Upload Flutter diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-diagnostics-0.13.0
+          path: |
+            src/client/quantara_app/flutter-analyze.log
+            src/client/quantara_app/flutter-test.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Compile API-configured web PWA
+        run: >-
+          flutter build web --release
+          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
+
+      - name: Compile API-configured Android release package
+        run: >-
+          flutter build apk --release
+          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
+
+      - name: Build stable offline-first web PWA
+        run: flutter build web --release
+
+      - name: Build universal Android release APK
+        run: flutter build apk --release
+
+      - name: Verify universal APK manifest safety declarations
+        shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart
-          git add src/client/quantara_app/lib/features/auto_trade/data/bitunix_local_live_api_client.dart
-          git add src/client/quantara_app/test/bitunix_local_live_api_client_test.dart
-          git commit -m 'fix: fail closed on unresolved Bitunix entry fills'
-          git push origin HEAD:feat/74-local-guarded-live
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          test -x "$apkanalyzer_path"
+          "$apkanalyzer_path" manifest print build/app/outputs/flutter-apk/app-release.apk > merged-manifest.xml
+          grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
+          grep -Fq "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
+          grep -Eq 'android:foregroundServiceType="(specialUse|0x40000000)"' merged-manifest.xml
+          grep -Fq "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" merged-manifest.xml
+          ! grep -Fq "android.permission.RECEIVE_BOOT_COMPLETED" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RebootReceiver" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
+
+      - name: Upload merged Android manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-merged-manifest-0.13.0
+          path: src/client/quantara_app/merged-manifest.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Verify universal APK 16KB ZIP alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -x "$zipalign_path"
+          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Build ABI-split Android release APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Verify arm64 APK 16KB ZIP alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -x "$zipalign_path"
+          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
+      - name: Upload web preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-web-preview-0.13.0
+          path: src/client/quantara_app/build/web
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Android 0.13.0 local live candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-android-0.13.0-local-live-canary
+          path: |
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  android-launch:
+    name: Android ${{ matrix.api-level }} cold-start smoke
+    needs: flutter
+    runs-on: macos-13
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [34, 35, 36]
+    steps:
+      - name: Download Android candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: quantara-android-0.13.0-local-live-canary
+          path: apk
+
+      - name: Boot hardware-accelerated emulator and verify cold start
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
+          script: |
+            set -eu
+            adb install -r apk/app-release.apk
+            adb logcat -c
+            adb shell am force-stop "$ANDROID_PACKAGE"
+
+            : > android-start.txt
+            launched=false
+            for attempt in 1 2 3; do
+              echo "Cold-start attempt $attempt" | tee -a android-start.txt
+              set +e
+              adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" >> android-start.txt 2>&1
+              start_status=$?
+              set -e
+              cat android-start.txt
+              sleep 8
+              if adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt && test -s android-pid.txt; then
+                launched=true
+                break
+              fi
+              echo "Start command exited with $start_status and no live process; retrying." | tee -a android-start.txt
+              adb shell am force-stop "$ANDROID_PACKAGE" || true
+              sleep 3
+            done
+
+            test "$launched" = true
+            cat android-pid.txt
+            sleep 15
+            adb shell pidof "$ANDROID_PACKAGE" > android-pid-after-settle.txt
+            test -s android-pid-after-settle.txt
+            adb logcat -d > android-logcat.txt
+            adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
+            ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
+
+      - name: Upload Android launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics
+          path: |
+            android-start.txt
+            android-pid.txt
+            android-pid-after-settle.txt
+            android-logcat.txt
+            android-jobscheduler.txt
+          if-no-files-found: ignore
+          retention-days: 14
