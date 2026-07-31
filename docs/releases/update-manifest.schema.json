@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://updates.quantara.app/schema/v1.json",
+  "title": "Quantara update manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "channel",
+    "publishedAt",
+    "minimumSupportedVersion",
+    "mandatory",
+    "releaseNotes",
+    "rolloutPercent",
+    "revokedBuilds",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "channel": { "enum": ["stable", "canary", "internal"] },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "minimumSupportedVersion": { "type": "string", "minLength": 5 },
+    "mandatory": { "type": "boolean" },
+    "releaseNotes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string" }
+    },
+    "rolloutPercent": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "revokedBuilds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "integer", "minimum": 1 }
+    },
+    "artifacts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "android": { "$ref": "#/$defs/artifact" },
+        "windows": { "$ref": "#/$defs/artifact" },
+        "pwa": { "$ref": "#/$defs/artifact" }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "buildNumber", "url", "sha256"],
+      "properties": {
+        "version": { "type": "string", "minLength": 5 },
+        "buildNumber": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "packageId": { "type": "string" },
+        "signingIdentity": { "type": "string" },
+        "architecture": { "type": "string" }
+      }
+    }
+  }
+}
