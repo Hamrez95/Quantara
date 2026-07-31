@@ -1,0 +1,53 @@
+name: One-shot Dart formatter
+
+on:
+  push:
+    branches:
+      - feat/74-local-guarded-live
+    paths:
+      - 'src/client/quantara_app/lib/**'
+      - 'src/client/quantara_app/test/**'
+      - '.github/workflows/one-shot-dart-format.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-format-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/74-local-guarded-live
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: dart format lib test
+
+      - name: Commit canonical formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- lib test; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib test
+          git commit -m "style: apply canonical Dart formatting"
+          git push origin HEAD:feat/74-local-guarded-live
