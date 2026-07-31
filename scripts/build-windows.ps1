@@ -47,8 +47,7 @@ try {
     $buildMode = if ($Configuration -eq 'Release') { '--release' } else { '--debug' }
     Invoke-Checked flutter build windows $buildMode
 
-    $modeDirectory = $Configuration.ToLowerInvariant()
-    $bundle = Join-Path $appRoot "build/windows/x64/runner/$modeDirectory"
+    $bundle = Join-Path $appRoot "build/windows/x64/runner/$Configuration"
     if (-not (Test-Path $bundle)) {
         throw "Windows bundle was not produced at $bundle"
     }
@@ -58,7 +57,8 @@ try {
     if ($PackageZip) {
         $dist = Join-Path $repoRoot 'dist/windows'
         New-Item -ItemType Directory -Force -Path $dist | Out-Null
-        $archive = Join-Path $dist "quantara-windows-$modeDirectory.zip"
+        $archiveName = "quantara-windows-$($Configuration.ToLowerInvariant()).zip"
+        $archive = Join-Path $dist $archiveName
         if (Test-Path $archive) { Remove-Item $archive -Force }
         Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $archive
         Write-Host "Packaged: $archive"
