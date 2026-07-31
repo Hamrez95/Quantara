@@ -19,7 +19,7 @@ permissions:
 jobs:
   android-smoke:
     name: Android ${{ matrix.api-level }} candidate smoke
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 30
     strategy:
       fail-fast: false
