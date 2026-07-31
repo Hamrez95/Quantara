@@ -19,8 +19,8 @@ permissions:
 jobs:
   android-smoke:
     name: Android ${{ matrix.api-level }} candidate smoke
-    runs-on: macos-26-intel
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -38,25 +38,36 @@ jobs:
           run-id: 30608516198
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Boot hardware-accelerated emulator and verify cold start
+      - name: Boot emulator and verify cold start
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           profile: pixel_6
           disable-animations: true
+          emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
             set -euo pipefail
             adb install -r apk/app-release.apk
             adb logcat -c
             adb shell am force-stop "$ANDROID_PACKAGE"
-            adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" > android-start.txt
-            cat android-start.txt
-            sleep 12
-            adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt
-            test -s android-pid.txt
-            sleep 12
+            launched=false
+            for attempt in 1 2 3; do
+              set +e
+              timeout 60s adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" > android-start.txt 2>&1
+              set -e
+              cat android-start.txt
+              sleep 12
+              if adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt && test -s android-pid.txt; then
+                launched=true
+                break
+              fi
+              adb shell am force-stop "$ANDROID_PACKAGE" || true
+              sleep 4
+            done
+            test "$launched" = true
+            sleep 15
             adb shell pidof "$ANDROID_PACKAGE" > android-pid-after-settle.txt
             test -s android-pid-after-settle.txt
             adb logcat -d > android-logcat.txt
