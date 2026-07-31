@@ -6,6 +6,11 @@ on:
       - feat/74-local-guarded-live
     paths:
       - '.github/workflows/one-shot-android-smoke.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-shot-android-smoke.yml'
 
 permissions:
   actions: read
