@@ -41,8 +41,8 @@ class SectionCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topDirectional,
-              end: Alignment.bottomDirectional,
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
                 scheme.surface,
                 Color.alphaBlend(

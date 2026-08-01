@@ -386,7 +386,7 @@ class _QuantaraMobileAppBar extends StatelessWidget
       actions: [
         IconButton(
           onPressed: controller.isLoading ? null : onRefresh,
-          tooltip: strings.refresh,
+          tooltip: strings.isPersian ? 'به‌روزرسانی' : 'Refresh',
           icon: AnimatedRotation(
             duration: QuantaraMotion.standard,
             turns: controller.isLoading ? 0.5 : 0,
