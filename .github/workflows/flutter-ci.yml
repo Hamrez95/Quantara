@@ -10,6 +10,7 @@ on:
       - 'release/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'scripts/android-cold-start-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
@@ -18,6 +19,7 @@ on:
       - 'feat/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'scripts/android-cold-start-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
@@ -178,6 +180,9 @@ jobs:
       matrix:
         api-level: [34, 35, 36]
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download Android candidate
         uses: actions/download-artifact@v4
         with:
@@ -198,39 +203,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: |
-            set -eu
-            adb install -r apk/app-release.apk
-            adb logcat -c
-            adb shell am force-stop "$ANDROID_PACKAGE"
-
-            : > android-start.txt
-            launched=false
-            for attempt in 1 2 3; do
-              echo "Cold-start attempt $attempt" | tee -a android-start.txt
-              set +e
-              adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" >> android-start.txt 2>&1
-              start_status=$?
-              set -e
-              cat android-start.txt
-              sleep 8
-              if adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt && test -s android-pid.txt; then
-                launched=true
-                break
-              fi
-              echo "Start command exited with $start_status and no live process; retrying." | tee -a android-start.txt
-              adb shell am force-stop "$ANDROID_PACKAGE" || true
-              sleep 3
-            done
-
-            test "$launched" = true
-            cat android-pid.txt
-            sleep 15
-            adb shell pidof "$ANDROID_PACKAGE" > android-pid-after-settle.txt
-            test -s android-pid-after-settle.txt
-            adb logcat -d > android-logcat.txt
-            adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
-            ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
+          script: bash scripts/android-cold-start-smoke.sh apk/app-release.apk
 
       - name: Upload Android launch diagnostics
         if: always()
