@@ -171,7 +171,7 @@ jobs:
   android-launch:
     name: Android ${{ matrix.api-level }} cold-start smoke
     needs: flutter
-    runs-on: macos-13
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -183,6 +183,12 @@ jobs:
         with:
           name: quantara-android-0.13.0-local-live-canary
           path: apk
+
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
       - name: Boot hardware-accelerated emulator and verify cold start
         uses: reactivecircus/android-emulator-runner@v2
