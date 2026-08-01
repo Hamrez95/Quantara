@@ -1,0 +1,68 @@
+name: Repair UI analyzer findings
+
+on:
+  push:
+    branches:
+      - feat/95-ui-finalization
+    paths:
+      - .github/workflows/fix-ui-analyzer.yml
+  pull_request:
+    branches:
+      - feat/74-local-guarded-live
+    paths:
+      - .github/workflows/fix-ui-analyzer.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/95-ui-finalization
+          fetch-depth: 0
+
+      - name: Apply analyzer repairs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          ui = Path('src/client/quantara_app/lib/core/widgets/quantara_ui.dart')
+          text = ui.read_text(encoding='utf-8')
+          text = text.replace('begin: Alignment.topDirectional,', 'begin: Alignment.topCenter,')
+          text = text.replace('end: Alignment.bottomDirectional,', 'end: Alignment.bottomCenter,')
+          ui.write_text(text, encoding='utf-8')
+
+          page = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          text = page.read_text(encoding='utf-8')
+          text = text.replace('tooltip: strings.refresh,', "tooltip: strings.isPersian ? 'به‌روزرسانی' : 'Refresh',")
+          page.write_text(text, encoding='utf-8')
+          PY
+          rm .github/workflows/fix-ui-analyzer.yml
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Format and analyze locally
+        working-directory: src/client/quantara_app
+        run: |
+          flutter pub get
+          dart format lib/core/widgets/quantara_ui.dart lib/features/owner_alpha/presentation/owner_alpha_page.dart
+          flutter analyze --fatal-infos
+
+      - name: Commit repairs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: resolve UI finalization analyzer findings"
+          git push origin HEAD:feat/95-ui-finalization
