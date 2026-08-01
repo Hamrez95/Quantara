@@ -28,6 +28,17 @@ jobs:
           ref: feat/95-ui-finalization
           fetch-depth: 0
 
+      - name: Repair staged generator syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_ui_finalization_patch.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace("'USDC': ('$', Color(0xFF2775CA)),", "'USDC': (r'$', Color(0xFF2775CA)),")
+          text = text.replace('    "\\n  }\\n}\\n\\nColor _ideaColor",', '    "\\nColor _ideaColor",')
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Apply deterministic implementation patch
         run: python3 scripts/apply_ui_finalization_patch.py
 
