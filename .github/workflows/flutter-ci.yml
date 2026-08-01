@@ -86,7 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics-0.13.1-rc.1
+          name: flutter-diagnostics-0.13.2-rc.1
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
@@ -128,7 +128,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-merged-manifest-0.13.1-rc.1
+          name: android-merged-manifest-0.13.2-rc.1
           path: src/client/quantara_app/merged-manifest.xml
           if-no-files-found: ignore
           retention-days: 14
@@ -155,15 +155,15 @@ jobs:
       - name: Upload web preview
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-preview-0.13.1-rc.1
+          name: quantara-web-preview-0.13.2-rc.1
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android 0.13.1 RC local live candidate
+      - name: Upload Android 0.13.2 RC local live candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-0.13.1-rc.1-local-live-canary
+          name: quantara-android-0.13.2-rc.1-local-live-canary
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -186,7 +186,7 @@ jobs:
       - name: Download Android candidate
         uses: actions/download-artifact@v4
         with:
-          name: quantara-android-0.13.1-rc.1-local-live-canary
+          name: quantara-android-0.13.2-rc.1-local-live-canary
           path: apk
 
       - name: Enable KVM group permissions
@@ -209,7 +209,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics-0.13.1-rc.1
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-0.13.2-rc.1
           path: |
             android-start.txt
             android-pid.txt
