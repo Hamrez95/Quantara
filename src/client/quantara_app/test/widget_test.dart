@@ -14,7 +14,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final realData = find.textContaining('داده بازار واقعی');
-    for (var attempt = 0; attempt < 6 && realData.evaluate().isEmpty; attempt++) {
+    for (
+      var attempt = 0;
+      attempt < 6 && realData.evaluate().isEmpty;
+      attempt++
+    ) {
       await tester.drag(find.byType(ListView).first, const Offset(0, -280));
       await tester.pumpAndSettle();
     }
