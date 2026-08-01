@@ -11,6 +11,7 @@ on:
     branches:
       - main
       - dev
+      - 'feat/**'
     paths:
       - 'src/client/quantara_app/**'
       - '.github/workflows/pages.yml'
