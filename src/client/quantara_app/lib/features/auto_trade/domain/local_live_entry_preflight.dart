@@ -12,7 +12,9 @@ final class LocalLiveEntryAffordability {
   final double availableMargin;
 
   double get shortfall =>
-      (minimumBufferedMargin - availableMargin).clamp(0, double.infinity);
+      (minimumBufferedMargin - availableMargin)
+          .clamp(0, double.infinity)
+          .toDouble();
 
   bool get affordable =>
       availableMargin.isFinite &&
