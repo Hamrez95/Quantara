@@ -1,0 +1,51 @@
+name: Format signal continuity implementation
+
+on:
+  push:
+    branches:
+      - feat/89-91-signal-continuity
+    paths:
+      - .github/workflows/format-signal-continuity.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/89-91-signal-continuity
+          fetch-depth: 0
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Format changed Dart files
+        run: |
+          dart format \
+            src/client/quantara_app/lib/features/owner_alpha/data/signal_outcome_evaluator.dart \
+            src/client/quantara_app/lib/features/owner_alpha/application/owner_alpha_controller.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_signals.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_analysis.dart \
+            src/client/quantara_app/lib/features/market_analysis/presentation/tradingview_lightweight_chart.dart \
+            src/client/quantara_app/test/signal_outcome_evaluator_test.dart \
+            src/client/quantara_app/test/chart_signal_overlay_policy_test.dart \
+            src/client/quantara_app/test/signal_continuity_source_test.dart
+          rm .github/workflows/format-signal-continuity.yml
+
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "style: format signal continuity implementation"
+          git push origin HEAD:feat/89-91-signal-continuity
