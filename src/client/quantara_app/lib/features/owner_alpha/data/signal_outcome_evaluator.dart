@@ -172,8 +172,7 @@ abstract final class SignalOutcomeEvaluator {
     final remainingExit = outcome == SignalOutcome.stopped
         ? entry.stopLoss!
         : exitPrice;
-    grossPnl +=
-        (remainingExit - referenceEntry) * remainingSize * direction;
+    grossPnl += (remainingExit - referenceEntry) * remainingSize * direction;
     final effectiveExit =
         referenceEntry + grossPnl / entry.positionSize * direction;
     final priceChange =

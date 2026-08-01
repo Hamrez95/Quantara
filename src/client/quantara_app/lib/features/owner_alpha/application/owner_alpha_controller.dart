@@ -340,7 +340,8 @@ final class OwnerAlphaController extends ChangeNotifier {
     if (!loaded) return false;
 
     final signal = setupId == null ? null : signalEntry(setupId);
-    _selectedChartSignalId = signal != null &&
+    _selectedChartSignalId =
+        signal != null &&
             signal.symbol == symbol &&
             signal.timeframe == timeframe
         ? setupId
@@ -788,8 +789,7 @@ final class OwnerAlphaController extends ChangeNotifier {
     final missingSymbols = _opportunityState.journal
         .where((entry) => !entry.hasTerminalOutcome && !entry.closed)
         .where(
-          (entry) =>
-              !candles.containsKey('${entry.symbol}|${entry.timeframe}'),
+          (entry) => !candles.containsKey('${entry.symbol}|${entry.timeframe}'),
         )
         .map((entry) => entry.symbol)
         .toSet()

@@ -36,11 +36,8 @@ part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
 part 'owner_alpha_strategy_lab.dart';
 
-typedef _OpenAnalysis = void Function(
-  String symbol, [
-  String? timeframe,
-  String? setupId,
-]);
+typedef _OpenAnalysis =
+    void Function(String symbol, [String? timeframe, String? setupId]);
 
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
@@ -116,11 +113,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     }
   }
 
-  void _openAnalysis(
-    String symbol, [
-    String? timeframe,
-    String? setupId,
-  ]) {
+  void _openAnalysis(String symbol, [String? timeframe, String? setupId]) {
     unawaited(_openAnalysisContext(symbol, timeframe, setupId));
   }
 

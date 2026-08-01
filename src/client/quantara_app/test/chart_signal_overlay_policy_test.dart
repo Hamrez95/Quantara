@@ -4,27 +4,34 @@ import 'package:quantara_app/features/market_analysis/presentation/tradingview_l
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
 void main() {
-  test('renders a frozen overlay only when historical candles cover the signal', () {
-    final signal = _signal();
-    final covered = _analysis(start: _origin.subtract(const Duration(minutes: 10)));
-    final afterSignal = _analysis(start: _origin.add(const Duration(minutes: 1)));
+  test(
+    'renders a frozen overlay only when historical candles cover the signal',
+    () {
+      final signal = _signal();
+      final covered = _analysis(
+        start: _origin.subtract(const Duration(minutes: 10)),
+      );
+      final afterSignal = _analysis(
+        start: _origin.add(const Duration(minutes: 1)),
+      );
 
-    expect(
-      ChartSignalOverlayPolicy.canRender(analysis: covered, signal: signal),
-      isTrue,
-    );
-    expect(
-      ChartSignalOverlayPolicy.create(analysis: covered, signal: signal),
-      isNotNull,
-    );
-    expect(
-      ChartSignalOverlayPolicy.canRender(
-        analysis: afterSignal,
-        signal: signal,
-      ),
-      isFalse,
-    );
-  });
+      expect(
+        ChartSignalOverlayPolicy.canRender(analysis: covered, signal: signal),
+        isTrue,
+      );
+      expect(
+        ChartSignalOverlayPolicy.create(analysis: covered, signal: signal),
+        isNotNull,
+      );
+      expect(
+        ChartSignalOverlayPolicy.canRender(
+          analysis: afterSignal,
+          signal: signal,
+        ),
+        isFalse,
+      );
+    },
+  );
 
   test('rejects a frozen overlay for a different timeframe', () {
     final analysis = _analysis(
@@ -33,10 +40,7 @@ void main() {
     );
 
     expect(
-      ChartSignalOverlayPolicy.canRender(
-        analysis: analysis,
-        signal: _signal(),
-      ),
+      ChartSignalOverlayPolicy.canRender(analysis: analysis, signal: _signal()),
       isFalse,
     );
   });
