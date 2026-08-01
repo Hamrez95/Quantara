@@ -1,6 +1,7 @@
 name: quantara_app
 description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
+# Internal visual-acceptance candidate; public Stable signing remains gated.
 version: 0.13.2+18
 
 environment:
