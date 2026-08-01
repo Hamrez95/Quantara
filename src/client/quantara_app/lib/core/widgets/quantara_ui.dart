@@ -25,32 +25,68 @@ class SectionCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final radius = BorderRadius.circular(QuantaraRadius.card);
-    Widget card = Material(
-      color: scheme.surface,
-      elevation: dark ? 0 : 0.5,
-      shadowColor: Colors.black.withValues(alpha: 0.12),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: radius,
-        side: BorderSide(color: scheme.outline.withValues(alpha: 0.78)),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: Stack(
-          children: [
-            Padding(padding: padding, child: child),
-            if (accentColor != null)
-              PositionedDirectional(
-                top: 0,
-                bottom: 0,
-                start: 0,
-                child: ColoredBox(
-                  color: accentColor!,
-                  child: const SizedBox(width: 3),
+    Widget card = TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: QuantaraMotion.standard,
+      curve: QuantaraMotion.curve,
+      child: Material(
+        color: Colors.transparent,
+        elevation: dark ? 0 : 1,
+        shadowColor: Colors.black.withValues(alpha: 0.16),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: scheme.outline.withValues(alpha: 0.7)),
+        ),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topDirectional,
+              end: Alignment.bottomDirectional,
+              colors: [
+                scheme.surface,
+                Color.alphaBlend(
+                  scheme.primary.withValues(alpha: dark ? 0.025 : 0.018),
+                  scheme.surface,
                 ),
-              ),
-          ],
+              ],
+            ),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            child: Stack(
+              children: [
+                Padding(padding: padding, child: child),
+                if (accentColor != null)
+                  PositionedDirectional(
+                    top: 0,
+                    bottom: 0,
+                    start: 0,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            accentColor!.withValues(alpha: 0.96),
+                            accentColor!.withValues(alpha: 0.45),
+                          ],
+                        ),
+                      ),
+                      child: const SizedBox(width: 3),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - value)),
+          child: child,
         ),
       ),
     );
@@ -64,6 +100,270 @@ class SectionCard extends StatelessWidget {
       );
     }
     return card;
+  }
+}
+
+class QuantaraBrandMark extends StatelessWidget {
+  const QuantaraBrandMark({this.size = 42, this.heroTag, super.key});
+
+  final double size;
+  final String? heroTag;
+
+  @override
+  Widget build(BuildContext context) {
+    final mark = Semantics(
+      image: true,
+      label: 'Quantara',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [
+              QuantaraColors.cyan,
+              QuantaraColors.electricBlue,
+              QuantaraColors.violet,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(size * 0.31),
+          boxShadow: [
+            BoxShadow(
+              color: QuantaraColors.cyan.withValues(alpha: 0.18),
+              blurRadius: size * 0.45,
+              spreadRadius: -size * 0.14,
+            ),
+          ],
+        ),
+        child: SizedBox.square(
+          dimension: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Text(
+                'Q',
+                style: TextStyle(
+                  color: QuantaraColors.ink,
+                  fontSize: size * 0.48,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1,
+                ),
+              ),
+              Positioned(
+                right: size * 0.18,
+                bottom: size * 0.2,
+                child: Transform.rotate(
+                  angle: -0.35,
+                  child: Container(
+                    width: size * 0.22,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: QuantaraColors.ink,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final tag = heroTag;
+    return tag == null ? mark : Hero(tag: tag, child: mark);
+  }
+}
+
+class SymbolAvatar extends StatelessWidget {
+  const SymbolAvatar({
+    required this.symbol,
+    this.size = 40,
+    this.fallbackLabel,
+    this.showBorder = true,
+    super.key,
+  });
+
+  final String symbol;
+  final double size;
+  final String? fallbackLabel;
+  final bool showBorder;
+
+  static const _brand = <String, (String, Color)>{
+    'BTC': ('₿', Color(0xFFF7931A)),
+    'ETH': ('Ξ', Color(0xFF627EEA)),
+    'SOL': ('S', Color(0xFF14F195)),
+    'XRP': ('X', Color(0xFFB9C4CF)),
+    'AVAX': ('A', Color(0xFFE84142)),
+    'ADA': ('A', Color(0xFF2A6EF0)),
+    'DOGE': ('Ð', Color(0xFFC2A633)),
+    'BNB': ('B', Color(0xFFF3BA2F)),
+    'TRX': ('T', Color(0xFFEF0027)),
+    'LINK': ('L', Color(0xFF2A5ADA)),
+    'DOT': ('●', Color(0xFFE6007A)),
+    'MATIC': ('M', Color(0xFF8247E5)),
+    'TON': ('T', Color(0xFF0098EA)),
+    'LTC': ('Ł', Color(0xFFBEBEBE)),
+    'SHIB': ('S', Color(0xFFFF6A3D)),
+    'PEPE': ('P', Color(0xFF5AAF46)),
+    'USDT': ('₮', Color(0xFF26A17B)),
+    'USDC': (r'$', Color(0xFF2775CA)),
+    'XAU': ('Au', Color(0xFFD6A936)),
+  };
+
+  static String baseSymbol(String raw) {
+    var value = raw.toUpperCase().trim();
+    if (value.contains('/')) value = value.split('/').first;
+    if (value.contains(':')) value = value.split(':').first;
+    for (final suffix in const ['USDT', 'USDC', 'BUSD', 'USD', 'PERP']) {
+      if (value.endsWith(suffix) && value.length > suffix.length) {
+        value = value.substring(0, value.length - suffix.length);
+        break;
+      }
+    }
+    return value.isEmpty ? '?' : value;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final base = baseSymbol(symbol);
+    final brand = _brand[base];
+    final color = brand?.$2 ?? _fallbackColor(base);
+    final label = fallbackLabel ?? brand?.$1 ?? _fallbackText(base);
+    return Semantics(
+      image: true,
+      label: '$base symbol',
+      child: ExcludeSemantics(
+        child: AnimatedContainer(
+          duration: QuantaraMotion.fast,
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withValues(alpha: 0.96),
+                Color.alphaBlend(Colors.black.withValues(alpha: 0.22), color),
+              ],
+            ),
+            border: showBorder
+                ? Border.all(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.13),
+                    width: 1,
+                  )
+                : null,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.18),
+                blurRadius: 12,
+                spreadRadius: -5,
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            maxLines: 1,
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              color: _foregroundFor(color),
+              fontSize: size * (label.length > 1 ? 0.29 : 0.42),
+              height: 1,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.4,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _fallbackText(String base) =>
+      base.length <= 2 ? base : base.substring(0, 2);
+
+  static Color _fallbackColor(String base) {
+    const palette = [
+      QuantaraColors.cyan,
+      QuantaraColors.electricBlue,
+      QuantaraColors.violet,
+      Color(0xFFEF7D52),
+      Color(0xFF46A76B),
+      Color(0xFFD45FA6),
+    ];
+    return palette[base.codeUnits.fold<int>(0, (sum, value) => sum + value) %
+        palette.length];
+  }
+
+  static Color _foregroundFor(Color color) =>
+      color.computeLuminance() > 0.58 ? QuantaraColors.ink : Colors.white;
+}
+
+class FinanceMetricPanel extends StatelessWidget {
+  const FinanceMetricPanel({
+    required this.label,
+    required this.value,
+    this.icon,
+    this.color,
+    super.key,
+  });
+
+  final String label;
+  final String value;
+  final IconData? icon;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = color ?? scheme.primary;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 128),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.075),
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
+          border: Border.all(color: accent.withValues(alpha: 0.2)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 15, color: accent),
+                    const SizedBox(width: 5),
+                  ],
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Text(
+                value,
+                textDirection: TextDirection.ltr,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w900,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -265,27 +565,7 @@ class MarketListRow extends StatelessWidget {
     final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.35;
     final identity = Row(
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: 0.7),
-            ),
-          ),
-          child: SizedBox.square(
-            dimension: 40,
-            child: Center(
-              child: Text(
-                leadingLabel ?? symbol.characters.first,
-                textDirection: TextDirection.ltr,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-        ),
+        SymbolAvatar(symbol: symbol, size: 40, fallbackLabel: leadingLabel),
         const SizedBox(width: QuantaraSpacing.sm),
         Expanded(
           child: Column(

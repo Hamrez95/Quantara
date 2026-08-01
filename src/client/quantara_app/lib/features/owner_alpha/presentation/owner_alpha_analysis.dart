@@ -33,11 +33,10 @@ class _AlphaAnalysisView extends StatelessWidget {
                     for (final symbol in controller.symbols) ...[
                       ChoiceChip(
                         showCheckmark: false,
-                        avatar: Icon(
-                          symbol == controller.selectedSymbol
-                              ? Icons.bolt_rounded
-                              : Icons.show_chart_rounded,
-                          size: 18,
+                        avatar: SymbolAvatar(
+                          symbol: symbol,
+                          size: 22,
+                          showBorder: false,
                         ),
                         label: Text(
                           symbol,
@@ -96,26 +95,54 @@ class _AlphaAnalysisView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${analysis.symbol} · ${analysis.timeframe}',
-                      textDirection: TextDirection.ltr,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        SymbolAvatar(symbol: analysis.symbol, size: 48),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${analysis.symbol} · ${analysis.timeframe}',
+                                textDirection: TextDirection.ltr,
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
+                              Text(
+                                strings.structureSummary(
+                                  timeframe: analysis.timeframe,
+                                  direction: strings.direction(
+                                    analysis.direction.name,
+                                  ),
+                                  strength: (analysis.directionStrength * 100)
+                                      .round(),
+                                  zones: analysis.zones.length,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        StatusPill(
+                          label: _directionLabel(context, analysis.direction),
+                          color: _chartDirectionColor(analysis.direction),
+                        ),
+                      ],
+                    ),
+                    if (controller.selectedChartSignal != null) ...[
+                      const SizedBox(height: 10),
+                      StatusPill(
+                        label: strings.isPersian
+                            ? 'نمایش ستاپ ذخیره‌شده روی چارت'
+                            : 'Frozen setup overlay active',
+                        color: QuantaraColors.violet,
+                        icon: Icons.layers_rounded,
                       ),
-                    ),
-                    Text(
-                      strings.structureSummary(
-                        timeframe: analysis.timeframe,
-                        direction: strings.direction(analysis.direction.name),
-                        strength: (analysis.directionStrength * 100).round(),
-                        zones: analysis.zones.length,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    StatusPill(
-                      label: _directionLabel(context, analysis.direction),
-                      color: _chartDirectionColor(analysis.direction),
-                    ),
+                    ],
                   ],
                 ),
               ),
