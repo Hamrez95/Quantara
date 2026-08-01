@@ -57,6 +57,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   static const defaultSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT'];
   static final _symbolPattern = RegExp(r'^[A-Z0-9]{2,20}$');
   static const timeframes = ['15m', '1h', '4h', '1D'];
+  static const outcomeCatchUpBatchSize = 2;
 
   final OwnerAlphaRepository _repository;
   final OwnerAlphaSettingsStore _settingsStore;
@@ -85,6 +86,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   bool _disposed = false;
   String _languageCode;
   OpportunityState _opportunityState = const OpportunityState();
+  String? _selectedChartSignalId;
 
   List<String> get symbols => List.unmodifiable(_symbols);
   String get selectedSymbol => _selectedSymbol;
@@ -107,6 +109,11 @@ final class OwnerAlphaController extends ChangeNotifier {
       _opportunityState.takenSetupIds.contains(setupId);
   List<SignalJournalEntry> get signalJournal =>
       List.unmodifiable(_opportunityState.journal);
+  SignalJournalEntry? get selectedChartSignal {
+    final setupId = _selectedChartSignalId;
+    return setupId == null ? null : signalEntry(setupId);
+  }
+
   SignalJournalEntry? signalEntry(String setupId) {
     for (final item in _opportunityState.journal) {
       if (item.setupId == setupId) return item;
@@ -293,6 +300,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   }
 
   Future<void> selectSymbol(String symbol) async {
+    _selectedChartSignalId = null;
     if (!_symbols.contains(symbol) || symbol == _selectedSymbol) {
       return;
     }
@@ -303,6 +311,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   }
 
   Future<void> selectTimeframe(String timeframe) async {
+    _selectedChartSignalId = null;
     if (!timeframes.contains(timeframe) || timeframe == _selectedTimeframe) {
       return;
     }
@@ -310,6 +319,35 @@ final class OwnerAlphaController extends ChangeNotifier {
       return;
     }
     await _requestScan(selectedTimeframe: timeframe);
+  }
+
+  Future<bool> selectChartContext({
+    required String symbol,
+    required String timeframe,
+    String? setupId,
+  }) async {
+    if (!_symbols.contains(symbol) || !timeframes.contains(timeframe)) {
+      return false;
+    }
+
+    var loaded = _selectFromSnapshot(symbol, timeframe);
+    if (!loaded) {
+      loaded = await _requestScan(
+        selectedSymbol: symbol,
+        selectedTimeframe: timeframe,
+      );
+    }
+    if (!loaded) return false;
+
+    final signal = setupId == null ? null : signalEntry(setupId);
+    _selectedChartSignalId =
+        signal != null &&
+            signal.symbol == symbol &&
+            signal.timeframe == timeframe
+        ? setupId
+        : null;
+    notifyListeners();
+    return true;
   }
 
   bool _selectFromSnapshot(String symbol, String timeframe) {
@@ -738,8 +776,9 @@ final class OwnerAlphaController extends ChangeNotifier {
     _opportunityState = await store.load();
   }
 
-  Future<void> _evaluateSignalJournal(OwnerAlphaSnapshot snapshot) async {
-    if (_opportunityState.journal.isEmpty) return;
+  Future<Map<String, List<ChartCandle>>> _collectOutcomeCandles(
+    OwnerAlphaSnapshot snapshot,
+  ) async {
     final candles = <String, List<ChartCandle>>{
       for (final result in snapshot.radar)
         for (final analysis in result.analysesByTimeframe.values)
@@ -747,6 +786,58 @@ final class OwnerAlphaController extends ChangeNotifier {
             growable: false,
           ),
     };
+    final missingSymbols = _opportunityState.journal
+        .where((entry) => !entry.hasTerminalOutcome && !entry.closed)
+        .where(
+          (entry) => !candles.containsKey('${entry.symbol}|${entry.timeframe}'),
+        )
+        .map((entry) => entry.symbol)
+        .toSet()
+        .toList(growable: false);
+
+    for (
+      var start = 0;
+      start < missingSymbols.length;
+      start += outcomeCatchUpBatchSize
+    ) {
+      final batch = missingSymbols
+          .skip(start)
+          .take(outcomeCatchUpBatchSize)
+          .toList(growable: false);
+      if (batch.isEmpty) continue;
+      final matchingEntry = _opportunityState.journal.firstWhere(
+        (entry) => entry.symbol == batch.first,
+      );
+      final selectedTimeframe = timeframes.contains(matchingEntry.timeframe)
+          ? matchingEntry.timeframe
+          : '1h';
+      try {
+        final catchUp = await _repository.scan(
+          symbols: batch,
+          selectedSymbol: batch.first,
+          selectedTimeframe: selectedTimeframe,
+          capital: _capital,
+          riskPercent: _riskPercent,
+          languageCode: _languageCode,
+        );
+        for (final result in catchUp.radar) {
+          for (final analysis in result.analysesByTimeframe.values) {
+            candles['${analysis.symbol}|${analysis.timeframe}'] = analysis
+                .candles
+                .toList(growable: false);
+          }
+        }
+      } catch (_) {
+        // Catch-up is best-effort and must never hide the current watchlist.
+        // Missing data leaves the signal unresolved until a later scan.
+      }
+    }
+    return candles;
+  }
+
+  Future<void> _evaluateSignalJournal(OwnerAlphaSnapshot snapshot) async {
+    if (_opportunityState.journal.isEmpty) return;
+    final candles = await _collectOutcomeCandles(snapshot);
     final evaluatedAt = DateTime.now().toUtc();
     _opportunityState = _opportunityState.copyWith(
       journal: [

@@ -9,7 +9,7 @@ class _SignalInboxView extends StatefulWidget {
   });
 
   final OwnerAlphaController controller;
-  final ValueChanged<String> onOpenAnalysis;
+  final _OpenAnalysis onOpenAnalysis;
 
   @override
   State<_SignalInboxView> createState() => _SignalInboxViewState();
@@ -154,7 +154,11 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
               entry: filtered[index],
               priority: priorityBySetupId[filtered[index].setupId],
               taken: controller.isTaken(filtered[index].setupId),
-              onOpen: () => widget.onOpenAnalysis(filtered[index].symbol),
+              onOpen: () => widget.onOpenAnalysis(
+                filtered[index].symbol,
+                filtered[index].timeframe,
+                filtered[index].setupId,
+              ),
               onTakenChanged: (value) =>
                   controller.setTaken(filtered[index].setupId, value),
               onNote: () => _editNote(filtered[index]),

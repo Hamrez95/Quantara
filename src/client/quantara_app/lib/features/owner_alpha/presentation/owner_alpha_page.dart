@@ -36,6 +36,9 @@ part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
 part 'owner_alpha_strategy_lab.dart';
 
+typedef _OpenAnalysis =
+    void Function(String symbol, [String? timeframe, String? setupId]);
+
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
     required this.repository,
@@ -110,9 +113,36 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     }
   }
 
-  void _openAnalysis(String symbol) {
-    unawaited(_controller.selectSymbol(symbol));
-    setState(() => _destination = 2);
+  void _openAnalysis(String symbol, [String? timeframe, String? setupId]) {
+    unawaited(_openAnalysisContext(symbol, timeframe, setupId));
+  }
+
+  Future<void> _openAnalysisContext(
+    String symbol,
+    String? timeframe,
+    String? setupId,
+  ) async {
+    final opened = await _controller.selectChartContext(
+      symbol: symbol,
+      timeframe: timeframe ?? _controller.selectedTimeframe,
+      setupId: setupId,
+    );
+    if (!mounted) return;
+    if (opened) {
+      setState(() => _destination = 2);
+      return;
+    }
+    final persian = widget.locale.languageCode != 'en';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          persian
+              ? 'زمینه دقیق این پیشنهاد فعلاً در واچ‌لیست یا داده بازار موجود نیست.'
+              : 'The exact signal context is not currently available in the watchlist or market data.',
+        ),
+      ),
+    );
   }
 
   Future<void> _showAddSymbolDialog() async {
@@ -338,7 +368,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   final Locale locale;
   final VoidCallback onToggleTheme;
   final ValueChanged<Locale> onLocaleChanged;
-  final ValueChanged<String> onOpenAnalysis;
+  final _OpenAnalysis onOpenAnalysis;
   final VoidCallback onAddSymbol;
   final VoidCallback onOpenStrategyLab;
 

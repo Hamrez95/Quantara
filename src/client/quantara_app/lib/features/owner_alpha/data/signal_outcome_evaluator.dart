@@ -148,30 +148,33 @@ abstract final class SignalOutcomeEvaluator {
     }
 
     final direction = entry.direction == TradeDirection.long ? 1.0 : -1.0;
-    var effectiveExit = exitPrice;
-    var grossPnl =
-        (exitPrice - referenceEntry) * entry.positionSize * direction;
+    const targetFractions = <double>[0.35, 0.35, 0.30];
+    final reachedTargets = highestTarget
+        .clamp(0, targetFractions.length)
+        .toInt();
+    var realizedSize = 0.0;
+    var grossPnl = 0.0;
 
-    // When price reaches one or more targets and later stops, model equal
-    // one-third scale-outs at the reached targets and send only the remaining
-    // size to the stop. This avoids reporting the whole position as a stop
-    // after the journal already recorded TP1/TP2.
-    if (outcome == SignalOutcome.stopped && highestTarget > 0) {
-      final trancheSize = entry.positionSize / entry.targets.length;
-      final realizedTargets = entry.targets
-          .take(highestTarget)
-          .fold<double>(
-            0,
-            (sum, target) =>
-                sum + (target - referenceEntry) * trancheSize * direction,
-          );
-      final remainingSize = entry.positionSize - trancheSize * highestTarget;
-      final stoppedRemainder =
-          (entry.stopLoss! - referenceEntry) * remainingSize * direction;
-      grossPnl = realizedTargets + stoppedRemainder;
-      effectiveExit =
-          referenceEntry + grossPnl / entry.positionSize * direction;
+    for (var index = 0; index < reachedTargets; index++) {
+      final trancheSize = entry.positionSize * targetFractions[index];
+      realizedSize += trancheSize;
+      grossPnl +=
+          (entry.targets[index] - referenceEntry) * trancheSize * direction;
     }
+
+    // A target event marks the still-open remainder at the latest reached
+    // target. A later stop sends only that remainder to the original stop.
+    // This preserves the documented 35% / 35% / 30% paper-management policy
+    // without pretending that the entire position exited at TP2 or TP3.
+    final remainingSize = (entry.positionSize - realizedSize)
+        .clamp(0, entry.positionSize)
+        .toDouble();
+    final remainingExit = outcome == SignalOutcome.stopped
+        ? entry.stopLoss!
+        : exitPrice;
+    grossPnl += (remainingExit - referenceEntry) * remainingSize * direction;
+    final effectiveExit =
+        referenceEntry + grossPnl / entry.positionSize * direction;
     final priceChange =
         ((effectiveExit - referenceEntry) / referenceEntry) * direction * 100;
     final netPnl = grossPnl - entry.estimatedRoundTripCosts;
