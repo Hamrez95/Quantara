@@ -2,7 +2,7 @@ name: quantara_app
 description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
 # Internal visual-acceptance candidate; public Stable signing remains gated.
-# Full Android/PWA validation is required on this exact source revision.
+# Full Android/PWA validation is required on this exact formatted revision.
 version: 0.13.2+18
 
 environment:
