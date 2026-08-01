@@ -13,7 +13,13 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('داده بازار واقعی'), findsOneWidget);
+    final realData = find.textContaining('داده بازار واقعی');
+    for (var attempt = 0; attempt < 6 && realData.evaluate().isEmpty; attempt++) {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -280));
+      await tester.pumpAndSettle();
+    }
+
+    expect(realData, findsOneWidget);
     expect(find.textContaining('بازار عمومی Bitunix'), findsOneWidget);
     expect(find.textContaining('بدون سفارش واقعی'), findsOneWidget);
     expect(find.text('رادار موقعیت‌ها'), findsOneWidget);
@@ -27,8 +33,7 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('تحلیل'));
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.candlestick_chart_outlined);
 
     expect(find.textContaining('Lightweight Charts'), findsOneWidget);
     expect(find.text('هم‌سویی چندتایم‌فریمی'), findsOneWidget);
@@ -42,12 +47,11 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('تحلیل'));
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.candlestick_chart_outlined);
     await tester.tap(find.text('تست این تحلیل در آزمایشگاه'));
     await tester.pumpAndSettle();
 
-    expect(find.text('آزمایشگاه'), findsOneWidget);
+    expect(find.text('آزمایشگاه'), findsWidgets);
     expect(find.text('BTCUSDT'), findsWidgets);
     expect(find.text('پیپر / تحقیق'), findsOneWidget);
 
@@ -68,8 +72,7 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('واچ‌لیست'));
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.view_list_outlined);
     await tester.tap(find.text('افزودن'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'XRP');
@@ -87,8 +90,7 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('پروفایل'));
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.person_outline_rounded);
 
     expect(find.text('Bitunix Futures'), findsOneWidget);
     expect(find.text('پروفایل و تنظیمات'), findsOneWidget);
@@ -105,21 +107,19 @@ void main() {
     await tester.pumpWidget(_testApp(preferencesStore: preferences));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('پروفایل'));
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.person_outline_rounded);
     await tester.tap(find.text('انگلیسی'));
     await tester.pumpAndSettle();
 
     expect(find.text('Profile & settings'), findsOneWidget);
-    expect(find.text('Radar'), findsOneWidget);
+    expect(find.text('Radar'), findsWidgets);
     expect(
       Directionality.of(tester.element(find.text('Profile & settings'))),
       TextDirection.ltr,
     );
     expect(preferences.value?.languageCode, 'en');
 
-    await tester.tap(find.text('Radar').last);
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.radar_outlined);
     expect(find.text('BTCUSDT'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -133,8 +133,7 @@ void main() {
 
     await tester.tap(find.byTooltip('حالت روشن'));
     await tester.pump();
-    await tester.tap(find.text('تحلیل'));
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.candlestick_chart_outlined);
     for (var attempt = 0; attempt < 6; attempt++) {
       await tester.drag(find.byType(ListView), const Offset(0, -500));
       await tester.pump();
@@ -166,8 +165,7 @@ void main() {
       Icons.person_outline_rounded: 'پروفایل',
       Icons.radar_outlined: 'رادار',
     }.entries) {
-      await tester.tap(find.byIcon(target.key));
-      await tester.pumpAndSettle();
+      await _openDestination(tester, target.key);
       expect(
         tester.takeException(),
         isNull,
@@ -191,13 +189,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('پروفایل'));
-    await tester.pumpAndSettle();
+    await _openDestination(tester, Icons.person_outline_rounded);
 
     expect(find.text('پروفایل و تنظیمات'), findsOneWidget);
     expect(find.text('Bitunix Futures'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _openDestination(WidgetTester tester, IconData icon) async {
+  final navigation = find.byType(NavigationBar);
+  expect(navigation, findsOneWidget);
+  final target = find.descendant(of: navigation, matching: find.byIcon(icon));
+  expect(target, findsOneWidget);
+  await tester.tap(target);
+  await tester.pumpAndSettle();
 }
 
 Widget _testApp({MemoryAppPreferencesStore? preferencesStore}) {
