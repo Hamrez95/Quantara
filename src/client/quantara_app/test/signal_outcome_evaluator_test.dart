@@ -66,6 +66,65 @@ void main() {
     expect(stopped.highestTargetHit, 2);
     expect(stopped.simulatedPnl, greaterThan(0));
   });
+
+  test('ignores a legacy entry with a zero reference price', () {
+    final invalid = _entry().copyWith();
+    final entry = SignalJournalEntry(
+      setupId: invalid.setupId,
+      symbol: invalid.symbol,
+      timeframe: invalid.timeframe,
+      direction: invalid.direction,
+      strategy: invalid.strategy,
+      strategyVersion: invalid.strategyVersion,
+      createdAt: invalid.createdAt,
+      validUntil: invalid.validUntil,
+      entryLower: 0,
+      entryUpper: 0,
+      stopLoss: invalid.stopLoss,
+      targets: invalid.targets,
+      maximumLoss: invalid.maximumLoss,
+      positionSize: invalid.positionSize,
+      notionalValue: invalid.notionalValue,
+      estimatedRoundTripCosts: invalid.estimatedRoundTripCosts,
+      recommendedLeverage: invalid.recommendedLeverage,
+      maximumSafeLeverage: invalid.maximumSafeLeverage,
+      selectedLeverage: invalid.selectedLeverage,
+      summary: invalid.summary,
+      invalidation: invalid.invalidation,
+    );
+
+    final result = SignalOutcomeEvaluator.evaluate(
+      entry: entry,
+      candles: [_candle(minutes: 0, low: 97, high: 103)],
+      evaluatedAt: _origin.add(const Duration(minutes: 15)),
+    );
+
+    expect(result, same(entry));
+    expect(result.priceChangePercent, isNull);
+    expect(result.simulatedPnl, isNull);
+  });
+
+  test('skips non-finite candles without producing non-finite results', () {
+    final entry = _entry();
+    final result = SignalOutcomeEvaluator.evaluate(
+      entry: entry,
+      candles: [
+        ChartCandle(
+          openTime: _origin,
+          open: double.nan,
+          high: double.infinity,
+          low: 99,
+          close: 100,
+          volume: 10,
+        ),
+      ],
+      evaluatedAt: _origin.add(const Duration(minutes: 15)),
+    );
+
+    expect(result.outcome, SignalOutcome.pendingEntry);
+    expect(result.priceChangePercent, isNull);
+    expect(result.simulatedPnl, isNull);
+  });
 }
 
 final _origin = DateTime.utc(2026, 7, 29, 10);
