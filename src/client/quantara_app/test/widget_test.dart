@@ -13,7 +13,7 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    final realData = find.textContaining('داده بازار واقعی');
+    final realData = find.textContaining('داده عمومی واقعی');
     for (
       var attempt = 0;
       attempt < 30 && realData.evaluate().isEmpty;
@@ -25,8 +25,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(realData, findsOneWidget);
-    expect(find.textContaining('بازار عمومی Bitunix'), findsOneWidget);
-    expect(find.textContaining('بدون سفارش واقعی'), findsOneWidget);
+    expect(find.textContaining('کلید صرافی'), findsOneWidget);
+    expect(find.textContaining('سفارش واقعی و برداشت'), findsOneWidget);
     expect(find.text('رادار موقعیت‌ها'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
