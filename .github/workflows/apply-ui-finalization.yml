@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/apply_ui_finalization_patch.py
       - .github/workflows/apply-ui-finalization.yml
+  pull_request:
+    branches:
+      - fix/87-setups-gray-and-live-preflight
+    paths:
+      - scripts/apply_ui_finalization_patch.py
+      - .github/workflows/apply-ui-finalization.yml
 
 permissions:
   contents: write
@@ -55,5 +61,3 @@ jobs:
           git diff --cached --check
           git commit -m "feat: finalize branded market UI and instant setup overlay"
           git push origin HEAD:feat/95-ui-finalization
-
-# Trigger revision: 2
