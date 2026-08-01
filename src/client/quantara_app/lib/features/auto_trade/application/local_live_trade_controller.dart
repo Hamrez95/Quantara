@@ -176,6 +176,14 @@ final class LocalLiveTradeController extends ChangeNotifier {
     try {
       final exchange = BitunixLocalLiveApiClient(client: client);
       final account = await exchange.fetchAccountSnapshot(credentials);
+      if (!LocalLiveEntryPreflightPolicy.shouldCheckNewEntryAffordability(
+        openPositionCount: account.positions.length,
+      )) {
+        // Starting the service must remain possible so a persisted managed
+        // position can be reconciled. The service's one-position gate still
+        // prevents any additional entry while an exchange position is open.
+        return;
+      }
       if (!account.available.isFinite || account.available <= 0) {
         throw const LocalLiveTradeSafeException(
           'No available USDT margin is available for a new isolated position.',

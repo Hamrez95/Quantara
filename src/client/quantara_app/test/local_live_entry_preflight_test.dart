@@ -2,6 +2,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/domain/local_live_entry_preflight.dart';
 
 void main() {
+  test('existing position bypasses only the new-entry affordability gate', () {
+    expect(
+      LocalLiveEntryPreflightPolicy.shouldCheckNewEntryAffordability(
+        openPositionCount: 0,
+      ),
+      isTrue,
+    );
+    expect(
+      LocalLiveEntryPreflightPolicy.shouldCheckNewEntryAffordability(
+        openPositionCount: 1,
+      ),
+      isFalse,
+    );
+  });
+
   test('requires three exchange-minimum quantities for three TP tranches', () {
     final result = LocalLiveEntryAffordability.calculate(
       availableMargin: 0.25,

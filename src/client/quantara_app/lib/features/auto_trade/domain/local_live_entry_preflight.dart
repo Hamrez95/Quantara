@@ -1,3 +1,14 @@
+abstract final class LocalLiveEntryPreflightPolicy {
+  static bool shouldCheckNewEntryAffordability({
+    required int openPositionCount,
+  }) {
+    if (openPositionCount < 0) {
+      throw const FormatException('Open position count cannot be negative.');
+    }
+    return openPositionCount == 0;
+  }
+}
+
 final class LocalLiveEntryAffordability {
   const LocalLiveEntryAffordability({
     required this.requiredQuantity,
