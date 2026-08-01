@@ -120,7 +120,11 @@ class _AlphaAnalysisView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              TradingViewLightweightChart(analysis: analysis, idea: idea),
+              TradingViewLightweightChart(
+                analysis: analysis,
+                idea: idea,
+                frozenSignal: controller.selectedChartSignal,
+              ),
               const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),

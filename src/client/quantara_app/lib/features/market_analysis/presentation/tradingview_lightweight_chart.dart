@@ -6,22 +6,80 @@ import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../domain/market_chart_models.dart';
 import 'quantara_candlestick_chart.dart';
 
+abstract final class ChartSignalOverlayPolicy {
+  static ChartTradeOverlay? create({
+    required TimeframeChartAnalysis analysis,
+    required SignalJournalEntry signal,
+  }) {
+    if (!canRender(analysis: analysis, signal: signal)) return null;
+    return ChartTradeOverlay(
+      entry: (signal.entryLower! + signal.entryUpper!) / 2,
+      stop: signal.stopLoss!,
+      targets: signal.targets,
+      isLong: signal.direction == TradeDirection.long,
+    );
+  }
+
+  static bool canRender({
+    required TimeframeChartAnalysis analysis,
+    required SignalJournalEntry signal,
+  }) {
+    final entryLower = signal.entryLower;
+    final entryUpper = signal.entryUpper;
+    final stopLoss = signal.stopLoss;
+    if (analysis.symbol != signal.symbol ||
+        analysis.timeframe != signal.timeframe ||
+        signal.direction == TradeDirection.wait ||
+        entryLower == null ||
+        entryUpper == null ||
+        stopLoss == null ||
+        !entryLower.isFinite ||
+        !entryUpper.isFinite ||
+        !stopLoss.isFinite ||
+        entryLower <= 0 ||
+        entryUpper < entryLower ||
+        stopLoss <= 0 ||
+        signal.targets.length != 3 ||
+        signal.targets.any((target) => !target.isFinite || target <= 0)) {
+      return false;
+    }
+    final candles = analysis.candles;
+    if (candles.isEmpty ||
+        candles.any(
+          (candle) =>
+              !candle.open.isFinite ||
+              !candle.high.isFinite ||
+              !candle.low.isFinite ||
+              !candle.close.isFinite,
+        )) {
+      return false;
+    }
+    return !candles.first.openTime.isAfter(signal.createdAt) &&
+        !candles.last.openTime.isBefore(signal.createdAt);
+  }
+}
+
 class TradingViewLightweightChart extends StatelessWidget {
   const TradingViewLightweightChart({
     required this.analysis,
     required this.idea,
+    this.frozenSignal,
     this.height = 390,
     super.key,
   });
 
   final TimeframeChartAnalysis analysis;
   final TradeIdea idea;
+  final SignalJournalEntry? frozenSignal;
   final double height;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
-    final overlay = idea.isActionable
+    final frozen = frozenSignal;
+    final overlay = frozen != null
+        ? ChartSignalOverlayPolicy.create(analysis: analysis, signal: frozen)
+        : idea.isActionable
         ? ChartTradeOverlay(
             entry: (idea.entryLower! + idea.entryUpper!) / 2,
             stop: idea.stopLoss!,
@@ -30,7 +88,9 @@ class TradingViewLightweightChart extends StatelessWidget {
           )
         : null;
     final chart = RepaintBoundary(
-      key: ValueKey('quantara-chart-${analysis.fingerprint}-${idea.setupId}'),
+      key: ValueKey(
+        'quantara-chart-${analysis.fingerprint}-${frozen?.setupId ?? idea.setupId}',
+      ),
       child: QuantaraCandlestickChart(
         analysis: analysis,
         tradeOverlay: overlay,
