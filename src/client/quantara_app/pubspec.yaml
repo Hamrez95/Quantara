@@ -1,7 +1,7 @@
 name: quantara_app
 description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
-version: 0.13.0+16
+version: 0.13.1+17
 
 environment:
   sdk: ^3.12.2
