@@ -1,0 +1,47 @@
+name: Format updated widget tests
+
+on:
+  push:
+    branches:
+      - feat/95-ui-finalization
+    paths:
+      - .github/workflows/format-widget-tests.yml
+  pull_request:
+    branches:
+      - feat/74-local-guarded-live
+    paths:
+      - .github/workflows/format-widget-tests.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/95-ui-finalization
+          fetch-depth: 0
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Format widget tests
+        run: |
+          dart format src/client/quantara_app/test/widget_test.dart
+          rm .github/workflows/format-widget-tests.yml
+
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "style: format polished navigation tests"
+          git push origin HEAD:feat/95-ui-finalization
