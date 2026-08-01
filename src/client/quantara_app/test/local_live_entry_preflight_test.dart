@@ -17,27 +17,30 @@ void main() {
     expect(result.shortfall, closeTo(4.925, 1e-9));
   });
 
-  test('higher leverage lowers margin floor but never changes quantity floor', () {
-    final lowLeverage = LocalLiveEntryAffordability.calculate(
-      availableMargin: 10,
-      markPrice: 60000,
-      minimumExchangeQuantity: 0.0001,
-      leverage: 4,
-    );
-    final highLeverage = LocalLiveEntryAffordability.calculate(
-      availableMargin: 10,
-      markPrice: 60000,
-      minimumExchangeQuantity: 0.0001,
-      leverage: 20,
-    );
+  test(
+    'higher leverage lowers margin floor but never changes quantity floor',
+    () {
+      final lowLeverage = LocalLiveEntryAffordability.calculate(
+        availableMargin: 10,
+        markPrice: 60000,
+        minimumExchangeQuantity: 0.0001,
+        leverage: 4,
+      );
+      final highLeverage = LocalLiveEntryAffordability.calculate(
+        availableMargin: 10,
+        markPrice: 60000,
+        minimumExchangeQuantity: 0.0001,
+        leverage: 20,
+      );
 
-    expect(highLeverage.requiredQuantity, lowLeverage.requiredQuantity);
-    expect(
-      highLeverage.minimumBufferedMargin,
-      lessThan(lowLeverage.minimumBufferedMargin),
-    );
-    expect(highLeverage.affordable, isTrue);
-  });
+      expect(highLeverage.requiredQuantity, lowLeverage.requiredQuantity);
+      expect(
+        highLeverage.minimumBufferedMargin,
+        lessThan(lowLeverage.minimumBufferedMargin),
+      );
+      expect(highLeverage.affordable, isTrue);
+    },
+  );
 
   test('rejects malformed exchange values', () {
     expect(

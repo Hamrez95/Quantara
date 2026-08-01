@@ -8,10 +8,7 @@ void main() {
       QuantaraNumberFormat.marketValue(double.infinity, unit: 'USDT'),
       '— USDT',
     );
-    expect(
-      QuantaraNumberFormat.marketValue(double.negativeInfinity),
-      '—',
-    );
+    expect(QuantaraNumberFormat.marketValue(double.negativeInfinity), '—');
   });
 
   test('percent and Persian formatting do not throw on non-finite values', () {
@@ -21,7 +18,10 @@ void main() {
   });
 
   test('finite formatting remains unchanged', () {
-    expect(QuantaraNumberFormat.marketValue(1234.5, unit: 'USDT'), '1,234.50 USDT');
+    expect(
+      QuantaraNumberFormat.marketValue(1234.5, unit: 'USDT'),
+      '1,234.50 USDT',
+    );
     expect(QuantaraNumberFormat.marketPercent(1.25), '+1.25%');
   });
 }
