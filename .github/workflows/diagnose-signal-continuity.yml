@@ -1,0 +1,83 @@
+name: Diagnose signal continuity
+
+on:
+  push:
+    branches:
+      - feat/89-91-signal-continuity
+    paths:
+      - .github/workflows/diagnose-signal-continuity.yml
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/89-91-signal-continuity
+          fetch-depth: 0
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - id: pub
+        name: Resolve dependencies
+        continue-on-error: true
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - id: format
+        name: Check formatting
+        continue-on-error: true
+        working-directory: src/client/quantara_app
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - id: analyze
+        name: Analyze
+        continue-on-error: true
+        working-directory: src/client/quantara_app
+        run: flutter analyze
+
+      - id: test
+        name: Run full Flutter tests
+        continue-on-error: true
+        working-directory: src/client/quantara_app
+        run: flutter test
+
+      - name: Persist diagnostic result
+        if: always()
+        run: |
+          mkdir -p docs/validation
+          cat > docs/validation/signal-continuity-diagnostics.md <<EOF
+          # Signal continuity diagnostics
+
+          - Source commit: \`${GITHUB_SHA}\`
+          - Flutter: 3.44.8 stable
+          - pub get: \`${{ steps.pub.outcome }}\`
+          - format: \`${{ steps.format.outcome }}\`
+          - analyze: \`${{ steps.analyze.outcome }}\`
+          - tests: \`${{ steps.test.outcome }}\`
+          EOF
+          rm -f .github/workflows/diagnose-signal-continuity.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "test: record signal continuity diagnostics"
+          git push origin HEAD:feat/89-91-signal-continuity
+
+      - name: Fail when a diagnostic gate failed
+        if: always()
+        run: |
+          test "${{ steps.pub.outcome }}" = success
+          test "${{ steps.format.outcome }}" = success
+          test "${{ steps.analyze.outcome }}" = success
+          test "${{ steps.test.outcome }}" = success
