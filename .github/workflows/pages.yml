@@ -24,6 +24,9 @@ concurrency:
   group: pages-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FLUTTER_VERSION: '3.44.8'
+
 jobs:
   validate-and-build:
     name: Validate and build PWA
@@ -39,6 +42,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
