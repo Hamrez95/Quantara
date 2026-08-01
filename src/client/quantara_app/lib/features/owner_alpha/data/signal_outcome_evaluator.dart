@@ -13,14 +13,7 @@ abstract final class SignalOutcomeEvaluator {
     required DateTime evaluatedAt,
   }) {
     if (entry.hasTerminalOutcome || entry.closed) return entry;
-    if (entry.entryLower == null ||
-        entry.entryUpper == null ||
-        entry.stopLoss == null ||
-        entry.targets.length != 3 ||
-        entry.positionSize <= 0 ||
-        entry.notionalValue <= 0) {
-      return entry;
-    }
+    if (!_hasValidFinancialInputs(entry)) return entry;
 
     var active = entry.activatedAt != null;
     var activatedAt = entry.activatedAt;
@@ -29,6 +22,7 @@ abstract final class SignalOutcomeEvaluator {
     final replayFrom = entry.resolvedAt ?? entry.activatedAt ?? entry.createdAt;
 
     for (final candle in candles) {
+      if (!_validCandle(candle)) continue;
       if (candle.openTime.isBefore(replayFrom)) continue;
       if (!active && !candle.openTime.isBefore(entry.validUntil)) break;
 
@@ -89,6 +83,45 @@ abstract final class SignalOutcomeEvaluator {
     return latest;
   }
 
+  static bool _hasValidFinancialInputs(SignalJournalEntry entry) {
+    final entryLower = entry.entryLower;
+    final entryUpper = entry.entryUpper;
+    final stopLoss = entry.stopLoss;
+    if (entryLower == null ||
+        entryUpper == null ||
+        stopLoss == null ||
+        !entryLower.isFinite ||
+        !entryUpper.isFinite ||
+        !stopLoss.isFinite ||
+        entryLower <= 0 ||
+        entryUpper <= 0 ||
+        stopLoss <= 0 ||
+        entryLower > entryUpper ||
+        entry.targets.length != 3 ||
+        entry.targets.any((value) => !value.isFinite || value <= 0) ||
+        !entry.positionSize.isFinite ||
+        entry.positionSize <= 0 ||
+        !entry.notionalValue.isFinite ||
+        entry.notionalValue <= 0 ||
+        !entry.estimatedRoundTripCosts.isFinite ||
+        entry.estimatedRoundTripCosts < 0 ||
+        entry.selectedLeverage < 1) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool _validCandle(ChartCandle candle) =>
+      candle.open.isFinite &&
+      candle.high.isFinite &&
+      candle.low.isFinite &&
+      candle.close.isFinite &&
+      candle.open > 0 &&
+      candle.high > 0 &&
+      candle.low > 0 &&
+      candle.close > 0 &&
+      candle.high >= candle.low;
+
   static SignalJournalEntry _withResult({
     required SignalJournalEntry entry,
     required SignalOutcome outcome,
@@ -102,6 +135,18 @@ abstract final class SignalOutcomeEvaluator {
     final referenceEntry = entry.direction == TradeDirection.long
         ? entry.entryUpper!
         : entry.entryLower!;
+    if (!referenceEntry.isFinite ||
+        referenceEntry <= 0 ||
+        !exitPrice.isFinite ||
+        exitPrice <= 0) {
+      return entry.copyWith(
+        outcome: outcome,
+        highestTargetHit: highestTarget,
+        activatedAt: activatedAt,
+        resolvedAt: eventAt,
+      );
+    }
+
     final direction = entry.direction == TradeDirection.long ? 1.0 : -1.0;
     var effectiveExit = exitPrice;
     var grossPnl =
@@ -130,9 +175,24 @@ abstract final class SignalOutcomeEvaluator {
     final priceChange =
         ((effectiveExit - referenceEntry) / referenceEntry) * direction * 100;
     final netPnl = grossPnl - entry.estimatedRoundTripCosts;
-    final marginReturn = entry.selectedMargin <= 0
+    final selectedMargin = entry.selectedMargin;
+    final marginReturn = selectedMargin <= 0 || !selectedMargin.isFinite
         ? 0.0
-        : netPnl / entry.selectedMargin * 100;
+        : netPnl / selectedMargin * 100;
+
+    if (!effectiveExit.isFinite ||
+        !grossPnl.isFinite ||
+        !priceChange.isFinite ||
+        !netPnl.isFinite ||
+        !marginReturn.isFinite) {
+      return entry.copyWith(
+        outcome: outcome,
+        highestTargetHit: highestTarget,
+        activatedAt: activatedAt,
+        resolvedAt: eventAt,
+      );
+    }
+
     return entry.copyWith(
       outcome: outcome,
       highestTargetHit: highestTarget,
