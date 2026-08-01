@@ -14,14 +14,13 @@ void main() {
     await tester.pumpAndSettle();
 
     final realData = find.textContaining('داده بازار واقعی');
-    for (
-      var attempt = 0;
-      attempt < 6 && realData.evaluate().isEmpty;
-      attempt++
-    ) {
-      await tester.drag(find.byType(ListView).first, const Offset(0, -280));
-      await tester.pumpAndSettle();
-    }
+    await tester.scrollUntilVisible(
+      realData,
+      420,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 24,
+    );
+    await tester.pumpAndSettle();
 
     expect(realData, findsOneWidget);
     expect(find.textContaining('بازار عمومی Bitunix'), findsOneWidget);
