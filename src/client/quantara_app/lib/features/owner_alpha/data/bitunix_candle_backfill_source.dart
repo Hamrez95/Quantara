@@ -115,7 +115,8 @@ final class BitunixCandleBackfillSource
     final byTime = <DateTime, ChartCandle>{};
     var cursor = fromInclusiveUtc;
     while (cursor.isBefore(toExclusiveUtc)) {
-      final remaining = toExclusiveUtc.difference(cursor).inMilliseconds ~/
+      final remaining =
+          toExclusiveUtc.difference(cursor).inMilliseconds ~/
           intervalMilliseconds;
       final pageLimit = math.min(remaining, maximumPageSize);
       final page = await _request(
@@ -129,14 +130,15 @@ final class BitunixCandleBackfillSource
           'type': 'LAST_PRICE',
         },
       );
-      final inRange = page
-          .where(
-            (candle) =>
-                !candle.openTime.isBefore(cursor) &&
-                candle.openTime.isBefore(toExclusiveUtc),
-          )
-          .toList(growable: false)
-        ..sort((left, right) => left.openTime.compareTo(right.openTime));
+      final inRange =
+          page
+              .where(
+                (candle) =>
+                    !candle.openTime.isBefore(cursor) &&
+                    candle.openTime.isBefore(toExclusiveUtc),
+              )
+              .toList(growable: false)
+            ..sort((left, right) => left.openTime.compareTo(right.openTime));
       if (inRange.isEmpty || inRange.first.openTime != cursor) {
         throw StateError(
           'Bitunix backfill left a gap at $cursor for ${key.id}.',
@@ -161,9 +163,7 @@ final class BitunixCandleBackfillSource
       );
     }
     for (var index = 0; index < result.length; index++) {
-      final expectedOpen = fromInclusiveUtc.add(
-        key.interval.duration * index,
-      );
+      final expectedOpen = fromInclusiveUtc.add(key.interval.duration * index);
       if (result[index].openTime != expectedOpen) {
         throw StateError('Bitunix backfill is not strictly contiguous.');
       }

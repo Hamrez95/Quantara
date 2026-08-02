@@ -64,10 +64,7 @@ void main() {
             'code': 0,
             'data': [
               for (var index = 0; index < count; index++)
-                _jsonCandle(
-                  cursor.add(Duration(minutes: index * 5)),
-                  index,
-                ),
+                _jsonCandle(cursor.add(Duration(minutes: index * 5)), index),
             ],
           }),
           200,
@@ -92,30 +89,31 @@ void main() {
       expect(delays, [const Duration(milliseconds: 120)]);
     });
 
-    test('fails closed when a REST page does not start at the cursor', () async {
-      final start = DateTime.utc(2026, 8, 2, 10);
-      final client = MockClient((request) async {
-        return http.Response(
-          jsonEncode({
-            'code': 0,
-            'data': [
-              _jsonCandle(start.add(const Duration(minutes: 5)), 0),
-            ],
-          }),
-          200,
-        );
-      });
-      final source = BitunixCandleBackfillSource(client: client);
+    test(
+      'fails closed when a REST page does not start at the cursor',
+      () async {
+        final start = DateTime.utc(2026, 8, 2, 10);
+        final client = MockClient((request) async {
+          return http.Response(
+            jsonEncode({
+              'code': 0,
+              'data': [_jsonCandle(start.add(const Duration(minutes: 5)), 0)],
+            }),
+            200,
+          );
+        });
+        final source = BitunixCandleBackfillSource(client: client);
 
-      await expectLater(
-        source.loadClosedRange(
-          key: key,
-          fromInclusiveUtc: start,
-          toExclusiveUtc: start.add(const Duration(minutes: 10)),
-        ),
-        throwsStateError,
-      );
-    });
+        await expectLater(
+          source.loadClosedRange(
+            key: key,
+            fromInclusiveUtc: start,
+            toExclusiveUtc: start.add(const Duration(minutes: 10)),
+          ),
+          throwsStateError,
+        );
+      },
+    );
 
     test('rejects malformed OHLC and unsuccessful response codes', () async {
       final start = DateTime.utc(2026, 8, 2, 10);
@@ -125,11 +123,7 @@ void main() {
             jsonEncode({
               'code': 0,
               'data': [
-                {
-                  ..._jsonCandle(start, 0),
-                  'high': '99',
-                  'close': '101',
-                },
+                {..._jsonCandle(start, 0), 'high': '99', 'close': '101'},
               ],
             }),
             200,
@@ -160,22 +154,25 @@ void main() {
       );
     });
 
-    test('rejects insecure origins and request pacing above ten per second', () {
-      expect(
-        () => BitunixCandleBackfillSource(
-          client: MockClient((request) async => http.Response('{}', 200)),
-          apiOrigin: 'http://example.test',
-        ),
-        throwsArgumentError,
-      );
-      expect(
-        () => BitunixCandleBackfillSource(
-          client: MockClient((request) async => http.Response('{}', 200)),
-          requestSpacing: const Duration(milliseconds: 99),
-        ),
-        throwsArgumentError,
-      );
-    });
+    test(
+      'rejects insecure origins and request pacing above ten per second',
+      () {
+        expect(
+          () => BitunixCandleBackfillSource(
+            client: MockClient((request) async => http.Response('{}', 200)),
+            apiOrigin: 'http://example.test',
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => BitunixCandleBackfillSource(
+            client: MockClient((request) async => http.Response('{}', 200)),
+            requestSpacing: const Duration(milliseconds: 99),
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
   });
 }
 

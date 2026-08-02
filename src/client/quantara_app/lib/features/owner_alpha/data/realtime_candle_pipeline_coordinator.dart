@@ -61,17 +61,15 @@ final class RealtimeCandlePipelineCoordinator {
       final update = assembler.apply(event, processedAtUtc: clock());
       emitted.add(update);
       await eventBus.publish(update);
-      if (update.disposition ==
-          RealtimeCandlePipelineDisposition.gapDetected) {
+      if (update.disposition == RealtimeCandlePipelineDisposition.gapDetected) {
         emitted.add(await _reconcile(key));
       }
       return List.unmodifiable(emitted);
     });
   }
 
-  Future<RealtimeCandlePipelineUpdate> reconcile(
-    RealtimeCandleStreamKey key,
-  ) => _serialize(key, () => _reconcile(key));
+  Future<RealtimeCandlePipelineUpdate> reconcile(RealtimeCandleStreamKey key) =>
+      _serialize(key, () => _reconcile(key));
 
   Future<RealtimeCandlePipelineUpdate> _reconcile(
     RealtimeCandleStreamKey key,

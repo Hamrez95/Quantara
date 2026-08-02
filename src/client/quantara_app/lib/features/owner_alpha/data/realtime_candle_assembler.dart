@@ -35,9 +35,7 @@ final class RealtimeCandleAssembler {
 
     final retained = normalized.length <= maximumClosedCandlesPerStream
         ? normalized
-        : normalized.sublist(
-            normalized.length - maximumClosedCandlesPerStream,
-          );
+        : normalized.sublist(normalized.length - maximumClosedCandlesPerStream);
     _states[key] = _CandleStreamState(closedCandles: retained);
     return RealtimeCandlePipelineUpdate(
       key: key,
@@ -211,14 +209,14 @@ final class RealtimeCandleAssembler {
       throw StateError('The candle stream has no active gap to reconcile.');
     }
 
-    final replacements = _validateClosedSequence(
-      key,
-      replacementClosedCandles,
-    );
-    final expectedCount = gap.missingDuration.inMilliseconds ~/
+    final replacements = _validateClosedSequence(key, replacementClosedCandles);
+    final expectedCount =
+        gap.missingDuration.inMilliseconds ~/
         key.interval.duration.inMilliseconds;
     if (replacements.length != expectedCount || replacements.isEmpty) {
-      throw StateError('Backfill did not cover the exact missing candle range.');
+      throw StateError(
+        'Backfill did not cover the exact missing candle range.',
+      );
     }
     if (replacements.first.openTime != gap.fromOpenTimeUtc ||
         replacements.last.openTime.add(key.interval.duration) !=

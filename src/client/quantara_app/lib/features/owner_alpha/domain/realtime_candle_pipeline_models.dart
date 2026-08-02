@@ -2,10 +2,8 @@ import '../../market_analysis/domain/market_chart_models.dart';
 import 'bitunix_public_stream_models.dart';
 
 final class RealtimeCandleStreamKey {
-  RealtimeCandleStreamKey({
-    required String symbol,
-    required this.interval,
-  }) : symbol = _normalizeSymbol(symbol);
+  RealtimeCandleStreamKey({required String symbol, required this.interval})
+    : symbol = _normalizeSymbol(symbol);
 
   final String symbol;
   final BitunixKlineInterval interval;
