@@ -11,20 +11,14 @@ final class CandidateRegistryPreparedUpdate {
   CandidateRegistryPreparedUpdate._({
     required this.update,
     required this.requiresCommit,
-    required RealtimeCandidateRegistry owner,
-    required int revision,
-    required String? candidateSetupId,
-    required RealtimeOpportunityCandidate? nextCandidate,
-    required _CandidateStreamKey? cursorKey,
-    required _StreamCursor? nextCursor,
-    required String? deduplicationKey,
-  }) : _owner = owner,
-       _revision = revision,
-       _candidateSetupId = candidateSetupId,
-       _nextCandidate = nextCandidate,
-       _cursorKey = cursorKey,
-       _nextCursor = nextCursor,
-       _deduplicationKey = deduplicationKey;
+    required this._owner,
+    required this._revision,
+    required this._candidateSetupId,
+    required this._nextCandidate,
+    required this._cursorKey,
+    required this._nextCursor,
+    required this._deduplicationKey,
+  });
 
   final CandidateRegistryUpdate update;
   final bool requiresCommit;
@@ -187,16 +181,16 @@ final class RealtimeCandidateRegistry {
     return CandidateRegistryPreparedUpdate._(
       update: update,
       requiresCommit: true,
-      owner: this,
-      revision: _revision,
-      candidateSetupId: candidate.setupId,
-      nextCandidate: evaluation.candidate,
-      cursorKey: cursorKey,
-      nextCursor: _StreamCursor(
+      _owner: this,
+      _revision: _revision,
+      _candidateSetupId: candidate.setupId,
+      _nextCandidate: evaluation.candidate,
+      _cursorKey: cursorKey,
+      _nextCursor: _StreamCursor(
         sequence: sequence ?? cursor?.sequence,
         exchangeTimestampUtc: envelope.observation.exchangeTimestampUtc,
       ),
-      deduplicationKey: envelope.deduplicationKey,
+      _deduplicationKey: envelope.deduplicationKey,
     );
   }
 
@@ -313,13 +307,13 @@ final class RealtimeCandidateRegistry {
       ),
     ),
     requiresCommit: false,
-    owner: this,
-    revision: _revision,
-    candidateSetupId: null,
-    nextCandidate: null,
-    cursorKey: null,
-    nextCursor: null,
-    deduplicationKey: null,
+    _owner: this,
+    _revision: _revision,
+    _candidateSetupId: null,
+    _nextCandidate: null,
+    _cursorKey: null,
+    _nextCursor: null,
+    _deduplicationKey: null,
   );
 
   CandidateRegistryAuditEvent _audit({
