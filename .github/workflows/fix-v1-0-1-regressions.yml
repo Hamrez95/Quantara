@@ -1,0 +1,108 @@
+name: Fix v1.0.1 regression expectations
+
+on:
+  push:
+    branches:
+      - fix/97-local-live-persistence-scalp
+    paths:
+      - .github/workflows/fix-v1-0-1-regressions.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout latest feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/97-local-live-persistence-scalp
+          fetch-depth: 0
+
+      - name: Update regression expectations for advanced bounds and 5m
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          agents = Path('src/client/quantara_app/test/local_live_trader_agents_test.dart')
+          text = agents.read_text(encoding='utf-8')
+          text = text.replace(
+              "configuration(risk: 0.30).validate()",
+              "configuration(risk: 2.01).validate()",
+          )
+          agents.write_text(text, encoding='utf-8')
+
+          repository = Path('src/client/quantara_app/test/owner_alpha_repository_test.dart')
+          text = repository.read_text(encoding='utf-8')
+          text = text.replace(
+              "loads a bounded live radar and four selected timeframes",
+              "loads a bounded live radar and five selected timeframes",
+          )
+          text = text.replace("expect(requestCount, 8);", "expect(requestCount, 10);", 1)
+          text = text.replace(
+              "containsAll(['15m', '1h', '4h'])",
+              "containsAll(['5m', '15m', '1h', '4h'])",
+              1,
+          )
+          text = text.replace(
+              "containsAll(['15m', '1h', '4h', '1D'])",
+              "containsAll(['5m', '15m', '1h', '4h', '1D'])",
+              1,
+          )
+          text = text.replace(
+              "expect(snapshot.diagnostics.networkRequests, 8);",
+              "expect(snapshot.diagnostics.networkRequests, 10);",
+              1,
+          )
+          text = text.replace(
+              "expect(snapshot.diagnostics.requestedAnalyses, 7);",
+              "expect(snapshot.diagnostics.requestedAnalyses, 9);",
+              1,
+          )
+          text = text.replace("expect(requestCount, 9);", "expect(requestCount, 11);", 1)
+          text = text.replace(
+              "expect(secondSnapshot.diagnostics.cacheHits, 7);",
+              "expect(secondSnapshot.diagnostics.cacheHits, 9);",
+              1,
+          )
+          text = text.replace("expect(requestCount, 14);", "expect(requestCount, 18);", 1)
+          text = text.replace(
+              "expect(expiredSnapshot.diagnostics.networkRequests, 5);",
+              "expect(expiredSnapshot.diagnostics.networkRequests, 7);",
+              1,
+          )
+          text = text.replace(
+              "final interval = switch (timeframe) {\n    '15m' =>",
+              "final interval = switch (timeframe) {\n    '5m' => const Duration(minutes: 5),\n    '15m' =>",
+              1,
+          )
+          repository.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Format and run focused tests
+        working-directory: src/client/quantara_app
+        run: |
+          flutter pub get
+          dart format test/local_live_trader_agents_test.dart test/owner_alpha_repository_test.dart
+          flutter test test/local_live_trader_agents_test.dart
+          flutter test test/owner_alpha_repository_test.dart
+          flutter test test/signal_outcome_evaluator_test.dart
+
+      - name: Commit test updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/test/local_live_trader_agents_test.dart \
+                  src/client/quantara_app/test/owner_alpha_repository_test.dart
+          git diff --cached --check
+          git commit -m "test: align regression suite with bounded 5m controls"
+          git push origin HEAD:fix/97-local-live-persistence-scalp
