@@ -1,0 +1,41 @@
+name: Remove redundant realtime imports once
+
+on:
+  push:
+    branches:
+      - feat/101-realtime-application-composition
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-clean:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/101-realtime-application-composition
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Remove redundant imports and self-delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i "/import 'candidate_audit_retention_policy.dart';/d" src/client/quantara_app/lib/features/owner_alpha/data/realtime_market_application.dart
+          sed -i "/import 'package:quantara_app\/features\/owner_alpha\/data\/candidate_audit_retention_policy.dart';/d" src/client/quantara_app/test/realtime_market_application_test.dart
+          git rm .github/workflows/fix-realtime-imports-once.yml
+          git add src/client/quantara_app/lib/features/owner_alpha/data/realtime_market_application.dart
+          git add src/client/quantara_app/test/realtime_market_application_test.dart
+          git diff --cached --check
+
+      - name: Commit clean import fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "quantara-ci"
+          git config user.email "quantara-ci@users.noreply.github.com"
+          git commit -m "fix: remove redundant realtime imports"
+          git push origin HEAD:feat/101-realtime-application-composition
