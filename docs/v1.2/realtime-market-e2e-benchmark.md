@@ -21,6 +21,8 @@ The reconnect scenario verifies that:
 - reconnect metrics increment without creating a duplicate candidate;
 - stop closes the active fake socket cleanly.
 
+Each asynchronous wait has a stage label, so a CI timeout identifies whether subscription, working-Kline delivery, reconnect, replay or projection failed.
+
 ## 100-symbol benchmark
 
 The benchmark creates 100 deterministic symbols across all five supported Kline timeframes:
@@ -56,7 +58,7 @@ The wall-clock limit is intentionally wider than the product latency target so s
 
 ## Validation tooling
 
-The E2E source is formatted with Flutter `3.44.8` and Dart `3.12.2`. The one-shot formatter workflow self-deletes before CI and review, so no temporary workflow is part of the product diff.
+The E2E source is formatted with Flutter `3.44.8` and Dart `3.12.2`. One-shot formatting or diagnostic workflows self-delete before CI and review, so no temporary workflow is part of the product diff.
 
 ## Remaining issue #101 work
 
