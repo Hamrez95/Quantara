@@ -17,6 +17,8 @@ It owns:
 
 It does not own WebSocket sockets, REST backfill, playbook calculations, persistence, notifications, orders or risk reservations.
 
+Raw exchange sequence reconciliation happens before playbook fan-out. The optional sequence in this registry is candidate-delivery continuity, so multiple candidates may consume one reconciled market event without being mistaken for duplicates.
+
 ## Delivery contract
 
 An adapter produces a `RealtimeObservationEnvelope` with:
