@@ -71,8 +71,15 @@ void main() {
       await application.start();
       await _flushMicrotasks();
 
-      expect(order.take(3), ['projection-restore', 'backfill-recent', 'fleet-build']);
-      expect(fleetFactory.subscriptions.single.key, 'BTCUSDT|market_kline_15min');
+      expect(order.take(3), [
+        'projection-restore',
+        'backfill-recent',
+        'fleet-build',
+      ]);
+      expect(
+        fleetFactory.subscriptions.single.key,
+        'BTCUSDT|market_kline_15min',
+      );
       expect(application.state, RealtimeMarketRuntimeState.live);
       expect(application.health.configuredStreams, 1);
       expect(application.health.activeShards, 1);
@@ -80,77 +87,90 @@ void main() {
 
       await application.stop();
       expect(application.state, RealtimeMarketRuntimeState.stopped);
+      expect(application.health.lastFaultMessage, isNull);
     });
 
-    test('runs public candle through analysis, audit, commit and projection', () async {
-      final order = <String>[];
-      final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
-      final source = _FakeBackfillSource(
-        recent: _candles(
-          historyStart,
-          20,
-          interval: key.interval.duration,
-        ),
-        order: order,
-      );
-      final auditStore = _FakeAuditStore(order: order);
-      final registry = RealtimeCandidateRegistry();
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: auditStore,
-      );
-      final projection = _FakeProjection(order: order);
-      final analysis = _TriggerAnalysisGateway();
-      final fleetFactory = _FakeFleetFactory(order: order);
-      final application = _application(
-        key: key,
-        source: source,
-        fleetFactory: fleetFactory,
-        projection: projection,
-        analysis: analysis,
-        clock: clock,
-        coordinator: coordinator,
-      );
-      await application.start();
-      await _flushMicrotasks();
+    test(
+      'runs public candle through analysis, audit, commit and projection',
+      () async {
+        final order = <String>[];
+        final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
+        final source = _FakeBackfillSource(
+          recent: _candles(
+            historyStart,
+            20,
+            interval: key.interval.duration,
+          ),
+          order: order,
+        );
+        final auditStore = _FakeAuditStore(order: order);
+        final registry = RealtimeCandidateRegistry();
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: auditStore,
+        );
+        final projection = _FakeProjection(order: order);
+        final analysis = _TriggerAnalysisGateway();
+        final fleetFactory = _FakeFleetFactory(order: order);
+        final application = _application(
+          key: key,
+          source: source,
+          fleetFactory: fleetFactory,
+          projection: projection,
+          analysis: analysis,
+          clock: clock,
+          coordinator: coordinator,
+        );
+        await application.start();
+        await _flushMicrotasks();
 
-      clock.now = DateTime.utc(2026, 8, 2, 11, 0, 1);
-      await fleetFactory.fleet.emit(
-        _event(
-          DateTime.utc(2026, 8, 2, 11),
-          exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 11, 0, 0, 500),
-          receivedAtUtc: DateTime.utc(2026, 8, 2, 11, 0, 0, 700),
-          close: 101,
-        ),
-      );
-      expect(projection.applied, isEmpty);
+        clock.now = DateTime.utc(2026, 8, 2, 11, 0, 1);
+        await fleetFactory.fleet.emit(
+          _event(
+            DateTime.utc(2026, 8, 2, 11),
+            exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 11, 0, 0, 500),
+            receivedAtUtc: DateTime.utc(2026, 8, 2, 11, 0, 0, 700),
+            close: 101,
+          ),
+        );
+        expect(projection.applied, isEmpty);
 
-      clock.now = DateTime.utc(2026, 8, 2, 11, 16, 1);
-      await fleetFactory.fleet.emit(
-        _event(
-          DateTime.utc(2026, 8, 2, 11, 15),
-          exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 11, 16),
-          receivedAtUtc: DateTime.utc(2026, 8, 2, 11, 16, 0, 200),
-          close: 102,
-        ),
-      );
+        clock.now = DateTime.utc(2026, 8, 2, 11, 16, 1);
+        await fleetFactory.fleet.emit(
+          _event(
+            DateTime.utc(2026, 8, 2, 11, 15),
+            exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 11, 16),
+            receivedAtUtc: DateTime.utc(2026, 8, 2, 11, 16, 0, 200),
+            close: 102,
+          ),
+        );
 
-      expect(analysis.dispositions, [
-        RealtimeCandlePipelineDisposition.workingUpdated,
-        RealtimeCandlePipelineDisposition.candleClosed,
-      ]);
-      expect(order.indexOf('audit'), greaterThanOrEqualTo(0));
-      expect(order.indexOf('projection'), greaterThan(order.indexOf('audit')));
-      expect(projection.applied.single.currentStage, OpportunityStage.triggered);
-      expect(registry.candidateFor('setup-1')?.stage, OpportunityStage.triggered);
-      expect(application.health.klineEventsReceived, 2);
-      expect(application.health.closedCandleEvents, 1);
-      expect(application.health.candidateEvaluations, 1);
-      expect(application.health.candidateCommits, 1);
-      expect(application.health.p95TransportLag, isNot(Duration.zero));
+        expect(analysis.dispositions, [
+          RealtimeCandlePipelineDisposition.workingUpdated,
+          RealtimeCandlePipelineDisposition.candleClosed,
+        ]);
+        expect(order.indexOf('audit'), greaterThanOrEqualTo(0));
+        expect(
+          order.indexOf('projection'),
+          greaterThan(order.indexOf('audit')),
+        );
+        expect(
+          projection.applied.single.currentStage,
+          OpportunityStage.triggered,
+        );
+        expect(
+          registry.candidateFor('setup-1')?.stage,
+          OpportunityStage.triggered,
+        );
+        expect(application.health.klineEventsReceived, 2);
+        expect(application.health.closedCandleEvents, 1);
+        expect(application.health.candidateEvaluations, 1);
+        expect(application.health.candidateCommits, 1);
+        expect(application.health.p95TransportLag, isNot(Duration.zero));
 
-      await application.stop();
-    });
+        await application.stop();
+      },
+    );
 
     test('reconciles an exact gap before allowing analysis again', () async {
       final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
@@ -259,7 +279,10 @@ void main() {
       );
 
       expect(projection.applied, isEmpty);
-      expect(registry.candidateFor('setup-1')?.stage, OpportunityStage.detected);
+      expect(
+        registry.candidateFor('setup-1')?.stage,
+        OpportunityStage.detected,
+      );
       expect(application.health.candidateCommits, 0);
 
       await application.stop();
@@ -360,20 +383,15 @@ final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
   }) {
     order?.add('fleet-build');
     this.subscriptions = List.unmodifiable(subscriptions);
-    fleet = _FakeFleet(onEvent: onEvent, onFault: onFault, onState: onState);
+    fleet = _FakeFleet(onEvent: onEvent, onState: onState);
     return fleet;
   }
 }
 
 final class _FakeFleet implements RealtimePublicStreamFleet {
-  _FakeFleet({
-    required this.onEvent,
-    required this.onFault,
-    required this.onState,
-  });
+  _FakeFleet({required this.onEvent, required this.onState});
 
   final BitunixStreamEventHandler onEvent;
-  final BitunixStreamFaultHandler onFault;
   final BitunixFleetStateHandler onState;
   final Completer<void> _stopped = Completer<void>();
 
