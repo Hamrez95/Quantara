@@ -48,11 +48,21 @@ enum RealtimeCandlePipelineDisposition {
 }
 
 final class RealtimeCandleGap {
-  const RealtimeCandleGap({
+  RealtimeCandleGap({
     required this.fromOpenTimeUtc,
     required this.toOpenTimeExclusiveUtc,
     required this.observedWorkingOpenTimeUtc,
-  });
+  }) {
+    if (!fromOpenTimeUtc.isUtc ||
+        !toOpenTimeExclusiveUtc.isUtc ||
+        !observedWorkingOpenTimeUtc.isUtc) {
+      throw ArgumentError('Gap timestamps must be UTC.');
+    }
+    if (!toOpenTimeExclusiveUtc.isAfter(fromOpenTimeUtc) ||
+        observedWorkingOpenTimeUtc != toOpenTimeExclusiveUtc) {
+      throw ArgumentError('Gap boundaries are invalid.');
+    }
+  }
 
   final DateTime fromOpenTimeUtc;
   final DateTime toOpenTimeExclusiveUtc;
