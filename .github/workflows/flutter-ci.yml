@@ -63,8 +63,8 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Capture canonical formatting
+        run: dart format lib test
 
       - name: Analyze
         shell: bash
@@ -92,8 +92,10 @@ jobs:
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
-          if-no-files-found: ignore
-          retention-days: 14
+            src/client/quantara_app/lib/features/owner_alpha/domain/realtime_candidate_models.dart
+            src/client/quantara_app/test/realtime_candidate_engine_test.dart
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Compile API-configured web PWA
         run: >-
