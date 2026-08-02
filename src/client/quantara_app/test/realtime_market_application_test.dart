@@ -86,6 +86,32 @@ void main() {
     });
 
     test(
+      'stops a constructed fleet after synchronous startup failure',
+      () async {
+        final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
+        final source = _FakeBackfillSource(
+          recent: _candles(historyStart, 20, interval: key.interval.duration),
+        );
+        final fleetFactory = _FakeFleetFactory(failRunSynchronously: true);
+        final application = _application(
+          key: key,
+          source: source,
+          fleetFactory: fleetFactory,
+          projection: _FakeProjection(),
+          analysis: const _EmptyAnalysisGateway(),
+          clock: clock,
+        );
+
+        await expectLater(application.start(), throwsStateError);
+
+        expect(fleetFactory.fleet.stopCalls, 1);
+        expect(application.state, RealtimeMarketRuntimeState.failed);
+        expect(application.health.activeShards, 0);
+        await application.stop();
+      },
+    );
+
+    test(
       'runs public candle through analysis, audit, commit and projection',
       () async {
         final order = <String>[];
@@ -295,6 +321,7 @@ RealtimeMarketApplication _application({
     analysisGateway: analysis,
     candidateCoordinator: candidateCoordinator,
     projection: projection,
+    closedCandleLimit: 20,
     bootstrapSpacing: Duration.zero,
     clock: clock.call,
     delay: (_) async {},
@@ -351,9 +378,10 @@ final class _FakeBackfillSource implements RealtimeCandleBackfillSource {
 }
 
 final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
-  _FakeFleetFactory({this.order});
+  _FakeFleetFactory({this.order, this.failRunSynchronously = false});
 
   final List<String>? order;
+  final bool failRunSynchronously;
   late final _FakeFleet fleet;
   List<BitunixPublicSubscription> subscriptions = const [];
 
@@ -366,23 +394,40 @@ final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
   }) {
     order?.add('fleet-build');
     this.subscriptions = List.unmodifiable(subscriptions);
-    fleet = _FakeFleet(onEvent: onEvent, onState: onState);
+    fleet = _FakeFleet(
+      onEvent: onEvent,
+      onState: onState,
+      failRunSynchronously: failRunSynchronously,
+    );
     return fleet;
   }
 }
 
 final class _FakeFleet implements RealtimePublicStreamFleet {
-  _FakeFleet({required this.onEvent, required this.onState});
+  _FakeFleet({
+    required this.onEvent,
+    required this.onState,
+    required this.failRunSynchronously,
+  });
 
   final BitunixStreamEventHandler onEvent;
   final BitunixFleetStateHandler onState;
+  final bool failRunSynchronously;
   final Completer<void> _stopped = Completer<void>();
+  int stopCalls = 0;
 
   @override
   int get shardCount => 1;
 
   @override
-  Future<void> run() async {
+  Future<void> run() {
+    if (failRunSynchronously) {
+      throw StateError('injected synchronous fleet startup failure');
+    }
+    return _runUntilStopped();
+  }
+
+  Future<void> _runUntilStopped() async {
     await onState(0, BitunixPublicConnectionState.connecting);
     await onState(0, BitunixPublicConnectionState.live);
     await _stopped.future;
@@ -395,6 +440,7 @@ final class _FakeFleet implements RealtimePublicStreamFleet {
 
   @override
   Future<void> stop() async {
+    stopCalls++;
     if (!_stopped.isCompleted) _stopped.complete();
   }
 }

@@ -277,12 +277,35 @@ final class RealtimeMarketApplication {
         ),
       );
     } on Object catch (error) {
+      await _discardFailedFleet();
       _setState(RealtimeMarketRuntimeState.failed);
       _metrics.recordFault(
         message: 'Realtime startup failed: $error',
         occurredAtUtc: _clock(),
       );
       rethrow;
+    }
+  }
+
+  Future<void> _discardFailedFleet() async {
+    final fleet = _fleet;
+    final run = _fleetRun;
+    _fleet = null;
+    _fleetRun = null;
+    _shardStates.clear();
+    if (fleet != null) {
+      try {
+        await fleet.stop();
+      } on Object {
+        // Startup failure remains the primary fault.
+      }
+    }
+    if (run != null) {
+      try {
+        await run;
+      } on Object {
+        // The startup failure is reported by the caller.
+      }
     }
   }
 
