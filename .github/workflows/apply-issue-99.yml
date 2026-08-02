@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: apply-issue-99
+  cancel-in-progress: false
+
 jobs:
   patch:
     runs-on: ubuntu-24.04
