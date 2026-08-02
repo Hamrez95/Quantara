@@ -15,8 +15,8 @@ abstract final class BitunixPublicStreamFleetFactory {
     required BitunixStreamEventHandler onEvent,
     required BitunixStreamFaultHandler onFault,
     required BitunixFleetStateHandler onState,
-    BitunixPublicStreamConfig config = const BitunixPublicStreamConfig(),
-    BitunixReconnectPolicy reconnectPolicy = const BitunixReconnectPolicy(),
+    BitunixPublicStreamConfig? config,
+    BitunixReconnectPolicy? reconnectPolicy,
     BitunixUtcClock? clock,
     BitunixAsyncDelay? delay,
   }) {
