@@ -7,6 +7,30 @@ import 'realtime_candidate_engine.dart';
 typedef RealtimeCandidatePolicyResolver =
     RealtimeCandidatePolicy Function(RealtimeOpportunityCandidate candidate);
 
+final class CandidateRegistryPreparedUpdate {
+  CandidateRegistryPreparedUpdate._({
+    required this.update,
+    required this.requiresCommit,
+    required this._owner,
+    required this._candidateRevision,
+    required this._candidateSetupId,
+    required this._nextCandidate,
+    required this._cursorKey,
+    required this._nextCursor,
+    required this._deduplicationKey,
+  });
+
+  final CandidateRegistryUpdate update;
+  final bool requiresCommit;
+  final RealtimeCandidateRegistry _owner;
+  final int _candidateRevision;
+  final String? _candidateSetupId;
+  final RealtimeOpportunityCandidate? _nextCandidate;
+  final _CandidateStreamKey? _cursorKey;
+  final _StreamCursor? _nextCursor;
+  final String? _deduplicationKey;
+}
+
 final class RealtimeCandidateRegistry {
   RealtimeCandidateRegistry({
     this.maximumCandidates = 2000,
@@ -25,11 +49,14 @@ final class RealtimeCandidateRegistry {
   final int recentEventCapacity;
   final RealtimeCandidatePolicyResolver _policyResolver;
   final Map<String, RealtimeOpportunityCandidate> _candidates = {};
+  final Map<String, int> _candidateRevisions = {};
   final Map<_CandidateStreamKey, _StreamCursor> _streamCursors = {};
   final LinkedHashSet<String> _recentEventIds = LinkedHashSet();
   var _nextAuditSequence = 1;
 
   int get candidateCount => _candidates.length;
+
+  int revisionFor(String setupId) => _candidateRevisions[setupId] ?? -1;
 
   RealtimeOpportunityCandidate? candidateFor(String setupId) =>
       _candidates[setupId];
@@ -62,33 +89,34 @@ final class RealtimeCandidateRegistry {
     }
 
     _candidates[candidate.setupId] = candidate;
+    _candidateRevisions[candidate.setupId] = 0;
     return CandidateRegistrationResult(
       disposition: CandidateRegistrationDisposition.registered,
       candidate: candidate,
     );
   }
 
-  CandidateRegistryUpdate apply(
+  CandidateRegistryPreparedUpdate prepare(
     RealtimeObservationEnvelope envelope, {
     RealtimeCandidatePolicy? policy,
   }) {
     final candidate = _candidates[envelope.setupId];
     if (candidate == null) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.unknownCandidate,
       );
     }
     if (candidate.symbol != envelope.symbol ||
         candidate.timeframe != envelope.timeframe) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.identityMismatch,
         candidate: candidate,
       );
     }
     if (_recentEventIds.contains(envelope.deduplicationKey)) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.duplicate,
         candidate: candidate,
@@ -103,7 +131,7 @@ final class RealtimeCandidateRegistry {
     final sequence = envelope.sequence;
     if (sequence != null && cursor?.sequence != null) {
       if (sequence <= cursor!.sequence!) {
-        return _rejected(
+        return _rejectedPreparation(
           envelope: envelope,
           disposition: StreamEventDisposition.outOfOrder,
           candidate: candidate,
@@ -111,7 +139,7 @@ final class RealtimeCandidateRegistry {
       }
       final expected = cursor.sequence! + 1;
       if (sequence > expected) {
-        return _rejected(
+        return _rejectedPreparation(
           envelope: envelope,
           disposition: StreamEventDisposition.gapDetected,
           candidate: candidate,
@@ -125,7 +153,7 @@ final class RealtimeCandidateRegistry {
         envelope.observation.exchangeTimestampUtc.isBefore(
           cursor.exchangeTimestampUtc,
         )) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.outOfOrder,
         candidate: candidate,
@@ -137,14 +165,7 @@ final class RealtimeCandidateRegistry {
       observation: envelope.observation,
       policy: policy ?? _policyResolver(candidate),
     );
-    _candidates[candidate.setupId] = evaluation.candidate;
-    _streamCursors[cursorKey] = _StreamCursor(
-      sequence: sequence ?? cursor?.sequence,
-      exchangeTimestampUtc: envelope.observation.exchangeTimestampUtc,
-    );
-    _remember(envelope.deduplicationKey);
-
-    return CandidateRegistryUpdate(
+    final update = CandidateRegistryUpdate(
       disposition: StreamEventDisposition.accepted,
       candidate: evaluation.candidate,
       evaluation: evaluation,
@@ -156,6 +177,58 @@ final class RealtimeCandidateRegistry {
         transitionReason: evaluation.candidate.transitionReason,
       ),
     );
+
+    return CandidateRegistryPreparedUpdate._(
+      update: update,
+      requiresCommit: true,
+      owner: this,
+      candidateRevision: revisionFor(candidate.setupId),
+      candidateSetupId: candidate.setupId,
+      nextCandidate: evaluation.candidate,
+      cursorKey: cursorKey,
+      nextCursor: _StreamCursor(
+        sequence: sequence ?? cursor?.sequence,
+        exchangeTimestampUtc: envelope.observation.exchangeTimestampUtc,
+      ),
+      deduplicationKey: envelope.deduplicationKey,
+    );
+  }
+
+  CandidateRegistryUpdate commit(CandidateRegistryPreparedUpdate prepared) {
+    if (!identical(prepared._owner, this)) {
+      throw ArgumentError('The prepared update belongs to another registry.');
+    }
+    if (!prepared.requiresCommit) return prepared.update;
+
+    final setupId = prepared._candidateSetupId;
+    final nextCandidate = prepared._nextCandidate;
+    final cursorKey = prepared._cursorKey;
+    final nextCursor = prepared._nextCursor;
+    final deduplicationKey = prepared._deduplicationKey;
+    if (setupId == null ||
+        nextCandidate == null ||
+        cursorKey == null ||
+        nextCursor == null ||
+        deduplicationKey == null) {
+      throw StateError('The prepared candidate update is incomplete.');
+    }
+    if (prepared._candidateRevision != revisionFor(setupId)) {
+      throw StateError('The candidate changed after this update was prepared.');
+    }
+
+    _candidates[setupId] = nextCandidate;
+    _streamCursors[cursorKey] = nextCursor;
+    _remember(deduplicationKey);
+    _candidateRevisions[setupId] = prepared._candidateRevision + 1;
+    return prepared.update;
+  }
+
+  CandidateRegistryUpdate apply(
+    RealtimeObservationEnvelope envelope, {
+    RealtimeCandidatePolicy? policy,
+  }) {
+    final prepared = prepare(envelope, policy: policy);
+    return prepared.requiresCommit ? commit(prepared) : prepared.update;
   }
 
   void markReconciled({
@@ -209,25 +282,36 @@ final class RealtimeCandidateRegistry {
       sequence: sequence,
       exchangeTimestampUtc: exchangeTimestampUtc,
     );
+    _candidateRevisions[setupId] = revisionFor(setupId) + 1;
   }
 
-  CandidateRegistryUpdate _rejected({
+  CandidateRegistryPreparedUpdate _rejectedPreparation({
     required RealtimeObservationEnvelope envelope,
     required StreamEventDisposition disposition,
     RealtimeOpportunityCandidate? candidate,
     RealtimeStreamGap? gap,
-  }) => CandidateRegistryUpdate(
-    disposition: disposition,
-    candidate: candidate,
-    evaluation: null,
-    auditEvent: _audit(
-      envelope: envelope,
+  }) => CandidateRegistryPreparedUpdate._(
+    update: CandidateRegistryUpdate(
       disposition: disposition,
-      previousStage: candidate?.stage,
-      currentStage: candidate?.stage,
-      transitionReason: null,
-      gap: gap,
+      candidate: candidate,
+      evaluation: null,
+      auditEvent: _audit(
+        envelope: envelope,
+        disposition: disposition,
+        previousStage: candidate?.stage,
+        currentStage: candidate?.stage,
+        transitionReason: null,
+        gap: gap,
+      ),
     ),
+    requiresCommit: false,
+    owner: this,
+    candidateRevision: candidate == null ? -1 : revisionFor(candidate.setupId),
+    candidateSetupId: null,
+    nextCandidate: null,
+    cursorKey: null,
+    nextCursor: null,
+    deduplicationKey: null,
   );
 
   CandidateRegistryAuditEvent _audit({
