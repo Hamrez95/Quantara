@@ -65,10 +65,7 @@ final class RealtimeOpportunityCandidate {
       );
     }
     if (idea.confidencePercent < 0 || idea.confidencePercent > 100) {
-      throw ArgumentError.value(
-        idea.confidencePercent,
-        'confidencePercent',
-      );
+      throw ArgumentError.value(idea.confidencePercent, 'confidencePercent');
     }
 
     final lower = idea.entryLower!;
@@ -179,18 +176,13 @@ final class RealtimeOpportunityCandidate {
     DateTime? resolvedAtUtc,
   }) {
     if (!atUtc.isUtc || atUtc.isBefore(lastUpdatedAtUtc)) {
-      throw ArgumentError(
-        'Candidate transitions require monotonic UTC time.',
-      );
+      throw ArgumentError('Candidate transitions require monotonic UTC time.');
     }
     if (!_validPrice(observedPrice)) {
       throw ArgumentError.value(observedPrice, 'observedPrice');
     }
     if (observedQualityScore < 0 || observedQualityScore > 100) {
-      throw ArgumentError.value(
-        observedQualityScore,
-        'observedQualityScore',
-      );
+      throw ArgumentError.value(observedQualityScore, 'observedQualityScore');
     }
     if (isClosedForDiscovery && nextStage != stage) {
       throw StateError('A closed discovery candidate cannot be resurrected.');
