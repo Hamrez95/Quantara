@@ -63,7 +63,10 @@ void main() {
 
       registry.register(_candidate(setupId: 'BTCUSDT|1h|long|second'));
 
-      expect(registry.commit(prepared).candidate?.stage, OpportunityStage.armed);
+      expect(
+        registry.commit(prepared).candidate?.stage,
+        OpportunityStage.armed,
+      );
     });
 
     test('rejected preparation needs no commit and preserves state', () {

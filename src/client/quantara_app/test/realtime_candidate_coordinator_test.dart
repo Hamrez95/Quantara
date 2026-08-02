@@ -250,47 +250,50 @@ void main() {
       },
     );
 
-    test('processes independent candidates without head-of-line blocking', () async {
-      const firstSetup = 'BTCUSDT|1h|long|coordinator';
-      const secondSetup = 'BTCUSDT|1h|long|second';
-      final registry = RealtimeCandidateRegistry();
-      registry.register(_candidate(setupId: firstSetup));
-      registry.register(_candidate(setupId: secondSetup));
-      final store = _BlockingAuditStore(blockedSetupId: firstSetup);
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-      );
+    test(
+      'processes independent candidates without head-of-line blocking',
+      () async {
+        const firstSetup = 'BTCUSDT|1h|long|coordinator';
+        const secondSetup = 'BTCUSDT|1h|long|second';
+        final registry = RealtimeCandidateRegistry();
+        registry.register(_candidate(setupId: firstSetup));
+        registry.register(_candidate(setupId: secondSetup));
+        final store = _BlockingAuditStore(blockedSetupId: firstSetup);
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+        );
 
-      final firstFuture = coordinator.handle(
-        _envelope(
-          eventId: 'first-event',
-          setupId: firstSetup,
-          sequence: 1,
-          minute: 2,
-          price: 99.7,
-          qualityScore: 70,
-        ),
-      );
-      await store.blockedAppendStarted.future;
-      final secondResult = await coordinator
-          .handle(
-            _envelope(
-              eventId: 'second-event',
-              setupId: secondSetup,
-              sequence: 1,
-              minute: 2,
-              price: 99.7,
-              qualityScore: 70,
-            ),
-          )
-          .timeout(const Duration(seconds: 1));
+        final firstFuture = coordinator.handle(
+          _envelope(
+            eventId: 'first-event',
+            setupId: firstSetup,
+            sequence: 1,
+            minute: 2,
+            price: 99.7,
+            qualityScore: 70,
+          ),
+        );
+        await store.blockedAppendStarted.future;
+        final secondResult = await coordinator
+            .handle(
+              _envelope(
+                eventId: 'second-event',
+                setupId: secondSetup,
+                sequence: 1,
+                minute: 2,
+                price: 99.7,
+                qualityScore: 70,
+              ),
+            )
+            .timeout(const Duration(seconds: 1));
 
-      expect(secondResult.outcome, CandidateCoordinationOutcome.committed);
-      store.releaseBlockedAppend.complete();
-      final firstResult = await firstFuture;
-      expect(firstResult.outcome, CandidateCoordinationOutcome.committed);
-    });
+        expect(secondResult.outcome, CandidateCoordinationOutcome.committed);
+        store.releaseBlockedAppend.complete();
+        final firstResult = await firstFuture;
+        expect(firstResult.outcome, CandidateCoordinationOutcome.committed);
+      },
+    );
 
     test(
       'surfaces metric failure without blocking duplicate rejection',

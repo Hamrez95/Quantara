@@ -213,9 +213,7 @@ final class RealtimeCandidateRegistry {
       throw StateError('The prepared candidate update is incomplete.');
     }
     if (prepared._candidateRevision != revisionFor(setupId)) {
-      throw StateError(
-        'The candidate changed after this update was prepared.',
-      );
+      throw StateError('The candidate changed after this update was prepared.');
     }
 
     _candidates[setupId] = nextCandidate;
@@ -308,9 +306,7 @@ final class RealtimeCandidateRegistry {
     ),
     requiresCommit: false,
     _owner: this,
-    _candidateRevision: candidate == null
-        ? -1
-        : revisionFor(candidate.setupId),
+    _candidateRevision: candidate == null ? -1 : revisionFor(candidate.setupId),
     _candidateSetupId: null,
     _nextCandidate: null,
     _cursorKey: null,
