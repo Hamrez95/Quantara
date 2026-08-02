@@ -7,6 +7,36 @@ import 'realtime_candidate_engine.dart';
 typedef RealtimeCandidatePolicyResolver =
     RealtimeCandidatePolicy Function(RealtimeOpportunityCandidate candidate);
 
+final class CandidateRegistryPreparedUpdate {
+  CandidateRegistryPreparedUpdate._({
+    required this.update,
+    required this.requiresCommit,
+    required RealtimeCandidateRegistry owner,
+    required int revision,
+    required String? candidateSetupId,
+    required RealtimeOpportunityCandidate? nextCandidate,
+    required _CandidateStreamKey? cursorKey,
+    required _StreamCursor? nextCursor,
+    required String? deduplicationKey,
+  }) : _owner = owner,
+       _revision = revision,
+       _candidateSetupId = candidateSetupId,
+       _nextCandidate = nextCandidate,
+       _cursorKey = cursorKey,
+       _nextCursor = nextCursor,
+       _deduplicationKey = deduplicationKey;
+
+  final CandidateRegistryUpdate update;
+  final bool requiresCommit;
+  final RealtimeCandidateRegistry _owner;
+  final int _revision;
+  final String? _candidateSetupId;
+  final RealtimeOpportunityCandidate? _nextCandidate;
+  final _CandidateStreamKey? _cursorKey;
+  final _StreamCursor? _nextCursor;
+  final String? _deduplicationKey;
+}
+
 final class RealtimeCandidateRegistry {
   RealtimeCandidateRegistry({
     this.maximumCandidates = 2000,
@@ -28,8 +58,11 @@ final class RealtimeCandidateRegistry {
   final Map<_CandidateStreamKey, _StreamCursor> _streamCursors = {};
   final LinkedHashSet<String> _recentEventIds = LinkedHashSet();
   var _nextAuditSequence = 1;
+  var _revision = 0;
 
   int get candidateCount => _candidates.length;
+
+  int get revision => _revision;
 
   RealtimeOpportunityCandidate? candidateFor(String setupId) =>
       _candidates[setupId];
@@ -62,33 +95,34 @@ final class RealtimeCandidateRegistry {
     }
 
     _candidates[candidate.setupId] = candidate;
+    _revision++;
     return CandidateRegistrationResult(
       disposition: CandidateRegistrationDisposition.registered,
       candidate: candidate,
     );
   }
 
-  CandidateRegistryUpdate apply(
+  CandidateRegistryPreparedUpdate prepare(
     RealtimeObservationEnvelope envelope, {
     RealtimeCandidatePolicy? policy,
   }) {
     final candidate = _candidates[envelope.setupId];
     if (candidate == null) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.unknownCandidate,
       );
     }
     if (candidate.symbol != envelope.symbol ||
         candidate.timeframe != envelope.timeframe) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.identityMismatch,
         candidate: candidate,
       );
     }
     if (_recentEventIds.contains(envelope.deduplicationKey)) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.duplicate,
         candidate: candidate,
@@ -103,7 +137,7 @@ final class RealtimeCandidateRegistry {
     final sequence = envelope.sequence;
     if (sequence != null && cursor?.sequence != null) {
       if (sequence <= cursor!.sequence!) {
-        return _rejected(
+        return _rejectedPreparation(
           envelope: envelope,
           disposition: StreamEventDisposition.outOfOrder,
           candidate: candidate,
@@ -111,7 +145,7 @@ final class RealtimeCandidateRegistry {
       }
       final expected = cursor.sequence! + 1;
       if (sequence > expected) {
-        return _rejected(
+        return _rejectedPreparation(
           envelope: envelope,
           disposition: StreamEventDisposition.gapDetected,
           candidate: candidate,
@@ -125,7 +159,7 @@ final class RealtimeCandidateRegistry {
         envelope.observation.exchangeTimestampUtc.isBefore(
           cursor.exchangeTimestampUtc,
         )) {
-      return _rejected(
+      return _rejectedPreparation(
         envelope: envelope,
         disposition: StreamEventDisposition.outOfOrder,
         candidate: candidate,
@@ -137,14 +171,7 @@ final class RealtimeCandidateRegistry {
       observation: envelope.observation,
       policy: policy ?? _policyResolver(candidate),
     );
-    _candidates[candidate.setupId] = evaluation.candidate;
-    _streamCursors[cursorKey] = _StreamCursor(
-      sequence: sequence ?? cursor?.sequence,
-      exchangeTimestampUtc: envelope.observation.exchangeTimestampUtc,
-    );
-    _remember(envelope.deduplicationKey);
-
-    return CandidateRegistryUpdate(
+    final update = CandidateRegistryUpdate(
       disposition: StreamEventDisposition.accepted,
       candidate: evaluation.candidate,
       evaluation: evaluation,
@@ -156,6 +183,60 @@ final class RealtimeCandidateRegistry {
         transitionReason: evaluation.candidate.transitionReason,
       ),
     );
+
+    return CandidateRegistryPreparedUpdate._(
+      update: update,
+      requiresCommit: true,
+      owner: this,
+      revision: _revision,
+      candidateSetupId: candidate.setupId,
+      nextCandidate: evaluation.candidate,
+      cursorKey: cursorKey,
+      nextCursor: _StreamCursor(
+        sequence: sequence ?? cursor?.sequence,
+        exchangeTimestampUtc: envelope.observation.exchangeTimestampUtc,
+      ),
+      deduplicationKey: envelope.deduplicationKey,
+    );
+  }
+
+  CandidateRegistryUpdate commit(CandidateRegistryPreparedUpdate prepared) {
+    if (!identical(prepared._owner, this)) {
+      throw ArgumentError('The prepared update belongs to another registry.');
+    }
+    if (!prepared.requiresCommit) return prepared.update;
+    if (prepared._revision != _revision) {
+      throw StateError(
+        'The candidate registry changed after this update was prepared.',
+      );
+    }
+
+    final setupId = prepared._candidateSetupId;
+    final nextCandidate = prepared._nextCandidate;
+    final cursorKey = prepared._cursorKey;
+    final nextCursor = prepared._nextCursor;
+    final deduplicationKey = prepared._deduplicationKey;
+    if (setupId == null ||
+        nextCandidate == null ||
+        cursorKey == null ||
+        nextCursor == null ||
+        deduplicationKey == null) {
+      throw StateError('The prepared candidate update is incomplete.');
+    }
+
+    _candidates[setupId] = nextCandidate;
+    _streamCursors[cursorKey] = nextCursor;
+    _remember(deduplicationKey);
+    _revision++;
+    return prepared.update;
+  }
+
+  CandidateRegistryUpdate apply(
+    RealtimeObservationEnvelope envelope, {
+    RealtimeCandidatePolicy? policy,
+  }) {
+    final prepared = prepare(envelope, policy: policy);
+    return prepared.requiresCommit ? commit(prepared) : prepared.update;
   }
 
   void markReconciled({
@@ -209,25 +290,36 @@ final class RealtimeCandidateRegistry {
       sequence: sequence,
       exchangeTimestampUtc: exchangeTimestampUtc,
     );
+    _revision++;
   }
 
-  CandidateRegistryUpdate _rejected({
+  CandidateRegistryPreparedUpdate _rejectedPreparation({
     required RealtimeObservationEnvelope envelope,
     required StreamEventDisposition disposition,
     RealtimeOpportunityCandidate? candidate,
     RealtimeStreamGap? gap,
-  }) => CandidateRegistryUpdate(
-    disposition: disposition,
-    candidate: candidate,
-    evaluation: null,
-    auditEvent: _audit(
-      envelope: envelope,
+  }) => CandidateRegistryPreparedUpdate._(
+    update: CandidateRegistryUpdate(
       disposition: disposition,
-      previousStage: candidate?.stage,
-      currentStage: candidate?.stage,
-      transitionReason: null,
-      gap: gap,
+      candidate: candidate,
+      evaluation: null,
+      auditEvent: _audit(
+        envelope: envelope,
+        disposition: disposition,
+        previousStage: candidate?.stage,
+        currentStage: candidate?.stage,
+        transitionReason: null,
+        gap: gap,
+      ),
     ),
+    requiresCommit: false,
+    owner: this,
+    revision: _revision,
+    candidateSetupId: null,
+    nextCandidate: null,
+    cursorKey: null,
+    nextCursor: null,
+    deduplicationKey: null,
   );
 
   CandidateRegistryAuditEvent _audit({
