@@ -124,6 +124,7 @@ final class TradeIdea {
   DateTime get createdAt => candleClosedAt;
 
   Duration get validityWindow => switch (timeframe) {
+    '5m' => const Duration(minutes: 15),
     '15m' => const Duration(minutes: 45),
     '1h' => const Duration(hours: 3),
     '4h' => const Duration(hours: 12),

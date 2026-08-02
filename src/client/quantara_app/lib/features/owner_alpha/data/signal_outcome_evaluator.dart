@@ -148,7 +148,7 @@ abstract final class SignalOutcomeEvaluator {
     }
 
     final direction = entry.direction == TradeDirection.long ? 1.0 : -1.0;
-    const targetFractions = <double>[0.35, 0.35, 0.30];
+    const targetFractions = <double>[0.40, 0.30, 0.30];
     final reachedTargets = highestTarget
         .clamp(0, targetFractions.length)
         .toInt();
@@ -164,7 +164,7 @@ abstract final class SignalOutcomeEvaluator {
 
     // A target event marks the still-open remainder at the latest reached
     // target. A later stop sends only that remainder to the original stop.
-    // This preserves the documented 35% / 35% / 30% paper-management policy
+    // This preserves the documented 40% / 30% / 30% paper-management policy
     // without pretending that the entire position exited at TP2 or TP3.
     final remainingSize = (entry.positionSize - realizedSize)
         .clamp(0, entry.positionSize)

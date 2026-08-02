@@ -42,6 +42,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   double? _sessionStartEquity;
   DateTime? _lastScanAt;
   DateTime? _lastExchangeSync;
+  String? _lastAuditFingerprint;
+  DateTime? _lastAuditAt;
+
+  static const _targetFractions = <double>[0.40, 0.30, 0.30];
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -283,21 +287,61 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                 },
               ),
       ].where((idea) => idea.isActionable).toList(growable: false);
+      if (ideas.isEmpty) {
+        _auditEvent(
+          'scan_skip',
+          'No actionable setup passed the selected strategy and timeframe filters.',
+        );
+        return;
+      }
       final idea = _pickPrimaryIdea(ideas);
-      if (idea == null || _executedSetupIds.contains(idea.setupId)) return;
+      if (idea == null) {
+        _auditEvent(
+          'scan_skip',
+          'Actionable setups were skipped because selected timeframes disagreed on direction.',
+        );
+        return;
+      }
+      if (_executedSetupIds.contains(idea.setupId)) {
+        _auditEvent(
+          'scan_skip',
+          'The highest-ranked setup was already executed in this local-live history.',
+          symbol: idea.symbol,
+        );
+        return;
+      }
       if (idea.isExpiredAt(DateTime.now().toUtc()) ||
           idea.stopLoss == null ||
           idea.targets.length < 3 ||
           idea.entryLower == null ||
           idea.entryUpper == null) {
+        _auditEvent(
+          'scan_skip',
+          'The highest-ranked setup was expired or missing a complete protected plan.',
+          symbol: idea.symbol,
+        );
         return;
       }
       final markPrice = await exchange.fetchMarkPrice(idea.symbol);
       final lower = math.min(idea.entryLower!, idea.entryUpper!);
       final upper = math.max(idea.entryLower!, idea.entryUpper!);
-      if (markPrice < lower || markPrice > upper) return;
+      if (markPrice < lower || markPrice > upper) {
+        _auditEvent(
+          'scan_skip',
+          'The highest-ranked setup is valid but the live mark price is outside its entry zone.',
+          symbol: idea.symbol,
+        );
+        return;
+      }
       final rules = await exchange.fetchInstrumentRules(idea.symbol);
-      if (!rules.open || !rules.apiSupported) return;
+      if (!rules.open || !rules.apiSupported) {
+        _auditEvent(
+          'scan_skip',
+          'The selected instrument is closed or unavailable for API futures execution.',
+          symbol: idea.symbol,
+        );
+        return;
+      }
       final leverage = configuration.leverage
           .clamp(rules.minimumLeverage, rules.maximumLeverage)
           .toInt();
@@ -307,13 +351,25 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       final riskBudget =
           account.estimatedEquity * configuration.riskPercent / 100;
       var quantity = rules.roundQuantityDown(riskBudget / riskPerUnit);
-      if (quantity < rules.minimumQuantity * 3 ||
+      if (quantity < rules.minimumQuantity / _targetFractions.last ||
           quantity > rules.maximumMarketQuantity ||
           quantity <= 0) {
+        _auditEvent(
+          'scan_skip',
+          'Calculated position size is below the exchange minimum for three protected target tranches.',
+          symbol: idea.symbol,
+        );
         return;
       }
       final requiredMargin = quantity * entryPrice / leverage;
-      if (requiredMargin * 1.15 > account.available) return;
+      if (requiredMargin * 1.15 > account.available) {
+        _auditEvent(
+          'scan_skip',
+          'Available margin is below the protected entry requirement including the safety buffer.',
+          symbol: idea.symbol,
+        );
+        return;
+      }
       await exchange.ensureIsolatedMargin(
         symbol: idea.symbol,
         credentials: credentials,
@@ -450,8 +506,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           'Protective stop was not confirmed; the position was closed reduce-only.',
         );
       }
-      final tp1Quantity = rules.roundQuantityDown(quantity * 0.35);
-      final tp2Quantity = rules.roundQuantityDown(quantity * 0.35);
+      final tp1Quantity = rules.roundQuantityDown(
+        quantity * _targetFractions[0],
+      );
+      final tp2Quantity = rules.roundQuantityDown(
+        quantity * _targetFractions[1],
+      );
       final tp3Quantity = rules.roundQuantityDown(
         quantity - tp1Quantity - tp2Quantity,
       );
@@ -609,7 +669,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       }
       final ratio = position.quantity / managed.initialQuantity;
       var next = managed;
-      if (managed.stage < 1 && ratio <= 0.70) {
+      if (managed.stage < 1 && ratio <= 0.62) {
         await exchange.modifyPositionStop(
           symbol: managed.symbol,
           positionId: managed.positionId,
@@ -619,11 +679,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         next = managed.copyWith(stage: 1);
         _auditEvent(
           'risk_free',
-          'TP1 reduction observed; remaining position moved beyond break-even.',
+          'TP1 largest reduction observed; remaining position moved beyond break-even including costs.',
           symbol: managed.symbol,
         );
       }
-      if (next.stage < 2 && ratio <= 0.38) {
+      if (next.stage < 2 && ratio <= 0.32) {
         await exchange.modifyPositionStop(
           symbol: managed.symbol,
           positionId: managed.positionId,
@@ -681,7 +741,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           ? '4h'
           : timeframes.contains('1h')
           ? '1h'
-          : '15m';
+          : timeframes.contains('15m')
+          ? '15m'
+          : '5m';
       final sameTimeframe =
           group
               .where((item) => item.timeframe == preferred)
@@ -793,9 +855,18 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }
 
   void _auditEvent(String type, String message, {String? symbol}) {
+    final now = DateTime.now().toUtc();
+    final fingerprint = '$type|${symbol ?? ''}|$message';
+    if (_lastAuditFingerprint == fingerprint &&
+        _lastAuditAt != null &&
+        now.difference(_lastAuditAt!) < const Duration(minutes: 10)) {
+      return;
+    }
+    _lastAuditFingerprint = fingerprint;
+    _lastAuditAt = now;
     _audit.add(
       LocalLiveAuditEvent(
-        at: DateTime.now().toUtc(),
+        at: now,
         type: type,
         message: message,
         symbol: symbol,

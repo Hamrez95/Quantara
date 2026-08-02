@@ -14,6 +14,7 @@ import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
 import '../../auto_trade/application/unattended_auto_trade_controller.dart';
 import '../../auto_trade/data/bitunix_private_api_client.dart';
+import '../../auto_trade/data/local_live_preferences_store.dart';
 import '../../auto_trade/data/secure_auto_trade_credentials_store.dart';
 import '../../auto_trade/data/secure_auto_trade_server_config_store.dart';
 import '../../auto_trade/data/unattended_auto_trade_api_client.dart';

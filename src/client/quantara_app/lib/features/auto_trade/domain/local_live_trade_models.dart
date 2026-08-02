@@ -41,22 +41,24 @@ final class LocalLiveTradeConfiguration {
       throw const FormatException('Select between 1 and 12 symbols.');
     }
     if (timeframes.isEmpty ||
-        timeframes.any((item) => !const {'15m', '1h', '4h'}.contains(item))) {
+        timeframes.any(
+          (item) => !const {'5m', '15m', '1h', '4h'}.contains(item),
+        )) {
       throw const FormatException('Select a supported execution timeframe.');
     }
     if (leverage < 1 || leverage > 125) {
       throw const FormatException('Leverage must be between 1x and 125x.');
     }
-    if (!riskPercent.isFinite || riskPercent <= 0 || riskPercent > 0.25) {
+    if (!riskPercent.isFinite || riskPercent < 0.05 || riskPercent > 2) {
       throw const FormatException(
-        'Local live canary risk must be between 0.01% and 0.25%.',
+        'Local live risk must be between 0.05% and 2%.',
       );
     }
     if (!dailyLossLimitPercent.isFinite ||
         dailyLossLimitPercent < 0.25 ||
-        dailyLossLimitPercent > 2) {
+        dailyLossLimitPercent > 10) {
       throw const FormatException(
-        'Daily loss limit must be between 0.25% and 2%.',
+        'Daily loss limit must be between 0.25% and 10%.',
       );
     }
     if (maximumConcurrentPositions != 1) {

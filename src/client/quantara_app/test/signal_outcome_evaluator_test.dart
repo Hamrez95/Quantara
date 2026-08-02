@@ -17,7 +17,7 @@ void main() {
 
     expect(result.outcome, SignalOutcome.tp2);
     expect(result.highestTargetHit, 2);
-    expect(result.simulatedPnl, closeTo(13, 0.000001));
+    expect(result.simulatedPnl, closeTo(12.5, 0.000001));
     expect(result.marginReturnPercent, greaterThan(result.priceChangePercent!));
   });
 
@@ -64,7 +64,7 @@ void main() {
 
     expect(stopped.outcome, SignalOutcome.stopped);
     expect(stopped.highestTargetHit, 2);
-    expect(stopped.simulatedPnl, closeTo(4, 0.000001));
+    expect(stopped.simulatedPnl, closeTo(3.5, 0.000001));
   });
 
   test('ignores a legacy entry with a zero reference price', () {
