@@ -27,15 +27,15 @@ If durable storage fails, the prepared update is not committed. Replaying the sa
 
 ## Registry transaction contract
 
-A prepared accepted update captures the registry revision. Commit succeeds only when:
+A prepared accepted update captures the revision of its own candidate. Commit succeeds only when:
 
 - the prepared update belongs to the same registry;
-- no candidate registration, reconciliation or accepted commit changed the registry revision;
+- reconciliation or an accepted commit did not change that candidate after preparation;
 - the prepared update contains complete candidate/cursor/dedup state.
 
-Rejected observations require no commit because they do not mutate registry truth. The existing `apply` method remains as a prepare-plus-commit convenience for tests and non-durable callers.
+Registering or processing a different setup does not invalidate an independent prepared update. Rejected observations require no commit because they do not mutate registry truth. The existing `apply` method remains as a prepare-plus-commit convenience for tests and non-durable callers.
 
-The production composition must treat the registry as coordinator-owned. A commit conflict is a programming or ownership fault, is never publishable and must stop that processing path for reconciliation.
+The production composition must treat each candidate stream as coordinator-owned. A commit conflict is a programming or reconciliation fault, is never publishable and must stop that candidate processing path for reconciliation.
 
 ## Persistence decisions
 
@@ -46,7 +46,7 @@ The production composition must treat the registry as coordinator-owned. A commi
 
 ## Concurrency
 
-Coordinator operations are serialized. Concurrent envelopes are processed in submission order so candidate sequence continuity remains deterministic. A failed operation does not poison later coordinator work.
+Operations are serialized per `setupId`, preserving deterministic sequence order for one candidate. Different candidates use independent tails and can progress concurrently, preventing a slow audit write for one symbol from blocking the full market universe. A failed operation does not poison later work for that candidate, and completed tails are removed to keep the coordinator bounded.
 
 ## Publication contract
 
