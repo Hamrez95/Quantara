@@ -231,9 +231,13 @@ void main() {
         ),
         throwsFormatException,
       );
+      final oversized = List.filled(
+        BitunixPublicStreamCodec.maximumPayloadCharacters + 1,
+        'x',
+      ).join();
       expect(
         () => BitunixPublicStreamCodec.decode(
-          'x' * (BitunixPublicStreamCodec.maximumPayloadCharacters + 1),
+          oversized,
           receivedAtUtc: receivedAt,
         ),
         throwsFormatException,
