@@ -50,11 +50,7 @@ void main() {
       final order = <String>[];
       final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
       final source = _FakeBackfillSource(
-        recent: _candles(
-          historyStart,
-          20,
-          interval: key.interval.duration,
-        ),
+        recent: _candles(historyStart, 20, interval: key.interval.duration),
         order: order,
       );
       final fleetFactory = _FakeFleetFactory(order: order);
@@ -96,11 +92,7 @@ void main() {
         final order = <String>[];
         final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
         final source = _FakeBackfillSource(
-          recent: _candles(
-            historyStart,
-            20,
-            interval: key.interval.duration,
-          ),
+          recent: _candles(historyStart, 20, interval: key.interval.duration),
           order: order,
         );
         final auditStore = _FakeAuditStore(order: order);
@@ -175,11 +167,7 @@ void main() {
     test('reconciles an exact gap before allowing analysis again', () async {
       final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
       final source = _FakeBackfillSource(
-        recent: _candles(
-          historyStart,
-          20,
-          interval: key.interval.duration,
-        ),
+        recent: _candles(historyStart, 20, interval: key.interval.duration),
         range: _candles(
           DateTime.utc(2026, 8, 2, 11),
           3,
@@ -233,11 +221,7 @@ void main() {
     test('does not commit or project when durable audit fails', () async {
       final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
       final source = _FakeBackfillSource(
-        recent: _candles(
-          historyStart,
-          20,
-          interval: key.interval.duration,
-        ),
+        recent: _candles(historyStart, 20, interval: key.interval.duration),
       );
       final auditStore = _FakeAuditStore()..failAppend = true;
       final registry = RealtimeCandidateRegistry();
