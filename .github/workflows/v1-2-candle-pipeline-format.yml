@@ -1,0 +1,56 @@
+name: v1.2 candle pipeline formatter
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v1-2-candle-pipeline-format-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  format-and-commit:
+    if: github.head_ref == 'feat/101-candle-event-pipeline'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/101-candle-event-pipeline
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: >-
+          dart format
+          lib/features/owner_alpha/domain/realtime_candle_pipeline_models.dart
+          lib/features/owner_alpha/data/realtime_candle_assembler.dart
+          lib/features/owner_alpha/data/bitunix_candle_backfill_source.dart
+          lib/features/owner_alpha/data/realtime_market_event_bus.dart
+          lib/features/owner_alpha/data/realtime_candle_pipeline_coordinator.dart
+          test/realtime_candle_assembler_test.dart
+          test/bitunix_candle_backfill_source_test.dart
+          test/realtime_market_event_bus_test.dart
+          test/realtime_candle_pipeline_coordinator_test.dart
+      - name: Commit canonical formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- lib test; then
+            exit 0
+          fi
+          git config user.name 'quantara-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add lib test
+          git commit -m 'style: apply canonical candle pipeline formatting'
+          git push origin HEAD:feat/101-candle-event-pipeline
