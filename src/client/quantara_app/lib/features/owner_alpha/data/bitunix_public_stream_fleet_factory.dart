@@ -6,10 +6,7 @@ import 'bitunix_subscription_planner.dart';
 import 'bitunix_web_socket_adapter.dart';
 
 typedef BitunixFleetStateHandler =
-    FutureOr<void> Function(
-      int shardIndex,
-      BitunixPublicConnectionState state,
-    );
+    FutureOr<void> Function(int shardIndex, BitunixPublicConnectionState state);
 
 abstract final class BitunixPublicStreamFleetFactory {
   static BitunixPublicStreamFleet build({
