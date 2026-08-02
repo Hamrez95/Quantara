@@ -151,13 +151,13 @@ final class RealtimeMarketEventBus {
       if (stream.queue.isNotEmpty) {
         stream.draining = true;
         unawaited(_drain(key, stream));
-        return;
+      } else {
+        if (identical(_streams[key], stream)) {
+          _streams.remove(key);
+          _activeStreamCount--;
+        }
+        if (!stream.drained.isCompleted) stream.drained.complete();
       }
-      if (identical(_streams[key], stream)) {
-        _streams.remove(key);
-        _activeStreamCount--;
-      }
-      if (!stream.drained.isCompleted) stream.drained.complete();
     }
   }
 }
