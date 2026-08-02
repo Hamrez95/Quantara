@@ -53,7 +53,9 @@ final class RealtimeOpportunityCandidate {
         idea.entryLower == null ||
         idea.entryUpper == null ||
         idea.stopLoss == null) {
-      throw ArgumentError('Only complete actionable trade ideas can be tracked.');
+      throw ArgumentError(
+        'Only complete actionable trade ideas can be tracked.',
+      );
     }
     if (!detectedAtUtc.isUtc) {
       throw ArgumentError.value(
@@ -62,6 +64,13 @@ final class RealtimeOpportunityCandidate {
         'UTC is required.',
       );
     }
+    if (idea.confidencePercent < 0 || idea.confidencePercent > 100) {
+      throw ArgumentError.value(
+        idea.confidencePercent,
+        'confidencePercent',
+      );
+    }
+
     final lower = idea.entryLower!;
     final upper = idea.entryUpper!;
     final invalidation = idea.stopLoss!;
@@ -72,11 +81,16 @@ final class RealtimeOpportunityCandidate {
       throw ArgumentError('The idea contains invalid financial boundaries.');
     }
     if (idea.direction == TradeDirection.long && invalidation >= lower) {
-      throw ArgumentError('A long invalidation must remain below the entry zone.');
+      throw ArgumentError(
+        'A long invalidation must remain below the entry zone.',
+      );
     }
     if (idea.direction == TradeDirection.short && invalidation <= upper) {
-      throw ArgumentError('A short invalidation must remain above the entry zone.');
+      throw ArgumentError(
+        'A short invalidation must remain above the entry zone.',
+      );
     }
+
     final validUntil = idea.validUntil.toUtc();
     if (!validUntil.isAfter(detectedAtUtc)) {
       throw ArgumentError('The candidate must be detected before it expires.');
@@ -94,7 +108,7 @@ final class RealtimeOpportunityCandidate {
       validUntilUtc: validUntil,
       detectedAtUtc: detectedAtUtc,
       lastUpdatedAtUtc: detectedAtUtc,
-      qualityScore: idea.confidencePercent.clamp(0, 100),
+      qualityScore: idea.confidencePercent,
       stage: OpportunityStage.detected,
       transitionReason: OpportunityTransitionReason.created,
       lastPrice: null,
@@ -127,6 +141,9 @@ final class RealtimeOpportunityCandidate {
     OpportunityStage.invalidated => true,
     _ => false,
   };
+
+  bool get isClosedForDiscovery =>
+      stage == OpportunityStage.triggered || isTerminal;
 
   bool containsPrice(double price) =>
       _validPrice(price) && price >= entryLower && price <= entryUpper;
@@ -162,16 +179,21 @@ final class RealtimeOpportunityCandidate {
     DateTime? resolvedAtUtc,
   }) {
     if (!atUtc.isUtc || atUtc.isBefore(lastUpdatedAtUtc)) {
-      throw ArgumentError('Candidate transitions require monotonic UTC time.');
+      throw ArgumentError(
+        'Candidate transitions require monotonic UTC time.',
+      );
     }
     if (!_validPrice(observedPrice)) {
       throw ArgumentError.value(observedPrice, 'observedPrice');
     }
     if (observedQualityScore < 0 || observedQualityScore > 100) {
-      throw ArgumentError.value(observedQualityScore, 'observedQualityScore');
+      throw ArgumentError.value(
+        observedQualityScore,
+        'observedQualityScore',
+      );
     }
-    if (isTerminal && nextStage != stage) {
-      throw StateError('A terminal candidate cannot be resurrected.');
+    if (isClosedForDiscovery && nextStage != stage) {
+      throw StateError('A closed discovery candidate cannot be resurrected.');
     }
 
     return RealtimeOpportunityCandidate._(
@@ -219,7 +241,10 @@ final class RealtimeMarketObservation {
   final bool triggerConfirmed;
   final bool triggerCandleClosed;
 
-  Duration get eventAge => evaluatedAtUtc.difference(exchangeTimestampUtc);
+  Duration get eventAge {
+    final value = evaluatedAtUtc.difference(exchangeTimestampUtc);
+    return value.isNegative ? Duration.zero : value;
+  }
 
   Duration get processingLatency => evaluatedAtUtc.difference(receivedAtUtc);
 
@@ -251,12 +276,13 @@ final class RealtimeCandidatePolicy {
     required this.maximumEventAge,
   });
 
-  const RealtimeCandidatePolicy.balanced()
-    : formingScore = 52,
-      armedScore = 64,
-      approachDistancePercent = 0.45,
-      maximumChasePercent = 0.25,
-      maximumEventAge = const Duration(seconds: 5);
+  static const balanced = RealtimeCandidatePolicy(
+    formingScore: 52,
+    armedScore: 64,
+    approachDistancePercent: 0.45,
+    maximumChasePercent: 0.25,
+    maximumEventAge: Duration(seconds: 5),
+  );
 
   final int formingScore;
   final int armedScore;
