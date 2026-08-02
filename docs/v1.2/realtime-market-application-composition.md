@@ -50,6 +50,10 @@ The bounded health snapshot exposes:
 
 Historical faults remain visible, while a fully live shard fleet can recover to a healthy discovery state.
 
+## Validation
+
+Runtime and regression sources are formatted with Flutter `3.44.8` and Dart `3.12.2`; temporary formatter diagnostics are removed before CI and review.
+
 ## Remaining issue #101 work
 
 - wire the runtime into the foreground app lifecycle and settings-derived universe;
