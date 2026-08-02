@@ -122,6 +122,5 @@ final class RealtimeMarketHealthSnapshot {
   bool get discoveryHealthy =>
       state == RealtimeMarketRuntimeState.live &&
       activeShards > 0 &&
-      liveShards == activeShards &&
-      lastFaultMessage == null;
+      liveShards == activeShards;
 }
