@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/apply_v1_stabilization.py
       - .github/workflows/apply-v1-stabilization.yml
+  pull_request:
+    branches:
+      - fix/87-setups-gray-and-live-preflight
+    paths:
+      - scripts/apply_v1_stabilization.py
+      - .github/workflows/apply-v1-stabilization.yml
 
 permissions:
   contents: write
@@ -51,5 +57,3 @@ jobs:
           git diff --cached --check
           git commit -m "feat: stabilize Quantara 1.0 identity, settings transfer and crypto icons"
           git push origin HEAD:feat/95-ui-finalization
-
-# trigger: 1
