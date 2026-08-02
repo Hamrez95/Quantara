@@ -120,6 +120,8 @@ final class _BitunixRealtimePublicStreamFleet
   Future<void> stop() => _delegate.stop();
 }
 
+typedef RealtimeBootstrapDelay = Future<void> Function(Duration duration);
+
 final class RealtimeMarketApplication {
   RealtimeMarketApplication({
     required this.universe,
@@ -263,32 +265,14 @@ final class RealtimeMarketApplication {
       );
       _fleet = fleet;
       _setState(RealtimeMarketRuntimeState.connecting);
-      final run = fleet.run();
+      late final Future<void> run;
+      run = fleet.run();
       _fleetRun = run;
       unawaited(
         run.then<void>(
-          (_) {
-            if (!_closed &&
-                _state != RealtimeMarketRuntimeState.paused &&
-                _state != RealtimeMarketRuntimeState.stopped) {
-              _setState(RealtimeMarketRuntimeState.failed);
-              _metrics.recordFault(
-                message: 'The public stream fleet stopped unexpectedly.',
-                occurredAtUtc: _clock(),
-              );
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            if (!_closed &&
-                _state != RealtimeMarketRuntimeState.paused &&
-                _state != RealtimeMarketRuntimeState.stopped) {
-              _setState(RealtimeMarketRuntimeState.failed);
-              _metrics.recordFault(
-                message: 'The public stream fleet failed: $error',
-                occurredAtUtc: _clock(),
-              );
-            }
-          },
+          (_) => _handleFleetTermination(run),
+          onError: (Object error, StackTrace _) =>
+              _handleFleetTermination(run, error: error),
         ),
       );
     } on Object catch (error) {
@@ -301,15 +285,35 @@ final class RealtimeMarketApplication {
     }
   }
 
+  void _handleFleetTermination(Future<void> run, {Object? error}) {
+    if (!identical(_fleetRun, run)) return;
+    _fleetRun = null;
+    _fleet = null;
+    _shardStates.clear();
+    if (_closed ||
+        _state == RealtimeMarketRuntimeState.stopping ||
+        _state == RealtimeMarketRuntimeState.paused ||
+        _state == RealtimeMarketRuntimeState.stopped) {
+      return;
+    }
+    _setState(RealtimeMarketRuntimeState.failed);
+    _metrics.recordFault(
+      message: error == null
+          ? 'The public stream fleet stopped unexpectedly.'
+          : 'The public stream fleet failed: $error',
+      occurredAtUtc: _clock(),
+    );
+  }
+
   Future<void> _stopFleet({
     required RealtimeMarketRuntimeState finalState,
   }) async {
     _setState(RealtimeMarketRuntimeState.stopping);
     final fleet = _fleet;
-    _fleet = null;
-    if (fleet != null) await fleet.stop();
     final run = _fleetRun;
+    _fleet = null;
     _fleetRun = null;
+    if (fleet != null) await fleet.stop();
     if (run != null) {
       try {
         await run;
@@ -436,8 +440,6 @@ final class RealtimeMarketApplication {
       Future.delayed(duration);
 }
 
-typedef RealtimeBootstrapDelay = Future<void> Function(Duration duration);
-
 final class _RealtimeMarketMetrics {
   _RealtimeMarketMetrics(this.maximumSamples);
 
@@ -472,15 +474,18 @@ final class _RealtimeMarketMetrics {
     switch (update.disposition) {
       case RealtimeCandlePipelineDisposition.candleClosed:
         closedCandleEvents++;
+        break;
       case RealtimeCandlePipelineDisposition.gapDetected:
         gapEvents++;
+        break;
       case RealtimeCandlePipelineDisposition.reconciled:
         reconciliationEvents++;
-      case RealtimeCandlePipelineDisposition.bootstrapped ||
-          RealtimeCandlePipelineDisposition.workingUpdated ||
-          RealtimeCandlePipelineDisposition.duplicate ||
-          RealtimeCandlePipelineDisposition.outOfOrder ||
-          RealtimeCandlePipelineDisposition.blockedByGap:
+        break;
+      case RealtimeCandlePipelineDisposition.bootstrapped:
+      case RealtimeCandlePipelineDisposition.workingUpdated:
+      case RealtimeCandlePipelineDisposition.duplicate:
+      case RealtimeCandlePipelineDisposition.outOfOrder:
+      case RealtimeCandlePipelineDisposition.blockedByGap:
         break;
     }
     final latency = update.processedAtUtc.difference(update.receivedAtUtc);
