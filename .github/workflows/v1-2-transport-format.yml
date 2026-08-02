@@ -1,0 +1,50 @@
+name: v1.2 public transport formatter
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v1-2-transport-format-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  format-and-commit:
+    if: github.head_ref == 'feat/101-bitunix-public-stream-transport'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/101-bitunix-public-stream-transport
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: >-
+          dart format
+          lib/features/owner_alpha/data/bitunix_public_stream_transport.dart
+          lib/features/owner_alpha/data/bitunix_public_stream_fleet_factory.dart
+          test/bitunix_public_stream_transport_test.dart
+      - name: Commit canonical formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- lib test; then
+            exit 0
+          fi
+          git config user.name 'quantara-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add lib test
+          git commit -m 'style: apply runtime transport formatting'
+          git push origin HEAD:feat/101-bitunix-public-stream-transport
