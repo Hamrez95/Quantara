@@ -1,0 +1,74 @@
+name: Label realtime e2e waits once
+
+on:
+  push:
+    branches:
+      - feat/101-realtime-e2e-benchmark
+
+permissions:
+  contents: write
+
+jobs:
+  label-format-and-clean:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    env:
+      FLUTTER_VERSION: 3.44.8
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/101-realtime-e2e-benchmark
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Add stage labels and self-delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/client/quantara_app/test/realtime_market_application_e2e_test.dart')
+          text = path.read_text()
+          replacements = {
+              "await _waitUntil(() => firstSocket.sent.isNotEmpty);": "await _waitUntil(\n          () => firstSocket.sent.isNotEmpty,\n          description: 'first public subscription',\n        );",
+              "await _waitUntil(() => application.health.klineEventsReceived == 1);": "await _waitUntil(\n          () => application.health.klineEventsReceived == 1,\n          description: 'first working Kline delivery',\n        );",
+              "await _waitUntil(() => connector.connectCount == 2);": "await _waitUntil(\n          () => connector.connectCount == 2,\n          description: 'second socket connection',\n        );",
+              "await _waitUntil(() => secondSocket.sent.isNotEmpty);": "await _waitUntil(\n          () => secondSocket.sent.isNotEmpty,\n          description: 'second public subscription',\n        );",
+              "await _waitUntil(() => application.health.klineEventsReceived == 2);": "await _waitUntil(\n          () => application.health.klineEventsReceived == 2,\n          description: 'replayed working Kline delivery',\n        );",
+              "await _waitUntil(() => projection.applied.length == 1);": "await _waitUntil(\n          () => projection.applied.length == 1,\n          description: 'audited candidate projection',\n        );",
+              "() => sockets.every((socket) => socket.sent.isNotEmpty),\n          timeout: const Duration(seconds: 5),": "() => sockets.every((socket) => socket.sent.isNotEmpty),\n          description: '500-stream shard subscriptions',\n          timeout: const Duration(seconds: 5),",
+              "() => application.health.klineEventsReceived == 500,\n          timeout: const Duration(seconds: 10),": "() => application.health.klineEventsReceived == 500,\n          description: '500-stream Kline delivery',\n          timeout: const Duration(seconds: 10),",
+              "bool Function() predicate, {\n  Duration timeout = const Duration(seconds: 2),\n}) async {": "bool Function() predicate, {\n  required String description,\n  Duration timeout = const Duration(seconds: 2),\n}) async {",
+              "throw TimeoutException('Condition was not reached before timeout.');": "throw TimeoutException(\n        'Condition was not reached before timeout: $description.',\n      );",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing marker: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+          cd src/client/quantara_app
+          dart format test/realtime_market_application_e2e_test.dart
+          cd ../../..
+          git rm .github/workflows/label-realtime-e2e-waits-once.yml
+          git add src/client/quantara_app/test/realtime_market_application_e2e_test.dart
+          git diff --cached --check
+
+      - name: Commit clean diagnostic labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "quantara-ci"
+          git config user.email "quantara-ci@users.noreply.github.com"
+          git commit -m "test: label realtime e2e wait stages"
+          git push origin HEAD:feat/101-realtime-e2e-benchmark
