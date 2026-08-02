@@ -19,6 +19,7 @@ void main() {
         plan.targetFractions.first,
         greaterThanOrEqualTo(plan.targetFractions[2]),
       );
+      expect(plan.minimumTargetFraction, greaterThanOrEqualTo(0.25));
       expect(plan.tp1RemainingTrigger, greaterThan(plan.tp2RemainingTrigger));
     }
   });
