@@ -91,6 +91,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout origin/feat/95-ui-finalization -- .github/workflows
+          rm -f .github/workflows/android-stable-release.yml
           git add -A
           git diff --cached --check
           git commit -m "feat: stabilize Quantara 1.0 identity, settings transfer and crypto icons"
