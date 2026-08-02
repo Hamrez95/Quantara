@@ -81,15 +81,13 @@ final class BitunixReconnectPolicy {
 
 final class BitunixPublicStreamConfig {
   BitunixPublicStreamConfig({
-    this.endpoint = 'wss://fapi.bitunix.com/public/',
+    String endpoint = 'wss://fapi.bitunix.com/public/',
     this.connectTimeout = const Duration(seconds: 10),
     this.pingInterval = const Duration(seconds: 20),
     this.silenceTimeout = const Duration(seconds: 45),
     this.malformedPayloadBudget = 3,
-  }) {
-    if (endpoint.trim().isEmpty) {
-      throw ArgumentError.value(endpoint, 'endpoint');
-    }
+  }) : endpoint = endpoint.trim(),
+       endpointUri = _parseEndpoint(endpoint) {
     if (connectTimeout <= Duration.zero) {
       throw ArgumentError.value(connectTimeout, 'connectTimeout');
     }
@@ -108,14 +106,21 @@ final class BitunixPublicStreamConfig {
   }
 
   final String endpoint;
+  final Uri endpointUri;
   final Duration connectTimeout;
   final Duration pingInterval;
   final Duration silenceTimeout;
   final int malformedPayloadBudget;
 
-  Uri get endpointUri {
-    final uri = Uri.tryParse(endpoint);
-    if (uri == null || uri.scheme != 'wss' || uri.host.isEmpty) {
+  static Uri _parseEndpoint(String value) {
+    final normalized = value.trim();
+    final uri = Uri.tryParse(normalized);
+    if (uri == null ||
+        uri.scheme != 'wss' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.query.isNotEmpty ||
+        uri.fragment.isNotEmpty) {
       throw FormatException('Invalid Bitunix public WebSocket endpoint.');
     }
     return uri;
@@ -295,10 +300,16 @@ final class BitunixPublicStreamConnection {
       }
 
       if (malformedCount >= config.malformedPayloadBudget) {
-        await socket.close(
-          code: 1003,
-          reason: 'Malformed public payload budget exceeded',
-        );
+        try {
+          unawaited(
+            socket.close(
+              code: 1003,
+              reason: 'Malformed public payload budget exceeded',
+            ),
+          );
+        } on Object {
+          // The transport fault below remains the source of truth.
+        }
         throw StateError('Bitunix malformed payload budget exceeded.');
       }
     }
