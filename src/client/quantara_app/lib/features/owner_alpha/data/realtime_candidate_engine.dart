@@ -36,6 +36,20 @@ abstract final class RealtimeCandidateEngine {
       );
     }
 
+    if (observation.eventAge > policy.maximumEventAge) {
+      return _result(
+        previousStage: previousStage,
+        candidate: candidate.transition(
+          nextStage: candidate.stage,
+          reason: OpportunityTransitionReason.dataStale,
+          atUtc: atUtc,
+          observedPrice: observation.lastPrice,
+          observedQualityScore: observation.qualityScore,
+        ),
+        observation: observation,
+      );
+    }
+
     if (!observation.structureValid ||
         _invalidationBreached(candidate, observation.lastPrice)) {
       return _result(
@@ -47,20 +61,6 @@ abstract final class RealtimeCandidateEngine {
           observedPrice: observation.lastPrice,
           observedQualityScore: observation.qualityScore,
           resolvedAtUtc: atUtc,
-        ),
-        observation: observation,
-      );
-    }
-
-    if (observation.eventAge > policy.maximumEventAge) {
-      return _result(
-        previousStage: previousStage,
-        candidate: candidate.transition(
-          nextStage: candidate.stage,
-          reason: OpportunityTransitionReason.dataStale,
-          atUtc: atUtc,
-          observedPrice: observation.lastPrice,
-          observedQualityScore: observation.qualityScore,
         ),
         observation: observation,
       );
