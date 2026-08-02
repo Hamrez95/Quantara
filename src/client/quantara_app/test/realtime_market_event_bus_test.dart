@@ -40,9 +40,9 @@ void main() {
       final bus = RealtimeMarketEventBus(
         handler: (update) async {
           if (update.key.symbol == 'BTCUSDT') {
-            btcStarted.complete();
+            if (!btcStarted.isCompleted) btcStarted.complete();
             await btcGate.future;
-          } else {
+          } else if (!ethDelivered.isCompleted) {
             ethDelivered.complete();
           }
         },
@@ -70,18 +70,22 @@ void main() {
 
     test('coalesces queued working updates but never critical events', () async {
       final gate = Completer<void>();
+      final started = Completer<void>();
       var calls = 0;
       final bus = RealtimeMarketEventBus(
         handler: (update) async {
           calls++;
-          if (calls == 1) await gate.future;
+          if (calls == 1) {
+            started.complete();
+            await gate.future;
+          }
         },
       );
 
       final first = bus.publish(
         _update(RealtimeCandlePipelineDisposition.workingUpdated, close: 101),
       );
-      await Future<void>.delayed(Duration.zero);
+      await started.future;
       final staleQueued = bus.publish(
         _update(RealtimeCandlePipelineDisposition.workingUpdated, close: 102),
       );
@@ -92,16 +96,52 @@ void main() {
         _update(RealtimeCandlePipelineDisposition.candleClosed, close: 104),
       );
 
-      expect(
-        await staleQueued,
-        RealtimeMarketEventDelivery.coalesced,
-      );
+      expect(await staleQueued, RealtimeMarketEventDelivery.coalesced);
       gate.complete();
       expect(await first, RealtimeMarketEventDelivery.delivered);
       expect(await latestQueued, RealtimeMarketEventDelivery.delivered);
       expect(await critical, RealtimeMarketEventDelivery.delivered);
       expect(bus.coalescedCount, 1);
       expect(calls, 3);
+    });
+
+    test('never coalesces the bootstrap snapshot', () async {
+      final gate = Completer<void>();
+      final started = Completer<void>();
+      final delivered = <RealtimeCandlePipelineDisposition>[];
+      final bus = RealtimeMarketEventBus(
+        handler: (update) async {
+          delivered.add(update.disposition);
+          if (!started.isCompleted) {
+            started.complete();
+            await gate.future;
+          }
+        },
+      );
+
+      final first = bus.publish(
+        _update(RealtimeCandlePipelineDisposition.workingUpdated),
+      );
+      await started.future;
+      final bootstrap = bus.publish(
+        _update(RealtimeCandlePipelineDisposition.bootstrapped),
+      );
+      final latest = bus.publish(
+        _update(RealtimeCandlePipelineDisposition.workingUpdated, close: 103),
+      );
+
+      gate.complete();
+      expect(await first, RealtimeMarketEventDelivery.delivered);
+      expect(await bootstrap, RealtimeMarketEventDelivery.delivered);
+      expect(await latest, RealtimeMarketEventDelivery.delivered);
+      expect(
+        delivered,
+        [
+          RealtimeCandlePipelineDisposition.workingUpdated,
+          RealtimeCandlePipelineDisposition.bootstrapped,
+          RealtimeCandlePipelineDisposition.workingUpdated,
+        ],
+      );
     });
 
     test('fails closed when critical per-stream capacity is exceeded', () async {
@@ -196,7 +236,11 @@ RealtimeCandlePipelineUpdate _update(
         : const [],
     gap: gap,
     exchangeTimestampUtc: openTime.add(const Duration(minutes: 1)),
-    receivedAtUtc: openTime.add(const Duration(minutes: 1, milliseconds: 20)),
-    processedAtUtc: openTime.add(const Duration(minutes: 1, milliseconds: 40)),
+    receivedAtUtc: openTime.add(
+      const Duration(minutes: 1, milliseconds: 20),
+    ),
+    processedAtUtc: openTime.add(
+      const Duration(minutes: 1, milliseconds: 40),
+    ),
   );
 }
