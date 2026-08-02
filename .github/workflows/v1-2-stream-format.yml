@@ -1,0 +1,52 @@
+name: v1.2 public stream formatter
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v1-2-stream-format-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  format-and-commit:
+    if: github.head_ref == 'feat/101-bitunix-public-stream-protocol'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/101-bitunix-public-stream-protocol
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: >-
+          dart format
+          lib/features/owner_alpha/domain/bitunix_public_stream_models.dart
+          lib/features/owner_alpha/data/bitunix_public_stream_codec.dart
+          lib/features/owner_alpha/data/bitunix_subscription_planner.dart
+          test/bitunix_public_stream_codec_test.dart
+          test/bitunix_subscription_planner_test.dart
+      - name: Commit canonical formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- lib test; then
+            exit 0
+          fi
+          git config user.name 'quantara-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add lib test
+          git commit -m 'style: apply canonical public stream formatting'
+          git push origin HEAD:feat/101-bitunix-public-stream-protocol
