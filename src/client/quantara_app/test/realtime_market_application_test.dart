@@ -111,6 +111,57 @@ void main() {
       },
     );
 
+    test('rebootstraps on resume and records reconnect health', () async {
+      final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
+      final source = _FakeBackfillSource(
+        recent: _candles(historyStart, 20, interval: key.interval.duration),
+      );
+      final fleetFactory = _FakeFleetFactory();
+      final projection = _FakeProjection();
+      final application = _application(
+        key: key,
+        source: source,
+        fleetFactory: fleetFactory,
+        projection: projection,
+        analysis: const _EmptyAnalysisGateway(),
+        clock: clock,
+      );
+
+      await application.start();
+      await _flushMicrotasks();
+      final firstFleet = fleetFactory.fleet;
+
+      await firstFleet.transition(BitunixPublicConnectionState.backingOff);
+      await firstFleet.transition(BitunixPublicConnectionState.live);
+      await firstFleet.emitFault(
+        BitunixPublicStreamFault(
+          kind: BitunixPublicStreamFaultKind.malformedPayload,
+          message: 'injected malformed payload',
+          occurredAtUtc: clock.now,
+          shardIndex: 0,
+        ),
+      );
+
+      expect(application.health.reconnectTransitions, 1);
+      expect(application.health.malformedPayloadFaults, 1);
+      expect(application.health.discoveryHealthy, isTrue);
+
+      await application.pause();
+      expect(application.state, RealtimeMarketRuntimeState.paused);
+      expect(firstFleet.stopCalls, 1);
+
+      await application.resume();
+      await _flushMicrotasks();
+
+      expect(source.recentRequests, 2);
+      expect(projection.restoreCalls, 1);
+      expect(fleetFactory.fleets, hasLength(2));
+      expect(fleetFactory.fleet, isNot(same(firstFleet)));
+      expect(application.state, RealtimeMarketRuntimeState.live);
+
+      await application.stop();
+    });
+
     test(
       'runs public candle through analysis, audit, commit and projection',
       () async {
@@ -382,8 +433,10 @@ final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
 
   final List<String>? order;
   final bool failRunSynchronously;
-  late final _FakeFleet fleet;
+  final List<_FakeFleet> fleets = [];
   List<BitunixPublicSubscription> subscriptions = const [];
+
+  _FakeFleet get fleet => fleets.last;
 
   @override
   RealtimePublicStreamFleet build({
@@ -394,11 +447,13 @@ final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
   }) {
     order?.add('fleet-build');
     this.subscriptions = List.unmodifiable(subscriptions);
-    fleet = _FakeFleet(
+    final fleet = _FakeFleet(
       onEvent: onEvent,
+      onFault: onFault,
       onState: onState,
       failRunSynchronously: failRunSynchronously,
     );
+    fleets.add(fleet);
     return fleet;
   }
 }
@@ -406,11 +461,13 @@ final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
 final class _FakeFleet implements RealtimePublicStreamFleet {
   _FakeFleet({
     required this.onEvent,
+    required this.onFault,
     required this.onState,
     required this.failRunSynchronously,
   });
 
   final BitunixStreamEventHandler onEvent;
+  final BitunixStreamFaultHandler onFault;
   final BitunixFleetStateHandler onState;
   final bool failRunSynchronously;
   final Completer<void> _stopped = Completer<void>();
@@ -436,6 +493,14 @@ final class _FakeFleet implements RealtimePublicStreamFleet {
 
   Future<void> emit(BitunixPublicStreamEvent event) async {
     await onEvent(event);
+  }
+
+  Future<void> emitFault(BitunixPublicStreamFault fault) async {
+    await onFault(fault);
+  }
+
+  Future<void> transition(BitunixPublicConnectionState state) async {
+    await onState(0, state);
   }
 
   @override
@@ -555,9 +620,11 @@ final class _FakeProjection implements RealtimeAuditedCandidateProjection {
 
   final List<String>? order;
   final List<CandidateRegistryAuditEvent> applied = [];
+  int restoreCalls = 0;
 
   @override
   Future<void> restore() async {
+    restoreCalls++;
     order?.add('projection-restore');
   }
 
