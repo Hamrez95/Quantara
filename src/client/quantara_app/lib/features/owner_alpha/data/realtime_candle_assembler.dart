@@ -193,10 +193,8 @@ final class RealtimeCandleAssembler {
   RealtimeCandlePipelineUpdate reconcile({
     required RealtimeCandleStreamKey key,
     required List<ChartCandle> replacementClosedCandles,
-    required DateTime receivedAtUtc,
     required DateTime processedAtUtc,
   }) {
-    _requireUtc(receivedAtUtc, 'receivedAtUtc');
     _requireUtc(processedAtUtc, 'processedAtUtc');
     final state = _states[key];
     if (state == null) {
@@ -204,7 +202,12 @@ final class RealtimeCandleAssembler {
     }
     final gap = state.gap;
     final pendingWorking = state.pendingWorking;
-    if (gap == null || pendingWorking == null) {
+    final pendingExchangeTimestampUtc = state.pendingExchangeTimestampUtc;
+    final pendingReceivedAtUtc = state.pendingReceivedAtUtc;
+    if (gap == null ||
+        pendingWorking == null ||
+        pendingExchangeTimestampUtc == null ||
+        pendingReceivedAtUtc == null) {
       throw StateError('The candle stream has no active gap to reconcile.');
     }
 
@@ -228,6 +231,8 @@ final class RealtimeCandleAssembler {
     }
     state.workingCandle = pendingWorking;
     state.pendingWorking = null;
+    state.pendingExchangeTimestampUtc = null;
+    state.pendingReceivedAtUtc = null;
     state.gap = null;
 
     return _update(
@@ -235,8 +240,8 @@ final class RealtimeCandleAssembler {
       state: state,
       disposition: RealtimeCandlePipelineDisposition.reconciled,
       closedCandles: replacements,
-      exchangeTimestampUtc: pendingWorking.openTime,
-      receivedAtUtc: receivedAtUtc,
+      exchangeTimestampUtc: pendingExchangeTimestampUtc,
+      receivedAtUtc: pendingReceivedAtUtc,
       processedAtUtc: processedAtUtc,
     );
   }
@@ -269,6 +274,8 @@ final class RealtimeCandleAssembler {
     );
     state.gap = gap;
     state.pendingWorking = pendingWorking;
+    state.pendingExchangeTimestampUtc = event.exchangeTimestampUtc;
+    state.pendingReceivedAtUtc = event.receivedAtUtc;
     return _update(
       key: key,
       state: state,
@@ -369,5 +376,7 @@ final class _CandleStreamState {
   final List<ChartCandle> closedCandles;
   ChartCandle? workingCandle;
   ChartCandle? pendingWorking;
+  DateTime? pendingExchangeTimestampUtc;
+  DateTime? pendingReceivedAtUtc;
   RealtimeCandleGap? gap;
 }
