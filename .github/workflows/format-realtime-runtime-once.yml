@@ -1,0 +1,52 @@
+name: Apply realtime runtime formatting once
+
+on:
+  push:
+    branches:
+      - feat/101-realtime-application-composition
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-clean:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    env:
+      FLUTTER_VERSION: 3.44.8
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/101-realtime-application-composition
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Apply canonical Dart formatting and remove diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/client/quantara_app
+          dart format lib test
+          cd ../../..
+          git rm .github/workflows/format-realtime-runtime-once.yml
+          git rm src/client/quantara_app/flutter-analyze.log
+          git rm src/client/quantara_app/flutter-test.log
+          git add src/client/quantara_app/lib src/client/quantara_app/test
+          git diff --cached --check
+
+      - name: Commit clean formatted tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "quantara-ci"
+          git config user.email "quantara-ci@users.noreply.github.com"
+          git commit -m "style: apply canonical Dart formatting"
+          git push origin HEAD:feat/101-realtime-application-composition
