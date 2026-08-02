@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/apply_v1_0_1_patch.py
       - .github/workflows/apply-v1-0-1.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/apply_v1_0_1_patch.py
+      - .github/workflows/apply-v1-0-1.yml
 
 permissions:
   contents: write
@@ -76,5 +82,3 @@ jobs:
           git diff --cached --check
           git commit -m "fix: persist Local Live controls and add guarded 5m scalp mode"
           git push origin HEAD:fix/97-local-live-persistence-scalp
-
-# trigger 2
