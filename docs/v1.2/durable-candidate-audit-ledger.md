@@ -14,12 +14,13 @@ Each audit event is converted into a SHA-256 record identifier derived from:
 
 - event, setup, symbol and timeframe identity;
 - disposition;
-- UTC observation timestamp;
 - previous/current lifecycle stage;
 - transition reason;
 - optional gap sequences.
 
-The local audit sequence is intentionally excluded from the identifier. A restarted process may restart its local counter, but replaying the same factual audit event remains idempotent.
+Process-local audit sequence and evaluation timestamp are intentionally excluded from the identifier. A restarted process may assign a new local counter or evaluation time, but replaying the same factual audit event remains idempotent. Different dispositions or lifecycle results for the same upstream event remain distinct records.
+
+The decoder recomputes the record identifier from persisted content and rejects an internally inconsistent record.
 
 ## Integrity envelope
 
@@ -30,7 +31,7 @@ The encoded ledger has:
 - ordered bounded records;
 - SHA-256 checksum over the canonical JSON body.
 
-Malformed, oversized, unsupported or checksum-mismatched data is rejected rather than partially trusted.
+Malformed, oversized, unsupported, checksum-mismatched or internally inconsistent data is rejected rather than partially trusted. The checksum protects against accidental corruption; it is not a cryptographic authenticity signature against a malicious local actor.
 
 ## Double-slot recovery
 
@@ -56,7 +57,7 @@ Writes are serialized within one store instance. A failed append does not poison
 
 The default limit is 2,000 records. When the bound is exceeded, the oldest records are compacted. The limit is configurable for tests and future product profiles.
 
-Compaction is explicit and deterministic; the ledger never grows without bound.
+Compaction is explicit and deterministic; the ledger never grows without bound. Decode also rejects an excessive record count before constructing the ledger.
 
 ## Integration contract
 
