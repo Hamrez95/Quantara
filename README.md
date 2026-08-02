@@ -1,20 +1,52 @@
 # Quantara
 
-Quantara is a safety-first crypto trading analysis and automation platform. The modular monorepo contains a .NET backend, PostgreSQL/Redis infrastructure, a Flutter Android and web/PWA cockpit, and research services for technical and fundamental analysis.
+Quantara is a safety-first crypto market analysis, signal monitoring and guarded automation platform. The monorepo contains a .NET backend, PostgreSQL/Redis infrastructure, a Flutter Android and web/PWA cockpit, and deterministic research/risk components.
 
-## Current status
+## Quantara 1.0 scope
 
-Android preview 0.9.0 uses real public Bitunix Futures prices and closed candles for periodic multi-timeframe analysis, support/resistance zones and explainable risk scenarios. It scans every watchlist symbol on 15m, 1h and 4h, caches analysis until the next candle close, changes cached symbol/timeframe views without a new market scan, and reports scan timing, cache use and explicit wait reasons. It provides three targets and leverage-aware risk sizing, and includes an opt-in local setup journal and Android alerts. The Strategy Lab adds independent strategy/symbol/timeframe historical replay, persistent forward-paper sessions, market-regime context, partial TP simulation, and cost-aware validation metrics. It defaults to Persian and supports instant Persian/English RTL/LTR switching with device-local preferences. The active Android route does not fall back to simulated market data.
+The 1.0 source candidate provides:
 
-Market data currently refreshes every 60 seconds only while the app is open. It is not a WebSocket stream or a 24-hour background monitor. TradingView Lightweight Charts renders Quantara/Bitunix candles; TradingView is not the market-data feed. Android is the current product priority and PWA work is deferred.
+- real public Bitunix Futures prices and closed-candle analysis;
+- watchlist scanning on 15m, 1h and 4h with explicit wait/rejection reasons;
+- explainable setups with Entry, SL, TP1/TP2/TP3 and leverage-aware risk sizing;
+- Signal Inbox and hypothetical outcome tracking for taken and untaken suggestions;
+- exact symbol/timeframe setup navigation and frozen chart overlays;
+- Strategy Lab historical replay and forward-paper monitoring;
+- Persian/English, RTL/LTR and light/dark themes;
+- Android Preview and web/PWA builds;
+- optional Bitunix account connection and **Guarded Local Live Canary** behind an explicit Start action.
 
-Default trading mode is paper-only. Live Bitunix order placement, autonomous LLM order execution, and withdrawal functionality are intentionally unavailable.
+The analysis, monitoring and paper features are the Stable 1.0 product surface. Local real execution remains an explicit opt-in Canary: it is restricted to hard safety limits, may stop when Android or connectivity stops the local service, and is never described as unattended or guaranteed. Server Auto remains visible but locked. Withdrawals, transfers, martingale, averaging down, stop widening and unrestricted multi-position execution are not supported.
+
+## Android identities and upgrades
+
+Internal Preview builds use `com.quantara.quantara_app.alpha` so they can coexist with Stable. Public Stable builds use `com.quantara.quantara_app` and require the permanent owner-managed signing key. Stable signing fails closed when its protected inputs are absent.
+
+The first move from an old Preview to Stable is a one-time clean migration because earlier candidates used a different package/signing identity. Before removing Preview, use **Profile > Settings backup** to copy the watchlist and non-sensitive risk preferences, then restore them after installing Stable. API credentials are intentionally excluded. Once Stable 1.0 is installed, future Stable APKs use the same package ID and signing key and can update in place without clearing app data.
+
+See [`docs/releases/v1.0.0.fa.md`](docs/releases/v1.0.0.fa.md).
+
+## PWA on Windows / VS Code
+
+From the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run-QuantaraPwa.ps1
+```
+
+This runs the app in Chrome development mode. To build and serve the Release PWA locally:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Run-QuantaraPwa.ps1 -ReleasePreview
+```
+
+Then open `http://localhost:8080`. Full Persian instructions are in [`docs/guides/pwa-windows-vscode.fa.md`](docs/guides/pwa-windows-vscode.fa.md).
 
 ## Quality policy
 
-A successful build or a strong backtest does not prove profitability. Strategy candidates must pass chronological out-of-sample, walk-forward, realistic-cost, regime, stability, paper-trading, and shadow-trading gates before restricted live execution can even be considered. Win rate is reported beside expectancy, drawdown, profit factor, uncertainty, and sample size; it is never guaranteed or used alone.
+A successful build or a strong backtest does not prove profitability. Strategy candidates must pass chronological out-of-sample, walk-forward, realistic-cost, regime, stability, paper and shadow gates before broader execution can be considered. Win rate is reported beside expectancy, drawdown, profit factor, uncertainty and sample size; it is never guaranteed or used alone.
 
-See:
+Key documents:
 
 - [`docs/product-scope.md`](docs/product-scope.md)
 - [`docs/architecture.md`](docs/architecture.md)
@@ -23,14 +55,12 @@ See:
 - [`docs/risk-engine.md`](docs/risk-engine.md)
 - [`docs/order-state-machine.md`](docs/order-state-machine.md)
 - [`docs/threat-model.md`](docs/threat-model.md)
-- [`docs/releases/v0.5.0-local-setups-preview.md`](docs/releases/v0.5.0-local-setups-preview.md)
-- [`docs/releases/v0.5.1-performance-diagnostics.md`](docs/releases/v0.5.1-performance-diagnostics.md)
-- [`docs/releases/v0.9.0-strategy-validation-preview.md`](docs/releases/v0.9.0-strategy-validation-preview.md)
+- [`docs/releases/v1.0.0.fa.md`](docs/releases/v1.0.0.fa.md)
 - [`docs/releases/local-release-builder.md`](docs/releases/local-release-builder.md)
 
 ## Local validation
 
-With the pinned .NET 8 SDK, Python 3, and Docker Compose installed:
+With the pinned .NET 8 SDK, Python 3 and Docker Compose installed:
 
 ```bash
 dotnet restore Quantara.sln
@@ -48,9 +78,8 @@ flutter pub get
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze --fatal-infos
 flutter test
+flutter build web --release
 flutter build apk --release
 ```
 
-The Android preview reads only documented HTTPS public endpoints and requires no API key. A malformed, stale or unavailable market response fails closed and the interface identifies old snapshots instead of presenting them as fresh. Exchange credentials, real orders and withdrawals are absent.
-
-Every implementation should begin with a GitHub issue, use a short-lived branch from `dev`, include tests and limitations, and enter `dev` through a reviewed pull request.
+Public market analysis uses documented HTTPS endpoints and requires no API key. Malformed, stale or unavailable market data fails closed. Private Bitunix credentials, when explicitly configured for the Android Canary, remain in platform Secure Storage and are not written to ordinary logs, backups or source control.
