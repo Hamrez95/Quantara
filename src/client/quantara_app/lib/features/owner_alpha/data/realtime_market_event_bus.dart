@@ -76,8 +76,8 @@ final class RealtimeMarketEventBus {
 
     if (!update.isCritical) {
       final retained = Queue<_PendingMarketEvent>();
-      while (stream.queue.firstOrNull case final pending?) {
-        stream.queue.removeFirst();
+      while (stream.queue.isNotEmpty) {
+        final pending = stream.queue.removeFirst();
         if (pending.update.isCritical) {
           retained.add(pending);
         } else {
@@ -119,8 +119,8 @@ final class RealtimeMarketEventBus {
     }
 
     for (final stream in _streams.values) {
-      while (stream.queue.firstOrNull case final pending?) {
-        stream.queue.removeFirst();
+      while (stream.queue.isNotEmpty) {
+        final pending = stream.queue.removeFirst();
         pending.completeError(
           StateError('The market event bus closed before delivery.'),
         );
@@ -136,8 +136,8 @@ final class RealtimeMarketEventBus {
     _StreamEventQueue stream,
   ) async {
     try {
-      while (stream.queue.firstOrNull case final pending?) {
-        stream.queue.removeFirst();
+      while (stream.queue.isNotEmpty) {
+        final pending = stream.queue.removeFirst();
         try {
           await handler(pending.update);
           _deliveredCount++;
@@ -148,7 +148,7 @@ final class RealtimeMarketEventBus {
       }
     } finally {
       stream.draining = false;
-      if (stream.queue.firstOrNull != null) {
+      if (stream.queue.isNotEmpty) {
         stream.draining = true;
         unawaited(_drain(key, stream));
         return;
