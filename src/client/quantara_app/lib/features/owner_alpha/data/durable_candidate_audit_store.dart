@@ -10,11 +10,11 @@ abstract interface class CandidateAuditKeyValueStore {
 
 final class DurableCandidateAuditStore implements CandidateAuditStore {
   DurableCandidateAuditStore({
-    required CandidateAuditKeyValueStore keyValueStore,
+    required this.keyValueStore,
     this.maximumRecords = 2000,
     this.primaryKey = 'quantara.candidate-audit.primary-v1',
     this.backupKey = 'quantara.candidate-audit.backup-v1',
-  }) : _keyValueStore = keyValueStore {
+  }) {
     if (maximumRecords < 1) {
       throw ArgumentError.value(maximumRecords, 'maximumRecords');
     }
@@ -26,7 +26,7 @@ final class DurableCandidateAuditStore implements CandidateAuditStore {
     }
   }
 
-  final CandidateAuditKeyValueStore _keyValueStore;
+  final CandidateAuditKeyValueStore keyValueStore;
   final int maximumRecords;
   final String primaryKey;
   final String backupKey;
@@ -35,10 +35,10 @@ final class DurableCandidateAuditStore implements CandidateAuditStore {
   @override
   Future<CandidateAuditLedger> load() async {
     final primary = CandidateAuditCodec.tryDecode(
-      await _keyValueStore.read(primaryKey),
+      await keyValueStore.read(primaryKey),
     );
     final backup = CandidateAuditCodec.tryDecode(
-      await _keyValueStore.read(backupKey),
+      await keyValueStore.read(backupKey),
     );
     if (primary == null && backup == null) {
       return CandidateAuditLedger.empty();
@@ -53,7 +53,7 @@ final class DurableCandidateAuditStore implements CandidateAuditStore {
     final operation = _writeTail.then((_) => _appendInternal(event));
     _writeTail = operation.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return operation;
   }
@@ -64,7 +64,7 @@ final class DurableCandidateAuditStore implements CandidateAuditStore {
     final next = current.append(record, maximumRecords: maximumRecords);
     if (identical(next, current)) return;
 
-    await _keyValueStore.write(backupKey, CandidateAuditCodec.encode(current));
-    await _keyValueStore.write(primaryKey, CandidateAuditCodec.encode(next));
+    await keyValueStore.write(backupKey, CandidateAuditCodec.encode(current));
+    await keyValueStore.write(primaryKey, CandidateAuditCodec.encode(next));
   }
 }
