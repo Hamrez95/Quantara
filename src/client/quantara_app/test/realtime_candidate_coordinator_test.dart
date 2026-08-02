@@ -8,148 +8,160 @@ import 'package:quantara_app/features/owner_alpha/domain/realtime_market_event_m
 
 void main() {
   group('RealtimeCandidateCoordinator', () {
-    test('persists a durable transition before committing candidate state', () async {
-      final registry = RealtimeCandidateRegistry();
-      final candidate = _candidate();
-      registry.register(candidate);
-      final store = _RecordingAuditStore(
-        onAppend: (_) {
-          expect(
-            registry.candidateFor(candidate.setupId)?.stage,
-            OpportunityStage.detected,
-          );
-        },
-      );
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-      );
+    test(
+      'persists a durable transition before committing candidate state',
+      () async {
+        final registry = RealtimeCandidateRegistry();
+        final candidate = _candidate();
+        registry.register(candidate);
+        final store = _RecordingAuditStore(
+          onAppend: (_) {
+            expect(
+              registry.candidateFor(candidate.setupId)?.stage,
+              OpportunityStage.detected,
+            );
+          },
+        );
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+        );
 
-      final result = await coordinator.handle(
-        _envelope(
+        final result = await coordinator.handle(
+          _envelope(
+            eventId: 'event-1',
+            sequence: 1,
+            minute: 2,
+            price: 99.7,
+            qualityScore: 70,
+          ),
+        );
+
+        expect(result.outcome, CandidateCoordinationOutcome.committed);
+        expect(result.publishable, isTrue);
+        expect(store.events, hasLength(1));
+        expect(
+          registry.candidateFor(candidate.setupId)?.stage,
+          OpportunityStage.armed,
+        );
+      },
+    );
+
+    test(
+      'storage failure leaves candidate, cursor and dedup uncommitted',
+      () async {
+        final registry = RealtimeCandidateRegistry();
+        final candidate = _candidate();
+        registry.register(candidate);
+        final store = _RecordingAuditStore()..failNext = true;
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+        );
+        final envelope = _envelope(
           eventId: 'event-1',
           sequence: 1,
           minute: 2,
           price: 99.7,
           qualityScore: 70,
-        ),
-      );
+        );
 
-      expect(result.outcome, CandidateCoordinationOutcome.committed);
-      expect(result.publishable, isTrue);
-      expect(store.events, hasLength(1));
-      expect(
-        registry.candidateFor(candidate.setupId)?.stage,
-        OpportunityStage.armed,
-      );
-    });
+        final failed = await coordinator.handle(envelope);
+        expect(failed.outcome, CandidateCoordinationOutcome.durabilityFailed);
+        expect(failed.publishable, isFalse);
+        expect(
+          registry.candidateFor(candidate.setupId)?.stage,
+          OpportunityStage.detected,
+        );
 
-    test('storage failure leaves candidate, cursor and dedup uncommitted', () async {
-      final registry = RealtimeCandidateRegistry();
-      final candidate = _candidate();
-      registry.register(candidate);
-      final store = _RecordingAuditStore()..failNext = true;
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-      );
-      final envelope = _envelope(
-        eventId: 'event-1',
-        sequence: 1,
-        minute: 2,
-        price: 99.7,
-        qualityScore: 70,
-      );
+        final retried = await coordinator.handle(envelope);
+        expect(retried.outcome, CandidateCoordinationOutcome.committed);
+        expect(retried.update.disposition, StreamEventDisposition.accepted);
+        expect(store.events, hasLength(1));
+        expect(
+          registry.candidateFor(candidate.setupId)?.stage,
+          OpportunityStage.armed,
+        );
+      },
+    );
 
-      final failed = await coordinator.handle(envelope);
-      expect(failed.outcome, CandidateCoordinationOutcome.durabilityFailed);
-      expect(failed.publishable, isFalse);
-      expect(
-        registry.candidateFor(candidate.setupId)?.stage,
-        OpportunityStage.detected,
-      );
+    test(
+      'commits accepted ticks without durable state changes without I/O',
+      () async {
+        final registry = RealtimeCandidateRegistry();
+        final candidate = _candidate();
+        registry.register(candidate);
+        registry.apply(
+          _envelope(
+            eventId: 'forming',
+            sequence: 1,
+            minute: 2,
+            price: 98.5,
+            qualityScore: 58,
+          ),
+        );
+        final store = _RecordingAuditStore();
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+        );
 
-      final retried = await coordinator.handle(envelope);
-      expect(retried.outcome, CandidateCoordinationOutcome.committed);
-      expect(retried.update.disposition, StreamEventDisposition.accepted);
-      expect(store.events, hasLength(1));
-      expect(
-        registry.candidateFor(candidate.setupId)?.stage,
-        OpportunityStage.armed,
-      );
-    });
+        final result = await coordinator.handle(
+          _envelope(
+            eventId: 'same-stage',
+            sequence: 2,
+            minute: 3,
+            price: 98.6,
+            qualityScore: 59,
+          ),
+        );
 
-    test('commits accepted ticks without durable state changes without I/O', () async {
-      final registry = RealtimeCandidateRegistry();
-      final candidate = _candidate();
-      registry.register(candidate);
-      registry.apply(
-        _envelope(
-          eventId: 'forming',
+        expect(result.outcome, CandidateCoordinationOutcome.committed);
+        expect(
+          result.persistenceDecision,
+          CandidateAuditPersistenceDecision.skip,
+        );
+        expect(store.events, isEmpty);
+        expect(
+          registry.candidateFor(candidate.setupId)?.stage,
+          OpportunityStage.forming,
+        );
+      },
+    );
+
+    test(
+      'aggregates duplicate noise without publishing or writing ledger',
+      () async {
+        final registry = RealtimeCandidateRegistry();
+        registry.register(_candidate());
+        final store = _RecordingAuditStore();
+        final metrics = _RecordingMetricSink();
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+          metricSink: metrics,
+        );
+        final envelope = _envelope(
+          eventId: 'event-1',
           sequence: 1,
           minute: 2,
-          price: 98.5,
-          qualityScore: 58,
-        ),
-      );
-      final store = _RecordingAuditStore();
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-      );
+          price: 99.7,
+          qualityScore: 70,
+        );
+        await coordinator.handle(envelope);
 
-      final result = await coordinator.handle(
-        _envelope(
-          eventId: 'same-stage',
-          sequence: 2,
-          minute: 3,
-          price: 98.6,
-          qualityScore: 59,
-        ),
-      );
+        final duplicate = await coordinator.handle(envelope);
 
-      expect(result.outcome, CandidateCoordinationOutcome.committed);
-      expect(
-        result.persistenceDecision,
-        CandidateAuditPersistenceDecision.skip,
-      );
-      expect(store.events, isEmpty);
-      expect(
-        registry.candidateFor(candidate.setupId)?.stage,
-        OpportunityStage.forming,
-      );
-    });
-
-    test('aggregates duplicate noise without publishing or writing ledger', () async {
-      final registry = RealtimeCandidateRegistry();
-      registry.register(_candidate());
-      final store = _RecordingAuditStore();
-      final metrics = _RecordingMetricSink();
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-        metricSink: metrics,
-      );
-      final envelope = _envelope(
-        eventId: 'event-1',
-        sequence: 1,
-        minute: 2,
-        price: 99.7,
-        qualityScore: 70,
-      );
-      await coordinator.handle(envelope);
-
-      final duplicate = await coordinator.handle(envelope);
-
-      expect(duplicate.outcome, CandidateCoordinationOutcome.rejected);
-      expect(duplicate.publishable, isFalse);
-      expect(
-        duplicate.persistenceDecision,
-        CandidateAuditPersistenceDecision.aggregate,
-      );
-      expect(metrics.dispositions, [StreamEventDisposition.duplicate]);
-      expect(store.events, hasLength(1));
-    });
+        expect(duplicate.outcome, CandidateCoordinationOutcome.rejected);
+        expect(duplicate.publishable, isFalse);
+        expect(
+          duplicate.persistenceDecision,
+          CandidateAuditPersistenceDecision.aggregate,
+        );
+        expect(metrics.dispositions, [StreamEventDisposition.duplicate]);
+        expect(store.events, hasLength(1));
+      },
+    );
 
     test('persists a gap fault without mutating candidate state', () async {
       final registry = RealtimeCandidateRegistry();
@@ -191,107 +203,116 @@ void main() {
       );
     });
 
-    test('serializes concurrent envelopes in candidate sequence order', () async {
-      final registry = RealtimeCandidateRegistry();
-      final candidate = _candidate();
-      registry.register(candidate);
-      final store = _RecordingAuditStore();
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-      );
+    test(
+      'serializes concurrent envelopes in candidate sequence order',
+      () async {
+        final registry = RealtimeCandidateRegistry();
+        final candidate = _candidate();
+        registry.register(candidate);
+        final store = _RecordingAuditStore();
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+        );
 
-      final results = await Future.wait([
-        coordinator.handle(
-          _envelope(
-            eventId: 'event-1',
-            sequence: 1,
-            minute: 2,
-            price: 98.5,
-            qualityScore: 58,
+        final results = await Future.wait([
+          coordinator.handle(
+            _envelope(
+              eventId: 'event-1',
+              sequence: 1,
+              minute: 2,
+              price: 98.5,
+              qualityScore: 58,
+            ),
           ),
-        ),
-        coordinator.handle(
-          _envelope(
-            eventId: 'event-2',
-            sequence: 2,
-            minute: 3,
-            price: 99.7,
-            qualityScore: 70,
+          coordinator.handle(
+            _envelope(
+              eventId: 'event-2',
+              sequence: 2,
+              minute: 3,
+              price: 99.7,
+              qualityScore: 70,
+            ),
           ),
-        ),
-      ]);
+        ]);
 
-      expect(
-        results.map((result) => result.outcome),
-        everyElement(CandidateCoordinationOutcome.committed),
-      );
-      expect(store.events, hasLength(2));
-      expect(
-        registry.candidateFor(candidate.setupId)?.stage,
-        OpportunityStage.armed,
-      );
-    });
+        expect(
+          results.map((result) => result.outcome),
+          everyElement(CandidateCoordinationOutcome.committed),
+        );
+        expect(store.events, hasLength(2));
+        expect(
+          registry.candidateFor(candidate.setupId)?.stage,
+          OpportunityStage.armed,
+        );
+      },
+    );
 
-    test('surfaces metric failure without blocking duplicate rejection', () async {
-      final registry = RealtimeCandidateRegistry();
-      registry.register(_candidate());
-      final store = _RecordingAuditStore();
-      final metrics = _RecordingMetricSink()..fail = true;
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-        metricSink: metrics,
-      );
-      final envelope = _envelope(
-        eventId: 'event-1',
-        sequence: 1,
-        minute: 2,
-        price: 99.7,
-        qualityScore: 70,
-      );
-      await coordinator.handle(envelope);
-
-      final duplicate = await coordinator.handle(envelope);
-
-      expect(duplicate.outcome, CandidateCoordinationOutcome.rejected);
-      expect(duplicate.diagnosticFailureMessage, contains('metric failure'));
-    });
-
-    test('reports commit conflict when registry ownership is violated', () async {
-      final registry = RealtimeCandidateRegistry();
-      final candidate = _candidate();
-      registry.register(candidate);
-      final store = _RecordingAuditStore(
-        onAppend: (_) {
-          registry.register(
-            _candidate(setupId: 'BTCUSDT|1h|long|concurrent'),
-          );
-        },
-      );
-      final coordinator = RealtimeCandidateCoordinator(
-        registry: registry,
-        auditStore: store,
-      );
-
-      final result = await coordinator.handle(
-        _envelope(
+    test(
+      'surfaces metric failure without blocking duplicate rejection',
+      () async {
+        final registry = RealtimeCandidateRegistry();
+        registry.register(_candidate());
+        final store = _RecordingAuditStore();
+        final metrics = _RecordingMetricSink()..fail = true;
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+          metricSink: metrics,
+        );
+        final envelope = _envelope(
           eventId: 'event-1',
           sequence: 1,
           minute: 2,
           price: 99.7,
           qualityScore: 70,
-        ),
-      );
+        );
+        await coordinator.handle(envelope);
 
-      expect(result.outcome, CandidateCoordinationOutcome.commitConflict);
-      expect(result.publishable, isFalse);
-      expect(store.events, hasLength(1));
-      expect(
-        registry.candidateFor(candidate.setupId)?.stage,
-        OpportunityStage.detected,
-      );
-    });
+        final duplicate = await coordinator.handle(envelope);
+
+        expect(duplicate.outcome, CandidateCoordinationOutcome.rejected);
+        expect(duplicate.diagnosticFailureMessage, contains('metric failure'));
+      },
+    );
+
+    test(
+      'reports commit conflict when registry ownership is violated',
+      () async {
+        final registry = RealtimeCandidateRegistry();
+        final candidate = _candidate();
+        registry.register(candidate);
+        final store = _RecordingAuditStore(
+          onAppend: (_) {
+            registry.register(
+              _candidate(setupId: 'BTCUSDT|1h|long|concurrent'),
+            );
+          },
+        );
+        final coordinator = RealtimeCandidateCoordinator(
+          registry: registry,
+          auditStore: store,
+        );
+
+        final result = await coordinator.handle(
+          _envelope(
+            eventId: 'event-1',
+            sequence: 1,
+            minute: 2,
+            price: 99.7,
+            qualityScore: 70,
+          ),
+        );
+
+        expect(result.outcome, CandidateCoordinationOutcome.commitConflict);
+        expect(result.publishable, isFalse);
+        expect(store.events, hasLength(1));
+        expect(
+          registry.candidateFor(candidate.setupId)?.stage,
+          OpportunityStage.detected,
+        );
+      },
+    );
   });
 }
 
