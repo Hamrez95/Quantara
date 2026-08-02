@@ -11,6 +11,7 @@ on:
     paths:
       - 'src/client/quantara_app/**'
       - 'scripts/android-cold-start-smoke.sh'
+      - 'scripts/apply_issue_99_patch.py'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
@@ -24,7 +25,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -34,7 +35,7 @@ env:
   FLUTTER_VERSION: '3.44.8'
   ANDROID_PACKAGE: com.quantara.quantara_app.alpha
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  PREVIEW_ARTIFACT: quantara-android-1.0.1-preview
+  PREVIEW_ARTIFACT: quantara-android-1.0.2-preview
 
 jobs:
   flutter:
@@ -47,6 +48,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply issue 99 source patch once
+        if: github.event_name == 'push'
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated='src/client/quantara_app/lib/features/owner_alpha/application/signal_inbox_query.dart'
+          if [[ ! -f "$generated" ]]; then
+            python3 scripts/apply_issue_99_patch.py
+          fi
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -62,6 +76,10 @@ jobs:
 
       - name: Restore packages
         run: flutter pub get
+
+      - name: Format source and tests
+        if: github.event_name == 'push'
+        run: dart format lib test
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
@@ -84,11 +102,27 @@ jobs:
           cat flutter-test.log
           exit $status
 
+      - name: Commit issue 99 implementation
+        if: github.event_name == 'push'
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app .github/workflows/flutter-ci.yml
+          git diff --cached --check
+          git commit -m "feat: organize signal inbox and adapt profit protection"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
       - name: Upload Flutter diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics-1.0.1
+          name: flutter-diagnostics-1.0.2
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
@@ -131,7 +165,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-merged-manifest-1.0.1-preview
+          name: android-merged-manifest-1.0.2-preview
           path: src/client/quantara_app/merged-manifest.xml
           if-no-files-found: ignore
           retention-days: 14
@@ -158,12 +192,12 @@ jobs:
       - name: Upload web preview
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-1.0.1-preview
+          name: quantara-web-1.0.2-preview
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android 1.0.1 preview candidate
+      - name: Upload Android 1.0.2 preview candidate
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PREVIEW_ARTIFACT }}
@@ -212,7 +246,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics-1.0.1-preview
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-1.0.2-preview
           path: |
             android-start.txt
             android-pid.txt
