@@ -59,17 +59,29 @@ The default limit is 2,000 records. When the bound is exceeded, the oldest recor
 
 Compaction is explicit and deterministic; the ledger never grows without bound. Decode also rejects an excessive record count before constructing the ledger.
 
+## Realtime retention policy
+
+The snapshot store must not be called for every market tick. `CandidateAuditRetentionPolicy` classifies registry results:
+
+- persist lifecycle stage transitions;
+- persist stale-data and ordering/identity/gap faults;
+- aggregate duplicate-delivery noise in metrics;
+- skip accepted observations that do not change durable candidate state.
+
+This keeps the durable ledger focused on replayable decisions while high-frequency counters remain in the observability pipeline. SharedPreferences is therefore a low-frequency transition snapshot adapter, not the raw realtime event log. A database/file event log remains a later requirement for server-scale retention.
+
 ## Integration contract
 
 The registry remains synchronous and transport-independent. A coordinator must:
 
 1. apply the reconciled observation to `RealtimeCandidateRegistry`;
-2. append the returned audit event to `CandidateAuditStore`;
-3. publish the resulting projection to the journal, diagnostics, Radar and notifications;
-4. surface and retry persistence failure rather than silently claiming durable audit success.
+2. classify the audit event with `CandidateAuditRetentionPolicy`;
+3. append durable events to `CandidateAuditStore` or aggregate diagnostic events;
+4. publish the resulting projection to the journal, diagnostics, Radar and notifications;
+5. surface and retry persistence failure rather than silently claiming durable audit success.
 
-This PR provides the durable store and codec. Wiring the store into the realtime coordinator and adding user-visible journal projections are the next slices.
+This PR provides the durable store, codec and retention policy. Wiring them into the realtime coordinator and adding user-visible journal projections are the next slices.
 
 ## Platform adapter
 
-`SharedPreferencesCandidateAuditKeyValueStore` is intentionally a tiny adapter. All recovery, checksum, idempotency, capacity and concurrency behavior is implemented above the plugin boundary and tested without platform mocks.
+`SharedPreferencesCandidateAuditKeyValueStore` is intentionally a tiny low-frequency adapter. All recovery, checksum, idempotency, capacity and concurrency behavior is implemented above the plugin boundary and tested without platform mocks.
