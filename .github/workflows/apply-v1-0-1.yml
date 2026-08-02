@@ -76,3 +76,5 @@ jobs:
           git diff --cached --check
           git commit -m "fix: persist Local Live controls and add guarded 5m scalp mode"
           git push origin HEAD:fix/97-local-live-persistence-scalp
+
+# trigger 2
