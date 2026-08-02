@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../domain/bitunix_public_stream_models.dart';
 
 abstract final class BitunixSubscriptionPlanner {
@@ -20,8 +22,8 @@ abstract final class BitunixSubscriptionPlanner {
       offset < ordered.length;
       offset += maximumSubscriptionsPerConnection
     ) {
-      final end = (offset + maximumSubscriptionsPerConnection).clamp(
-        0,
+      final end = math.min(
+        offset + maximumSubscriptionsPerConnection,
         ordered.length,
       );
       shards.add(
