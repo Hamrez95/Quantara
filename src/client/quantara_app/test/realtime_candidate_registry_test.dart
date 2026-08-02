@@ -6,24 +6,27 @@ import 'package:quantara_app/features/owner_alpha/domain/realtime_market_event_m
 
 void main() {
   group('RealtimeCandidateRegistry', () {
-    test('registers identical candidates idempotently and rejects conflict', () {
-      final registry = RealtimeCandidateRegistry();
-      final candidate = _candidate();
+    test(
+      'registers identical candidates idempotently and rejects conflict',
+      () {
+        final registry = RealtimeCandidateRegistry();
+        final candidate = _candidate();
 
-      expect(
-        registry.register(candidate).disposition,
-        CandidateRegistrationDisposition.registered,
-      );
-      expect(
-        registry.register(candidate).disposition,
-        CandidateRegistrationDisposition.alreadyRegistered,
-      );
-      expect(
-        registry.register(_candidate(entryLower: 99.5)).disposition,
-        CandidateRegistrationDisposition.conflict,
-      );
-      expect(registry.candidateCount, 1);
-    });
+        expect(
+          registry.register(candidate).disposition,
+          CandidateRegistrationDisposition.registered,
+        );
+        expect(
+          registry.register(candidate).disposition,
+          CandidateRegistrationDisposition.alreadyRegistered,
+        );
+        expect(
+          registry.register(_candidate(entryLower: 99.5)).disposition,
+          CandidateRegistrationDisposition.conflict,
+        );
+        expect(registry.candidateCount, 1);
+      },
+    );
 
     test('accepts an ordered event and publishes an auditable transition', () {
       final registry = RealtimeCandidateRegistry();
@@ -50,7 +53,10 @@ void main() {
         update.auditEvent.transitionReason,
         OpportunityTransitionReason.entryApproaching,
       );
-      expect(registry.candidateFor(candidate.setupId)?.stage, OpportunityStage.armed);
+      expect(
+        registry.candidateFor(candidate.setupId)?.stage,
+        OpportunityStage.armed,
+      );
     });
 
     test('deduplicates accepted event IDs without mutating the candidate', () {
@@ -183,20 +189,10 @@ void main() {
       final timestampRegistry = RealtimeCandidateRegistry();
       timestampRegistry.register(_candidate());
       timestampRegistry.apply(
-        _envelope(
-          eventId: 'newer',
-          minute: 5,
-          price: 99.7,
-          qualityScore: 70,
-        ),
+        _envelope(eventId: 'newer', minute: 5, price: 99.7, qualityScore: 70),
       );
       final oldTimestamp = timestampRegistry.apply(
-        _envelope(
-          eventId: 'older',
-          minute: 4,
-          price: 100,
-          qualityScore: 75,
-        ),
+        _envelope(eventId: 'older', minute: 4, price: 100, qualityScore: 75),
       );
       expect(oldTimestamp.disposition, StreamEventDisposition.outOfOrder);
     });
