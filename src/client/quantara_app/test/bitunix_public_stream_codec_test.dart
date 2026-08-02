@@ -71,24 +71,26 @@ void main() {
     });
 
     test('decodes individual and aggregated ticker messages', () {
-      final ticker = BitunixPublicStreamCodec.decode(
-        jsonEncode({
-          'ch': 'ticker',
-          'symbol': 'BTCUSDT',
-          'ts': exchangeMilliseconds,
-          'data': {
-            's': 'BTCUSDT',
-            'o': '100',
-            'h': '110',
-            'l': '95',
-            'la': '105',
-            'b': '10',
-            'q': '1020',
-            'r': '5',
-          },
-        }),
-        receivedAtUtc: receivedAt,
-      ).single as BitunixTickerEvent;
+      final ticker =
+          BitunixPublicStreamCodec.decode(
+                jsonEncode({
+                  'ch': 'ticker',
+                  'symbol': 'BTCUSDT',
+                  'ts': exchangeMilliseconds,
+                  'data': {
+                    's': 'BTCUSDT',
+                    'o': '100',
+                    'h': '110',
+                    'l': '95',
+                    'la': '105',
+                    'b': '10',
+                    'q': '1020',
+                    'r': '5',
+                  },
+                }),
+                receivedAtUtc: receivedAt,
+              ).single
+              as BitunixTickerEvent;
       expect(ticker.symbol, 'BTCUSDT');
       expect(ticker.bestBid, isNull);
 
@@ -130,37 +132,51 @@ void main() {
     });
 
     test('decodes trade and depth batches', () {
-      final trade = BitunixPublicStreamCodec.decode(
-        jsonEncode({
-          'ch': 'trade',
-          'symbol': 'BTCUSDT',
-          'ts': exchangeMilliseconds,
-          'data': [
-            {'t': '2026-08-02T12:07:00Z', 'p': '101', 'v': '0.5', 's': 'buy'},
-            {'t': '2026-08-02T12:07:00Z', 'p': '100.9', 'v': '0.2', 's': 'sell'},
-          ],
-        }),
-        receivedAtUtc: receivedAt,
-      ).single as BitunixTradeEvent;
+      final trade =
+          BitunixPublicStreamCodec.decode(
+                jsonEncode({
+                  'ch': 'trade',
+                  'symbol': 'BTCUSDT',
+                  'ts': exchangeMilliseconds,
+                  'data': [
+                    {
+                      't': '2026-08-02T12:07:00Z',
+                      'p': '101',
+                      'v': '0.5',
+                      's': 'buy',
+                    },
+                    {
+                      't': '2026-08-02T12:07:00Z',
+                      'p': '100.9',
+                      'v': '0.2',
+                      's': 'sell',
+                    },
+                  ],
+                }),
+                receivedAtUtc: receivedAt,
+              ).single
+              as BitunixTradeEvent;
       expect(trade.trades, hasLength(2));
       expect(trade.trades.first.isBuyerInitiated, isTrue);
 
-      final depth = BitunixPublicStreamCodec.decode(
-        jsonEncode({
-          'ch': 'depth_book1',
-          'symbol': 'BTCUSDT',
-          'ts': exchangeMilliseconds,
-          'data': {
-            'b': [
-              ['100', '2'],
-            ],
-            'a': [
-              ['101', '3'],
-            ],
-          },
-        }),
-        receivedAtUtc: receivedAt,
-      ).single as BitunixDepthEvent;
+      final depth =
+          BitunixPublicStreamCodec.decode(
+                jsonEncode({
+                  'ch': 'depth_book1',
+                  'symbol': 'BTCUSDT',
+                  'ts': exchangeMilliseconds,
+                  'data': {
+                    'b': [
+                      ['100', '2'],
+                    ],
+                    'a': [
+                      ['101', '3'],
+                    ],
+                  },
+                }),
+                receivedAtUtc: receivedAt,
+              ).single
+              as BitunixDepthEvent;
       expect(depth.bids.single.price, 100);
       expect(depth.asks.single.quantity, 3);
     });
@@ -173,10 +189,12 @@ void main() {
         ),
         isEmpty,
       );
-      final ping = BitunixPublicStreamCodec.decode(
-        '{"op":"ping","pong":1732519687,"ping":1732519690}',
-        receivedAtUtc: receivedAt,
-      ).single as BitunixPingEvent;
+      final ping =
+          BitunixPublicStreamCodec.decode(
+                '{"op":"ping","pong":1732519687,"ping":1732519690}',
+                receivedAtUtc: receivedAt,
+              ).single
+              as BitunixPingEvent;
       expect(ping.pong, 1732519687);
       expect(ping.serverPing, 1732519690);
     });

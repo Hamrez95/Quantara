@@ -5,11 +5,7 @@ enum BitunixKlineInterval {
   fourHours('4h', 'market_kline_4h', Duration(hours: 4)),
   oneDay('1D', 'market_kline_1day', Duration(days: 1));
 
-  const BitunixKlineInterval(
-    this.timeframe,
-    this.channel,
-    this.duration,
-  );
+  const BitunixKlineInterval(this.timeframe, this.channel, this.duration);
 
   final String timeframe;
   final String channel;
@@ -18,9 +14,8 @@ enum BitunixKlineInterval {
   static BitunixKlineInterval fromChannel(String channel) {
     return values.firstWhere(
       (value) => value.channel == channel,
-      orElse: () => throw FormatException(
-        'Unsupported Bitunix kline channel: $channel',
-      ),
+      orElse: () =>
+          throw FormatException('Unsupported Bitunix kline channel: $channel'),
     );
   }
 }
@@ -38,9 +33,8 @@ enum BitunixDepthLevel {
   static BitunixDepthLevel fromChannel(String channel) {
     return values.firstWhere(
       (value) => value.channel == channel,
-      orElse: () => throw FormatException(
-        'Unsupported Bitunix depth channel: $channel',
-      ),
+      orElse: () =>
+          throw FormatException('Unsupported Bitunix depth channel: $channel'),
     );
   }
 }
@@ -86,7 +80,8 @@ final class BitunixPublicSubscription {
 
   static String _normalizeChannel(String value) {
     final normalized = value.trim();
-    final supported = normalized == 'ticker' ||
+    final supported =
+        normalized == 'ticker' ||
         normalized == 'tickers' ||
         normalized == 'trade' ||
         BitunixKlineInterval.values.any(

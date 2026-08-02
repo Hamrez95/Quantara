@@ -46,10 +46,7 @@ abstract final class BitunixPublicStreamCodec {
           : _integer(root['ping'], 'ping');
       final exchangeTimestamp = serverPing == null
           ? receivedAtUtc
-          : DateTime.fromMillisecondsSinceEpoch(
-              serverPing * 1000,
-              isUtc: true,
-            );
+          : DateTime.fromMillisecondsSinceEpoch(serverPing * 1000, isUtc: true);
       return [
         BitunixPingEvent(
           pong: pong,
@@ -169,8 +166,7 @@ abstract final class BitunixPublicStreamCodec {
       throw const FormatException('Invalid Bitunix kline OHLC range.');
     }
     final intervalMilliseconds = interval.duration.inMilliseconds;
-    final timestampMilliseconds =
-        exchangeTimestampUtc.millisecondsSinceEpoch;
+    final timestampMilliseconds = exchangeTimestampUtc.millisecondsSinceEpoch;
     final openTimestamp =
         timestampMilliseconds - (timestampMilliseconds % intervalMilliseconds);
 
@@ -290,7 +286,9 @@ abstract final class BitunixPublicStreamCodec {
     if (bids.isEmpty && asks.isEmpty) {
       throw const FormatException('Bitunix depth update is empty.');
     }
-    if (bids.isNotEmpty && asks.isNotEmpty && bids.first.price > asks.first.price) {
+    if (bids.isNotEmpty &&
+        asks.isNotEmpty &&
+        bids.first.price > asks.first.price) {
       throw const FormatException('Bitunix depth book is crossed.');
     }
     return BitunixDepthEvent(

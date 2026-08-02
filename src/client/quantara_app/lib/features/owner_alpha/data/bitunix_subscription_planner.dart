@@ -62,8 +62,8 @@ final class BitunixOutboundMessageSchedule {
       );
     }
     final last = _lastReservationUtc;
-    final reserved = last == null ||
-            !requestedAtUtc.isBefore(last.add(minimumSpacing))
+    final reserved =
+        last == null || !requestedAtUtc.isBefore(last.add(minimumSpacing))
         ? requestedAtUtc
         : last.add(minimumSpacing);
     _lastReservationUtc = reserved;
