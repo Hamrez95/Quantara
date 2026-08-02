@@ -48,12 +48,12 @@ final class RealtimeCandidateCoordinator {
   RealtimeCandidateCoordinator({
     required this.registry,
     required this.auditStore,
-    CandidateAuditMetricSink metricSink = const NoopCandidateAuditMetricSink(),
-  }) : _metricSink = metricSink;
+    this.metricSink = const NoopCandidateAuditMetricSink(),
+  });
 
   final RealtimeCandidateRegistry registry;
   final CandidateAuditStore auditStore;
-  final CandidateAuditMetricSink _metricSink;
+  final CandidateAuditMetricSink metricSink;
   Future<void> _operationTail = Future.value();
 
   Future<CandidateCoordinationResult> handle(
@@ -96,7 +96,7 @@ final class RealtimeCandidateCoordinator {
     } else if (persistenceDecision ==
         CandidateAuditPersistenceDecision.aggregate) {
       try {
-        await _metricSink.increment(update.disposition);
+        await metricSink.increment(update.disposition);
       } on Object catch (error) {
         diagnosticFailureMessage = error.toString();
       }
