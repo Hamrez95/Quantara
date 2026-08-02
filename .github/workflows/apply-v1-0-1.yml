@@ -31,6 +31,22 @@ jobs:
       - name: Apply deterministic source patch
         run: python3 scripts/apply_v1_0_1_patch.py
 
+      - name: Repair advanced confirmation placement
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart')
+          text = path.read_text(encoding='utf-8')
+          start = text.index('    if (_riskPercent > 0.50 ||')
+          end = text.index('    final confirmed = await showDialog<bool>(', start)
+          block = text[start:end]
+          text = text[:start] + text[end:]
+          method = text.index('  Future<void> _confirmStart() async {')
+          insertion = text.index('    final confirmed = await showDialog<bool>(', method)
+          text = text[:insertion] + block + text[insertion:]
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Install pinned Flutter
         uses: subosito/flutter-action@v2
         with:
