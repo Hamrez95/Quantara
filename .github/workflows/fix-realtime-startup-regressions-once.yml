@@ -1,0 +1,261 @@
+name: Apply realtime startup regression fixes once
+
+on:
+  push:
+    branches:
+      - feat/101-realtime-application-composition
+
+permissions:
+  contents: write
+
+jobs:
+  fix-format-and-clean:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    env:
+      FLUTTER_VERSION: 3.44.8
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/101-realtime-application-composition
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Apply runtime and regression edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app_path = Path('src/client/quantara_app/lib/features/owner_alpha/data/realtime_market_application.dart')
+          app = app_path.read_text()
+          old = """    } on Object catch (error) {
+                _setState(RealtimeMarketRuntimeState.failed);
+                _metrics.recordFault(
+                  message: 'Realtime startup failed: $error',
+                  occurredAtUtc: _clock(),
+                );
+                rethrow;
+              }
+            }
+
+            void _handleFleetTermination(Future<void> run, {Object? error}) {
+          """
+          new = """    } on Object catch (error) {
+                await _discardFailedFleet();
+                _setState(RealtimeMarketRuntimeState.failed);
+                _metrics.recordFault(
+                  message: 'Realtime startup failed: $error',
+                  occurredAtUtc: _clock(),
+                );
+                rethrow;
+              }
+            }
+
+            Future<void> _discardFailedFleet() async {
+              final fleet = _fleet;
+              final run = _fleetRun;
+              _fleet = null;
+              _fleetRun = null;
+              _shardStates.clear();
+              if (fleet != null) {
+                try {
+                  await fleet.stop();
+                } on Object {
+                  // Startup failure remains the primary fault.
+                }
+              }
+              if (run != null) {
+                try {
+                  await run;
+                } on Object {
+                  // The startup failure is reported by the caller.
+                }
+              }
+            }
+
+            void _handleFleetTermination(Future<void> run, {Object? error}) {
+          """
+          if old not in app:
+              raise SystemExit('application startup catch marker not found')
+          app_path.write_text(app.replace(old, new, 1))
+
+          test_path = Path('src/client/quantara_app/test/realtime_market_application_test.dart')
+          test = test_path.read_text()
+
+          marker = """      expect(application.health.lastFaultMessage, isNull);
+              });
+
+              test(
+                'runs public candle through analysis, audit, commit and projection',
+          """
+          insertion = """      expect(application.health.lastFaultMessage, isNull);
+              });
+
+              test('stops a constructed fleet after synchronous startup failure', () async {
+                final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
+                final source = _FakeBackfillSource(
+                  recent: _candles(historyStart, 20, interval: key.interval.duration),
+                );
+                final fleetFactory = _FakeFleetFactory(
+                  failRunSynchronously: true,
+                );
+                final application = _application(
+                  key: key,
+                  source: source,
+                  fleetFactory: fleetFactory,
+                  projection: _FakeProjection(),
+                  analysis: const _EmptyAnalysisGateway(),
+                  clock: clock,
+                );
+
+                await expectLater(application.start(), throwsStateError);
+
+                expect(fleetFactory.fleet.stopCalls, 1);
+                expect(application.state, RealtimeMarketRuntimeState.failed);
+                expect(application.health.activeShards, 0);
+                await application.stop();
+              });
+
+              test(
+                'runs public candle through analysis, audit, commit and projection',
+          """
+          if marker not in test:
+              raise SystemExit('test insertion marker not found')
+          test = test.replace(marker, insertion, 1)
+
+          helper_old = """    projection: projection,
+              bootstrapSpacing: Duration.zero,
+          """
+          helper_new = """    projection: projection,
+              closedCandleLimit: 20,
+              bootstrapSpacing: Duration.zero,
+          """
+          if helper_old not in test:
+              raise SystemExit('closed candle limit marker not found')
+          test = test.replace(helper_old, helper_new, 1)
+
+          factory_old = """final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
+            _FakeFleetFactory({this.order});
+
+            final List<String>? order;
+          """
+          factory_new = """final class _FakeFleetFactory implements RealtimePublicStreamFleetFactory {
+            _FakeFleetFactory({
+              this.order,
+              this.failRunSynchronously = false,
+            });
+
+            final List<String>? order;
+            final bool failRunSynchronously;
+          """
+          if factory_old not in test:
+              raise SystemExit('fake factory constructor marker not found')
+          test = test.replace(factory_old, factory_new, 1)
+
+          build_old = """    fleet = _FakeFleet(onEvent: onEvent, onState: onState);
+          """
+          build_new = """    fleet = _FakeFleet(
+                onEvent: onEvent,
+                onState: onState,
+                failRunSynchronously: failRunSynchronously,
+              );
+          """
+          if build_old not in test:
+              raise SystemExit('fake fleet build marker not found')
+          test = test.replace(build_old, build_new, 1)
+
+          fleet_old = """final class _FakeFleet implements RealtimePublicStreamFleet {
+            _FakeFleet({required this.onEvent, required this.onState});
+
+            final BitunixStreamEventHandler onEvent;
+            final BitunixFleetStateHandler onState;
+            final Completer<void> _stopped = Completer<void>();
+
+            @override
+            int get shardCount => 1;
+
+            @override
+            Future<void> run() async {
+              await onState(0, BitunixPublicConnectionState.connecting);
+              await onState(0, BitunixPublicConnectionState.live);
+              await _stopped.future;
+              await onState(0, BitunixPublicConnectionState.stopped);
+            }
+          """
+          fleet_new = """final class _FakeFleet implements RealtimePublicStreamFleet {
+            _FakeFleet({
+              required this.onEvent,
+              required this.onState,
+              required this.failRunSynchronously,
+            });
+
+            final BitunixStreamEventHandler onEvent;
+            final BitunixFleetStateHandler onState;
+            final bool failRunSynchronously;
+            final Completer<void> _stopped = Completer<void>();
+            int stopCalls = 0;
+
+            @override
+            int get shardCount => 1;
+
+            @override
+            Future<void> run() {
+              if (failRunSynchronously) {
+                throw StateError('injected synchronous fleet startup failure');
+              }
+              return _runUntilStopped();
+            }
+
+            Future<void> _runUntilStopped() async {
+              await onState(0, BitunixPublicConnectionState.connecting);
+              await onState(0, BitunixPublicConnectionState.live);
+              await _stopped.future;
+              await onState(0, BitunixPublicConnectionState.stopped);
+            }
+          """
+          if fleet_old not in test:
+              raise SystemExit('fake fleet run marker not found')
+          test = test.replace(fleet_old, fleet_new, 1)
+
+          stop_old = """  Future<void> stop() async {
+              if (!_stopped.isCompleted) _stopped.complete();
+            }
+          }
+          """
+          stop_new = """  Future<void> stop() async {
+              stopCalls++;
+              if (!_stopped.isCompleted) _stopped.complete();
+            }
+          }
+          """
+          if stop_old not in test:
+              raise SystemExit('fake fleet stop marker not found')
+          test_path.write_text(test.replace(stop_old, stop_new, 1))
+          PY
+
+          cd src/client/quantara_app
+          dart format lib/features/owner_alpha/data/realtime_market_application.dart test/realtime_market_application_test.dart
+          cd ../../..
+          git rm .github/workflows/fix-realtime-startup-regressions-once.yml
+          git add src/client/quantara_app/lib/features/owner_alpha/data/realtime_market_application.dart
+          git add src/client/quantara_app/test/realtime_market_application_test.dart
+          git diff --cached --check
+
+      - name: Commit clean regression fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "quantara-ci"
+          git config user.email "quantara-ci@users.noreply.github.com"
+          git commit -m "fix: bound bootstrap fixture and clean failed fleet"
+          git push origin HEAD:feat/101-realtime-application-composition
