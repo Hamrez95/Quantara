@@ -28,6 +28,7 @@ This slice composes the public Bitunix transport, deterministic candle truth, bo
 - Audit failure prevents candidate commit and projection.
 - Projection failure cannot mutate candidate truth and can be repaired from the durable audit ledger.
 - Intentional pause/stop is distinct from unexpected fleet termination.
+- A fleet constructed during a synchronous startup failure is stopped and detached before the failure is exposed.
 - The runtime accepts no credential, private endpoint, account payload or order-authority dependency.
 
 ## Lifecycle
@@ -52,7 +53,7 @@ Historical faults remain visible, while a fully live shard fleet can recover to 
 
 ## Validation
 
-Runtime and regression sources are formatted with Flutter `3.44.8` and Dart `3.12.2`; temporary formatter diagnostics are removed before CI and review. Strict analysis runs with fatal infos so redundant imports and other informational lints remain release-blocking.
+Runtime and regression sources are formatted with Flutter `3.44.8` and Dart `3.12.2`; temporary formatter diagnostics are removed before CI and review. Strict analysis runs with fatal infos so redundant imports and other informational lints remain release-blocking. The composition fixture requests the same bounded bootstrap limit it supplies, and a dedicated failure test verifies that synchronous fleet-start errors cannot leak an active shard.
 
 ## Remaining issue #101 work
 
