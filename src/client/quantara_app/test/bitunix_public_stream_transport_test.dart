@@ -50,9 +50,7 @@ void main() {
   group('BitunixPublicStreamConfig', () {
     test('rejects insecure or credential-bearing endpoints immediately', () {
       expect(
-        () => BitunixPublicStreamConfig(
-          endpoint: 'ws://example.test/public',
-        ),
+        () => BitunixPublicStreamConfig(endpoint: 'ws://example.test/public'),
         throwsFormatException,
       );
       expect(
