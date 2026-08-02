@@ -54,6 +54,10 @@ The wall-clock limit is intentionally wider than the product latency target so s
 - Candidate mutation still requires durable audit before commit and projection.
 - This slice does not enable foreground wiring, private exchange access or real-money execution.
 
+## Validation tooling
+
+The E2E source is formatted with Flutter `3.44.8` and Dart `3.12.2`. The one-shot formatter workflow self-deletes before CI and review, so no temporary workflow is part of the product diff.
+
 ## Remaining issue #101 work
 
 After this slice, issue #101 still requires foreground application lifecycle wiring, a settings-derived production universe, production strategy/projection adapters and a user-facing health/latency dashboard.
