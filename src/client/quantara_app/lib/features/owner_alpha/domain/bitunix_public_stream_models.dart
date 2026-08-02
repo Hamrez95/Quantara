@@ -155,7 +155,7 @@ final class BitunixPingEvent extends BitunixPublicStreamEvent {
 }
 
 final class BitunixKlineEvent extends BitunixPublicStreamEvent {
-  const BitunixKlineEvent({
+  BitunixKlineEvent({
     required this.symbol,
     required this.interval,
     required this.openTimeUtc,
