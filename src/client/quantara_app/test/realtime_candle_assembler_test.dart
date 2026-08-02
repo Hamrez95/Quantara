@@ -60,6 +60,7 @@ void main() {
         RealtimeCandlePipelineDisposition.duplicate,
       );
       expect(duplicate.closedCandles, isEmpty);
+      expect(duplicate.allowsCandidatePreparation, isFalse);
     });
 
     test('rollover closes the prior working candle exactly once', () {
