@@ -28,8 +28,14 @@ void main() {
         processedAtUtc: DateTime.utc(2026, 8, 2, 11, 40, 1),
       );
 
-      expect(bootstrap.disposition, RealtimeCandlePipelineDisposition.bootstrapped);
-      expect(update.disposition, RealtimeCandlePipelineDisposition.workingUpdated);
+      expect(
+        bootstrap.disposition,
+        RealtimeCandlePipelineDisposition.bootstrapped,
+      );
+      expect(
+        update.disposition,
+        RealtimeCandlePipelineDisposition.workingUpdated,
+      );
       expect(update.allowsCandidatePreparation, isTrue);
       expect(update.triggersClosedCandleAnalysis, isFalse);
       expect(assembler.snapshotFor(key).workingCandle?.close, 102);
@@ -40,13 +46,19 @@ void main() {
       final workingOpen = DateTime.utc(2026, 8, 2, 11, 40);
       final event = _event(workingOpen, close: 102);
 
-      assembler.apply(event, processedAtUtc: DateTime.utc(2026, 8, 2, 11, 40, 1));
+      assembler.apply(
+        event,
+        processedAtUtc: DateTime.utc(2026, 8, 2, 11, 40, 1),
+      );
       final duplicate = assembler.apply(
         event,
         processedAtUtc: DateTime.utc(2026, 8, 2, 11, 40, 2),
       );
 
-      expect(duplicate.disposition, RealtimeCandlePipelineDisposition.duplicate);
+      expect(
+        duplicate.disposition,
+        RealtimeCandlePipelineDisposition.duplicate,
+      );
       expect(duplicate.closedCandles, isEmpty);
     });
 
@@ -63,7 +75,10 @@ void main() {
         processedAtUtc: DateTime.utc(2026, 8, 2, 11, 45, 1),
       );
 
-      expect(rollover.disposition, RealtimeCandlePipelineDisposition.candleClosed);
+      expect(
+        rollover.disposition,
+        RealtimeCandlePipelineDisposition.candleClosed,
+      );
       expect(rollover.closedCandles.single.openTime, workingOpen);
       expect(rollover.triggersClosedCandleAnalysis, isTrue);
       expect(assembler.snapshotFor(key).closedCandles, hasLength(21));
@@ -78,8 +93,9 @@ void main() {
       );
 
       final observedOpen = workingOpen.add(const Duration(minutes: 15));
+      final gapEvent = _event(observedOpen, close: 106);
       final gap = assembler.apply(
-        _event(observedOpen, close: 106),
+        gapEvent,
         processedAtUtc: DateTime.utc(2026, 8, 2, 11, 55, 1),
       );
       final blocked = assembler.apply(
@@ -91,19 +107,26 @@ void main() {
       expect(gap.gap?.fromOpenTimeUtc, workingOpen);
       expect(gap.gap?.toOpenTimeExclusiveUtc, observedOpen);
       expect(gap.allowsCandidatePreparation, isFalse);
-      expect(blocked.disposition, RealtimeCandlePipelineDisposition.blockedByGap);
+      expect(
+        blocked.disposition,
+        RealtimeCandlePipelineDisposition.blockedByGap,
+      );
 
       final reconciled = assembler.reconcile(
         key: key,
         replacementClosedCandles: _candles(workingOpen, 3),
-        receivedAtUtc: DateTime.utc(2026, 8, 2, 11, 55, 2),
         processedAtUtc: DateTime.utc(2026, 8, 2, 11, 55, 3),
       );
 
-      expect(reconciled.disposition, RealtimeCandlePipelineDisposition.reconciled);
+      expect(
+        reconciled.disposition,
+        RealtimeCandlePipelineDisposition.reconciled,
+      );
       expect(reconciled.closedCandles, hasLength(3));
       expect(reconciled.triggersClosedCandleAnalysis, isTrue);
       expect(reconciled.workingCandle?.openTime, observedOpen);
+      expect(reconciled.exchangeTimestampUtc, gapEvent.exchangeTimestampUtc);
+      expect(reconciled.receivedAtUtc, gapEvent.receivedAtUtc);
       expect(assembler.snapshotFor(key).trusted, isTrue);
     });
 
@@ -126,7 +149,6 @@ void main() {
             workingOpen.add(const Duration(minutes: 5)),
             2,
           ),
-          receivedAtUtc: DateTime.utc(2026, 8, 2, 11, 55, 2),
           processedAtUtc: DateTime.utc(2026, 8, 2, 11, 55, 3),
         ),
         throwsStateError,
@@ -141,7 +163,10 @@ void main() {
         processedAtUtc: DateTime.utc(2026, 8, 2, 11, 40),
       );
 
-      expect(update.disposition, RealtimeCandlePipelineDisposition.outOfOrder);
+      expect(
+        update.disposition,
+        RealtimeCandlePipelineDisposition.outOfOrder,
+      );
       expect(update.allowsCandidatePreparation, isFalse);
     });
   });
@@ -185,5 +210,7 @@ BitunixKlineEvent _event(DateTime openTime, {required double close}) =>
       baseVolume: 12,
       quoteVolume: 1200,
       exchangeTimestampUtc: openTime.add(const Duration(minutes: 1)),
-      receivedAtUtc: openTime.add(const Duration(minutes: 1, milliseconds: 50)),
+      receivedAtUtc: openTime.add(
+        const Duration(minutes: 1, milliseconds: 50),
+      ),
     );
