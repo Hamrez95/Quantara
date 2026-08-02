@@ -4,6 +4,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val quantaraStableRelease =
+    (System.getenv("QUANTARA_STABLE_RELEASE") ?: "false").equals("true", ignoreCase = true)
+val quantaraKeystorePath = System.getenv("QUANTARA_ANDROID_KEYSTORE_PATH")
+val quantaraKeystorePassword = System.getenv("QUANTARA_ANDROID_KEYSTORE_PASSWORD")
+val quantaraKeyAlias = System.getenv("QUANTARA_ANDROID_KEY_ALIAS")
+val quantaraKeyPassword = System.getenv("QUANTARA_ANDROID_KEY_PASSWORD")
+
 android {
     namespace = "com.quantara.quantara_app"
     compileSdk = flutter.compileSdkVersion
@@ -17,19 +24,45 @@ android {
 
     defaultConfig {
         applicationId = "com.quantara.quantara_app"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (quantaraStableRelease) {
+            create("quantaraStable") {
+                require(!quantaraKeystorePath.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PATH is required for a Stable build."
+                }
+                require(!quantaraKeystorePassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PASSWORD is required for a Stable build."
+                }
+                require(!quantaraKeyAlias.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_ALIAS is required for a Stable build."
+                }
+                require(!quantaraKeyPassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_PASSWORD is required for a Stable build."
+                }
+                storeFile = file(quantaraKeystorePath!!)
+                storePassword = quantaraKeystorePassword
+                keyAlias = quantaraKeyAlias
+                keyPassword = quantaraKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // This APK is intentionally signed for direct internal testing only.
-            // Store distribution uses an owner-managed upload key outside the repository.
-            applicationIdSuffix = ".alpha"
-            versionNameSuffix = "-preview"
-            signingConfig = signingConfigs.getByName("debug")
+            if (quantaraStableRelease) {
+                signingConfig = signingConfigs.getByName("quantaraStable")
+            } else {
+                // Internal preview identity can coexist with Stable and is not update-compatible with it.
+                applicationIdSuffix = ".alpha"
+                versionNameSuffix = "-preview"
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }

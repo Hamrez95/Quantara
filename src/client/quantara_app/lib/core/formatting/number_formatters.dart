@@ -1,7 +1,11 @@
 abstract final class QuantaraNumberFormat {
   static const _persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  static const unavailable = '—';
 
   static String marketValue(double value, {String? unit}) {
+    if (!value.isFinite) {
+      return unit == null ? unavailable : '$unavailable $unit';
+    }
     final decimals = switch (value.abs()) {
       >= 10000 => 0,
       >= 1 => 2,
@@ -12,6 +16,7 @@ abstract final class QuantaraNumberFormat {
   }
 
   static String marketPercent(double value, {int decimals = 2}) {
+    if (!value.isFinite) return unavailable;
     final sign = value > 0 ? '+' : '';
     return '$sign${value.toStringAsFixed(decimals)}%';
   }
@@ -19,11 +24,13 @@ abstract final class QuantaraNumberFormat {
   static String persianInteger(int value) => _toPersian(value.toString());
 
   static String persianDecimal(double value, {int decimals = 1}) {
+    if (!value.isFinite) return unavailable;
     final latin = value.toStringAsFixed(decimals).replaceAll('.', '٫');
     return _toPersian(latin);
   }
 
   static String persianPercent(double value, {int decimals = 0}) {
+    if (!value.isFinite) return unavailable;
     return '${persianDecimal(value, decimals: decimals)}٪';
   }
 
@@ -39,6 +46,7 @@ abstract final class QuantaraNumberFormat {
   }
 
   static String _groupLatin(double value, int decimals) {
+    if (!value.isFinite) return unavailable;
     final parts = value.toStringAsFixed(decimals).split('.');
     final integer = parts.first;
     final negative = integer.startsWith('-');

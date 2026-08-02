@@ -69,6 +69,65 @@ class _ProfileViewState extends State<_ProfileView> {
     }
   }
 
+  Future<void> _copySettingsBackup(BuildContext context) async {
+    final persian = widget.locale.languageCode == 'fa';
+    final payload = OwnerAlphaSettingsTransfer.encode(
+      OwnerAlphaSettings(
+        symbols: controller.symbols,
+        capital: controller.capital,
+        riskPercent: controller.riskPercent,
+        strategy: controller.strategy,
+        cadence: controller.cadence,
+      ),
+    );
+    await Clipboard.setData(ClipboardData(text: payload));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          persian
+              ? 'نسخه پشتیبان تنظیمات در کلیپ‌بورد کپی شد. این متن شامل کلید API نیست.'
+              : 'Settings backup copied to the clipboard. It contains no API credentials.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreSettingsBackup(BuildContext context) async {
+    final persian = widget.locale.languageCode == 'fa';
+    try {
+      final clipboard = await Clipboard.getData('text/plain');
+      final text = clipboard?.text;
+      if (text == null || text.trim().isEmpty) {
+        throw const FormatException('empty clipboard');
+      }
+      final settings = OwnerAlphaSettingsTransfer.decode(text);
+      final error = await controller.restoreSettings(settings);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error ??
+                (persian
+                    ? 'واچ‌لیست و تنظیمات مدیریت سرمایه بازیابی شد.'
+                    : 'Watchlist and risk settings were restored.'),
+          ),
+        ),
+      );
+    } on Object {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            persian
+                ? 'متن معتبر پشتیبان Quantara در کلیپ‌بورد پیدا نشد.'
+                : 'No valid Quantara settings backup was found in the clipboard.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
@@ -78,22 +137,7 @@ class _ProfileViewState extends State<_ProfileView> {
         SectionCard(
           child: Row(
             children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [QuantaraColors.cyan, QuantaraColors.violet],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const SizedBox.square(
-                  dimension: 58,
-                  child: Icon(
-                    Icons.person_rounded,
-                    color: QuantaraColors.ink,
-                    size: 32,
-                  ),
-                ),
-              ),
+              const QuantaraBrandMark(size: 58),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -112,6 +156,62 @@ class _ProfileViewState extends State<_ProfileView> {
                     ),
                   ],
                 ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SectionCard(
+          accentColor: QuantaraColors.violet,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.settings_backup_restore_rounded),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.locale.languageCode == 'fa'
+                          ? 'پشتیبان تنظیمات'
+                          : 'Settings backup',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.locale.languageCode == 'fa'
+                    ? 'واچ‌لیست، سرمایه فرضی، ریسک و سیاست سیگنال را بدون کلید API کپی یا بازیابی کن. برای انتقال از نسخه Preview به نسخه پایدار از این بخش استفاده کن.'
+                    : 'Copy or restore watchlist, assumed capital, risk and signal policy without API credentials. Use this when moving from Preview to Stable.',
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _copySettingsBackup(context),
+                    icon: const Icon(Icons.copy_all_rounded),
+                    label: Text(
+                      widget.locale.languageCode == 'fa'
+                          ? 'کپی پشتیبان'
+                          : 'Copy backup',
+                    ),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _restoreSettingsBackup(context),
+                    icon: const Icon(Icons.content_paste_go_rounded),
+                    label: Text(
+                      widget.locale.languageCode == 'fa'
+                          ? 'بازیابی از کلیپ‌بورد'
+                          : 'Restore from clipboard',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

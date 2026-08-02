@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 abstract final class QuantaraColors {
-  static const ink = Color(0xFF07090D);
-  static const deepNavy = Color(0xFF0B0E14);
-  static const navy = Color(0xFF11151D);
-  static const elevatedNavy = Color(0xFF181D27);
-  static const cyan = Color(0xFF22B8A5);
-  static const violet = Color(0xFF8175F5);
+  static const ink = Color(0xFF05070B);
+  static const deepNavy = Color(0xFF090D14);
+  static const navy = Color(0xFF101620);
+  static const elevatedNavy = Color(0xFF171F2C);
+  static const cyan = Color(0xFF25C7B2);
+  static const electricBlue = Color(0xFF4E8CFF);
+  static const violet = Color(0xFF8B7CFF);
   static const success = Color(0xFF22B8A5);
   static const warning = Color(0xFFF4B740);
   static const danger = Color(0xFFF04452);
@@ -27,14 +28,15 @@ abstract final class QuantaraSpacing {
 }
 
 abstract final class QuantaraRadius {
-  static const control = 10.0;
-  static const card = 14.0;
-  static const large = 18.0;
+  static const control = 13.0;
+  static const card = 18.0;
+  static const large = 24.0;
 }
 
 abstract final class QuantaraMotion {
-  static const fast = Duration(milliseconds: 160);
-  static const standard = Duration(milliseconds: 220);
+  static const fast = Duration(milliseconds: 140);
+  static const standard = Duration(milliseconds: 240);
+  static const slow = Duration(milliseconds: 360);
   static const curve = Curves.easeOutCubic;
 }
 
@@ -69,7 +71,7 @@ abstract final class QuantaraTheme {
         unselectedLabelTextStyle: TextStyle(color: QuantaraColors.muted),
       ),
       navigationBarTheme: const NavigationBarThemeData(
-        height: 72,
+        height: 70,
         backgroundColor: QuantaraColors.deepNavy,
         indicatorColor: Color(0x2622B8A5),
         elevation: 0,
@@ -106,7 +108,7 @@ abstract final class QuantaraTheme {
         unselectedIconTheme: const IconThemeData(color: Color(0xFF64748B)),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 72,
+        height: 70,
         backgroundColor: QuantaraColors.lightSurface,
         indicatorColor: scheme.primary.withValues(alpha: 0.1),
         elevation: 0,
@@ -134,6 +136,34 @@ abstract final class QuantaraTheme {
       fontFamilyFallback: const ['Roboto', 'Arial'],
       visualDensity: VisualDensity.standard,
       splashFactory: InkSparkle.splashFactory,
+      appBarTheme: AppBarTheme(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        backgroundColor: scheme.brightness == Brightness.dark
+            ? QuantaraColors.deepNavy
+            : QuantaraColors.lightSurface,
+        foregroundColor: scheme.onSurface,
+        surfaceTintColor: Colors.transparent,
+        toolbarHeight: 64,
+        titleSpacing: 14,
+        shape: Border(
+          bottom: BorderSide(
+            color: scheme.outline.withValues(alpha: 0.55),
+            width: 0.8,
+          ),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 8,
+        backgroundColor: scheme.surfaceContainerHighest,
+        contentTextStyle: TextStyle(color: scheme.onSurface, height: 1.45),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(QuantaraRadius.card),
+          side: BorderSide(color: scheme.outline.withValues(alpha: 0.7)),
+        ),
+      ),
       textTheme: baseText.copyWith(
         headlineSmall: baseText.headlineSmall?.copyWith(
           fontSize: 24,
@@ -171,6 +201,8 @@ abstract final class QuantaraTheme {
       ),
       cardTheme: CardThemeData(
         color: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black.withValues(alpha: 0.22),
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(

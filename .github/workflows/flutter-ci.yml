@@ -10,13 +10,17 @@ on:
       - 'release/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'scripts/android-cold-start-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
       - main
       - dev
+      - 'feat/**'
+      - 'fix/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'scripts/android-cold-start-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
@@ -30,6 +34,7 @@ env:
   FLUTTER_VERSION: '3.44.8'
   ANDROID_PACKAGE: com.quantara.quantara_app.alpha
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
+  PREVIEW_ARTIFACT: quantara-android-1.0.0-preview
 
 jobs:
   flutter:
@@ -59,12 +64,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          dart format lib test
-          git diff -- lib test
-          git diff --exit-code -- lib test
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         shell: bash
@@ -75,7 +75,7 @@ jobs:
           cat flutter-analyze.log
           exit $status
 
-      - name: Run widget tests
+      - name: Run widget and safety tests
         shell: bash
         run: |
           set +e
@@ -88,7 +88,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics
+          name: flutter-diagnostics-1.0.0
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
@@ -100,16 +100,41 @@ jobs:
           flutter build web --release
           --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
 
-      - name: Compile API-configured Android release package
+      - name: Compile API-configured Android preview
         run: >-
           flutter build apk --release
           --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
 
-      - name: Build stable offline-first web PWA
+      - name: Build offline-first web PWA
         run: flutter build web --release
 
-      - name: Build universal Android release APK
+      - name: Build universal Android preview APK
         run: flutter build apk --release
+
+      - name: Verify preview identity and manifest safety declarations
+        shell: bash
+        run: |
+          set -euo pipefail
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          test -x "$apkanalyzer_path"
+          "$apkanalyzer_path" manifest application-id build/app/outputs/flutter-apk/app-release.apk | grep -Fxq "$ANDROID_PACKAGE"
+          "$apkanalyzer_path" manifest print build/app/outputs/flutter-apk/app-release.apk > merged-manifest.xml
+          grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
+          grep -Fq "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
+          grep -Eq 'android:foregroundServiceType="(specialUse|0x40000000)"' merged-manifest.xml
+          grep -Fq "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" merged-manifest.xml
+          ! grep -Fq "android.permission.RECEIVE_BOOT_COMPLETED" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RebootReceiver" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
+
+      - name: Upload merged Android manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-merged-manifest-1.0.0-preview
+          path: src/client/quantara_app/merged-manifest.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Verify universal APK 16KB ZIP alignment
         shell: bash
@@ -119,7 +144,7 @@ jobs:
           test -x "$zipalign_path"
           "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Build ABI-split Android release APKs
+      - name: Build ABI-split Android preview APKs
         run: flutter build apk --release --split-per-abi
 
       - name: Verify arm64 APK 16KB ZIP alignment
@@ -133,15 +158,15 @@ jobs:
       - name: Upload web preview
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-preview-0.12.0
+          name: quantara-web-1.0.0-preview
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android 0.12.0 candidate
+      - name: Upload Android 1.0 preview candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-android-0.12.0
+          name: ${{ env.PREVIEW_ARTIFACT }}
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -151,49 +176,47 @@ jobs:
   android-launch:
     name: Android ${{ matrix.api-level }} cold-start smoke
     needs: flutter
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         api-level: [34, 35, 36]
     steps:
-      - name: Download Android candidate
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Android preview candidate
         uses: actions/download-artifact@v4
         with:
-          name: quantara-android-0.12.0
+          name: ${{ env.PREVIEW_ARTIFACT }}
           path: apk
 
-      - name: Boot emulator and verify deferred background launch
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot hardware-accelerated emulator and verify cold start
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            set -eu
-            adb install -r apk/app-release.apk
-            adb logcat -c
-            adb shell am force-stop "$ANDROID_PACKAGE"
-            adb shell am start -W -n "$ANDROID_PACKAGE/$ANDROID_ACTIVITY" > android-start.txt
-            cat android-start.txt
-            sleep 20
-            adb shell pidof "$ANDROID_PACKAGE" > android-pid.txt
-            cat android-pid.txt
-            test -s android-pid.txt
-            adb logcat -d > android-logcat.txt
-            adb shell dumpsys jobscheduler "$ANDROID_PACKAGE" > android-jobscheduler.txt || true
-            ! grep -Eq "FATAL EXCEPTION|Process: $ANDROID_PACKAGE|Unable to instantiate application|WorkManager is not initialized properly" android-logcat.txt
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
+          script: bash scripts/android-cold-start-smoke.sh apk/app-release.apk
 
       - name: Upload Android launch diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-1.0.0-preview
           path: |
             android-start.txt
             android-pid.txt
+            android-pid-after-settle.txt
             android-logcat.txt
             android-jobscheduler.txt
           if-no-files-found: ignore

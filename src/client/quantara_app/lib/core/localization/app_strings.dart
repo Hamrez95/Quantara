@@ -246,10 +246,11 @@ final class AppStrings {
   );
   String get privateAccount =>
       t('حساب خصوصی و اجرای سفارش', 'Private account and order execution');
-  String get futureVersion => t('نسخه آینده', 'Future version');
+  String get futureVersion =>
+      t('مدیریت از بخش ترید خودکار', 'Managed in Auto Trade');
   String get privateConnectionDescription => t(
-    'کلید API در Android وارد یا ذخیره نمی‌شود. اتصال خصوصی بعداً فقط از Backend رمزنگاری‌شده و ابتدا به‌صورت Read-only اضافه می‌شود.',
-    'API keys are never entered or stored on Android. Private access will later use an encrypted backend and begin as read-only.',
+    'اتصال حساب Bitunix و وضعیت اجرای محلی از بخش ترید خودکار مدیریت می‌شود. اتصال حساب به‌تنهایی هیچ سفارشی ثبت نمی‌کند.',
+    'Bitunix account connection and local execution status are managed in Auto Trade. Connecting an account alone never places an order.',
   );
   String get addPrivateDisabled =>
       t('افزودن حساب خصوصی (غیرفعال)', 'Add private account (disabled)');
@@ -437,11 +438,11 @@ final class AppStrings {
   String get securityAndPrivacy =>
       t('امنیت و حریم خصوصی', 'Security & privacy');
   String get securityDescription => t(
-    'هیچ API Key یا مجوز معامله‌ای در اپ وجود ندارد. Quantara در این نسخه فقط مشاهده و تحلیل می‌کند.',
-    'The app contains no API key or trading permission. This version of Quantara only observes and analyzes.',
+    'در صورت اتصال Bitunix، اطلاعات اتصال فقط در Secure Storage اندروید نگه‌داری می‌شود و هرگز داخل پشتیبان تنظیمات قرار نمی‌گیرد. برداشت و انتقال در Quantara پشتیبانی نمی‌شود.',
+    'When Bitunix is connected, credentials stay in Android Secure Storage and are never included in settings backups. Quantara does not support withdrawals or transfers.',
   );
   String get about => t('درباره اپ', 'About');
-  String get version => t('نسخه ۰٫۹٫۰ آزمایشی', 'Experimental version 0.9.0');
+  String get version => t('نسخه ۱٫۰٫۰', 'Version 1.0.0');
 
   // Legacy cockpit strings remain available while its unused routes are retained.
   String get cockpit => t('مرکز کنترل', 'Cockpit');
