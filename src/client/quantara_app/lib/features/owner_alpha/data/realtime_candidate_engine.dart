@@ -1,17 +1,17 @@
-import '../domain/realtime_candidate_models.dart';
 import '../domain/owner_alpha_models.dart';
+import '../domain/realtime_candidate_models.dart';
 
 abstract final class RealtimeCandidateEngine {
   static CandidateEvaluationResult evaluate({
     required RealtimeOpportunityCandidate candidate,
     required RealtimeMarketObservation observation,
-    RealtimeCandidatePolicy policy = const RealtimeCandidatePolicy.balanced(),
+    RealtimeCandidatePolicy policy = RealtimeCandidatePolicy.balanced,
   }) {
     observation.validate();
     policy.validate();
 
     final previousStage = candidate.stage;
-    if (candidate.isTerminal) {
+    if (candidate.isClosedForDiscovery) {
       return CandidateEvaluationResult(
         previousStage: previousStage,
         candidate: candidate,
