@@ -31,9 +31,12 @@ final class ProfitProtectionPlan {
 }
 
 abstract final class ProfitProtectionPolicy {
+  // No tranche is smaller than 25%. This keeps the three exchange-native TP
+  // orders viable for small accounts while still saving the largest portion
+  // at TP1 and preserving a larger runner for confirmed breakouts.
   static const _range = ProfitProtectionPlan(
     profile: ProfitProtectionProfile.rangeDefense,
-    targetFractions: [0.55, 0.30, 0.15],
+    targetFractions: [0.50, 0.25, 0.25],
   );
   static const _trend = ProfitProtectionPlan(
     profile: ProfitProtectionProfile.trendBalance,
@@ -49,7 +52,7 @@ abstract final class ProfitProtectionPolicy {
   );
   static const _disorder = ProfitProtectionPlan(
     profile: ProfitProtectionProfile.disorderDefense,
-    targetFractions: [0.60, 0.25, 0.15],
+    targetFractions: [0.50, 0.25, 0.25],
   );
 
   static ProfitProtectionPlan forRegime(MarketRegime regime) =>
