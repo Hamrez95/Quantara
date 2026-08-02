@@ -10,13 +10,13 @@ void main() {
       final registry = RealtimeCandidateRegistry();
       final candidate = _candidate();
       registry.register(candidate);
-      final revisionBefore = registry.revision;
+      final revisionBefore = registry.revisionFor(candidate.setupId);
 
       final prepared = registry.prepare(_envelope());
 
       expect(prepared.requiresCommit, isTrue);
       expect(prepared.update.candidate?.stage, OpportunityStage.armed);
-      expect(registry.revision, revisionBefore);
+      expect(registry.revisionFor(candidate.setupId), revisionBefore);
       expect(
         registry.candidateFor(candidate.setupId)?.stage,
         OpportunityStage.detected,
@@ -24,7 +24,7 @@ void main() {
 
       final committed = registry.commit(prepared);
       expect(committed.candidate?.stage, OpportunityStage.armed);
-      expect(registry.revision, revisionBefore + 1);
+      expect(registry.revisionFor(candidate.setupId), revisionBefore + 1);
       expect(
         registry.candidateFor(candidate.setupId)?.stage,
         OpportunityStage.armed,
@@ -32,7 +32,30 @@ void main() {
       expect(() => registry.commit(prepared), throwsStateError);
     });
 
-    test('a stale prepared update cannot overwrite newer registry truth', () {
+    test('same-candidate reconciliation invalidates a stale preparation', () {
+      final registry = RealtimeCandidateRegistry();
+      final candidate = _candidate();
+      registry.register(candidate);
+      final prepared = registry.prepare(_envelope());
+
+      registry.markReconciled(
+        setupId: candidate.setupId,
+        streamKey: RealtimeStreamKey(
+          symbol: candidate.symbol,
+          timeframe: candidate.timeframe,
+        ),
+        exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 2),
+        sequence: 1,
+      );
+
+      expect(() => registry.commit(prepared), throwsStateError);
+      expect(
+        registry.candidateFor(candidate.setupId)?.stage,
+        OpportunityStage.detected,
+      );
+    });
+
+    test('independent candidate changes do not invalidate preparation', () {
       final registry = RealtimeCandidateRegistry();
       final candidate = _candidate();
       registry.register(candidate);
@@ -40,11 +63,7 @@ void main() {
 
       registry.register(_candidate(setupId: 'BTCUSDT|1h|long|second'));
 
-      expect(() => registry.commit(prepared), throwsStateError);
-      expect(
-        registry.candidateFor(candidate.setupId)?.stage,
-        OpportunityStage.detected,
-      );
+      expect(registry.commit(prepared).candidate?.stage, OpportunityStage.armed);
     });
 
     test('rejected preparation needs no commit and preserves state', () {
