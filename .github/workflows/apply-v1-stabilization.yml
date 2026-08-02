@@ -1,0 +1,53 @@
+name: Apply Quantara v1 stabilization
+
+on:
+  push:
+    branches:
+      - feat/95-ui-finalization
+    paths:
+      - scripts/apply_v1_stabilization.py
+      - .github/workflows/apply-v1-stabilization.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/95-ui-finalization
+          fetch-depth: 0
+
+      - name: Apply deterministic v1 patch
+        run: python3 scripts/apply_v1_stabilization.py
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Restore packages and lock dependency graph
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Format, analyze and test
+        working-directory: src/client/quantara_app
+        run: |
+          dart format lib test
+          flutter analyze --fatal-infos
+          flutter test
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: stabilize Quantara 1.0 identity, settings transfer and crypto icons"
+          git push origin HEAD:feat/95-ui-finalization
