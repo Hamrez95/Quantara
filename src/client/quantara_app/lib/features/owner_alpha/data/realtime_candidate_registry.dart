@@ -44,9 +44,7 @@ final class RealtimeCandidateRegistry {
     return List.unmodifiable(result);
   }
 
-  CandidateRegistrationResult register(
-    RealtimeOpportunityCandidate candidate,
-  ) {
+  CandidateRegistrationResult register(RealtimeOpportunityCandidate candidate) {
     final existing = _candidates[candidate.setupId];
     if (existing != null) {
       return CandidateRegistrationResult(
@@ -186,9 +184,10 @@ final class RealtimeCandidateRegistry {
     if (sequence != null && sequence < 0) {
       throw ArgumentError.value(sequence, 'sequence');
     }
-    _streamCursors[
-      _CandidateStreamKey(setupId: setupId, streamKey: streamKey)
-    ] = _StreamCursor(
+    _streamCursors[_CandidateStreamKey(
+      setupId: setupId,
+      streamKey: streamKey,
+    )] = _StreamCursor(
       sequence: sequence,
       exchangeTimestampUtc: exchangeTimestampUtc,
     );
@@ -262,10 +261,7 @@ final class RealtimeCandidateRegistry {
 }
 
 final class _CandidateStreamKey {
-  const _CandidateStreamKey({
-    required this.setupId,
-    required this.streamKey,
-  });
+  const _CandidateStreamKey({required this.setupId, required this.streamKey});
 
   final String setupId;
   final RealtimeStreamKey streamKey;
