@@ -3,10 +3,13 @@ import '../domain/owner_alpha_models.dart';
 
 /// Replays closed candles after a signal was created.
 ///
-/// If a candle touches both the stop and a target, the stop wins. OHLC data
-/// cannot prove the intrabar order, so the conservative result avoids
+/// If a candle touches both the active stop and a target, the stop wins. OHLC
+/// data cannot prove the intrabar order, so the conservative result avoids
 /// overstating performance.
 abstract final class SignalOutcomeEvaluator {
+  static const _costBuffer = 0.0017;
+  static const _targetFractions = <double>[0.40, 0.30, 0.30];
+
   static SignalJournalEntry evaluate({
     required SignalJournalEntry entry,
     required Iterable<ChartCandle> candles,
@@ -34,14 +37,15 @@ abstract final class SignalOutcomeEvaluator {
         activatedAt = candle.openTime;
       }
 
+      final activeStop = _activeStop(entry, highestTarget);
       final stopHit = entry.direction == TradeDirection.long
-          ? candle.low <= entry.stopLoss!
-          : candle.high >= entry.stopLoss!;
+          ? candle.low <= activeStop
+          : candle.high >= activeStop;
       if (stopHit) {
         return _withResult(
           entry: latest,
           outcome: SignalOutcome.stopped,
-          exitPrice: entry.stopLoss!,
+          exitPrice: activeStop,
           eventAt: candle.openTime,
           activatedAt: activatedAt,
           highestTarget: highestTarget,
@@ -81,6 +85,19 @@ abstract final class SignalOutcomeEvaluator {
       );
     }
     return latest;
+  }
+
+  static double _activeStop(SignalJournalEntry entry, int highestTarget) {
+    if (highestTarget >= 2) return entry.targets.first;
+    if (highestTarget >= 1) {
+      final referenceEntry = entry.direction == TradeDirection.long
+          ? entry.entryUpper!
+          : entry.entryLower!;
+      return entry.direction == TradeDirection.long
+          ? referenceEntry * (1 + _costBuffer)
+          : referenceEntry * (1 - _costBuffer);
+    }
+    return entry.stopLoss!;
   }
 
   static bool _hasValidFinancialInputs(SignalJournalEntry entry) {
@@ -148,31 +165,25 @@ abstract final class SignalOutcomeEvaluator {
     }
 
     final direction = entry.direction == TradeDirection.long ? 1.0 : -1.0;
-    const targetFractions = <double>[0.40, 0.30, 0.30];
     final reachedTargets = highestTarget
-        .clamp(0, targetFractions.length)
+        .clamp(0, _targetFractions.length)
         .toInt();
     var realizedSize = 0.0;
     var grossPnl = 0.0;
 
     for (var index = 0; index < reachedTargets; index++) {
-      final trancheSize = entry.positionSize * targetFractions[index];
+      final trancheSize = entry.positionSize * _targetFractions[index];
       realizedSize += trancheSize;
       grossPnl +=
           (entry.targets[index] - referenceEntry) * trancheSize * direction;
     }
 
-    // A target event marks the still-open remainder at the latest reached
-    // target. A later stop sends only that remainder to the original stop.
-    // This preserves the documented 40% / 30% / 30% paper-management policy
-    // without pretending that the entire position exited at TP2 or TP3.
+    // TP1 realizes the largest tranche. The remainder is protected beyond
+    // break-even after TP1 and at TP1 after TP2, matching Local Live.
     final remainingSize = (entry.positionSize - realizedSize)
         .clamp(0, entry.positionSize)
         .toDouble();
-    final remainingExit = outcome == SignalOutcome.stopped
-        ? entry.stopLoss!
-        : exitPrice;
-    grossPnl += (remainingExit - referenceEntry) * remainingSize * direction;
+    grossPnl += (exitPrice - referenceEntry) * remainingSize * direction;
     final effectiveExit =
         referenceEntry + grossPnl / entry.positionSize * direction;
     final priceChange =
