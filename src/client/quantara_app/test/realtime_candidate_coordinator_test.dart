@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/owner_alpha/data/realtime_candidate_coordinator.dart';
 import 'package:quantara_app/features/owner_alpha/data/realtime_candidate_registry.dart';
@@ -248,6 +250,48 @@ void main() {
       },
     );
 
+    test('processes independent candidates without head-of-line blocking', () async {
+      const firstSetup = 'BTCUSDT|1h|long|coordinator';
+      const secondSetup = 'BTCUSDT|1h|long|second';
+      final registry = RealtimeCandidateRegistry();
+      registry.register(_candidate(setupId: firstSetup));
+      registry.register(_candidate(setupId: secondSetup));
+      final store = _BlockingAuditStore(blockedSetupId: firstSetup);
+      final coordinator = RealtimeCandidateCoordinator(
+        registry: registry,
+        auditStore: store,
+      );
+
+      final firstFuture = coordinator.handle(
+        _envelope(
+          eventId: 'first-event',
+          setupId: firstSetup,
+          sequence: 1,
+          minute: 2,
+          price: 99.7,
+          qualityScore: 70,
+        ),
+      );
+      await store.blockedAppendStarted.future;
+      final secondResult = await coordinator
+          .handle(
+            _envelope(
+              eventId: 'second-event',
+              setupId: secondSetup,
+              sequence: 1,
+              minute: 2,
+              price: 99.7,
+              qualityScore: 70,
+            ),
+          )
+          .timeout(const Duration(seconds: 1));
+
+      expect(secondResult.outcome, CandidateCoordinationOutcome.committed);
+      store.releaseBlockedAppend.complete();
+      final firstResult = await firstFuture;
+      expect(firstResult.outcome, CandidateCoordinationOutcome.committed);
+    });
+
     test(
       'surfaces metric failure without blocking duplicate rejection',
       () async {
@@ -277,15 +321,21 @@ void main() {
     );
 
     test(
-      'reports commit conflict when registry ownership is violated',
+      'reports commit conflict when same-candidate ownership is violated',
       () async {
         final registry = RealtimeCandidateRegistry();
         final candidate = _candidate();
         registry.register(candidate);
         final store = _RecordingAuditStore(
           onAppend: (_) {
-            registry.register(
-              _candidate(setupId: 'BTCUSDT|1h|long|concurrent'),
+            registry.markReconciled(
+              setupId: candidate.setupId,
+              streamKey: RealtimeStreamKey(
+                symbol: candidate.symbol,
+                timeframe: candidate.timeframe,
+              ),
+              exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 2),
+              sequence: 1,
             );
           },
         );
@@ -337,6 +387,25 @@ final class _RecordingAuditStore implements CandidateAuditStore {
   }
 }
 
+final class _BlockingAuditStore implements CandidateAuditStore {
+  _BlockingAuditStore({required this.blockedSetupId});
+
+  final String blockedSetupId;
+  final Completer<void> blockedAppendStarted = Completer<void>();
+  final Completer<void> releaseBlockedAppend = Completer<void>();
+
+  @override
+  Future<CandidateAuditLedger> load() async => CandidateAuditLedger.empty();
+
+  @override
+  Future<void> append(CandidateRegistryAuditEvent event) async {
+    if (event.setupId == blockedSetupId) {
+      blockedAppendStarted.complete();
+      await releaseBlockedAppend.future;
+    }
+  }
+}
+
 final class _RecordingMetricSink implements CandidateAuditMetricSink {
   final List<StreamEventDisposition> dispositions = [];
   bool fail = false;
@@ -384,11 +453,12 @@ RealtimeObservationEnvelope _envelope({
   required int minute,
   required double price,
   required int qualityScore,
+  String setupId = 'BTCUSDT|1h|long|coordinator',
   int? sequence,
   bool triggerConfirmed = false,
 }) => RealtimeObservationEnvelope(
   eventId: eventId,
-  setupId: 'BTCUSDT|1h|long|coordinator',
+  setupId: setupId,
   symbol: 'BTCUSDT',
   timeframe: '1h',
   sequence: sequence,
