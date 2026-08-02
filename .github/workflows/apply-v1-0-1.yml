@@ -1,0 +1,78 @@
+name: Apply v1.0.1 Local Live patch
+
+on:
+  push:
+    branches:
+      - fix/97-local-live-persistence-scalp
+    paths:
+      - scripts/apply_v1_0_1_patch.py
+      - .github/workflows/apply-v1-0-1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/97-local-live-persistence-scalp
+          fetch-depth: 0
+
+      - name: Apply deterministic source patch
+        run: python3 scripts/apply_v1_0_1_patch.py
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Format changed Dart files
+        run: |
+          dart format \
+            src/client/quantara_app/lib/core/localization/local_live_message_localizer.dart \
+            src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
+            src/client/quantara_app/lib/features/auto_trade/data/local_live_preferences_store.dart \
+            src/client/quantara_app/lib/features/auto_trade/domain/local_live_trade_models.dart \
+            src/client/quantara_app/lib/features/market_analysis/presentation/tradingview_lightweight_chart.dart \
+            src/client/quantara_app/lib/features/owner_alpha/application/owner_alpha_controller.dart \
+            src/client/quantara_app/lib/features/owner_alpha/data/bitunix_owner_alpha_repository.dart \
+            src/client/quantara_app/lib/features/owner_alpha/data/signal_outcome_evaluator.dart \
+            src/client/quantara_app/lib/features/owner_alpha/data/signal_timeframe_priority.dart \
+            src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            src/client/quantara_app/test/local_live_preferences_store_test.dart \
+            src/client/quantara_app/test/local_live_trade_models_test.dart \
+            src/client/quantara_app/test/local_live_v1_0_1_source_test.dart \
+            src/client/quantara_app/test/signal_outcome_evaluator_test.dart
+
+      - name: Analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+
+      - name: Run focused tests
+        working-directory: src/client/quantara_app
+        run: |
+          flutter test test/local_live_preferences_store_test.dart
+          flutter test test/local_live_trade_models_test.dart
+          flutter test test/local_live_v1_0_1_source_test.dart
+          flutter test test/signal_outcome_evaluator_test.dart
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: persist Local Live controls and add guarded 5m scalp mode"
+          git push origin HEAD:fix/97-local-live-persistence-scalp
