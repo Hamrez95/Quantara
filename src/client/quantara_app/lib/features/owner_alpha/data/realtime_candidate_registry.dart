@@ -181,16 +181,16 @@ final class RealtimeCandidateRegistry {
     return CandidateRegistryPreparedUpdate._(
       update: update,
       requiresCommit: true,
-      _owner: this,
-      _candidateRevision: revisionFor(candidate.setupId),
-      _candidateSetupId: candidate.setupId,
-      _nextCandidate: evaluation.candidate,
-      _cursorKey: cursorKey,
-      _nextCursor: _StreamCursor(
+      owner: this,
+      candidateRevision: revisionFor(candidate.setupId),
+      candidateSetupId: candidate.setupId,
+      nextCandidate: evaluation.candidate,
+      cursorKey: cursorKey,
+      nextCursor: _StreamCursor(
         sequence: sequence ?? cursor?.sequence,
         exchangeTimestampUtc: envelope.observation.exchangeTimestampUtc,
       ),
-      _deduplicationKey: envelope.deduplicationKey,
+      deduplicationKey: envelope.deduplicationKey,
     );
   }
 
@@ -305,13 +305,13 @@ final class RealtimeCandidateRegistry {
       ),
     ),
     requiresCommit: false,
-    _owner: this,
-    _candidateRevision: candidate == null ? -1 : revisionFor(candidate.setupId),
-    _candidateSetupId: null,
-    _nextCandidate: null,
-    _cursorKey: null,
-    _nextCursor: null,
-    _deduplicationKey: null,
+    owner: this,
+    candidateRevision: candidate == null ? -1 : revisionFor(candidate.setupId),
+    candidateSetupId: null,
+    nextCandidate: null,
+    cursorKey: null,
+    nextCursor: null,
+    deduplicationKey: null,
   );
 
   CandidateRegistryAuditEvent _audit({
