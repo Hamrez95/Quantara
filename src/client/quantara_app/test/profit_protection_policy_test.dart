@@ -37,6 +37,24 @@ void main() {
     expect(range.targetFractions.last, lessThan(breakout.targetFractions.last));
   });
 
+  test('tiny exchange-rounded size assigns residual to TP1', () {
+    final allocation = ProfitProtectionAllocation.allocate(
+      totalQuantity: 4,
+      plan: ProfitProtectionPolicy.forRegime(
+        MarketRegime.breakoutExpansion,
+      ),
+      roundDown: (value) => value.floorToDouble(),
+    );
+
+    expect(allocation.quantities, const [2, 1, 1]);
+    expect(allocation.actualFractions, const [0.5, 0.25, 0.25]);
+    expect(allocation.isValidFor(1), isTrue);
+    expect(
+      allocation.quantities.first,
+      greaterThan(allocation.quantities.last),
+    );
+  });
+
   test('legacy transition profile preserves the 40/30/30 ladder', () {
     expect(
       ProfitProtectionPolicy.forRegime(MarketRegime.transition).targetFractions,
