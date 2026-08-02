@@ -89,7 +89,6 @@ final class RealtimeCandlePipelineCoordinator {
     final update = assembler.reconcile(
       key: key,
       replacementClosedCandles: replacements,
-      receivedAtUtc: clock(),
       processedAtUtc: clock(),
     );
     await eventBus.publish(update);
