@@ -57,19 +57,27 @@ final class RealtimeCandidateCoordinator {
   final RealtimeCandidateRegistry registry;
   final CandidateAuditStore auditStore;
   final CandidateAuditMetricSink metricSink;
-  Future<void> _operationTail = Future.value();
+  final Map<String, Future<void>> _candidateOperationTails = {};
 
   Future<CandidateCoordinationResult> handle(
     RealtimeObservationEnvelope envelope, {
     RealtimeCandidatePolicy? policy,
   }) {
-    final operation = _operationTail.then(
+    final setupId = envelope.setupId;
+    final previous = _candidateOperationTails[setupId] ?? Future.value();
+    final operation = previous.then(
       (_) => _handleInternal(envelope, policy: policy),
     );
-    _operationTail = operation.then<void>(
+    final tail = operation.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
+    _candidateOperationTails[setupId] = tail;
+    tail.then((_) {
+      if (identical(_candidateOperationTails[setupId], tail)) {
+        _candidateOperationTails.remove(setupId);
+      }
+    });
     return operation;
   }
 
