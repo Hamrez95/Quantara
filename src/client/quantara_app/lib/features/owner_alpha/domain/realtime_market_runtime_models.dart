@@ -1,5 +1,3 @@
-import '../data/candidate_audit_retention_policy.dart';
-import '../data/realtime_candidate_coordinator.dart';
 import 'bitunix_public_stream_models.dart';
 import 'realtime_candidate_models.dart';
 import 'realtime_candle_pipeline_models.dart';
@@ -48,7 +46,11 @@ final class RealtimeMarketUniverse {
     final ordered = unique.values.toList(growable: false)
       ..sort((left, right) => left.id.compareTo(right.id));
     if (ordered.isEmpty) {
-      throw ArgumentError.value(values, 'streams', 'At least one stream is required.');
+      throw ArgumentError.value(
+        values,
+        'streams',
+        'At least one stream is required.',
+      );
     }
     if (ordered.length > maximumStreams) {
       throw ArgumentError.value(
@@ -72,39 +74,6 @@ final class RealtimeCandidateAnalysisBatch {
   final List<RealtimeObservationEnvelope> observations;
 
   bool get isEmpty => candidates.isEmpty && observations.isEmpty;
-}
-
-abstract interface class RealtimeMarketAnalysisGateway {
-  Future<RealtimeCandidateAnalysisBatch> analyze(
-    RealtimeCandlePipelineUpdate update,
-  );
-}
-
-abstract interface class RealtimeAuditedCandidateProjection {
-  Future<void> restore();
-
-  Future<void> apply({
-    required CandidateRegistryAuditEvent auditEvent,
-    required RealtimeOpportunityCandidate? candidate,
-    required CandidateCoordinationOutcome outcome,
-    required CandidateAuditPersistenceDecision persistenceDecision,
-  });
-}
-
-final class NoopRealtimeAuditedCandidateProjection
-    implements RealtimeAuditedCandidateProjection {
-  const NoopRealtimeAuditedCandidateProjection();
-
-  @override
-  Future<void> restore() async {}
-
-  @override
-  Future<void> apply({
-    required CandidateRegistryAuditEvent auditEvent,
-    required RealtimeOpportunityCandidate? candidate,
-    required CandidateCoordinationOutcome outcome,
-    required CandidateAuditPersistenceDecision persistenceDecision,
-  }) async {}
 }
 
 final class RealtimeMarketHealthSnapshot {
