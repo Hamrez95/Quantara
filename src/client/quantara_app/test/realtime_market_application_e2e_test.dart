@@ -47,7 +47,10 @@ void main() {
         );
 
         await application.start();
-        await _waitUntil(() => firstSocket.sent.isNotEmpty);
+        await _waitUntil(
+          () => firstSocket.sent.isNotEmpty,
+          description: 'first public subscription',
+        );
 
         clock.now = DateTime.utc(2026, 8, 2, 12, 2, 0, 200);
         firstSocket.add(
@@ -57,11 +60,20 @@ void main() {
             close: 101,
           ),
         );
-        await _waitUntil(() => application.health.klineEventsReceived == 1);
+        await _waitUntil(
+          () => application.health.klineEventsReceived == 1,
+          description: 'first working Kline delivery',
+        );
 
         await firstSocket.serverClose();
-        await _waitUntil(() => connector.connectCount == 2);
-        await _waitUntil(() => secondSocket.sent.isNotEmpty);
+        await _waitUntil(
+          () => connector.connectCount == 2,
+          description: 'second socket connection',
+        );
+        await _waitUntil(
+          () => secondSocket.sent.isNotEmpty,
+          description: 'second public subscription',
+        );
 
         secondSocket.add(
           _klinePayload(
@@ -70,7 +82,10 @@ void main() {
             close: 101,
           ),
         );
-        await _waitUntil(() => application.health.klineEventsReceived == 2);
+        await _waitUntil(
+          () => application.health.klineEventsReceived == 2,
+          description: 'replayed working Kline delivery',
+        );
 
         clock.now = DateTime.utc(2026, 8, 2, 12, 6, 0, 200);
         secondSocket.add(
@@ -80,7 +95,10 @@ void main() {
             close: 102,
           ),
         );
-        await _waitUntil(() => projection.applied.length == 1);
+        await _waitUntil(
+          () => projection.applied.length == 1,
+          description: 'audited candidate projection',
+        );
 
         expect(connector.connectCount, 2);
         expect(analysis.dispositions, [
@@ -138,6 +156,7 @@ void main() {
         await application.start();
         await _waitUntil(
           () => sockets.every((socket) => socket.sent.isNotEmpty),
+          description: '500-stream shard subscriptions',
           timeout: const Duration(seconds: 5),
         );
 
@@ -163,6 +182,7 @@ void main() {
         }
         await _waitUntil(
           () => application.health.klineEventsReceived == 500,
+          description: '500-stream Kline delivery',
           timeout: const Duration(seconds: 10),
         );
         stopwatch.stop();
@@ -458,12 +478,15 @@ final class _FakeSocket implements BitunixWebSocket {
 
 Future<void> _waitUntil(
   bool Function() predicate, {
+  required String description,
   Duration timeout = const Duration(seconds: 2),
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!predicate()) {
     if (DateTime.now().isAfter(deadline)) {
-      throw TimeoutException('Condition was not reached before timeout.');
+      throw TimeoutException(
+        'Condition was not reached before timeout: $description.',
+      );
     }
     await Future<void>.delayed(const Duration(milliseconds: 5));
   }
