@@ -1,3 +1,4 @@
+import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 
 enum LocalLiveTradeState {
@@ -135,6 +136,8 @@ final class LocalLiveManagedPosition {
     required this.openedAt,
     this.stopOrderId,
     this.stage = 0,
+    this.targetFractions = const [0.40, 0.30, 0.30],
+    this.marketRegime = MarketRegime.transition,
   });
 
   final String setupId;
@@ -152,6 +155,8 @@ final class LocalLiveManagedPosition {
   final DateTime openedAt;
   final String? stopOrderId;
   final int stage;
+  final List<double> targetFractions;
+  final MarketRegime marketRegime;
 
   LocalLiveManagedPosition copyWith({String? stopOrderId, int? stage}) =>
       LocalLiveManagedPosition(
@@ -170,6 +175,8 @@ final class LocalLiveManagedPosition {
         openedAt: openedAt,
         stopOrderId: stopOrderId ?? this.stopOrderId,
         stage: stage ?? this.stage,
+        targetFractions: targetFractions,
+        marketRegime: marketRegime,
       );
 
   Map<String, Object?> toJson() => {
@@ -188,6 +195,8 @@ final class LocalLiveManagedPosition {
     'openedAt': openedAt.toUtc().toIso8601String(),
     'stopOrderId': stopOrderId,
     'stage': stage,
+    'targetFractions': targetFractions,
+    'marketRegime': marketRegime.name,
   };
 
   factory LocalLiveManagedPosition.fromJson(Map<String, Object?> json) =>
@@ -215,7 +224,26 @@ final class LocalLiveManagedPosition {
             DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
         stopOrderId: json['stopOrderId']?.toString(),
         stage: (json['stage'] as num?)?.toInt() ?? 0,
+        targetFractions: _targetFractionsFromJson(json['targetFractions']),
+        marketRegime: MarketRegime.values.firstWhere(
+          (item) => item.name == json['marketRegime'],
+          orElse: () => MarketRegime.transition,
+        ),
       );
+
+  static List<double> _targetFractionsFromJson(Object? value) {
+    final parsed = (value as List<Object?>? ?? const [])
+        .whereType<num>()
+        .map((item) => item.toDouble())
+        .toList(growable: false);
+    final total = parsed.fold<double>(0, (sum, item) => sum + item);
+    if (parsed.length != 3 ||
+        parsed.any((item) => !item.isFinite || item <= 0) ||
+        (total - 1).abs() > 0.0001) {
+      return const [0.40, 0.30, 0.30];
+    }
+    return List.unmodifiable(parsed);
+  }
 }
 
 final class LocalLiveTradeStatus {

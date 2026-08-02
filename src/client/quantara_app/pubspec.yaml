@@ -2,7 +2,7 @@ name: quantara_app
 description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
 # Quantara 1.0.1 guarded Local Live hardening candidate. Validate Android/PWA on this exact source revision; public Stable signing remains owner-gated.
-version: 1.0.1+101
+version: 1.0.2+102
 
 environment:
   sdk: ^3.12.2

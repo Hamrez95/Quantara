@@ -1,7 +1,5 @@
 part of 'owner_alpha_page.dart';
 
-enum _SignalFilter { all, live, taken, expired }
-
 class _SignalInboxView extends StatefulWidget {
   const _SignalInboxView({
     required this.controller,
@@ -16,7 +14,8 @@ class _SignalInboxView extends StatefulWidget {
 }
 
 class _SignalInboxViewState extends State<_SignalInboxView> {
-  _SignalFilter _filter = _SignalFilter.all;
+  SignalInboxFilter _filter = SignalInboxFilter.all;
+  SignalInboxSort _sort = SignalInboxSort.recommended;
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
   String _t(String fa, String en) => _fa ? fa : en;
@@ -30,24 +29,19 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       all,
       now: now,
     );
-    final filtered = all
-        .where((entry) {
-          final lifecycle = entry.lifecycle(
-            now,
-            taken: controller.isTaken(entry.setupId),
-          );
-          return switch (_filter) {
-            _SignalFilter.all => true,
-            _SignalFilter.live =>
-              lifecycle == SignalLifecycle.fresh ||
-                  lifecycle == SignalLifecycle.expiring,
-            _SignalFilter.taken => lifecycle == SignalLifecycle.taken,
-            _SignalFilter.expired =>
-              lifecycle == SignalLifecycle.expired ||
-                  lifecycle == SignalLifecycle.closed,
-          };
-        })
-        .toList(growable: false);
+    final filtered = SignalInboxQuery.apply(
+      entries: all,
+      filter: _filter,
+      sort: _sort,
+      now: now,
+      isTaken: controller.isTaken,
+    );
+    int count(SignalInboxFilter filter) => SignalInboxQuery.count(
+      entries: all,
+      filter: filter,
+      now: now,
+      isTaken: controller.isTaken,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -85,32 +79,83 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
         const SizedBox(height: 14),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: SegmentedButton<_SignalFilter>(
+          child: SegmentedButton<SignalInboxFilter>(
             showSelectedIcon: false,
             segments: [
               ButtonSegment(
-                value: _SignalFilter.all,
-                label: Text(_t('همه', 'All')),
+                value: SignalInboxFilter.all,
+                label: Text(_t('همه ${all.length}', 'All ${all.length}')),
               ),
               ButtonSegment(
-                value: _SignalFilter.live,
+                value: SignalInboxFilter.opportunities,
                 icon: const Icon(Icons.bolt_rounded),
-                label: Text(_t('معتبر', 'Live')),
+                label: Text(
+                  _t(
+                    'فرصت باز ${count(SignalInboxFilter.opportunities)}',
+                    'Open ${count(SignalInboxFilter.opportunities)}',
+                  ),
+                ),
               ),
               ButtonSegment(
-                value: _SignalFilter.taken,
+                value: SignalInboxFilter.active,
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                label: Text(
+                  _t(
+                    'فعال ${count(SignalInboxFilter.active)}',
+                    'Active ${count(SignalInboxFilter.active)}',
+                  ),
+                ),
+              ),
+              ButtonSegment(
+                value: SignalInboxFilter.results,
+                icon: const Icon(Icons.query_stats_rounded),
+                label: Text(
+                  _t(
+                    'نتیجه‌دار ${count(SignalInboxFilter.results)}',
+                    'Results ${count(SignalInboxFilter.results)}',
+                  ),
+                ),
+              ),
+              ButtonSegment(
+                value: SignalInboxFilter.expired,
+                icon: const Icon(Icons.timer_off_outlined),
+                label: Text(
+                  _t(
+                    'منقضی ${count(SignalInboxFilter.expired)}',
+                    'Expired ${count(SignalInboxFilter.expired)}',
+                  ),
+                ),
+              ),
+              ButtonSegment(
+                value: SignalInboxFilter.taken,
                 icon: const Icon(Icons.bookmark_rounded),
-                label: Text(_t('گرفته‌شده', 'Taken')),
-              ),
-              ButtonSegment(
-                value: _SignalFilter.expired,
-                label: Text(_t('بایگانی', 'Archive')),
+                label: Text(
+                  _t(
+                    'گرفتم ${count(SignalInboxFilter.taken)}',
+                    'Taken ${count(SignalInboxFilter.taken)}',
+                  ),
+                ),
               ),
             ],
             selected: {_filter},
             onSelectionChanged: (value) =>
                 setState(() => _filter = value.single),
           ),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<SignalInboxSort>(
+          initialValue: _sort,
+          decoration: InputDecoration(
+            labelText: _t('مرتب‌سازی پیشنهادها', 'Sort setups'),
+            prefixIcon: const Icon(Icons.sort_rounded),
+          ),
+          items: [
+            for (final sort in SignalInboxSort.values)
+              DropdownMenuItem(value: sort, child: Text(_sortLabel(sort))),
+          ],
+          onChanged: (value) {
+            if (value != null) setState(() => _sort = value);
+          },
         ),
         const SizedBox(height: 16),
         if (filtered.isEmpty)
@@ -172,6 +217,17 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       ],
     );
   }
+
+  String _sortLabel(SignalInboxSort value) => switch (value) {
+    SignalInboxSort.recommended => _t(
+      'پیشنهادی؛ فرصت‌های بهتر اول',
+      'Recommended',
+    ),
+    SignalInboxSort.score => _t('بیشترین امتیاز', 'Highest score'),
+    SignalInboxSort.expiringSoon => _t('نزدیک‌ترین انقضا', 'Expiring soon'),
+    SignalInboxSort.newest => _t('جدیدترین', 'Newest'),
+    SignalInboxSort.latestResult => _t('آخرین نتیجه', 'Latest result'),
+  };
 
   Future<void> _editNote(SignalJournalEntry entry) async {
     final textController = TextEditingController(text: entry.note);
@@ -314,6 +370,18 @@ class _SignalPolicyCard extends StatelessWidget {
             ),
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          const SizedBox(height: 10),
+          Text(
+            _t(
+              context,
+              'منطق سیو سود ثابت نیست: اول می‌سنجیم بازار روند است، رنج است یا شکست دارد؛ بعد حجم TP1، رانر و نقطه ریسک‌فری متناسب با همان سناریو انتخاب می‌شود.',
+              'Profit protection is regime-aware: trend, range and breakout setups use different TP1, runner and break-even sizing.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: QuantaraColors.cyan,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -369,6 +437,7 @@ class _SignalJournalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now().toUtc();
     final lifecycle = entry.lifecycle(now, taken: taken);
+    final profitPlan = ProfitProtectionPolicy.forJournal(entry);
     final color = switch (lifecycle) {
       SignalLifecycle.fresh => QuantaraColors.success,
       SignalLifecycle.expiring => QuantaraColors.warning,
@@ -416,6 +485,26 @@ class _SignalJournalCard extends StatelessWidget {
                   color: _outcomeColor(context),
                   icon: _outcomeIcon,
                 ),
+                if (entry.confidencePercent > 0)
+                  StatusPill(
+                    label: _t(
+                      context,
+                      'امتیاز ${entry.confidencePercent}',
+                      'Score ${entry.confidencePercent}',
+                    ),
+                    color: QuantaraColors.cyan,
+                    icon: Icons.auto_graph_rounded,
+                  ),
+                if (entry.riskReward != null)
+                  StatusPill(
+                    label: 'R:R ${entry.riskReward!.toStringAsFixed(2)}',
+                    color: QuantaraColors.success,
+                  ),
+                StatusPill(
+                  label: _profitProfileLabel(context, profitPlan.profile),
+                  color: QuantaraColors.warning,
+                  icon: Icons.savings_outlined,
+                ),
                 StatusPill(
                   label: _t(
                     context,
@@ -453,6 +542,14 @@ class _SignalJournalCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(entry.summary),
+            const SizedBox(height: 8),
+            Text(
+              _profitProtectionHint(context, profitPlan),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: QuantaraColors.warning,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             if (priority == SignalTimeframePriorityKind.primary) ...[
               const SizedBox(height: 8),
               Text(
@@ -621,6 +718,51 @@ class _SignalJournalCard extends StatelessWidget {
     );
   }
 
+  String _profitProfileLabel(
+    BuildContext context,
+    ProfitProtectionProfile profile,
+  ) => switch (profile) {
+    ProfitProtectionProfile.rangeDefense => _t(
+      context,
+      'رنج؛ سیو سریع',
+      'Range defense',
+    ),
+    ProfitProtectionProfile.trendBalance => _t(
+      context,
+      'روند؛ متعادل',
+      'Trend balance',
+    ),
+    ProfitProtectionProfile.breakoutRunner => _t(
+      context,
+      'شکست؛ رانر بزرگ',
+      'Breakout runner',
+    ),
+    ProfitProtectionProfile.transitionBalance => _t(
+      context,
+      'گذار؛ متعادل',
+      'Transition balance',
+    ),
+    ProfitProtectionProfile.disorderDefense => _t(
+      context,
+      'آشفته؛ دفاعی',
+      'Disorder defense',
+    ),
+  };
+
+  String _profitProtectionHint(
+    BuildContext context,
+    ProfitProtectionPlan plan,
+  ) {
+    final parts = plan.targetFractions
+        .map((value) => (value * 100).round())
+        .join(' / ');
+    return _t(
+      context,
+      'پلن سیو سود $parts٪ است؛ بعد از TP1 باقی‌مانده با احتساب هزینه‌ها ریسک‌فری می‌شود و بعد از TP2 استاپ رانر روی TP1 می‌آید.',
+      'Save-profit plan: $parts%. After TP1 the remainder moves beyond break-even including costs; after TP2 the runner stop moves to TP1.',
+    );
+  }
+
   String _direction(BuildContext context) =>
       entry.direction == TradeDirection.long
       ? _t(context, 'خرید', 'Long')
@@ -784,8 +926,8 @@ class _SignalPerformancePanel extends StatelessWidget {
             Text(
               _t(
                 context,
-                'این گزارش مستقل از دکمه «گرفتم» و با ورود محافظه‌کارانه محاسبه می‌شود. اگر بعد از TP حد ضرر بخورد، خروج پله‌ای مساوی لحاظ می‌شود؛ کارمزد و لغزش فرضی هم کسر شده‌اند.',
-                'This report runs even when “Taken” is off and uses a conservative fill. If price stops after a TP, equal scale-outs are modeled; estimated fees and slippage are deducted.',
+                'این گزارش مستقل از دکمه «گرفتم» و با ورود محافظه‌کارانه محاسبه می‌شود. اگر بعد از TP حد ضرر بخورد، خروج پله‌ای متناسب با روند، رنج یا شکست و جابه‌جایی ریسک‌فری لحاظ می‌شود؛ کارمزد و لغزش فرضی هم کسر شده‌اند.',
+                'This report runs even when “Taken” is off and uses a conservative fill. If price stops after a TP, regime-aware scale-outs and break-even movement are modeled; estimated fees and slippage are deducted.',
               ),
               style: Theme.of(context).textTheme.bodySmall,
             ),

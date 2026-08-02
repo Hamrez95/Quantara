@@ -1,5 +1,6 @@
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../domain/owner_alpha_models.dart';
+import '../domain/profit_protection_policy.dart';
 
 /// Replays closed candles after a signal was created.
 ///
@@ -8,7 +9,6 @@ import '../domain/owner_alpha_models.dart';
 /// overstating performance.
 abstract final class SignalOutcomeEvaluator {
   static const _costBuffer = 0.0017;
-  static const _targetFractions = <double>[0.40, 0.30, 0.30];
 
   static SignalJournalEntry evaluate({
     required SignalJournalEntry entry,
@@ -165,14 +165,17 @@ abstract final class SignalOutcomeEvaluator {
     }
 
     final direction = entry.direction == TradeDirection.long ? 1.0 : -1.0;
+    final targetFractions = ProfitProtectionPolicy.forJournal(
+      entry,
+    ).targetFractions;
     final reachedTargets = highestTarget
-        .clamp(0, _targetFractions.length)
+        .clamp(0, targetFractions.length)
         .toInt();
     var realizedSize = 0.0;
     var grossPnl = 0.0;
 
     for (var index = 0; index < reachedTargets; index++) {
-      final trancheSize = entry.positionSize * _targetFractions[index];
+      final trancheSize = entry.positionSize * targetFractions[index];
       realizedSize += trancheSize;
       grossPnl +=
           (entry.targets[index] - referenceEntry) * trancheSize * direction;

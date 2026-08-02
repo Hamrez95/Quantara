@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import '../../owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../../owner_alpha/data/trade_idea_factory.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
+import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_trade_models.dart';
@@ -44,8 +45,6 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   DateTime? _lastExchangeSync;
   String? _lastAuditFingerprint;
   DateTime? _lastAuditAt;
-
-  static const _targetFractions = <double>[0.40, 0.30, 0.30];
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -322,6 +321,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         return;
       }
+      final profitPlan = ProfitProtectionPolicy.forIdea(idea);
       final markPrice = await exchange.fetchMarkPrice(idea.symbol);
       final lower = math.min(idea.entryLower!, idea.entryUpper!);
       final upper = math.max(idea.entryLower!, idea.entryUpper!);
@@ -351,7 +351,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       final riskBudget =
           account.estimatedEquity * configuration.riskPercent / 100;
       var quantity = rules.roundQuantityDown(riskBudget / riskPerUnit);
-      if (quantity < rules.minimumQuantity / _targetFractions.last ||
+      if (quantity < rules.minimumQuantity / profitPlan.minimumTargetFraction ||
           quantity > rules.maximumMarketQuantity ||
           quantity <= 0) {
         _auditEvent(
@@ -466,7 +466,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       quantity = rules.roundQuantityDown(
         math.min(detail.filledQuantity, position.quantity),
       );
-      if (quantity < rules.minimumQuantity * 3) {
+      if (quantity < rules.minimumQuantity / profitPlan.minimumTargetFraction) {
         await exchange.closePositionReduceOnly(
           position: position,
           clientId: '$clientId-small-close',
@@ -507,10 +507,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
       }
       final tp1Quantity = rules.roundQuantityDown(
-        quantity * _targetFractions[0],
+        quantity * profitPlan.targetFractions[0],
       );
       final tp2Quantity = rules.roundQuantityDown(
-        quantity * _targetFractions[1],
+        quantity * profitPlan.targetFractions[1],
       );
       final tp3Quantity = rules.roundQuantityDown(
         quantity - tp1Quantity - tp2Quantity,
@@ -602,13 +602,15 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           leverage: leverage,
           openedAt: DateTime.now().toUtc(),
           stopOrderId: stopOrderId,
+          targetFractions: profitPlan.targetFractions,
+          marketRegime: idea.marketRegime,
         ),
       );
       _executedSetupIds.add(idea.setupId);
       await _persistState();
       _auditEvent(
         'position_protected',
-        'Entry fill, full stop and three staged targets confirmed.',
+        'Entry fill, full stop and three regime-aware staged targets confirmed (${profitPlan.profile.name}).',
         symbol: idea.symbol,
       );
     } finally {
@@ -650,7 +652,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           await exchange.placePositionStop(
             symbol: managed.symbol,
             positionId: managed.positionId,
-            stopLoss: managed.stage >= 1
+            stopLoss: managed.stage >= 2
+                ? managed.targets.first
+                : managed.stage >= 1
                 ? _breakEvenStop(managed)
                 : managed.originalStopLoss,
             credentials: credentials,
@@ -669,7 +673,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       }
       final ratio = position.quantity / managed.initialQuantity;
       var next = managed;
-      if (managed.stage < 1 && ratio <= 0.62) {
+      final tp1Trigger = (1 - managed.targetFractions.first + 0.02).clamp(0, 1);
+      final tp2Trigger = (managed.targetFractions.last + 0.02).clamp(0, 1);
+      if (managed.stage < 1 && ratio <= tp1Trigger) {
         await exchange.modifyPositionStop(
           symbol: managed.symbol,
           positionId: managed.positionId,
@@ -679,11 +685,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         next = managed.copyWith(stage: 1);
         _auditEvent(
           'risk_free',
-          'TP1 largest reduction observed; remaining position moved beyond break-even including costs.',
+          'TP1 save-profit reduction observed; remaining position moved beyond break-even including costs.',
           symbol: managed.symbol,
         );
       }
-      if (next.stage < 2 && ratio <= 0.32) {
+      if (next.stage < 2 && ratio <= tp2Trigger) {
         await exchange.modifyPositionStop(
           symbol: managed.symbol,
           positionId: managed.positionId,
