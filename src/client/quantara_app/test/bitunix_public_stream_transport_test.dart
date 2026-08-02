@@ -9,9 +9,9 @@ import 'package:quantara_app/features/owner_alpha/domain/bitunix_public_stream_m
 void main() {
   group('BitunixReconnectPolicy', () {
     test('applies exponential backoff with a deterministic cap', () {
-      const policy = BitunixReconnectPolicy(
-        baseDelay: Duration(seconds: 1),
-        maximumDelay: Duration(seconds: 8),
+      final policy = BitunixReconnectPolicy(
+        baseDelay: const Duration(seconds: 1),
+        maximumDelay: const Duration(seconds: 8),
         maximumJitter: Duration.zero,
       );
 
@@ -34,8 +34,8 @@ void main() {
     });
 
     test('produces stable shard-aware jitter', () {
-      const policy = BitunixReconnectPolicy(
-        maximumJitter: Duration(milliseconds: 250),
+      final policy = BitunixReconnectPolicy(
+        maximumJitter: const Duration(milliseconds: 250),
       );
 
       final first = policy.delayFor(attempt: 2, shardIndex: 4);
@@ -229,9 +229,9 @@ BitunixPublicStreamConnection _connection({
     silenceTimeout: const Duration(hours: 2),
     malformedPayloadBudget: malformedPayloadBudget,
   ),
-  reconnectPolicy: const BitunixReconnectPolicy(
-    baseDelay: Duration(seconds: 1),
-    maximumDelay: Duration(seconds: 4),
+  reconnectPolicy: BitunixReconnectPolicy(
+    baseDelay: const Duration(seconds: 1),
+    maximumDelay: const Duration(seconds: 4),
     maximumJitter: Duration.zero,
   ),
 );
