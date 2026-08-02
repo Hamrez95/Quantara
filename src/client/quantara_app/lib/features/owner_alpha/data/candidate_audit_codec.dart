@@ -9,24 +9,23 @@ import '../domain/realtime_market_event_models.dart';
 abstract final class CandidateAuditCodec {
   static const schemaVersion = 1;
   static const maximumEncodedLength = 2000000;
+  static const maximumDecodedRecords = 10000;
 
   static CandidateAuditRecord fromAuditEvent(
     CandidateRegistryAuditEvent event,
   ) {
-    final canonicalIdentity = jsonEncode({
-      'eventId': event.eventId,
-      'setupId': event.setupId,
-      'symbol': event.streamKey.symbol,
-      'timeframe': event.streamKey.timeframe,
-      'disposition': event.disposition.name,
-      'observedAtUtc': event.observedAtUtc.toUtc().toIso8601String(),
-      'previousStage': event.previousStage?.name,
-      'currentStage': event.currentStage?.name,
-      'transitionReason': event.transitionReason?.name,
-      'expectedSequence': event.gap?.expectedSequence,
-      'observedSequence': event.gap?.observedSequence,
-    });
-    final recordId = sha256.convert(utf8.encode(canonicalIdentity)).toString();
+    final recordId = _recordIdentifier(
+      disposition: event.disposition,
+      eventId: event.eventId,
+      setupId: event.setupId,
+      symbol: event.streamKey.symbol,
+      timeframe: event.streamKey.timeframe,
+      previousStage: event.previousStage,
+      currentStage: event.currentStage,
+      transitionReason: event.transitionReason,
+      expectedSequence: event.gap?.expectedSequence,
+      observedSequence: event.gap?.observedSequence,
+    );
 
     return CandidateAuditRecord(
       recordId: recordId,
@@ -81,7 +80,8 @@ abstract final class CandidateAuditCodec {
       final rawRecords = body['records'];
       if (generation == null ||
           generation < 0 ||
-          rawRecords is! List<Object?>) {
+          rawRecords is! List<Object?> ||
+          rawRecords.length > maximumDecodedRecords) {
         return null;
       }
       final records = <CandidateAuditRecord>[];
@@ -138,6 +138,34 @@ abstract final class CandidateAuditCodec {
     final parsedAt = DateTime.tryParse(observedAt)?.toUtc();
     if (parsedAt == null) return null;
 
+    final previousStage = _nullableEnumValue(
+      OpportunityStage.values,
+      value['previousStage'],
+    );
+    final currentStage = _nullableEnumValue(
+      OpportunityStage.values,
+      value['currentStage'],
+    );
+    final transitionReason = _nullableEnumValue(
+      OpportunityTransitionReason.values,
+      value['transitionReason'],
+    );
+    final expectedSequence = (value['expectedSequence'] as num?)?.toInt();
+    final observedSequence = (value['observedSequence'] as num?)?.toInt();
+    final calculatedRecordId = _recordIdentifier(
+      disposition: disposition,
+      eventId: eventId,
+      setupId: setupId,
+      symbol: symbol,
+      timeframe: timeframe,
+      previousStage: previousStage,
+      currentStage: currentStage,
+      transitionReason: transitionReason,
+      expectedSequence: expectedSequence,
+      observedSequence: observedSequence,
+    );
+    if (calculatedRecordId != recordId) return null;
+
     try {
       return CandidateAuditRecord(
         recordId: recordId,
@@ -148,24 +176,42 @@ abstract final class CandidateAuditCodec {
         symbol: symbol,
         timeframe: timeframe,
         observedAtUtc: parsedAt,
-        previousStage: _nullableEnumValue(
-          OpportunityStage.values,
-          value['previousStage'],
-        ),
-        currentStage: _nullableEnumValue(
-          OpportunityStage.values,
-          value['currentStage'],
-        ),
-        transitionReason: _nullableEnumValue(
-          OpportunityTransitionReason.values,
-          value['transitionReason'],
-        ),
-        expectedSequence: (value['expectedSequence'] as num?)?.toInt(),
-        observedSequence: (value['observedSequence'] as num?)?.toInt(),
+        previousStage: previousStage,
+        currentStage: currentStage,
+        transitionReason: transitionReason,
+        expectedSequence: expectedSequence,
+        observedSequence: observedSequence,
       );
     } on Object {
       return null;
     }
+  }
+
+  static String _recordIdentifier({
+    required StreamEventDisposition disposition,
+    required String eventId,
+    required String setupId,
+    required String symbol,
+    required String timeframe,
+    required OpportunityStage? previousStage,
+    required OpportunityStage? currentStage,
+    required OpportunityTransitionReason? transitionReason,
+    required int? expectedSequence,
+    required int? observedSequence,
+  }) {
+    final canonicalIdentity = jsonEncode({
+      'eventId': eventId,
+      'setupId': setupId,
+      'symbol': symbol,
+      'timeframe': timeframe,
+      'disposition': disposition.name,
+      'previousStage': previousStage?.name,
+      'currentStage': currentStage?.name,
+      'transitionReason': transitionReason?.name,
+      'expectedSequence': expectedSequence,
+      'observedSequence': observedSequence,
+    });
+    return sha256.convert(utf8.encode(canonicalIdentity)).toString();
   }
 
   static T? _enumValue<T extends Enum>(Iterable<T> values, Object? raw) {
