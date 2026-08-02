@@ -6,6 +6,11 @@ on:
       - fix/97-local-live-persistence-scalp
     paths:
       - .github/workflows/fix-v1-0-1-regressions.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-v1-0-1-regressions.yml
 
 permissions:
   contents: write
@@ -106,3 +111,5 @@ jobs:
           git diff --cached --check
           git commit -m "test: align regression suite with bounded 5m controls"
           git push origin HEAD:fix/97-local-live-persistence-scalp
+
+# trigger 2
