@@ -506,16 +506,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           'Protective stop was not confirmed; the position was closed reduce-only.',
         );
       }
-      final tp1Quantity = rules.roundQuantityDown(
-        quantity * profitPlan.targetFractions[0],
+      final allocation = ProfitProtectionAllocation.allocate(
+        totalQuantity: quantity,
+        plan: profitPlan,
+        roundDown: rules.roundQuantityDown,
       );
-      final tp2Quantity = rules.roundQuantityDown(
-        quantity * profitPlan.targetFractions[1],
-      );
-      final tp3Quantity = rules.roundQuantityDown(
-        quantity - tp1Quantity - tp2Quantity,
-      );
-      final targetQuantities = [tp1Quantity, tp2Quantity, tp3Quantity];
+      final targetQuantities = allocation.quantities;
       if (targetQuantities.any(
         (targetQuantity) => targetQuantity < rules.minimumQuantity,
       )) {
@@ -602,7 +598,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           leverage: leverage,
           openedAt: DateTime.now().toUtc(),
           stopOrderId: stopOrderId,
-          targetFractions: profitPlan.targetFractions,
+          targetFractions: allocation.actualFractions,
           marketRegime: idea.marketRegime,
         ),
       );

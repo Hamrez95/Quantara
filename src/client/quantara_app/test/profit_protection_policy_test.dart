@@ -40,9 +40,7 @@ void main() {
   test('tiny exchange-rounded size assigns residual to TP1', () {
     final allocation = ProfitProtectionAllocation.allocate(
       totalQuantity: 4,
-      plan: ProfitProtectionPolicy.forRegime(
-        MarketRegime.breakoutExpansion,
-      ),
+      plan: ProfitProtectionPolicy.forRegime(MarketRegime.breakoutExpansion),
       roundDown: (value) => value.floorToDouble(),
     );
 
