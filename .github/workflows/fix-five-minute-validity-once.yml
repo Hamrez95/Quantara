@@ -1,0 +1,137 @@
+name: Fix five minute candidate validity once
+
+on:
+  push:
+    branches:
+      - feat/101-realtime-e2e-benchmark
+
+permissions:
+  contents: write
+
+jobs:
+  fix-test-format-and-clean:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    env:
+      FLUTTER_VERSION: 3.44.8
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/101-realtime-e2e-benchmark
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Add 5m validity and regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          model_path = Path('src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart')
+          model = model_path.read_text()
+          old = """  Duration get validityWindow => switch (timeframe) {
+              '15m' => const Duration(minutes: 45),
+          """
+          new = """  Duration get validityWindow => switch (timeframe) {
+              '5m' => const Duration(minutes: 15),
+              '15m' => const Duration(minutes: 45),
+          """
+          if old not in model:
+              raise SystemExit('validity window marker not found')
+          model_path.write_text(model.replace(old, new, 1))
+
+          test_path = Path('src/client/quantara_app/test/trade_idea_validity_test.dart')
+          test_path.write_text("""import 'package:flutter_test/flutter_test.dart';
+          import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
+          import 'package:quantara_app/features/owner_alpha/domain/realtime_candidate_models.dart';
+
+          void main() {
+            test('supported realtime timeframes retain three closed candles', () {
+              final closedAt = DateTime.utc(2026, 8, 2, 12);
+              const windows = <String, Duration>{
+                '5m': Duration(minutes: 15),
+                '15m': Duration(minutes: 45),
+                '1h': Duration(hours: 3),
+                '4h': Duration(hours: 12),
+                '1D': Duration(days: 3),
+              };
+
+              for (final entry in windows.entries) {
+                final idea = _idea(
+                  timeframe: entry.key,
+                  closedAt: closedAt,
+                );
+
+                expect(idea.validityWindow, entry.value);
+                expect(idea.validUntil, closedAt.add(entry.value));
+              }
+            });
+
+            test('a 5m candidate can be detected after its candle closes', () {
+              final closedAt = DateTime.utc(2026, 8, 2, 12);
+              final detectedAt = DateTime.utc(2026, 8, 2, 12, 6);
+
+              final candidate = RealtimeOpportunityCandidate.fromIdea(
+                _idea(timeframe: '5m', closedAt: closedAt),
+                detectedAtUtc: detectedAt,
+              );
+
+              expect(candidate.detectedAtUtc, detectedAt);
+              expect(candidate.validUntilUtc, DateTime.utc(2026, 8, 2, 12, 15));
+            });
+          }
+
+          TradeIdea _idea({
+            required String timeframe,
+            required DateTime closedAt,
+          }) => TradeIdea(
+            symbol: 'BTCUSDT',
+            timeframe: timeframe,
+            direction: TradeDirection.long,
+            confidencePercent: 85,
+            entryLower: 100,
+            entryUpper: 103,
+            stopLoss: 98,
+            targets: const [106, 109],
+            riskReward: 2,
+            maximumLoss: 5,
+            positionSize: 1,
+            notionalValue: 102,
+            recommendedLeverage: 1,
+            maximumSafeLeverage: 3,
+            requiredMargin: 102,
+            estimatedRoundTripCosts: 0.1,
+            setupId: 'validity-$timeframe',
+            candleClosedAt: closedAt,
+            summary: 'validity fixture',
+            invalidation: 'below structure',
+            reasons: const ['closed trigger'],
+          );
+          """)
+          PY
+
+          cd src/client/quantara_app
+          dart format lib/features/owner_alpha/domain/owner_alpha_models.dart test/trade_idea_validity_test.dart
+          cd ../../..
+          git rm .github/workflows/fix-five-minute-validity-once.yml
+          git add src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart
+          git add src/client/quantara_app/test/trade_idea_validity_test.dart
+          git diff --cached --check
+
+      - name: Commit clean domain fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "quantara-ci"
+          git config user.email "quantara-ci@users.noreply.github.com"
+          git commit -m "fix: retain five minute candidate validity"
+          git push origin HEAD:feat/101-realtime-e2e-benchmark
