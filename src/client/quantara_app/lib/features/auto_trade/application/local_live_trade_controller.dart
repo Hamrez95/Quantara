@@ -2,8 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:http/http.dart' as http;
 
+import '../data/bitunix_local_live_api_client.dart';
 import '../data/secure_auto_trade_credentials_store.dart';
+import '../domain/auto_trade_models.dart';
+import '../domain/local_live_entry_preflight.dart';
 import '../domain/local_live_trade_models.dart';
 import 'local_live_trade_service.dart';
 
@@ -71,6 +75,9 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'Connect and validate the Bitunix account before starting local live trading.',
         );
       }
+
+      await _ensureAtLeastOneAffordableSymbol(configuration, credentials);
+
       final permission =
           await FlutterForegroundTask.checkNotificationPermission();
       if (permission != NotificationPermission.granted) {
@@ -158,6 +165,85 @@ final class LocalLiveTradeController extends ChangeNotifier {
         _busy = false;
         notifyListeners();
       }
+    }
+  }
+
+  Future<void> _ensureAtLeastOneAffordableSymbol(
+    LocalLiveTradeConfiguration configuration,
+    BitunixApiCredentials credentials,
+  ) async {
+    final client = http.Client();
+    try {
+      final exchange = BitunixLocalLiveApiClient(client: client);
+      final account = await exchange.fetchAccountSnapshot(credentials);
+      if (!LocalLiveEntryPreflightPolicy.shouldCheckNewEntryAffordability(
+        openPositionCount: account.positions.length,
+      )) {
+        // Starting the service must remain possible so a persisted managed
+        // position can be reconciled. The service's one-position gate still
+        // prevents any additional entry while an exchange position is open.
+        return;
+      }
+      if (!account.available.isFinite || account.available <= 0) {
+        throw const LocalLiveTradeSafeException(
+          'No available USDT margin is available for a new isolated position.',
+        );
+      }
+
+      LocalLiveEntryAffordability? lowestFloor;
+      String? lowestFloorSymbol;
+      for (final symbol in configuration.symbols) {
+        try {
+          final rules = await exchange.fetchInstrumentRules(symbol);
+          if (!rules.open ||
+              !rules.apiSupported ||
+              !rules.minimumQuantity.isFinite ||
+              rules.minimumQuantity <= 0) {
+            continue;
+          }
+          final markPrice = await exchange.fetchMarkPrice(symbol);
+          final leverage = configuration.leverage
+              .clamp(rules.minimumLeverage, rules.maximumLeverage)
+              .toInt();
+          final affordability = LocalLiveEntryAffordability.calculate(
+            availableMargin: account.available,
+            markPrice: markPrice,
+            minimumExchangeQuantity: rules.minimumQuantity,
+            leverage: leverage,
+          );
+          if (affordability.affordable) return;
+          if (lowestFloor == null ||
+              affordability.minimumBufferedMargin <
+                  lowestFloor.minimumBufferedMargin) {
+            lowestFloor = affordability;
+            lowestFloorSymbol = symbol;
+          }
+        } on LocalLiveTradeSafeException {
+          // Try the remaining allow-listed symbols. Failure to validate every
+          // symbol still fails closed below.
+        } on FormatException {
+          // Malformed public symbol rules are not usable for live execution.
+        }
+      }
+
+      if (lowestFloor != null) {
+        final available = account.available.toStringAsFixed(4);
+        final minimum = lowestFloor.minimumBufferedMargin.toStringAsFixed(4);
+        final shortfall = lowestFloor.shortfall.toStringAsFixed(4);
+        throw LocalLiveTradeSafeException(
+          'Available margin is $available USDT. The smallest exchange/margin '
+          'floor among the selected symbols is about $minimum USDT '
+          '($lowestFloorSymbol, including three TP quantities and the safety '
+          'buffer). Shortfall: $shortfall USDT. The actual risk and stop '
+          'distance checks may require more capital.',
+        );
+      }
+
+      throw const LocalLiveTradeSafeException(
+        'Quantara could not confirm an affordable API-supported symbol from the selected allow-list.',
+      );
+    } finally {
+      client.close();
     }
   }
 

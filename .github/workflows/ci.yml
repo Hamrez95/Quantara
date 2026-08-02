@@ -12,6 +12,7 @@ on:
     branches:
       - main
       - dev
+      - 'feat/**'
 
 permissions:
   contents: read
