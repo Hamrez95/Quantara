@@ -380,26 +380,13 @@ class _SignalJournalCard extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       opacity: lifecycle == SignalLifecycle.expired ? 0.72 : 1,
       child: SectionCard(
+        accentColor: color,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: SizedBox.square(
-                    dimension: 48,
-                    child: Icon(
-                      entry.direction == TradeDirection.long
-                          ? Icons.north_east_rounded
-                          : Icons.south_east_rounded,
-                      color: color,
-                    ),
-                  ),
-                ),
+                SymbolAvatar(symbol: entry.symbol, size: 48),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

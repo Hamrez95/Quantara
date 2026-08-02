@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/services.dart';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/formatting/number_formatters.dart';
 import '../../../core/localization/app_strings.dart';
+import '../../../core/localization/local_live_message_localizer.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
@@ -22,6 +25,7 @@ import '../../strategy_lab/data/strategy_lab_runner.dart';
 import '../../strategy_lab/data/platform_strategy_lab_session_store.dart';
 import '../../strategy_lab/domain/strategy_lab_models.dart';
 import '../application/owner_alpha_controller.dart';
+import '../data/owner_alpha_settings_transfer.dart';
 import '../data/signal_timeframe_priority.dart';
 import '../domain/owner_alpha_models.dart';
 
@@ -182,6 +186,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
             onOpenStrategyLab: () => setState(() => _destination = 4),
+            showTopBar: desktop,
           ),
         );
         if (desktop) {
@@ -211,21 +216,39 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
                         .toList(growable: false),
                   ),
                   const VerticalDivider(width: 1),
-                  Expanded(child: body),
+                  Expanded(
+                    child: _DestinationTransition(
+                      destination: _destination,
+                      child: body,
+                    ),
+                  ),
                 ],
               ),
             ),
           );
         }
         return Scaffold(
-          body: SafeArea(bottom: false, child: body),
+          appBar: _QuantaraMobileAppBar(
+            controller: _controller,
+            destination: _destination,
+            themeMode: widget.themeMode,
+            onToggleTheme: widget.onToggleTheme,
+            onRefresh: _controller.refresh,
+          ),
+          body: SafeArea(
+            bottom: false,
+            child: _DestinationTransition(
+              destination: _destination,
+              child: body,
+            ),
+          ),
           bottomNavigationBar: SafeArea(
             top: false,
             child: NavigationBar(
               selectedIndex: _mobileDestinationIndexes.contains(_destination)
                   ? _mobileDestinationIndexes.indexOf(_destination)
                   : 2,
-              labelBehavior: constraints.maxWidth < 380
+              labelBehavior: constraints.maxWidth < 440
                   ? NavigationDestinationLabelBehavior.onlyShowSelected
                   : NavigationDestinationLabelBehavior.alwaysShow,
               onDestinationSelected: (value) {
@@ -244,6 +267,148 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _DestinationTransition extends StatelessWidget {
+  const _DestinationTransition({
+    required this.destination,
+    required this.child,
+  });
+
+  final int destination;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return AnimatedSwitcher(
+      duration: reduceMotion ? Duration.zero : QuantaraMotion.standard,
+      switchInCurve: QuantaraMotion.curve,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final offset = Tween<Offset>(
+          begin: const Offset(0.025, 0),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: offset, child: child),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey('destination-$destination'),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _QuantaraMobileAppBar extends StatelessWidget
+    implements PreferredSizeWidget {
+  const _QuantaraMobileAppBar({
+    required this.controller,
+    required this.destination,
+    required this.themeMode,
+    required this.onToggleTheme,
+    required this.onRefresh,
+  });
+
+  final OwnerAlphaController controller;
+  final int destination;
+  final ThemeMode themeMode;
+  final VoidCallback onToggleTheme;
+  final VoidCallback onRefresh;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(64);
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final state = controller.connectionState;
+    final healthy =
+        state == OwnerAlphaConnectionState.fresh ||
+        state == OwnerAlphaConnectionState.refreshing;
+    return AppBar(
+      leadingWidth: 56,
+      leading: const Padding(
+        padding: EdgeInsetsDirectional.only(start: 14, top: 10, bottom: 10),
+        child: QuantaraBrandMark(size: 40),
+      ),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Quantara',
+            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: -0.55),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: QuantaraMotion.fast,
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: healthy
+                      ? QuantaraColors.success
+                      : QuantaraColors.warning,
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          (healthy
+                                  ? QuantaraColors.success
+                                  : QuantaraColors.warning)
+                              .withValues(alpha: 0.35),
+                      blurRadius: 7,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  _destinationLabel(strings, destination),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          onPressed: controller.isLoading ? null : onRefresh,
+          tooltip: strings.isPersian ? 'به‌روزرسانی' : 'Refresh',
+          icon: AnimatedRotation(
+            duration: QuantaraMotion.standard,
+            turns: controller.isLoading ? 0.5 : 0,
+            child: const Icon(Icons.refresh_rounded),
+          ),
+        ),
+        IconButton(
+          onPressed: onToggleTheme,
+          tooltip: themeMode == ThemeMode.dark
+              ? strings.lightAppearance
+              : strings.darkAppearance,
+          icon: Icon(
+            themeMode == ThemeMode.dark
+                ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined,
+          ),
+        ),
+        const SizedBox(width: 6),
+      ],
     );
   }
 }
@@ -358,6 +523,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.onOpenAnalysis,
     required this.onAddSymbol,
     required this.onOpenStrategyLab,
+    required this.showTopBar,
   });
 
   final OwnerAlphaController controller;
@@ -371,6 +537,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   final _OpenAnalysis onOpenAnalysis;
   final VoidCallback onAddSymbol;
   final VoidCallback onOpenStrategyLab;
+  final bool showTopBar;
 
   @override
   Widget build(BuildContext context) {
@@ -388,12 +555,14 @@ class _OwnerAlphaBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _AlphaTopBar(
-                    controller: controller,
-                    themeMode: themeMode,
-                    onToggleTheme: onToggleTheme,
-                  ),
-                  const SizedBox(height: 14),
+                  if (showTopBar) ...[
+                    _AlphaTopBar(
+                      controller: controller,
+                      themeMode: themeMode,
+                      onToggleTheme: onToggleTheme,
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   const _LiveBoundaryStrip(),
                   if (controller.error != null) ...[
                     const SizedBox(height: 12),
@@ -700,29 +869,7 @@ class _AlphaLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [QuantaraColors.cyan, QuantaraColors.violet],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-        ),
-        borderRadius: BorderRadius.circular(size * 0.3),
-      ),
-      child: SizedBox.square(
-        dimension: size,
-        child: Center(
-          child: Text(
-            'Q',
-            style: TextStyle(
-              color: QuantaraColors.ink,
-              fontSize: size * 0.48,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ),
-    );
+    return QuantaraBrandMark(size: size);
   }
 }
 

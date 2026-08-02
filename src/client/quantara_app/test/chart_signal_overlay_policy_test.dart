@@ -33,6 +33,23 @@ void main() {
     },
   );
 
+  test(
+    'renders immediately when signal was created inside the last candle',
+    () {
+      final analysis = _analysis(
+        start: _origin.subtract(const Duration(minutes: 20)),
+      );
+
+      expect(
+        ChartSignalOverlayPolicy.canRender(
+          analysis: analysis,
+          signal: _signal(),
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test('rejects a frozen overlay for a different timeframe', () {
     final analysis = _analysis(
       start: _origin.subtract(const Duration(minutes: 10)),

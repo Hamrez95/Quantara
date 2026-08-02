@@ -54,9 +54,24 @@ abstract final class ChartSignalOverlayPolicy {
         )) {
       return false;
     }
-    return !candles.first.openTime.isAfter(signal.createdAt) &&
-        !candles.last.openTime.isBefore(signal.createdAt);
+    final coverageStart = candles.first.openTime;
+    final lastCandleEnd = candles.last.openTime.add(
+      _timeframeDuration(analysis.timeframe),
+    );
+    final coverageEnd = analysis.generatedAt.isAfter(lastCandleEnd)
+        ? analysis.generatedAt
+        : lastCandleEnd;
+    return !coverageStart.isAfter(signal.createdAt) &&
+        !coverageEnd.isBefore(signal.createdAt);
   }
+
+  static Duration _timeframeDuration(String timeframe) => switch (timeframe) {
+    '15m' => const Duration(minutes: 15),
+    '1h' => const Duration(hours: 1),
+    '4h' => const Duration(hours: 4),
+    '1D' || '1d' => const Duration(days: 1),
+    _ => const Duration(minutes: 1),
+  };
 }
 
 class TradingViewLightweightChart extends StatelessWidget {

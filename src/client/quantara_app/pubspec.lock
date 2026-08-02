@@ -65,6 +65,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
+  crypto_icons:
+    dependency: "direct main"
+    description:
+      name: crypto_icons
+      sha256: fed4ceceb62e6b776b4f98a13ba9754ab6a564668cfacab3a2eee8ca3a3501fb
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   dbus:
     dependency: transitive
     description:

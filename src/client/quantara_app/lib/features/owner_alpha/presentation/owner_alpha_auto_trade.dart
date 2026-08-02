@@ -368,7 +368,12 @@ class _LocalLiveTradeControlCardState
         : running
         ? QuantaraColors.success
         : QuantaraColors.cyan;
+    final localizedStatus = LocalLiveMessageLocalizer.localize(
+      status.message,
+      persian: _fa,
+    );
     return SectionCard(
+      accentColor: color,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -430,13 +435,23 @@ class _LocalLiveTradeControlCardState
           ),
           if (widget.controller.error != null) ...[
             const SizedBox(height: 10),
-            _BoundaryNotice(
-              text: widget.controller.error!,
-              color: QuantaraColors.danger,
+            _LocalLiveStatusNotice(
+              message: widget.controller.error!,
+              persian: _fa,
+              error: true,
             ),
           ],
           const SizedBox(height: 12),
-          Text(status.message),
+          AnimatedSwitcher(
+            duration: QuantaraMotion.fast,
+            child: Text(
+              localizedStatus,
+              key: ValueKey(localizedStatus),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -488,6 +503,11 @@ class _LocalLiveTradeControlCardState
                     children: [
                       for (final symbol in widget.analysisController.symbols)
                         FilterChip(
+                          avatar: SymbolAvatar(
+                            symbol: symbol,
+                            size: 22,
+                            showBorder: false,
+                          ),
                           label: Text(symbol, textDirection: TextDirection.ltr),
                           selected: _enabledSymbols.contains(symbol),
                           onSelected: (selected) => setState(() {
@@ -760,8 +780,11 @@ class _LocalLiveTradeControlCardState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.controller.error ??
-                _t('شروع امن انجام نشد.', 'Safe start was rejected.'),
+            LocalLiveMessageLocalizer.localize(
+              widget.controller.error ??
+                  _t('شروع امن انجام نشد.', 'Safe start was rejected.'),
+              persian: _fa,
+            ),
           ),
         ),
       );
@@ -846,6 +869,98 @@ class _LocalLiveTradeControlCardState
     LocalLiveTradeState.circuitBreaker => _t('مدار ایمنی', 'Circuit breaker'),
     LocalLiveTradeState.error => _t('خطا', 'Error'),
   };
+}
+
+class _LocalLiveStatusNotice extends StatelessWidget {
+  const _LocalLiveStatusNotice({
+    required this.message,
+    required this.persian,
+    this.error = false,
+  });
+
+  final String message;
+  final bool persian;
+  final bool error;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = LocalLiveMessageLocalizer.affordability(message);
+    final localized = LocalLiveMessageLocalizer.localize(
+      message,
+      persian: persian,
+    );
+    final color = error ? QuantaraColors.danger : QuantaraColors.warning;
+    if (summary == null) {
+      return _BoundaryNotice(text: localized, color: color);
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(QuantaraRadius.card),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.account_balance_wallet_outlined, color: color),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    persian
+                        ? 'بررسی حداقل سرمایه لازم'
+                        : 'Minimum capital check',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                SymbolAvatar(symbol: summary.symbol, size: 34),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FinanceMetricPanel(
+                  label: persian ? 'موجودی قابل استفاده' : 'Available margin',
+                  value: '${summary.availableMargin} USDT',
+                  icon: Icons.savings_outlined,
+                  color: QuantaraColors.cyan,
+                ),
+                FinanceMetricPanel(
+                  label: persian ? 'حداقل سرمایه' : 'Minimum floor',
+                  value: '${summary.minimumMargin} USDT',
+                  icon: Icons.vertical_align_top_rounded,
+                  color: QuantaraColors.warning,
+                ),
+                FinanceMetricPanel(
+                  label: persian ? 'کسری سرمایه' : 'Shortfall',
+                  value: '${summary.shortfall} USDT',
+                  icon: Icons.trending_down_rounded,
+                  color: QuantaraColors.danger,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              persian
+                  ? 'محدودکننده فعلی ${summary.symbol} است. با توجه به فاصله حد ضرر، حجم سفارش و کنترل ریسک، ممکن است برای ورود واقعی سرمایه بیشتری لازم باشد.'
+                  : '${summary.symbol} is currently the limiting symbol. Stop distance, order sizing and risk checks may require more capital.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(height: 1.55),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _LockedServerModeCard extends StatelessWidget {
