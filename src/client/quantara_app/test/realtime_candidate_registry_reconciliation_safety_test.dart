@@ -5,9 +5,71 @@ import 'package:quantara_app/features/owner_alpha/domain/realtime_candidate_mode
 import 'package:quantara_app/features/owner_alpha/domain/realtime_market_event_models.dart';
 
 void main() {
-  test('reconciliation cannot move a cursor for another market stream', () {
-    final registry = RealtimeCandidateRegistry();
-    final candidate = RealtimeOpportunityCandidate.fromIdea(
+  group('reconciliation safety', () {
+    test('cannot move a cursor for another market stream', () {
+      final registry = RealtimeCandidateRegistry();
+      final candidate = _candidate();
+      registry.register(candidate);
+
+      expect(
+        () => registry.markReconciled(
+          setupId: candidate.setupId,
+          streamKey: RealtimeStreamKey(symbol: 'ETHUSDT', timeframe: '1h'),
+          exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 2),
+          sequence: 10,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => registry.markReconciled(
+          setupId: candidate.setupId,
+          streamKey: RealtimeStreamKey(symbol: 'BTCUSDT', timeframe: '15m'),
+          exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 2),
+          sequence: 10,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('cannot move sequence or timestamp backwards', () {
+      final registry = RealtimeCandidateRegistry();
+      final candidate = _candidate();
+      final streamKey = RealtimeStreamKey(
+        symbol: candidate.symbol,
+        timeframe: candidate.timeframe,
+      );
+      registry.register(candidate);
+      registry.markReconciled(
+        setupId: candidate.setupId,
+        streamKey: streamKey,
+        exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 5),
+        sequence: 10,
+      );
+
+      expect(
+        () => registry.markReconciled(
+          setupId: candidate.setupId,
+          streamKey: streamKey,
+          exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 4),
+          sequence: 11,
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => registry.markReconciled(
+          setupId: candidate.setupId,
+          streamKey: streamKey,
+          exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 6),
+          sequence: 9,
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+}
+
+RealtimeOpportunityCandidate _candidate() =>
+    RealtimeOpportunityCandidate.fromIdea(
       TradeIdea(
         symbol: 'BTCUSDT',
         timeframe: '1h',
@@ -35,25 +97,3 @@ void main() {
       ),
       detectedAtUtc: DateTime.utc(2026, 8, 2, 12, 1),
     );
-    registry.register(candidate);
-
-    expect(
-      () => registry.markReconciled(
-        setupId: candidate.setupId,
-        streamKey: RealtimeStreamKey(symbol: 'ETHUSDT', timeframe: '1h'),
-        exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 2),
-        sequence: 10,
-      ),
-      throwsArgumentError,
-    );
-    expect(
-      () => registry.markReconciled(
-        setupId: candidate.setupId,
-        streamKey: RealtimeStreamKey(symbol: 'BTCUSDT', timeframe: '15m'),
-        exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 2),
-        sequence: 10,
-      ),
-      throwsArgumentError,
-    );
-  });
-}
