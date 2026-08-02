@@ -6,12 +6,17 @@ on:
       - feat/99-signal-inbox-profit-protection
     paths:
       - '.github/workflows/flutter-ci.yml'
+  pull_request:
+    branches:
+      - fix/97-local-live-persistence-scalp
+    paths:
+      - '.github/workflows/flutter-ci.yml'
 
 permissions:
   contents: write
 
 concurrency:
-  group: issue-99-allocation-fix
+  group: issue-99-allocation-fix-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
@@ -57,6 +62,7 @@ jobs:
           flutter test test/signal_outcome_evaluator_test.dart
 
       - name: Commit implementation
+        if: github.event_name == 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
