@@ -184,10 +184,28 @@ final class RealtimeCandidateRegistry {
     if (sequence != null && sequence < 0) {
       throw ArgumentError.value(sequence, 'sequence');
     }
-    _streamCursors[_CandidateStreamKey(
+
+    final cursorKey = _CandidateStreamKey(
       setupId: setupId,
       streamKey: streamKey,
-    )] = _StreamCursor(
+    );
+    final existing = _streamCursors[cursorKey];
+    if (existing != null) {
+      if (exchangeTimestampUtc.isBefore(existing.exchangeTimestampUtc)) {
+        throw ArgumentError(
+          'The reconciliation timestamp cannot move the cursor backwards.',
+        );
+      }
+      if (sequence != null &&
+          existing.sequence != null &&
+          sequence < existing.sequence!) {
+        throw ArgumentError(
+          'The reconciliation sequence cannot move the cursor backwards.',
+        );
+      }
+    }
+
+    _streamCursors[cursorKey] = _StreamCursor(
       sequence: sequence,
       exchangeTimestampUtc: exchangeTimestampUtc,
     );
