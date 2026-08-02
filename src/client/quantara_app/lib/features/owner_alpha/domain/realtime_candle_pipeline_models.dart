@@ -89,7 +89,7 @@ final class RealtimeCandlePipelineUpdate {
     if (workingCandle != null && !workingCandle!.isValid) {
       throw ArgumentError('The working candle must be valid.');
     }
-    if (this.closedCandles.any((candle) => !candle.isValid)) {
+    if (closedCandles.any((candle) => !candle.isValid)) {
       throw ArgumentError('Closed candles must be valid.');
     }
   }
