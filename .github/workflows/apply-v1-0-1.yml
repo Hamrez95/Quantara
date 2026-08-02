@@ -47,6 +47,13 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
 
+      - name: Restore automation files and existing CI workflow
+        run: |
+          git checkout HEAD -- \
+            .github/workflows/apply-v1-0-1.yml \
+            .github/workflows/flutter-ci.yml \
+            scripts/apply_v1_0_1_patch.py
+
       - name: Install pinned Flutter
         uses: subosito/flutter-action@v2
         with:
