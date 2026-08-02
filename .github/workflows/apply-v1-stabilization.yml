@@ -28,6 +28,18 @@ jobs:
           ref: feat/95-ui-finalization
           fetch-depth: 0
 
+      - name: Repair staged generator assumptions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply_v1_stabilization.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('CryptoIconsExtension.fromSymbol(base)', 'CryptoIcons.fromSymbol(base)')
+          text = text.replace('AnalysisStrategy.trendCandle', 'AnalysisStrategy.trendPullback')
+          text = text.replace("find.byIcon(CryptoIcons.btc)", "find.byIcon(CryptoIcons.fromSymbol('BTC'))")
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Apply deterministic v1 patch
         run: python3 scripts/apply_v1_stabilization.py
 
