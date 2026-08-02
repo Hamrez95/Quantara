@@ -46,7 +46,10 @@ void main() {
         ),
       );
       expect(result.candidate.stage, OpportunityStage.triggered);
-      expect(result.candidate.triggeredAtUtc, DateTime.utc(2026, 8, 2, 12, 4, 1));
+      expect(
+        result.candidate.triggeredAtUtc,
+        DateTime.utc(2026, 8, 2, 12, 4, 1),
+      );
       expect(result.candidate.resolvedAtUtc, isNull);
     });
 
@@ -66,7 +69,7 @@ void main() {
       expect(result.candidate.triggeredAtUtc, isNull);
     });
 
-    test('stale data blocks a transition without destroying the candidate', () {
+    test('stale data blocks transition without destroying candidate', () {
       final candidate = _candidate(TradeDirection.long);
       final result = RealtimeCandidateEngine.evaluate(
         candidate: candidate,
@@ -91,7 +94,7 @@ void main() {
       expect(result.processingLatency, const Duration(seconds: 9));
     });
 
-    test('marks a setup missed instead of chasing a price that ran away', () {
+    test('marks a setup missed instead of chasing price', () {
       final result = RealtimeCandidateEngine.evaluate(
         candidate: _candidate(TradeDirection.long),
         observation: _observation(
@@ -134,7 +137,7 @@ void main() {
       );
     });
 
-    test('invalidates when structure or the protective boundary fails', () {
+    test('invalidates when structure or protective boundary fails', () {
       final structuralFailure = RealtimeCandidateEngine.evaluate(
         candidate: _candidate(TradeDirection.long),
         observation: _observation(
@@ -160,9 +163,12 @@ void main() {
       expect(stopFailure.candidate.stage, OpportunityStage.invalidated);
     });
 
-    test('uses direction-aware approach and overshoot distances for shorts', () {
+    test('uses direction-aware approach and overshoot for shorts', () {
       final candidate = _candidate(TradeDirection.short);
-      expect(candidate.approachDistancePercent(101.3), closeTo(0.296, 0.001));
+      expect(
+        candidate.approachDistancePercent(101.3),
+        closeTo(0.296, 0.001),
+      );
       expect(candidate.overshootPercent(99.7), closeTo(0.3, 0.001));
 
       final armed = RealtimeCandidateEngine.evaluate(
@@ -188,7 +194,7 @@ void main() {
       expect(triggered.stage, OpportunityStage.triggered);
     });
 
-    test('allows playbook-specific policy without lowering every threshold', () {
+    test('allows playbook-specific policy without global relaxation', () {
       final candidate = _candidate(TradeDirection.long);
       final observation = _observation(
         minute: 2,
@@ -242,6 +248,32 @@ void main() {
       expect(later.candidate.stage, OpportunityStage.missed);
     });
 
+    test('does not regress a triggered candidate back into discovery', () {
+      final triggered = RealtimeCandidateEngine.evaluate(
+        candidate: _candidate(TradeDirection.long),
+        observation: _observation(
+          minute: 2,
+          price: 100.5,
+          qualityScore: 80,
+          triggerConfirmed: true,
+          triggerCandleClosed: true,
+        ),
+      ).candidate;
+      expect(triggered.stage, OpportunityStage.triggered);
+
+      final later = RealtimeCandidateEngine.evaluate(
+        candidate: triggered,
+        observation: _observation(
+          minute: 3,
+          price: 99,
+          qualityScore: 20,
+        ),
+      );
+
+      expect(identical(later.candidate, triggered), isTrue);
+      expect(later.candidate.stage, OpportunityStage.triggered);
+    });
+
     test('rejects invalid event ordering and non-actionable ideas', () {
       final observation = RealtimeMarketObservation(
         exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 2),
@@ -253,7 +285,7 @@ void main() {
         triggerConfirmed: false,
         triggerCandleClosed: false,
       );
-      expect(observation.validate, throwsArgumentError);
+      expect(() => observation.validate(), throwsArgumentError);
 
       expect(
         () => RealtimeOpportunityCandidate.fromIdea(
@@ -276,6 +308,16 @@ RealtimeOpportunityCandidate _candidate(
 
 TradeIdea _idea(TradeDirection direction, {int confidence = 60}) {
   final actionable = direction != TradeDirection.wait;
+  double? stopLoss;
+  List<double> targets = const [];
+  if (direction == TradeDirection.long) {
+    stopLoss = 98;
+    targets = const [102, 104, 106];
+  } else if (direction == TradeDirection.short) {
+    stopLoss = 103;
+    targets = const [99, 97, 95];
+  }
+
   return TradeIdea(
     symbol: 'BTCUSDT',
     timeframe: '1h',
@@ -283,16 +325,8 @@ TradeIdea _idea(TradeDirection direction, {int confidence = 60}) {
     confidencePercent: confidence,
     entryLower: actionable ? 100 : null,
     entryUpper: actionable ? 101 : null,
-    stopLoss: actionable
-        ? direction == TradeDirection.long
-              ? 98
-              : 103
-        : null,
-    targets: actionable
-        ? direction == TradeDirection.long
-              ? const [102, 104, 106]
-              : const [99, 97, 95]
-        : const [],
+    stopLoss: stopLoss,
+    targets: targets,
     riskReward: actionable ? 2 : null,
     maximumLoss: 50,
     positionSize: actionable ? 1 : null,
@@ -301,7 +335,9 @@ TradeIdea _idea(TradeDirection direction, {int confidence = 60}) {
     maximumSafeLeverage: actionable ? 5 : null,
     requiredMargin: actionable ? 50 : null,
     estimatedRoundTripCosts: actionable ? 0.2 : 0,
-    setupId: actionable ? 'BTCUSDT|1h|${direction.name}|test' : 'wait-test',
+    setupId: actionable
+        ? 'BTCUSDT|1h|${direction.name}|test'
+        : 'wait-test',
     candleClosedAt: DateTime.utc(2026, 8, 2, 12),
     summary: 'test setup',
     invalidation: 'test invalidation',
