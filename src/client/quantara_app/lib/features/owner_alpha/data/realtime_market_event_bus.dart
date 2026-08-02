@@ -39,11 +39,12 @@ final class RealtimeMarketEventBus {
   final int maximumActiveStreams;
   final Map<RealtimeCandleStreamKey, _StreamEventQueue> _streams = {};
   var _closed = false;
+  var _activeStreamCount = 0;
   var _deliveredCount = 0;
   var _coalescedCount = 0;
   var _backpressureCount = 0;
 
-  int get activeStreamCount => _streams.length;
+  int get activeStreamCount => _activeStreamCount;
 
   int get deliveredCount => _deliveredCount;
 
@@ -60,7 +61,7 @@ final class RealtimeMarketEventBus {
 
     var stream = _streams[update.key];
     if (stream == null) {
-      if (_streams.length >= maximumActiveStreams) {
+      if (_activeStreamCount >= maximumActiveStreams) {
         _backpressureCount++;
         return Future.error(
           const RealtimeMarketEventBackpressureException(
@@ -70,12 +71,13 @@ final class RealtimeMarketEventBus {
       }
       stream = _StreamEventQueue();
       _streams[update.key] = stream;
+      _activeStreamCount++;
     }
 
     if (!update.isCritical) {
       final retained = Queue<_PendingMarketEvent>();
-      while (stream.queue.isNotEmpty) {
-        final pending = stream.queue.removeFirst();
+      while (stream.queue.firstOrNull case final pending?) {
+        stream.queue.removeFirst();
         if (pending.update.isCritical) {
           retained.add(pending);
         } else {
@@ -117,8 +119,9 @@ final class RealtimeMarketEventBus {
     }
 
     for (final stream in _streams.values) {
-      while (stream.queue.isNotEmpty) {
-        stream.queue.removeFirst().completeError(
+      while (stream.queue.firstOrNull case final pending?) {
+        stream.queue.removeFirst();
+        pending.completeError(
           StateError('The market event bus closed before delivery.'),
         );
       }
@@ -133,8 +136,8 @@ final class RealtimeMarketEventBus {
     _StreamEventQueue stream,
   ) async {
     try {
-      while (stream.queue.isNotEmpty) {
-        final pending = stream.queue.removeFirst();
+      while (stream.queue.firstOrNull case final pending?) {
+        stream.queue.removeFirst();
         try {
           await handler(pending.update);
           _deliveredCount++;
@@ -145,12 +148,15 @@ final class RealtimeMarketEventBus {
       }
     } finally {
       stream.draining = false;
-      if (stream.queue.isNotEmpty) {
+      if (stream.queue.firstOrNull != null) {
         stream.draining = true;
         unawaited(_drain(key, stream));
         return;
       }
-      _streams.remove(key);
+      if (identical(_streams[key], stream)) {
+        _streams.remove(key);
+        _activeStreamCount--;
+      }
       if (!stream.drained.isCompleted) stream.drained.complete();
     }
   }
