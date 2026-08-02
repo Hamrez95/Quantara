@@ -16,7 +16,7 @@ void main() {
   group('BitunixCandleBackfillSource', () {
     test('loads recent closed candles and excludes the open candle', () async {
       final start = DateTime.utc(2026, 8, 2, 10);
-      final now = start.add(const Duration(minutes: 105));
+      final now = start.add(const Duration(minutes: 100));
       final client = MockClient((request) async {
         expect(request.url.path, '/api/v1/futures/market/kline');
         expect(request.url.queryParameters['interval'], '5m');
