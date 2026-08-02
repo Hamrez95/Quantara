@@ -110,7 +110,6 @@ final class RealtimeCandlePipelineUpdate {
   bool get allowsCandidatePreparation =>
       workingCandle != null &&
       (disposition == RealtimeCandlePipelineDisposition.workingUpdated ||
-          disposition == RealtimeCandlePipelineDisposition.duplicate ||
           disposition == RealtimeCandlePipelineDisposition.candleClosed ||
           disposition == RealtimeCandlePipelineDisposition.reconciled);
 
