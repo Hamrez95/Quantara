@@ -121,6 +121,7 @@ final class RealtimeCandlePipelineUpdate {
       disposition == RealtimeCandlePipelineDisposition.reconciled;
 
   bool get isCritical =>
+      disposition == RealtimeCandlePipelineDisposition.bootstrapped ||
       triggersClosedCandleAnalysis ||
       disposition == RealtimeCandlePipelineDisposition.gapDetected ||
       disposition == RealtimeCandlePipelineDisposition.blockedByGap ||
