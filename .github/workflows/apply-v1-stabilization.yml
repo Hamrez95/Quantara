@@ -86,10 +86,11 @@ jobs:
           flutter analyze --fatal-infos
           flutter test
 
-      - name: Commit implementation
+      - name: Commit implementation without workflow files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout origin/feat/95-ui-finalization -- .github/workflows
           git add -A
           git diff --cached --check
           git commit -m "feat: stabilize Quantara 1.0 identity, settings transfer and crypto icons"
