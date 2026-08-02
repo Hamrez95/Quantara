@@ -12,8 +12,7 @@ final class RealtimeCandidateRegistry {
     this.maximumCandidates = 2000,
     this.recentEventCapacity = 4096,
     RealtimeCandidatePolicyResolver? policyResolver,
-  }) : _policyResolver =
-           policyResolver ?? (_) => RealtimeCandidatePolicy.balanced {
+  }) : _policyResolver = policyResolver ?? _balancedPolicy {
     if (maximumCandidates < 1) {
       throw ArgumentError.value(maximumCandidates, 'maximumCandidates');
     }
@@ -27,7 +26,7 @@ final class RealtimeCandidateRegistry {
   final RealtimeCandidatePolicyResolver _policyResolver;
   final Map<String, RealtimeOpportunityCandidate> _candidates = {};
   final Map<_CandidateStreamKey, _StreamCursor> _streamCursors = {};
-  final LinkedHashMap<String, void> _recentEventIds = LinkedHashMap();
+  final LinkedHashSet<String> _recentEventIds = LinkedHashSet();
   var _nextAuditSequence = 1;
 
   int get candidateCount => _candidates.length;
@@ -90,7 +89,7 @@ final class RealtimeCandidateRegistry {
         candidate: candidate,
       );
     }
-    if (_recentEventIds.containsKey(envelope.deduplicationKey)) {
+    if (_recentEventIds.contains(envelope.deduplicationKey)) {
       return _rejected(
         envelope: envelope,
         disposition: StreamEventDisposition.duplicate,
@@ -167,8 +166,15 @@ final class RealtimeCandidateRegistry {
     required DateTime exchangeTimestampUtc,
     int? sequence,
   }) {
-    if (!_candidates.containsKey(setupId)) {
+    final candidate = _candidates[setupId];
+    if (candidate == null) {
       throw ArgumentError.value(setupId, 'setupId', 'Candidate not found.');
+    }
+    if (candidate.symbol != streamKey.symbol ||
+        candidate.timeframe != streamKey.timeframe) {
+      throw ArgumentError(
+        'The reconciliation stream identity does not match the candidate.',
+      );
     }
     if (!exchangeTimestampUtc.isUtc) {
       throw ArgumentError.value(
@@ -229,11 +235,15 @@ final class RealtimeCandidateRegistry {
 
   void _remember(String deduplicationKey) {
     _recentEventIds.remove(deduplicationKey);
-    _recentEventIds[deduplicationKey] = null;
+    _recentEventIds.add(deduplicationKey);
     while (_recentEventIds.length > recentEventCapacity) {
-      _recentEventIds.remove(_recentEventIds.keys.first);
+      _recentEventIds.remove(_recentEventIds.first);
     }
   }
+
+  static RealtimeCandidatePolicy _balancedPolicy(
+    RealtimeOpportunityCandidate candidate,
+  ) => RealtimeCandidatePolicy.balanced;
 
   static bool _sameIdentity(
     RealtimeOpportunityCandidate left,
