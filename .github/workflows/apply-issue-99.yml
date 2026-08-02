@@ -1,0 +1,62 @@
+name: Apply issue 99 signal inbox patch
+
+on:
+  push:
+    branches:
+      - feat/99-signal-inbox-profit-protection
+    paths:
+      - .github/workflows/apply-issue-99.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/99-signal-inbox-profit-protection
+          fetch-depth: 0
+
+      - name: Apply deterministic source patch
+        run: python3 scripts/apply_issue_99_patch.py
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Format source and tests
+        working-directory: src/client/quantara_app
+        run: dart format lib test
+
+      - name: Analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+
+      - name: Run focused safety and UX tests
+        working-directory: src/client/quantara_app
+        run: |
+          flutter test test/signal_inbox_query_test.dart
+          flutter test test/profit_protection_policy_test.dart
+          flutter test test/signal_journal_metadata_test.dart
+          flutter test test/signal_outcome_evaluator_test.dart
+          flutter test test/local_live_trade_models_test.dart
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app .github/workflows/flutter-ci.yml
+          git diff --cached --check
+          git commit -m "feat: organize signal inbox and adapt profit protection"
+          git push origin HEAD:feat/99-signal-inbox-profit-protection
