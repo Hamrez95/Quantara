@@ -23,6 +23,8 @@ The reconnect scenario verifies that:
 
 Each asynchronous wait has a stage label, so a CI timeout identifies whether subscription, working-Kline delivery, reconnect, replay or projection failed.
 
+The first reconnect run exposed a domain defect: the public pipeline supported 5m Klines while `TradeIdea.validityWindow` treated 5m as unsupported and expired the setup immediately. The fix gives 5m setups the same three-closed-candle validity policy used by the other realtime timeframes: 15 minutes. A separate domain regression verifies all five supported windows and candidate creation after a 5m candle closes.
+
 ## 100-symbol benchmark
 
 The benchmark creates 100 deterministic symbols across all five supported Kline timeframes:
@@ -58,7 +60,7 @@ The wall-clock limit is intentionally wider than the product latency target so s
 
 ## Validation tooling
 
-The E2E source is formatted with Flutter `3.44.8` and Dart `3.12.2`. One-shot formatting or diagnostic workflows self-delete before CI and review, so no temporary workflow is part of the product diff.
+The E2E and domain regression sources are formatted with Flutter `3.44.8` and Dart `3.12.2`. One-shot formatting or diagnostic workflows self-delete before CI and review, so no temporary workflow is part of the product diff.
 
 ## Remaining issue #101 work
 
