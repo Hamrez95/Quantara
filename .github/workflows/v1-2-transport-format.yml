@@ -35,7 +35,9 @@ jobs:
           dart format
           lib/features/owner_alpha/data/bitunix_web_socket_adapter.dart
           lib/features/owner_alpha/data/bitunix_public_stream_transport.dart
+          lib/features/owner_alpha/data/bitunix_public_stream_fleet_factory.dart
           test/bitunix_public_stream_transport_test.dart
+          test/bitunix_public_stream_fleet_factory_test.dart
       - name: Commit dependency lock and canonical formatting
         shell: bash
         run: |
