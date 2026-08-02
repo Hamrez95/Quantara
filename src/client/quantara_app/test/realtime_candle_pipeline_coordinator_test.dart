@@ -217,7 +217,8 @@ final class _FakeBackfillSource implements RealtimeCandleBackfillSource {
     required DateTime nowUtc,
   }) async {
     recentRequests++;
-    await onRecent?.call(key);
+    final callback = onRecent;
+    if (callback != null) await callback(key);
     return recent.sublist(recent.length - limit);
   }
 
