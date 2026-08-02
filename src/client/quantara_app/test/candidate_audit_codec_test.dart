@@ -38,7 +38,10 @@ void main() {
       expect(decoded, isNotNull);
       expect(decoded?.generation, 4);
       expect(decoded?.records, hasLength(2));
-      expect(decoded?.records.first.disposition, StreamEventDisposition.accepted);
+      expect(
+        decoded?.records.first.disposition,
+        StreamEventDisposition.accepted,
+      );
       expect(decoded?.records.last.expectedSequence, 7);
       expect(decoded?.records.last.observedSequence, 10);
     });
@@ -107,10 +110,7 @@ void main() {
         _event(eventId: 'duplicate'),
       );
       expect(
-        () => CandidateAuditLedger(
-          generation: 1,
-          records: [record, record],
-        ),
+        () => CandidateAuditLedger(generation: 1, records: [record, record]),
         throwsArgumentError,
       );
     });

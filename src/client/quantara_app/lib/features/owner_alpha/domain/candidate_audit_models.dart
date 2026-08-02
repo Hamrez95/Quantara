@@ -96,10 +96,8 @@ final class CandidateAuditLedger {
     }
   }
 
-  factory CandidateAuditLedger.empty() => CandidateAuditLedger(
-    generation: 0,
-    records: const [],
-  );
+  factory CandidateAuditLedger.empty() =>
+      CandidateAuditLedger(generation: 0, records: const []);
 
   final int generation;
   final List<CandidateAuditRecord> records;
