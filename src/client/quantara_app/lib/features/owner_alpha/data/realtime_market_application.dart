@@ -139,10 +139,16 @@ final class RealtimeMarketApplication {
   }) : _clock = clock ?? _utcNow,
        _delay = delay ?? _defaultDelay {
     if (closedCandleLimit < 20 || closedCandleLimit > 200) {
-      throw ArgumentError.value(closedCandleLimit, 'closedCandleLimit');
+      throw ArgumentError.value(
+        closedCandleLimit,
+        'closedCandleLimit',
+      );
     }
     if (bootstrapSpacing < Duration.zero) {
-      throw ArgumentError.value(bootstrapSpacing, 'bootstrapSpacing');
+      throw ArgumentError.value(
+        bootstrapSpacing,
+        'bootstrapSpacing',
+      );
     }
     if (maximumPendingEventsPerStream < 1) {
       throw ArgumentError.value(
@@ -151,7 +157,10 @@ final class RealtimeMarketApplication {
       );
     }
     if (maximumLatencySamples < 20) {
-      throw ArgumentError.value(maximumLatencySamples, 'maximumLatencySamples');
+      throw ArgumentError.value(
+        maximumLatencySamples,
+        'maximumLatencySamples',
+      );
     }
 
     _metrics = _RealtimeMarketMetrics(maximumLatencySamples);
@@ -198,7 +207,9 @@ final class RealtimeMarketApplication {
     configuredStreams: universe.streams.length,
     activeShards: _fleet?.shardCount ?? 0,
     liveShards: _shardStates.values
-        .where((state) => state == BitunixPublicConnectionState.live)
+        .where(
+          (state) => state == BitunixPublicConnectionState.live,
+        )
         .length,
   );
 
@@ -206,7 +217,9 @@ final class RealtimeMarketApplication {
 
   Future<void> resume() => _serializeLifecycle(() async {
     if (_state != RealtimeMarketRuntimeState.paused) {
-      throw StateError('Only a paused realtime runtime can resume.');
+      throw StateError(
+        'Only a paused realtime runtime can resume.',
+      );
     }
     await _startInternal();
   });
@@ -218,23 +231,33 @@ final class RealtimeMarketApplication {
       _setState(RealtimeMarketRuntimeState.paused);
       return;
     }
-    await _stopFleet(finalState: RealtimeMarketRuntimeState.paused);
+    await _stopFleet(
+      finalState: RealtimeMarketRuntimeState.paused,
+    );
   });
 
   Future<void> stop() => _serializeLifecycle(() async {
     if (_closed) return;
-    await _stopFleet(finalState: RealtimeMarketRuntimeState.stopped);
+    await _stopFleet(
+      finalState: RealtimeMarketRuntimeState.stopped,
+    );
     await _eventBus.close(drain: true);
     _closed = true;
   });
 
   Future<void> _startInternal() async {
-    if (_closed) throw StateError('The realtime market runtime is closed.');
+    if (_closed) {
+      throw StateError(
+        'The realtime market runtime is closed.',
+      );
+    }
     if (_state == RealtimeMarketRuntimeState.restoring ||
         _state == RealtimeMarketRuntimeState.bootstrapping ||
         _state == RealtimeMarketRuntimeState.connecting ||
         _state == RealtimeMarketRuntimeState.live) {
-      throw StateError('The realtime market runtime is already active.');
+      throw StateError(
+        'The realtime market runtime is already active.',
+      );
     }
 
     try {
@@ -272,7 +295,10 @@ final class RealtimeMarketApplication {
         run.then<void>(
           (_) => _handleFleetTermination(run),
           onError: (Object error, StackTrace _) =>
-              _handleFleetTermination(run, error: error),
+              _handleFleetTermination(
+                run,
+                error: error,
+              ),
         ),
       );
     } on Object catch (error) {
@@ -285,7 +311,10 @@ final class RealtimeMarketApplication {
     }
   }
 
-  void _handleFleetTermination(Future<void> run, {Object? error}) {
+  void _handleFleetTermination(
+    Future<void> run, {
+    Object? error,
+  }) {
     if (!identical(_fleetRun, run)) return;
     _fleetRun = null;
     _fleet = null;
@@ -325,14 +354,22 @@ final class RealtimeMarketApplication {
     _setState(finalState);
   }
 
-  Future<void> _handlePublicEvent(BitunixPublicStreamEvent event) async {
-    _metrics.recordPublicEvent(event, observedAtUtc: _clock());
+  Future<void> _handlePublicEvent(
+    BitunixPublicStreamEvent event,
+  ) async {
+    _metrics.recordPublicEvent(
+      event,
+      observedAtUtc: _clock(),
+    );
     if (event is! BitunixKlineEvent) return;
 
     try {
       await _candleCoordinator.handleKline(event);
     } on RealtimeMarketEventBackpressureException catch (error) {
-      _metrics.recordBackpressure(error.toString(), _clock());
+      _metrics.recordBackpressure(
+        error.toString(),
+        _clock(),
+      );
       rethrow;
     } on Object catch (error) {
       _metrics.recordFault(
@@ -389,7 +426,9 @@ final class RealtimeMarketApplication {
     }
   }
 
-  Future<void> _handleTransportFault(BitunixPublicStreamFault fault) async {
+  Future<void> _handleTransportFault(
+    BitunixPublicStreamFault fault,
+  ) async {
     _metrics.recordTransportFault(fault);
   }
 
@@ -421,8 +460,12 @@ final class RealtimeMarketApplication {
     }
   }
 
-  Future<T> _serializeLifecycle<T>(Future<T> Function() operation) {
-    final result = _lifecycleTail.then((_) => operation());
+  Future<T> _serializeLifecycle<T>(
+    Future<T> Function() operation,
+  ) {
+    final result = _lifecycleTail.then(
+      (_) => operation(),
+    );
     _lifecycleTail = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
@@ -436,8 +479,9 @@ final class RealtimeMarketApplication {
 
   static DateTime _utcNow() => DateTime.now().toUtc();
 
-  static Future<void> _defaultDelay(Duration duration) =>
-      Future.delayed(duration);
+  static Future<void> _defaultDelay(
+    Duration duration,
+  ) => Future.delayed(duration);
 }
 
 final class _RealtimeMarketMetrics {
@@ -467,10 +511,15 @@ final class _RealtimeMarketMetrics {
     eventsReceived++;
     if (event is BitunixKlineEvent) klineEventsReceived++;
     lastEventAtUtc = observedAtUtc;
-    _record(_transportLagMicros, _nonNegative(event.transportLag).inMicroseconds);
+    _record(
+      _transportLagMicros,
+      _nonNegative(event.transportLag).inMicroseconds,
+    );
   }
 
-  void recordPipelineUpdate(RealtimeCandlePipelineUpdate update) {
+  void recordPipelineUpdate(
+    RealtimeCandlePipelineUpdate update,
+  ) {
     switch (update.disposition) {
       case RealtimeCandlePipelineDisposition.candleClosed:
         closedCandleEvents++;
@@ -488,20 +537,36 @@ final class _RealtimeMarketMetrics {
       case RealtimeCandlePipelineDisposition.blockedByGap:
         break;
     }
-    final latency = update.processedAtUtc.difference(update.receivedAtUtc);
-    _record(_pipelineLatencyMicros, _nonNegative(latency).inMicroseconds);
+    final latency = update.processedAtUtc.difference(
+      update.receivedAtUtc,
+    );
+    _record(
+      _pipelineLatencyMicros,
+      _nonNegative(latency).inMicroseconds,
+    );
   }
 
-  void recordTransportFault(BitunixPublicStreamFault fault) {
+  void recordTransportFault(
+    BitunixPublicStreamFault fault,
+  ) {
     if (fault.kind == BitunixPublicStreamFaultKind.malformedPayload) {
       malformedPayloadFaults++;
     }
-    recordFault(message: fault.message, occurredAtUtc: fault.occurredAtUtc);
+    recordFault(
+      message: fault.message,
+      occurredAtUtc: fault.occurredAtUtc,
+    );
   }
 
-  void recordBackpressure(String message, DateTime occurredAtUtc) {
+  void recordBackpressure(
+    String message,
+    DateTime occurredAtUtc,
+  ) {
     backpressureFaults++;
-    recordFault(message: message, occurredAtUtc: occurredAtUtc);
+    recordFault(
+      message: message,
+      occurredAtUtc: occurredAtUtc,
+    );
   }
 
   void recordFault({
@@ -539,7 +604,10 @@ final class _RealtimeMarketMetrics {
     lastFaultMessage: lastFaultMessage,
   );
 
-  void _record(Queue<int> values, int value) {
+  void _record(
+    Queue<int> values,
+    int value,
+  ) {
     values.addLast(value);
     while (values.length > maximumSamples) {
       values.removeFirst();
@@ -550,9 +618,12 @@ final class _RealtimeMarketMetrics {
     if (values.isEmpty) return Duration.zero;
     final ordered = values.toList(growable: false)..sort();
     final index = ((ordered.length - 1) * 0.95).ceil();
-    return Duration(microseconds: ordered[index]);
+    return Duration(
+      microseconds: ordered[index],
+    );
   }
 
-  static Duration _nonNegative(Duration value) =>
-      value.isNegative ? Duration.zero : value;
+  static Duration _nonNegative(
+    Duration value,
+  ) => value.isNegative ? Duration.zero : value;
 }
