@@ -100,7 +100,11 @@ final class RealtimeCandlePipelineUpdate {
       disposition != RealtimeCandlePipelineDisposition.blockedByGap;
 
   bool get allowsCandidatePreparation =>
-      streamTrusted && workingCandle != null;
+      workingCandle != null &&
+      (disposition == RealtimeCandlePipelineDisposition.workingUpdated ||
+          disposition == RealtimeCandlePipelineDisposition.duplicate ||
+          disposition == RealtimeCandlePipelineDisposition.candleClosed ||
+          disposition == RealtimeCandlePipelineDisposition.reconciled);
 
   bool get triggersClosedCandleAnalysis =>
       disposition == RealtimeCandlePipelineDisposition.candleClosed ||
