@@ -34,7 +34,7 @@ env:
   FLUTTER_VERSION: '3.44.8'
   ANDROID_PACKAGE: com.quantara.quantara_app.alpha
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  PREVIEW_ARTIFACT: quantara-android-1.0.0-preview
+  PREVIEW_ARTIFACT: quantara-android-1.0.1-preview
 
 jobs:
   flutter:
@@ -88,7 +88,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics-1.0.0
+          name: flutter-diagnostics-1.0.1
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
@@ -131,7 +131,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-merged-manifest-1.0.0-preview
+          name: android-merged-manifest-1.0.1-preview
           path: src/client/quantara_app/merged-manifest.xml
           if-no-files-found: ignore
           retention-days: 14
@@ -158,12 +158,12 @@ jobs:
       - name: Upload web preview
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-1.0.0-preview
+          name: quantara-web-1.0.1-preview
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Android 1.0 preview candidate
+      - name: Upload Android 1.0.1 preview candidate
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PREVIEW_ARTIFACT }}
@@ -212,7 +212,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics-1.0.0-preview
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-1.0.1-preview
           path: |
             android-start.txt
             android-pid.txt
