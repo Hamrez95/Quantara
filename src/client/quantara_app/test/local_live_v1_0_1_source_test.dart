@@ -29,9 +29,10 @@ void main() {
       expect(service, contains('ProfitProtectionPolicy.forIdea'));
       expect(service, contains('managed.targetFractions.first'));
       expect(service, contains('managed.targetFractions.last'));
-      expect(policy, contains('[0.55, 0.30, 0.15]'));
+      expect(policy, contains('[0.50, 0.25, 0.25]'));
       expect(policy, contains('[0.40, 0.25, 0.35]'));
       expect(policy, contains('[0.40, 0.30, 0.30]'));
+      expect(policy, contains('No tranche is smaller than 25%'));
     },
   );
 }
