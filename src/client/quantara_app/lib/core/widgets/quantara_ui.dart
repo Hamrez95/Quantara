@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:crypto_icons/crypto_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/quantara_theme.dart';
@@ -230,6 +231,7 @@ class SymbolAvatar extends StatelessWidget {
     final brand = _brand[base];
     final color = brand?.$2 ?? _fallbackColor(base);
     final label = fallbackLabel ?? brand?.$1 ?? _fallbackText(base);
+    final iconData = _iconFor(base);
     return Semantics(
       image: true,
       label: '$base symbol',
@@ -263,18 +265,20 @@ class SymbolAvatar extends StatelessWidget {
             ],
           ),
           alignment: Alignment.center,
-          child: Text(
-            label,
-            maxLines: 1,
-            textDirection: TextDirection.ltr,
-            style: TextStyle(
-              color: _foregroundFor(color),
-              fontSize: size * (label.length > 1 ? 0.29 : 0.42),
-              height: 1,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.4,
-            ),
-          ),
+          child: iconData == null || fallbackLabel != null
+              ? Text(
+                  label,
+                  maxLines: 1,
+                  textDirection: TextDirection.ltr,
+                  style: TextStyle(
+                    color: _foregroundFor(color),
+                    fontSize: size * (label.length > 1 ? 0.29 : 0.42),
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.4,
+                  ),
+                )
+              : Icon(iconData, color: _foregroundFor(color), size: size * 0.56),
         ),
       ),
     );
@@ -282,6 +286,14 @@ class SymbolAvatar extends StatelessWidget {
 
   static String _fallbackText(String base) =>
       base.length <= 2 ? base : base.substring(0, 2);
+
+  static IconData? _iconFor(String base) {
+    try {
+      return CryptoIcons.fromSymbol(base);
+    } on Object {
+      return null;
+    }
+  }
 
   static Color _fallbackColor(String base) {
     const palette = [

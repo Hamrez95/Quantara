@@ -1,3 +1,4 @@
+import 'package:crypto_icons/crypto_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/core/widgets/quantara_ui.dart';
@@ -12,7 +13,7 @@ void main() {
       ),
     );
 
-    expect(find.text('₿'), findsOneWidget);
+    expect(find.byIcon(CryptoIcons.fromSymbol('BTC')), findsOneWidget);
     expect(find.byType(SymbolAvatar), findsOneWidget);
   });
 

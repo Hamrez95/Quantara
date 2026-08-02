@@ -113,6 +113,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openDestination(tester, Icons.person_outline_rounded);
+    await tester.ensureVisible(find.text('انگلیسی'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('انگلیسی'));
     await tester.pumpAndSettle();
 

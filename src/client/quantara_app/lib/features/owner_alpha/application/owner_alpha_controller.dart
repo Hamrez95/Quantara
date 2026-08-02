@@ -497,6 +497,42 @@ final class OwnerAlphaController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String?> restoreSettings(OwnerAlphaSettings settings) async {
+    while (_activeScan != null) {
+      await _activeScan!;
+    }
+    if (_disposed) return null;
+
+    final normalized = settings.symbols
+        .map(_normalizeSymbol)
+        .whereType<String>()
+        .toSet()
+        .take(12)
+        .toList(growable: false);
+    if (normalized.isEmpty) {
+      return _t(
+        'پشتیبان تنظیمات واچ‌لیست معتبر ندارد.',
+        'The settings backup has no valid watchlist symbols.',
+      );
+    }
+    _symbols = normalized;
+    _selectedSymbol = normalized.contains(_selectedSymbol)
+        ? _selectedSymbol
+        : normalized.first;
+    _capital = settings.capital.clamp(100, 100000000).toDouble();
+    _riskPercent = settings.riskPercent.clamp(0.1, 2).toDouble();
+    _strategy = settings.strategy;
+    _cadence = settings.cadence;
+    await _saveSettings();
+    notifyListeners();
+    await _requestScan(
+      symbols: normalized,
+      selectedSymbol: _selectedSymbol,
+      selectedTimeframe: _selectedTimeframe,
+    );
+    return null;
+  }
+
   static String? _normalizeSymbol(String rawValue) {
     var value = rawValue.trim().toUpperCase().replaceAll('/', '');
     if (value.isEmpty || !_symbolPattern.hasMatch(value)) {
