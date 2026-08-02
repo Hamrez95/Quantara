@@ -37,13 +37,21 @@ final class BitunixPublicStreamFault {
 }
 
 final class BitunixReconnectPolicy {
-  const BitunixReconnectPolicy({
+  BitunixReconnectPolicy({
     this.baseDelay = const Duration(seconds: 1),
     this.maximumDelay = const Duration(seconds: 30),
     this.maximumJitter = const Duration(milliseconds: 250),
-  }) : assert(baseDelay > Duration.zero),
-       assert(maximumDelay >= baseDelay),
-       assert(maximumJitter >= Duration.zero);
+  }) {
+    if (baseDelay <= Duration.zero) {
+      throw ArgumentError.value(baseDelay, 'baseDelay');
+    }
+    if (maximumDelay < baseDelay) {
+      throw ArgumentError.value(maximumDelay, 'maximumDelay');
+    }
+    if (maximumJitter < Duration.zero) {
+      throw ArgumentError.value(maximumJitter, 'maximumJitter');
+    }
+  }
 
   final Duration baseDelay;
   final Duration maximumDelay;
@@ -72,17 +80,32 @@ final class BitunixReconnectPolicy {
 }
 
 final class BitunixPublicStreamConfig {
-  const BitunixPublicStreamConfig({
+  BitunixPublicStreamConfig({
     this.endpoint = 'wss://fapi.bitunix.com/public/',
     this.connectTimeout = const Duration(seconds: 10),
     this.pingInterval = const Duration(seconds: 20),
     this.silenceTimeout = const Duration(seconds: 45),
     this.malformedPayloadBudget = 3,
-  }) : assert(endpoint != ''),
-       assert(connectTimeout > Duration.zero),
-       assert(pingInterval > Duration.zero),
-       assert(silenceTimeout > pingInterval),
-       assert(malformedPayloadBudget > 0);
+  }) {
+    if (endpoint.trim().isEmpty) {
+      throw ArgumentError.value(endpoint, 'endpoint');
+    }
+    if (connectTimeout <= Duration.zero) {
+      throw ArgumentError.value(connectTimeout, 'connectTimeout');
+    }
+    if (pingInterval <= Duration.zero) {
+      throw ArgumentError.value(pingInterval, 'pingInterval');
+    }
+    if (silenceTimeout <= pingInterval) {
+      throw ArgumentError.value(silenceTimeout, 'silenceTimeout');
+    }
+    if (malformedPayloadBudget < 1) {
+      throw ArgumentError.value(
+        malformedPayloadBudget,
+        'malformedPayloadBudget',
+      );
+    }
+  }
 
   final String endpoint;
   final Duration connectTimeout;
@@ -115,11 +138,13 @@ final class BitunixPublicStreamConnection {
     required this.onEvent,
     required this.onFault,
     required this.onState,
-    this.config = const BitunixPublicStreamConfig(),
-    this.reconnectPolicy = const BitunixReconnectPolicy(),
+    BitunixPublicStreamConfig? config,
+    BitunixReconnectPolicy? reconnectPolicy,
     BitunixUtcClock? clock,
     BitunixAsyncDelay? delay,
-  }) : clock = clock ?? _utcNow,
+  }) : config = config ?? BitunixPublicStreamConfig(),
+       reconnectPolicy = reconnectPolicy ?? BitunixReconnectPolicy(),
+       clock = clock ?? _utcNow,
        delay = delay ?? _delay;
 
   final BitunixSubscriptionShard shard;
