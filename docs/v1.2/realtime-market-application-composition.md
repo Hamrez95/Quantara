@@ -52,7 +52,7 @@ Historical faults remain visible, while a fully live shard fleet can recover to 
 
 ## Validation
 
-Runtime and regression sources are formatted with Flutter `3.44.8` and Dart `3.12.2`; temporary formatter diagnostics are removed before CI and review.
+Runtime and regression sources are formatted with Flutter `3.44.8` and Dart `3.12.2`; temporary formatter diagnostics are removed before CI and review. Strict analysis runs with fatal infos so redundant imports and other informational lints remain release-blocking.
 
 ## Remaining issue #101 work
 
