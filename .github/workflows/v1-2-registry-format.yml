@@ -1,9 +1,9 @@
 name: v1.2 registry formatter snapshot
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/101-102-event-registry
+      - dev
 
 permissions:
   contents: read
