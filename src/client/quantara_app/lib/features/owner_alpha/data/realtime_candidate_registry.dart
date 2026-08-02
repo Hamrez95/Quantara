@@ -12,7 +12,7 @@ final class CandidateRegistryPreparedUpdate {
     required this.update,
     required this.requiresCommit,
     required this._owner,
-    required this._revision,
+    required this._candidateRevision,
     required this._candidateSetupId,
     required this._nextCandidate,
     required this._cursorKey,
@@ -23,7 +23,7 @@ final class CandidateRegistryPreparedUpdate {
   final CandidateRegistryUpdate update;
   final bool requiresCommit;
   final RealtimeCandidateRegistry _owner;
-  final int _revision;
+  final int _candidateRevision;
   final String? _candidateSetupId;
   final RealtimeOpportunityCandidate? _nextCandidate;
   final _CandidateStreamKey? _cursorKey;
@@ -49,14 +49,14 @@ final class RealtimeCandidateRegistry {
   final int recentEventCapacity;
   final RealtimeCandidatePolicyResolver _policyResolver;
   final Map<String, RealtimeOpportunityCandidate> _candidates = {};
+  final Map<String, int> _candidateRevisions = {};
   final Map<_CandidateStreamKey, _StreamCursor> _streamCursors = {};
   final LinkedHashSet<String> _recentEventIds = LinkedHashSet();
   var _nextAuditSequence = 1;
-  var _revision = 0;
 
   int get candidateCount => _candidates.length;
 
-  int get revision => _revision;
+  int revisionFor(String setupId) => _candidateRevisions[setupId] ?? -1;
 
   RealtimeOpportunityCandidate? candidateFor(String setupId) =>
       _candidates[setupId];
@@ -89,7 +89,7 @@ final class RealtimeCandidateRegistry {
     }
 
     _candidates[candidate.setupId] = candidate;
-    _revision++;
+    _candidateRevisions[candidate.setupId] = 0;
     return CandidateRegistrationResult(
       disposition: CandidateRegistrationDisposition.registered,
       candidate: candidate,
@@ -182,7 +182,7 @@ final class RealtimeCandidateRegistry {
       update: update,
       requiresCommit: true,
       _owner: this,
-      _revision: _revision,
+      _candidateRevision: revisionFor(candidate.setupId),
       _candidateSetupId: candidate.setupId,
       _nextCandidate: evaluation.candidate,
       _cursorKey: cursorKey,
@@ -199,11 +199,6 @@ final class RealtimeCandidateRegistry {
       throw ArgumentError('The prepared update belongs to another registry.');
     }
     if (!prepared.requiresCommit) return prepared.update;
-    if (prepared._revision != _revision) {
-      throw StateError(
-        'The candidate registry changed after this update was prepared.',
-      );
-    }
 
     final setupId = prepared._candidateSetupId;
     final nextCandidate = prepared._nextCandidate;
@@ -217,11 +212,16 @@ final class RealtimeCandidateRegistry {
         deduplicationKey == null) {
       throw StateError('The prepared candidate update is incomplete.');
     }
+    if (prepared._candidateRevision != revisionFor(setupId)) {
+      throw StateError(
+        'The candidate changed after this update was prepared.',
+      );
+    }
 
     _candidates[setupId] = nextCandidate;
     _streamCursors[cursorKey] = nextCursor;
     _remember(deduplicationKey);
-    _revision++;
+    _candidateRevisions[setupId] = prepared._candidateRevision + 1;
     return prepared.update;
   }
 
@@ -284,7 +284,7 @@ final class RealtimeCandidateRegistry {
       sequence: sequence,
       exchangeTimestampUtc: exchangeTimestampUtc,
     );
-    _revision++;
+    _candidateRevisions[setupId] = revisionFor(setupId) + 1;
   }
 
   CandidateRegistryPreparedUpdate _rejectedPreparation({
@@ -308,7 +308,9 @@ final class RealtimeCandidateRegistry {
     ),
     requiresCommit: false,
     _owner: this,
-    _revision: _revision,
+    _candidateRevision: candidate == null
+        ? -1
+        : revisionFor(candidate.setupId),
     _candidateSetupId: null,
     _nextCandidate: null,
     _cursorKey: null,
