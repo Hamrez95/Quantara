@@ -121,9 +121,7 @@ void main() {
               ),
         ];
         final universe = RealtimeMarketUniverse(streams);
-        final clock = _MutableClock(
-          DateTime.utc(2026, 8, 2, 12, 0, 30, 200),
-        );
+        final clock = _MutableClock(DateTime.utc(2026, 8, 2, 12, 0, 30, 200));
         final sockets = [_FakeSocket(), _FakeSocket()];
         final connector = _QueueConnector(sockets);
         final application = _application(
@@ -176,14 +174,8 @@ void main() {
         expect(health.klineEventsReceived, 500);
         expect(health.backpressureFaults, 0);
         expect(health.malformedPayloadFaults, 0);
-        expect(
-          health.p95TransportLag,
-          lessThan(const Duration(seconds: 1)),
-        );
-        expect(
-          health.p95PipelineLatency,
-          lessThan(const Duration(seconds: 1)),
-        );
+        expect(health.p95TransportLag, lessThan(const Duration(seconds: 1)));
+        expect(health.p95PipelineLatency, lessThan(const Duration(seconds: 1)));
         expect(health.discoveryHealthy, isTrue);
 
         await application.stop();
@@ -227,8 +219,7 @@ RealtimeMarketApplication _application({
   delay: (_) async {},
 );
 
-final class _GeneratedBackfillSource
-    implements RealtimeCandleBackfillSource {
+final class _GeneratedBackfillSource implements RealtimeCandleBackfillSource {
   const _GeneratedBackfillSource();
 
   @override
@@ -384,8 +375,7 @@ final class _FakeAuditStore implements CandidateAuditStore {
   }
 }
 
-final class _RecordingProjection
-    implements RealtimeAuditedCandidateProjection {
+final class _RecordingProjection implements RealtimeAuditedCandidateProjection {
   final List<CandidateRegistryAuditEvent> applied = [];
   int restoreCalls = 0;
 
