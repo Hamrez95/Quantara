@@ -62,7 +62,11 @@ final class BitunixCandleBackfillSource
   }) async {
     _requireUtc(nowUtc, 'nowUtc');
     if (limit < 20 || limit > maximumPageSize) {
-      throw ArgumentError.value(limit, 'limit', 'Expected a value from 20 to 200.');
+      throw ArgumentError.value(
+        limit,
+        'limit',
+        'Expected a value from 20 to 200.',
+      );
     }
 
     final candles = await _request(
@@ -134,7 +138,9 @@ final class BitunixCandleBackfillSource
           .toList(growable: false)
         ..sort((left, right) => left.openTime.compareTo(right.openTime));
       if (inRange.isEmpty || inRange.first.openTime != cursor) {
-        throw StateError('Bitunix backfill left a gap at $cursor for ${key.id}.');
+        throw StateError(
+          'Bitunix backfill left a gap at $cursor for ${key.id}.',
+        );
       }
       for (final candle in inRange) {
         byTime[candle.openTime] = candle;
@@ -186,7 +192,9 @@ final class BitunixCandleBackfillSource
     }
     final root = _object(jsonDecode(utf8.decode(response.bodyBytes)));
     if (_integer(root['code'], 'code') != 0) {
-      throw FormatException('Bitunix kline response code was not successful.');
+      throw const FormatException(
+        'Bitunix kline response code was not successful.',
+      );
     }
     final rawData = root['data'];
     if (rawData is! List<Object?> || rawData.length > maximumPageSize) {
@@ -236,7 +244,11 @@ final class BitunixCandleBackfillSource
         uri.userInfo.isNotEmpty ||
         uri.query.isNotEmpty ||
         uri.fragment.isNotEmpty) {
-      throw ArgumentError.value(value, 'apiOrigin', 'A secure origin is required.');
+      throw ArgumentError.value(
+        value,
+        'apiOrigin',
+        'A secure origin is required.',
+      );
     }
     return uri;
   }
@@ -250,10 +262,11 @@ final class BitunixCandleBackfillSource
     }
     final result = <String, Object?>{};
     for (final entry in value.entries) {
-      if (entry.key is! String) {
+      final key = entry.key;
+      if (key is! String) {
         throw const FormatException('JSON keys must be strings.');
       }
-      result[entry.key! as String] = entry.value;
+      result[key] = entry.value;
     }
     return result;
   }
