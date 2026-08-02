@@ -10,11 +10,7 @@ void main() {
 
       var result = RealtimeCandidateEngine.evaluate(
         candidate: candidate,
-        observation: _observation(
-          minute: 2,
-          price: 98,
-          qualityScore: 58,
-        ),
+        observation: _observation(minute: 2, price: 98.5, qualityScore: 58),
       );
       expect(result.candidate.stage, OpportunityStage.forming);
       expect(result.stageChanged, isTrue);
@@ -22,11 +18,7 @@ void main() {
       candidate = result.candidate;
       result = RealtimeCandidateEngine.evaluate(
         candidate: candidate,
-        observation: _observation(
-          minute: 3,
-          price: 99.7,
-          qualityScore: 70,
-        ),
+        observation: _observation(minute: 3, price: 99.7, qualityScore: 70),
       );
       expect(result.candidate.stage, OpportunityStage.armed);
       expect(
@@ -147,37 +139,23 @@ void main() {
           structureValid: false,
         ),
       );
-      expect(
-        structuralFailure.candidate.stage,
-        OpportunityStage.invalidated,
-      );
+      expect(structuralFailure.candidate.stage, OpportunityStage.invalidated);
 
       final stopFailure = RealtimeCandidateEngine.evaluate(
         candidate: _candidate(TradeDirection.short),
-        observation: _observation(
-          minute: 2,
-          price: 103,
-          qualityScore: 75,
-        ),
+        observation: _observation(minute: 2, price: 103, qualityScore: 75),
       );
       expect(stopFailure.candidate.stage, OpportunityStage.invalidated);
     });
 
     test('uses direction-aware approach and overshoot for shorts', () {
       final candidate = _candidate(TradeDirection.short);
-      expect(
-        candidate.approachDistancePercent(101.3),
-        closeTo(0.296, 0.001),
-      );
+      expect(candidate.approachDistancePercent(101.3), closeTo(0.296, 0.001));
       expect(candidate.overshootPercent(99.7), closeTo(0.3, 0.001));
 
       final armed = RealtimeCandidateEngine.evaluate(
         candidate: candidate,
-        observation: _observation(
-          minute: 2,
-          price: 101.3,
-          qualityScore: 72,
-        ),
+        observation: _observation(minute: 2, price: 101.3, qualityScore: 72),
       ).candidate;
       expect(armed.stage, OpportunityStage.armed);
 
@@ -225,11 +203,7 @@ void main() {
     test('never resurrects terminal candidates', () {
       final missed = RealtimeCandidateEngine.evaluate(
         candidate: _candidate(TradeDirection.long),
-        observation: _observation(
-          minute: 2,
-          price: 102,
-          qualityScore: 80,
-        ),
+        observation: _observation(minute: 2, price: 102, qualityScore: 80),
       ).candidate;
       expect(missed.stage, OpportunityStage.missed);
 
@@ -263,11 +237,7 @@ void main() {
 
       final later = RealtimeCandidateEngine.evaluate(
         candidate: triggered,
-        observation: _observation(
-          minute: 3,
-          price: 99,
-          qualityScore: 20,
-        ),
+        observation: _observation(minute: 3, price: 99, qualityScore: 20),
       );
 
       expect(identical(later.candidate, triggered), isTrue);
@@ -335,9 +305,7 @@ TradeIdea _idea(TradeDirection direction, {int confidence = 60}) {
     maximumSafeLeverage: actionable ? 5 : null,
     requiredMargin: actionable ? 50 : null,
     estimatedRoundTripCosts: actionable ? 0.2 : 0,
-    setupId: actionable
-        ? 'BTCUSDT|1h|${direction.name}|test'
-        : 'wait-test',
+    setupId: actionable ? 'BTCUSDT|1h|${direction.name}|test' : 'wait-test',
     candleClosedAt: DateTime.utc(2026, 8, 2, 12),
     summary: 'test setup',
     invalidation: 'test invalidation',
