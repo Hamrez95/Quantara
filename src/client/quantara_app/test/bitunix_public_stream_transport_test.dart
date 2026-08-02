@@ -47,6 +47,29 @@ void main() {
     });
   });
 
+  group('BitunixPublicStreamConfig', () {
+    test('rejects insecure or credential-bearing endpoints immediately', () {
+      expect(
+        () => BitunixPublicStreamConfig(
+          endpoint: 'ws://example.test/public',
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => BitunixPublicStreamConfig(
+          endpoint: 'wss://user:secret@example.test/public',
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => BitunixPublicStreamConfig(
+          endpoint: 'wss://example.test/public?token=secret',
+        ),
+        throwsFormatException,
+      );
+    });
+  });
+
   group('BitunixPublicStreamConnection', () {
     test(
       'subscribes after ready, emits validated data and stops cleanly',
@@ -92,8 +115,7 @@ void main() {
       final second = _FakeSocket();
       final connector = _QueueConnector([first, second]);
       final delays = <Duration>[];
-      late BitunixPublicStreamConnection connection;
-      connection = _connection(
+      final connection = _connection(
         connector: connector,
         delay: (duration) async {
           delays.add(duration);
@@ -183,23 +205,6 @@ void main() {
         );
       },
     );
-
-    test('rejects insecure endpoint before connector invocation', () async {
-      final connector = _QueueConnector([_FakeSocket()]);
-      late BitunixPublicStreamConnection connection;
-      connection = _connection(
-        connector: connector,
-        endpoint: 'ws://example.test/public',
-        delay: (duration) async {
-          await connection.stop();
-        },
-      );
-
-      await connection.run();
-
-      expect(connector.connectCount, 0);
-      expect(connection.state, BitunixPublicConnectionState.stopped);
-    });
   });
 }
 
