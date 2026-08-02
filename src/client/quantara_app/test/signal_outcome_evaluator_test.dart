@@ -47,7 +47,27 @@ void main() {
     expect(result.priceChangePercent, greaterThan(0));
   });
 
-  test('keeps realized target profit when the remainder later stops', () {
+  test('moves the remainder beyond break-even after TP1', () {
+    final afterTp1 = SignalOutcomeEvaluator.evaluate(
+      entry: _entry(),
+      candles: [
+        _candle(minutes: 0, low: 99.5, high: 101),
+        _candle(minutes: 15, low: 100.5, high: 102.5),
+      ],
+      evaluatedAt: _origin.add(const Duration(minutes: 30)),
+    );
+    final stopped = SignalOutcomeEvaluator.evaluate(
+      entry: afterTp1,
+      candles: [_candle(minutes: 30, low: 100.6, high: 101.2)],
+      evaluatedAt: _origin.add(const Duration(minutes: 45)),
+    );
+
+    expect(stopped.outcome, SignalOutcome.stopped);
+    expect(stopped.highestTargetHit, 1);
+    expect(stopped.simulatedPnl, closeTo(2.51255, 0.000001));
+  });
+
+  test('keeps TP1 as the runner stop after TP2', () {
     final afterTp2 = SignalOutcomeEvaluator.evaluate(
       entry: _entry(),
       candles: [
@@ -58,13 +78,13 @@ void main() {
     );
     final stopped = SignalOutcomeEvaluator.evaluate(
       entry: afterTp2,
-      candles: [_candle(minutes: 30, low: 97.5, high: 101)],
+      candles: [_candle(minutes: 30, low: 101.5, high: 103)],
       evaluatedAt: _origin.add(const Duration(minutes: 45)),
     );
 
     expect(stopped.outcome, SignalOutcome.stopped);
     expect(stopped.highestTargetHit, 2);
-    expect(stopped.simulatedPnl, closeTo(3.5, 0.000001));
+    expect(stopped.simulatedPnl, closeTo(9.5, 0.000001));
   });
 
   test('ignores a legacy entry with a zero reference price', () {
