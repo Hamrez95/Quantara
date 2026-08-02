@@ -4,6 +4,9 @@ import '../domain/realtime_market_event_models.dart';
 import 'candidate_audit_retention_policy.dart';
 import 'realtime_candidate_registry.dart';
 
+export 'candidate_audit_retention_policy.dart'
+    show CandidateAuditPersistenceDecision;
+
 enum CandidateCoordinationOutcome {
   committed,
   rejected,
