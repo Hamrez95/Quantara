@@ -37,6 +37,10 @@ jobs:
           text = text.replace('CryptoIconsExtension.fromSymbol(base)', 'CryptoIcons.fromSymbol(base)')
           text = text.replace('AnalysisStrategy.trendCandle', 'AnalysisStrategy.trendPullback')
           text = text.replace("find.byIcon(CryptoIcons.btc)", "find.byIcon(CryptoIcons.fromSymbol('BTC'))")
+          text = text.replace(
+              'packages/crypto_icons/assets/fonts/cryptocurrency-icons.ttf',
+              'assets/fonts/cryptocurrency-icons.ttf',
+          )
           path.write_text(text, encoding='utf-8')
           PY
 
@@ -50,9 +54,13 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Restore packages and lock dependency graph
+      - name: Restore packages and vendor icon font
         working-directory: src/client/quantara_app
-        run: flutter pub get
+        run: |
+          flutter pub get
+          mkdir -p assets/fonts
+          cp "$PUB_CACHE/hosted/pub.dev/crypto_icons-1.0.0/assets/fonts/cryptocurrency-icons.ttf" \
+            assets/fonts/cryptocurrency-icons.ttf
 
       - name: Format, analyze and test
         working-directory: src/client/quantara_app
