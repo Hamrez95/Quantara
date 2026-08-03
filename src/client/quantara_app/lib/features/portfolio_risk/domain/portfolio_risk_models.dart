@@ -59,12 +59,14 @@ final class TradingDayId {
     final startUtc = localMidnight.subtract(
       Duration(minutes: timezoneOffsetMinutes),
     );
-    final date = '${local.year.toString().padLeft(4, '0')}-'
+    final date =
+        '${local.year.toString().padLeft(4, '0')}-'
         '${local.month.toString().padLeft(2, '0')}-'
         '${local.day.toString().padLeft(2, '0')}';
     final sign = timezoneOffsetMinutes >= 0 ? '+' : '-';
     final absolute = timezoneOffsetMinutes.abs();
-    final offset = '$sign${(absolute ~/ 60).toString().padLeft(2, '0')}:'
+    final offset =
+        '$sign${(absolute ~/ 60).toString().padLeft(2, '0')}:'
         '${(absolute % 60).toString().padLeft(2, '0')}';
     return TradingDayId(
       value: '$date@$offset',
@@ -123,8 +125,7 @@ final class DailyRiskBudget {
   final double pendingRisk;
   final double ambiguousRisk;
 
-  double get consumed =>
-      realizedLoss + openRisk + pendingRisk + ambiguousRisk;
+  double get consumed => realizedLoss + openRisk + pendingRisk + ambiguousRisk;
 
   double get available => math.max(0, limit - consumed);
 
@@ -155,7 +156,9 @@ final class MarginBudget {
   );
 
   bool canReserve(double requiredMargin) =>
-      requiredMargin.isFinite && requiredMargin >= 0 && spendable >= requiredMargin;
+      requiredMargin.isFinite &&
+      requiredMargin >= 0 &&
+      spendable >= requiredMargin;
 }
 
 @immutable
@@ -677,7 +680,8 @@ abstract final class PortfolioRiskMath {
     final entryFee = entryPrice * quantity * contractMultiplier * entryFeeRate;
     final exitFee = stopPrice * quantity * contractMultiplier * exitFeeRate;
     final slippage = entryPrice * quantity * contractMultiplier * slippageRate;
-    final total = stopDistanceLoss + entryFee + exitFee + slippage + fundingReserve;
+    final total =
+        stopDistanceLoss + entryFee + exitFee + slippage + fundingReserve;
     if (!total.isFinite || total <= 0) {
       throw const FormatException('Calculated position risk is invalid.');
     }
@@ -813,8 +817,10 @@ final class PortfolioRiskLedger {
     final notional = candidate.notional;
     final entryFee = notional * candidate.entryFeeRate;
     final exitFee =
-        candidate.stopPrice * candidate.plannedQuantity *
-        candidate.contractMultiplier * candidate.exitFeeRate;
+        candidate.stopPrice *
+        candidate.plannedQuantity *
+        candidate.contractMultiplier *
+        candidate.exitFeeRate;
     final slippage = notional * candidate.slippageRate;
     final next = PositionRiskReservation(
       reservationId: candidate.reservationId,
@@ -843,10 +849,7 @@ final class PortfolioRiskLedger {
       verification: PortfolioVerificationState.planned,
       revision: 1,
     );
-    return _copy(
-      revision: revision + 1,
-      reservations: [...reservations, next],
-    );
+    return _copy(revision: revision + 1, reservations: [...reservations, next]);
   }
 
   PortfolioRiskLedger release({
@@ -855,17 +858,19 @@ final class PortfolioRiskLedger {
   }) {
     if (processedEventIds.contains(eventId)) return this;
     var changed = false;
-    final next = reservations.map((item) {
-      if (item.reservationId != reservationId || !item.active) return item;
-      changed = true;
-      return item.copyWith(
-        maximumLoss: 0,
-        reservedMargin: 0,
-        lifecycle: PortfolioReservationLifecycle.released,
-        verification: PortfolioVerificationState.exchangeConfirmed,
-        revision: item.revision + 1,
-      );
-    }).toList(growable: false);
+    final next = reservations
+        .map((item) {
+          if (item.reservationId != reservationId || !item.active) return item;
+          changed = true;
+          return item.copyWith(
+            maximumLoss: 0,
+            reservedMargin: 0,
+            lifecycle: PortfolioReservationLifecycle.released,
+            verification: PortfolioVerificationState.exchangeConfirmed,
+            revision: item.revision + 1,
+          );
+        })
+        .toList(growable: false);
     return _copy(
       revision: changed ? revision + 1 : revision,
       reservations: next,
@@ -879,15 +884,17 @@ final class PortfolioRiskLedger {
   }) {
     if (processedEventIds.contains(eventId)) return this;
     var changed = false;
-    final next = reservations.map((item) {
-      if (item.reservationId != reservationId || !item.active) return item;
-      changed = true;
-      return item.copyWith(
-        lifecycle: PortfolioReservationLifecycle.ambiguous,
-        verification: PortfolioVerificationState.unverified,
-        revision: item.revision + 1,
-      );
-    }).toList(growable: false);
+    final next = reservations
+        .map((item) {
+          if (item.reservationId != reservationId || !item.active) return item;
+          changed = true;
+          return item.copyWith(
+            lifecycle: PortfolioReservationLifecycle.ambiguous,
+            verification: PortfolioVerificationState.unverified,
+            revision: item.revision + 1,
+          );
+        })
+        .toList(growable: false);
     return _copy(
       revision: changed ? revision + 1 : revision,
       reservations: next,
@@ -909,9 +916,8 @@ final class PortfolioRiskLedger {
     final index = reservations.indexWhere(
       (item) => item.reservationId == reservationId && item.pending,
     );
-    if (index < 0) return _copy(
-      processedEventIds: {...processedEventIds, eventId},
-    );
+    if (index < 0)
+      return _copy(processedEventIds: {...processedEventIds, eventId});
     final source = reservations[index];
     if (fillQuantity > source.plannedQuantity + 1e-9) {
       throw const FormatException('Fill exceeds pending quantity.');
@@ -989,27 +995,29 @@ final class PortfolioRiskLedger {
   }) {
     if (processedEventIds.contains(eventId)) return this;
     var changed = false;
-    final next = reservations.map((item) {
-      if (!item.open || item.positionId != positionId) return item;
-      final risk = PortfolioRiskMath.confirmedOpenRisk(
-        side: item.side,
-        entryPrice: item.entryPrice,
-        confirmedStop: confirmedStop,
-        remainingQuantity: item.filledQuantity,
-        contractMultiplier: item.contractMultiplier,
-        entryFee: item.estimatedEntryFee,
-        exitFee: item.estimatedExitFee,
-        slippageReserve: item.slippageReserve,
-        fundingReserve: item.fundingReserve,
-      );
-      changed = true;
-      return item.copyWith(
-        currentExchangeConfirmedStop: confirmedStop,
-        maximumLoss: risk,
-        verification: PortfolioVerificationState.exchangeConfirmed,
-        revision: item.revision + 1,
-      );
-    }).toList(growable: false);
+    final next = reservations
+        .map((item) {
+          if (!item.open || item.positionId != positionId) return item;
+          final risk = PortfolioRiskMath.confirmedOpenRisk(
+            side: item.side,
+            entryPrice: item.entryPrice,
+            confirmedStop: confirmedStop,
+            remainingQuantity: item.filledQuantity,
+            contractMultiplier: item.contractMultiplier,
+            entryFee: item.estimatedEntryFee,
+            exitFee: item.estimatedExitFee,
+            slippageReserve: item.slippageReserve,
+            fundingReserve: item.fundingReserve,
+          );
+          changed = true;
+          return item.copyWith(
+            currentExchangeConfirmedStop: confirmedStop,
+            maximumLoss: risk,
+            verification: PortfolioVerificationState.exchangeConfirmed,
+            revision: item.revision + 1,
+          );
+        })
+        .toList(growable: false);
     return _copy(
       revision: changed ? revision + 1 : revision,
       reservations: next,
@@ -1027,17 +1035,19 @@ final class PortfolioRiskLedger {
       throw const FormatException('Confirmed PnL is invalid.');
     }
     var changed = false;
-    final next = reservations.map((item) {
-      if (!item.open || item.positionId != positionId) return item;
-      changed = true;
-      return item.copyWith(
-        maximumLoss: 0,
-        reservedMargin: 0,
-        lifecycle: PortfolioReservationLifecycle.closed,
-        verification: PortfolioVerificationState.exchangeConfirmed,
-        revision: item.revision + 1,
-      );
-    }).toList(growable: false);
+    final next = reservations
+        .map((item) {
+          if (!item.open || item.positionId != positionId) return item;
+          changed = true;
+          return item.copyWith(
+            maximumLoss: 0,
+            reservedMargin: 0,
+            lifecycle: PortfolioReservationLifecycle.closed,
+            verification: PortfolioVerificationState.exchangeConfirmed,
+            revision: item.revision + 1,
+          );
+        })
+        .toList(growable: false);
     return _copy(
       revision: changed ? revision + 1 : revision,
       realizedLoss: realizedLoss + math.max(0, -exchangeConfirmedNetPnl),
@@ -1083,8 +1093,7 @@ final class PortfolioRiskLedger {
       margin: MarginBudget(
         freeMargin: account.freeMargin,
         usedMargin: account.usedMargin,
-        reservedMargin:
-            account.pendingMarginReservations + reservedMargin,
+        reservedMargin: account.pendingMarginReservations + reservedMargin,
         maintenanceMargin: account.maintenanceMargin,
         safetyBuffer: account.safetyBuffer,
         feeReserve: account.feeReserve,
@@ -1111,8 +1120,7 @@ final class PortfolioRiskLedger {
   factory PortfolioRiskLedger.fromJson(Map<String, Object?> json) {
     final dayRaw = json['tradingDay'];
     final reservationsRaw = json['reservations'];
-    if (dayRaw is! Map<Object?, Object?> ||
-        reservationsRaw is! List<Object?>) {
+    if (dayRaw is! Map<Object?, Object?> || reservationsRaw is! List<Object?>) {
       throw const FormatException('Invalid portfolio risk ledger.');
     }
     final ledger = PortfolioRiskLedger(
@@ -1244,9 +1252,8 @@ Map<String, Object?> _stringMap(Map<Object?, Object?> source) => {
   for (final entry in source.entries) entry.key.toString(): entry.value,
 };
 
-int _integer(Object? value) => value is num
-    ? value.toInt()
-    : int.tryParse(value?.toString() ?? '') ?? 0;
+int _integer(Object? value) =>
+    value is num ? value.toInt() : int.tryParse(value?.toString() ?? '') ?? 0;
 
 double _number(Object? value) => value is num
     ? value.toDouble()

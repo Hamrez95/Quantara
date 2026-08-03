@@ -153,12 +153,7 @@ void main() {
     var ledger = reserve(empty(), candidate('btc', 3, symbol: 'BTCUSDT'));
     ledger = reserve(
       ledger,
-      candidate(
-        'eth',
-        4,
-        symbol: 'ETHUSDT',
-        side: PortfolioSide.short,
-      ),
+      candidate('eth', 4, symbol: 'ETHUSDT', side: PortfolioSide.short),
     );
     expect(ledger.dailyRisk.pendingRisk, 7);
     expect(ledger.dailyRisk.available, 3);
@@ -168,12 +163,7 @@ void main() {
     var ledger = reserve(empty(), candidate('btc', 3, symbol: 'BTCUSDT'));
     ledger = reserve(
       ledger,
-      candidate(
-        'eth',
-        4,
-        symbol: 'ETHUSDT',
-        side: PortfolioSide.short,
-      ),
+      candidate('eth', 4, symbol: 'ETHUSDT', side: PortfolioSide.short),
     );
     final decision = policy.evaluate(
       ledger: ledger,
@@ -188,12 +178,7 @@ void main() {
     var ledger = reserve(empty(), candidate('btc', 3, symbol: 'BTCUSDT'));
     ledger = reserve(
       ledger,
-      candidate(
-        'eth',
-        4,
-        symbol: 'ETHUSDT',
-        side: PortfolioSide.short,
-      ),
+      candidate('eth', 4, symbol: 'ETHUSDT', side: PortfolioSide.short),
     );
     final decision = policy.evaluate(
       ledger: ledger,
@@ -229,10 +214,13 @@ void main() {
     expect(ledger.dailyRisk.available, 10);
   });
 
-  test('7. requested stop promotion does not release risk before confirmation', () {
-    final ledger = empty(reservations: [openReservation('btc', 3)]);
-    expect(ledger.dailyRisk.openRisk, 3);
-  });
+  test(
+    '7. requested stop promotion does not release risk before confirmation',
+    () {
+      final ledger = empty(reservations: [openReservation('btc', 3)]);
+      expect(ledger.dailyRisk.openRisk, 3);
+    },
+  );
 
   test('8. confirmed break-even stop reduces cost-free open risk to zero', () {
     final ledger = empty(reservations: [openReservation('btc', 3)]);
@@ -310,8 +298,10 @@ void main() {
       eventId: 'reject-1',
     );
     expect(rejected.dailyRisk.consumed, 0);
-    expect(rejected.reservations.single.lifecycle,
-        PortfolioReservationLifecycle.released);
+    expect(
+      rejected.reservations.single.lifecycle,
+      PortfolioReservationLifecycle.released,
+    );
   });
 
   test('13. partial fill splits pending and open risk proportionally', () {
@@ -514,9 +504,7 @@ void main() {
 
   test('24. TP partial fill changes risk only after confirmed reduction', () {
     final ledger = empty(
-      reservations: [
-        openReservation('btc', 10, quantity: 10, margin: 20),
-      ],
+      reservations: [openReservation('btc', 10, quantity: 10, margin: 20)],
     );
     expect(ledger.dailyRisk.openRisk, 10);
     final confirmed = PortfolioRiskTransitions.applyExchangeConfirmedReduction(
@@ -560,8 +548,10 @@ void main() {
     );
     expect(history.realizedProfit, 1.5);
     expect(repeated.realizedProfit, 1.5);
-    expect(repeated.reservations.single.lifecycle,
-        PortfolioReservationLifecycle.closed);
+    expect(
+      repeated.reservations.single.lifecycle,
+      PortfolioReservationLifecycle.closed,
+    );
   });
 
   test('27. manual external position is not adopted and blocks entries', () {
@@ -634,12 +624,7 @@ void main() {
     var ledger = reserve(empty(), candidate('btc', 3, symbol: 'BTCUSDT'));
     ledger = reserve(
       ledger,
-      candidate(
-        'eth',
-        4,
-        symbol: 'ETHUSDT',
-        side: PortfolioSide.short,
-      ),
+      candidate('eth', 4, symbol: 'ETHUSDT', side: PortfolioSide.short),
     );
     ledger = reserve(ledger, candidate('sol', 3, symbol: 'SOLUSDT'));
     expect(ledger.activeReservations, hasLength(3));

@@ -144,10 +144,7 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
         label: _t('ضرر محقق‌شده', 'Realized loss'),
         value: _money(risk.realizedLoss),
       ),
-      (
-        label: _t('ریسک پوزیشن باز', 'Open risk'),
-        value: _money(risk.openRisk),
-      ),
+      (label: _t('ریسک پوزیشن باز', 'Open risk'), value: _money(risk.openRisk)),
       (
         label: _t('ریسک Pending', 'Pending risk'),
         value: _money(risk.pendingRisk),
@@ -370,7 +367,10 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             spacing: 16,
             runSpacing: 8,
             children: [
-              _fact(_t('ورود', 'Entry'), position.entryPrice.toStringAsFixed(4)),
+              _fact(
+                _t('ورود', 'Entry'),
+                position.entryPrice.toStringAsFixed(4),
+              ),
               _fact(
                 _t('استاپ تأییدشده', 'Confirmed stop'),
                 position.currentExchangeConfirmedStop.toStringAsFixed(4),
@@ -379,7 +379,10 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                 _t('تعداد', 'Quantity'),
                 position.plannedQuantity.toStringAsFixed(4),
               ),
-              _fact(_t('حداکثر زیان', 'Maximum loss'), _money(position.maximumLoss)),
+              _fact(
+                _t('حداکثر زیان', 'Maximum loss'),
+                _money(position.maximumLoss),
+              ),
               _fact(_t('مارجین', 'Margin'), _money(position.reservedMargin)),
               _fact(
                 _t('سهم از سقف', 'Daily limit share'),
@@ -427,30 +430,54 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
 
   String _blockLabel(PortfolioEntryBlockReason reason) => switch (reason) {
     PortfolioEntryBlockReason.none => _t('مجاز', 'Allowed'),
-    PortfolioEntryBlockReason.invalidInput =>
-      _t('ورودی قیمت، تعداد، استاپ یا مارجین نامعتبر است.', 'Price, quantity, stop, or margin input is invalid.'),
-    PortfolioEntryBlockReason.staleAccount =>
-      _t('داده خصوصی حساب Stale است؛ Entry جدید مسدود شد.', 'Private account truth is stale; new entry is blocked.'),
-    PortfolioEntryBlockReason.incompleteProtection =>
-      _t('حداقل یک پوزیشن Protection تأییدشده ندارد.', 'At least one position lacks verified protection.'),
-    PortfolioEntryBlockReason.unsupportedMarginMode =>
-      _t('فقط Isolated Margin مجاز است.', 'Only isolated margin is allowed.'),
-    PortfolioEntryBlockReason.duplicateCandidate =>
-      _t('Candidate یا Trade تکراری است.', 'The candidate or trade is duplicated.'),
-    PortfolioEntryBlockReason.sameSymbolOverlap =>
-      _t('هم‌پوشانی روی یک Symbol در سیاست محافظه‌کارانه مسدود است.', 'Same-symbol overlap is blocked by the conservative policy.'),
-    PortfolioEntryBlockReason.ambiguousReservation =>
-      _t('Reservation مبهم تا Reconciliation ظرفیت را قفل کرده است.', 'An ambiguous reservation locks capacity until reconciliation.'),
-    PortfolioEntryBlockReason.emergencyTechnicalCeiling =>
-      _t('سقف فنی اضطراری فعال شده است.', 'The emergency technical ceiling was reached.'),
-    PortfolioEntryBlockReason.exchangeMinimum =>
-      _t('حداقل Quantity یا Notional صرافی رعایت نشده است.', 'The exchange minimum quantity or notional is not met.'),
-    PortfolioEntryBlockReason.riskBudgetInsufficient =>
-      _t('بودجه ریسک باقی‌مانده کافی نیست.', 'The remaining risk budget is insufficient.'),
-    PortfolioEntryBlockReason.marginInsufficient =>
-      _t('مارجین آزاد پس از بافر ایمنی کافی نیست.', 'Free margin is insufficient after the safety buffer.'),
-    PortfolioEntryBlockReason.directionConcentration =>
-      _t('تمرکز ریسک در یک جهت از سقف محافظه‌کارانه عبور می‌کند.', 'Directional risk concentration exceeds the conservative cap.'),
+    PortfolioEntryBlockReason.invalidInput => _t(
+      'ورودی قیمت، تعداد، استاپ یا مارجین نامعتبر است.',
+      'Price, quantity, stop, or margin input is invalid.',
+    ),
+    PortfolioEntryBlockReason.staleAccount => _t(
+      'داده خصوصی حساب Stale است؛ Entry جدید مسدود شد.',
+      'Private account truth is stale; new entry is blocked.',
+    ),
+    PortfolioEntryBlockReason.incompleteProtection => _t(
+      'حداقل یک پوزیشن Protection تأییدشده ندارد.',
+      'At least one position lacks verified protection.',
+    ),
+    PortfolioEntryBlockReason.unsupportedMarginMode => _t(
+      'فقط Isolated Margin مجاز است.',
+      'Only isolated margin is allowed.',
+    ),
+    PortfolioEntryBlockReason.duplicateCandidate => _t(
+      'Candidate یا Trade تکراری است.',
+      'The candidate or trade is duplicated.',
+    ),
+    PortfolioEntryBlockReason.sameSymbolOverlap => _t(
+      'هم‌پوشانی روی یک Symbol در سیاست محافظه‌کارانه مسدود است.',
+      'Same-symbol overlap is blocked by the conservative policy.',
+    ),
+    PortfolioEntryBlockReason.ambiguousReservation => _t(
+      'Reservation مبهم تا Reconciliation ظرفیت را قفل کرده است.',
+      'An ambiguous reservation locks capacity until reconciliation.',
+    ),
+    PortfolioEntryBlockReason.emergencyTechnicalCeiling => _t(
+      'سقف فنی اضطراری فعال شده است.',
+      'The emergency technical ceiling was reached.',
+    ),
+    PortfolioEntryBlockReason.exchangeMinimum => _t(
+      'حداقل Quantity یا Notional صرافی رعایت نشده است.',
+      'The exchange minimum quantity or notional is not met.',
+    ),
+    PortfolioEntryBlockReason.riskBudgetInsufficient => _t(
+      'بودجه ریسک باقی‌مانده کافی نیست.',
+      'The remaining risk budget is insufficient.',
+    ),
+    PortfolioEntryBlockReason.marginInsufficient => _t(
+      'مارجین آزاد پس از بافر ایمنی کافی نیست.',
+      'Free margin is insufficient after the safety buffer.',
+    ),
+    PortfolioEntryBlockReason.directionConcentration => _t(
+      'تمرکز ریسک در یک جهت از سقف محافظه‌کارانه عبور می‌کند.',
+      'Directional risk concentration exceeds the conservative cap.',
+    ),
   };
 
   String _money(double value) => '${value.toStringAsFixed(2)} USDT';

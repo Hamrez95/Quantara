@@ -14,58 +14,60 @@ abstract final class PortfolioRiskTransitions {
       throw const FormatException('Confirmed remaining quantity is invalid.');
     }
     var changed = false;
-    final next = ledger.reservations.map((item) {
-      if (!item.open || item.positionId != positionId) return item;
-      if (remainingQuantity > item.filledQuantity + 1e-9) {
-        throw const FormatException(
-          'Confirmed remaining quantity exceeds the open quantity.',
-        );
-      }
-      changed = true;
-      if (remainingQuantity <= 1e-9) {
-        return item.copyWith(
-          plannedQuantity: 0,
-          filledQuantity: 0,
-          estimatedEntryFee: 0,
-          estimatedExitFee: 0,
-          slippageReserve: 0,
-          fundingReserve: 0,
-          maximumLoss: 0,
-          reservedMargin: 0,
-          lifecycle: PortfolioReservationLifecycle.closed,
-          verification: PortfolioVerificationState.exchangeConfirmed,
-          revision: item.revision + 1,
-        );
-      }
-      final fraction = remainingQuantity / item.filledQuantity;
-      final entryFee = item.estimatedEntryFee * fraction;
-      final exitFee = item.estimatedExitFee * fraction;
-      final slippage = item.slippageReserve * fraction;
-      final funding = item.fundingReserve * fraction;
-      final maximumLoss = PortfolioRiskMath.confirmedOpenRisk(
-        side: item.side,
-        entryPrice: item.entryPrice,
-        confirmedStop: item.currentExchangeConfirmedStop,
-        remainingQuantity: remainingQuantity,
-        contractMultiplier: item.contractMultiplier,
-        entryFee: entryFee,
-        exitFee: exitFee,
-        slippageReserve: slippage,
-        fundingReserve: funding,
-      );
-      return item.copyWith(
-        plannedQuantity: remainingQuantity,
-        filledQuantity: remainingQuantity,
-        estimatedEntryFee: entryFee,
-        estimatedExitFee: exitFee,
-        slippageReserve: slippage,
-        fundingReserve: funding,
-        maximumLoss: maximumLoss,
-        reservedMargin: item.reservedMargin * fraction,
-        verification: PortfolioVerificationState.exchangeConfirmed,
-        revision: item.revision + 1,
-      );
-    }).toList(growable: false);
+    final next = ledger.reservations
+        .map((item) {
+          if (!item.open || item.positionId != positionId) return item;
+          if (remainingQuantity > item.filledQuantity + 1e-9) {
+            throw const FormatException(
+              'Confirmed remaining quantity exceeds the open quantity.',
+            );
+          }
+          changed = true;
+          if (remainingQuantity <= 1e-9) {
+            return item.copyWith(
+              plannedQuantity: 0,
+              filledQuantity: 0,
+              estimatedEntryFee: 0,
+              estimatedExitFee: 0,
+              slippageReserve: 0,
+              fundingReserve: 0,
+              maximumLoss: 0,
+              reservedMargin: 0,
+              lifecycle: PortfolioReservationLifecycle.closed,
+              verification: PortfolioVerificationState.exchangeConfirmed,
+              revision: item.revision + 1,
+            );
+          }
+          final fraction = remainingQuantity / item.filledQuantity;
+          final entryFee = item.estimatedEntryFee * fraction;
+          final exitFee = item.estimatedExitFee * fraction;
+          final slippage = item.slippageReserve * fraction;
+          final funding = item.fundingReserve * fraction;
+          final maximumLoss = PortfolioRiskMath.confirmedOpenRisk(
+            side: item.side,
+            entryPrice: item.entryPrice,
+            confirmedStop: item.currentExchangeConfirmedStop,
+            remainingQuantity: remainingQuantity,
+            contractMultiplier: item.contractMultiplier,
+            entryFee: entryFee,
+            exitFee: exitFee,
+            slippageReserve: slippage,
+            fundingReserve: funding,
+          );
+          return item.copyWith(
+            plannedQuantity: remainingQuantity,
+            filledQuantity: remainingQuantity,
+            estimatedEntryFee: entryFee,
+            estimatedExitFee: exitFee,
+            slippageReserve: slippage,
+            fundingReserve: funding,
+            maximumLoss: maximumLoss,
+            reservedMargin: item.reservedMargin * fraction,
+            verification: PortfolioVerificationState.exchangeConfirmed,
+            revision: item.revision + 1,
+          );
+        })
+        .toList(growable: false);
     return PortfolioRiskLedger(
       schemaVersion: ledger.schemaVersion,
       revision: changed ? ledger.revision + 1 : ledger.revision,

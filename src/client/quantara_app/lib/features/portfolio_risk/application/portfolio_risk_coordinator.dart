@@ -86,10 +86,8 @@ final class PortfolioRiskCoordinator {
     DateTime? now,
   }) => _mutate(
     now: now,
-    mutation: (ledger) => ledger.release(
-      reservationId: reservationId,
-      eventId: eventId,
-    ),
+    mutation: (ledger) =>
+        ledger.release(reservationId: reservationId, eventId: eventId),
   );
 
   Future<PortfolioRiskLedger> markAmbiguous({
@@ -98,10 +96,8 @@ final class PortfolioRiskCoordinator {
     DateTime? now,
   }) => _mutate(
     now: now,
-    mutation: (ledger) => ledger.markAmbiguous(
-      reservationId: reservationId,
-      eventId: eventId,
-    ),
+    mutation: (ledger) =>
+        ledger.markAmbiguous(reservationId: reservationId, eventId: eventId),
   );
 
   Future<PortfolioRiskLedger> applyPartialFill({

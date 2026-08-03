@@ -11,9 +11,7 @@ void main() {
       PortfolioRiskSimulationController(
         coordinator: PortfolioRiskCoordinator(
           store: _MemoryPortfolioRiskStore(),
-          policy: const PortfolioRiskPolicy(
-            maximumDirectionRiskFraction: 1,
-          ),
+          policy: const PortfolioRiskPolicy(maximumDirectionRiskFraction: 1),
           defaultDailyRiskLimit: 10,
         ),
         account: PortfolioAccountTruth(
