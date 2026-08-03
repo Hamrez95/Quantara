@@ -32,7 +32,7 @@ import '../../strategy_lab/data/strategy_lab_runner.dart';
 import '../../strategy_lab/data/platform_strategy_lab_session_store.dart';
 import '../../strategy_lab/domain/strategy_lab_models.dart';
 import '../../trading_journal/application/trading_journal_controller.dart';
-import '../../trading_journal/data/trading_journal_store.dart';
+import '../../trading_journal/data/database_trading_journal_store.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
@@ -99,7 +99,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
         configStore: const SecureAutoTradeServerConfigStore(),
       );
   late final TradingJournalController _journalController =
-      TradingJournalController(store: SharedPreferencesTradingJournalStore());
+      TradingJournalController(store: DatabaseTradingJournalStore());
   late final OwnerAlphaController _controller = OwnerAlphaController(
     repository: widget.repository,
     settingsStore: widget.settingsStore,
