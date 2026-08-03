@@ -175,85 +175,88 @@ void main() {
     },
   );
 
-  test('emergency request remains open until its exchange fill is confirmed', () async {
-    final store = _MemoryJournalStore(
-      TradingJournalLedger.empty().appendPlan(plan()),
-    );
-    final observer = LocalLiveJournalObserver(store: store);
+  test(
+    'emergency request remains open until its exchange fill is confirmed',
+    () async {
+      final store = _MemoryJournalStore(
+        TradingJournalLedger.empty().appendPlan(plan()),
+      );
+      final observer = LocalLiveJournalObserver(store: store);
 
-    await observer.recordLifecycle(
-      managed: managed(),
-      type: TradingJournalEventType.positionClosed,
-      identity: 'emergency-close-request:position-1',
-      message: 'Reduce-only emergency close submitted.',
-      quality: TradingJournalFactQuality.calculated,
-    );
+      await observer.recordLifecycle(
+        managed: managed(),
+        type: TradingJournalEventType.positionClosed,
+        identity: 'emergency-close-request:position-1',
+        message: 'Reduce-only emergency close submitted.',
+        quality: TradingJournalFactQuality.calculated,
+      );
 
-    final request = store.ledger.events.single;
-    expect(request.type, TradingJournalEventType.reconciliationStarted);
-    expect(
-      request.details['requestedType'],
-      TradingJournalEventType.positionClosed.name,
-    );
-    final beforeFill = TradingJournalProjector.project(
-      ledger: store.ledger,
-      journalTradeId: plan().journalTradeId,
-    );
-    expect(beforeFill.state, isNot(TradingJournalTradeState.closed));
+      final request = store.ledger.events.single;
+      expect(request.type, TradingJournalEventType.reconciliationStarted);
+      expect(
+        request.details['requestedType'],
+        TradingJournalEventType.positionClosed.name,
+      );
+      final beforeFill = TradingJournalProjector.project(
+        ledger: store.ledger,
+        journalTradeId: plan().journalTradeId,
+      );
+      expect(beforeFill.state, isNot(TradingJournalTradeState.closed));
 
-    final confirmed = TradingPnlProjection.reconcile(
-      currency: 'USDT',
-      asOf: openedAt.add(const Duration(minutes: 15)),
-      unrealizedByPosition: const {},
-      fills: [
-        ExchangePnlFill(
-          tradeId: 'emergency-fill-1',
-          orderId: 'emergency-order-1',
-          positionId: 'position-1',
-          symbol: 'XRPUSDT',
-          quantity: 21.4,
-          price: 1.067,
-          realizedPnl: -0.01,
-          fee: 0.01,
-          reduceOnly: true,
-          occurredAt: openedAt.add(const Duration(minutes: 14)),
-          clientId: 'client-entry-emergency-close',
-        ),
-      ],
-      settlements: [
-        ExchangePositionSettlement(
-          positionId: 'position-1',
-          symbol: 'XRPUSDT',
-          funding: 0,
-          openedAt: openedAt,
-          closedAt: openedAt.add(const Duration(minutes: 14)),
-          realizedPnl: -0.01,
-          fee: 0.01,
-        ),
-      ],
-    );
+      final confirmed = TradingPnlProjection.reconcile(
+        currency: 'USDT',
+        asOf: openedAt.add(const Duration(minutes: 15)),
+        unrealizedByPosition: const {},
+        fills: [
+          ExchangePnlFill(
+            tradeId: 'emergency-fill-1',
+            orderId: 'emergency-order-1',
+            positionId: 'position-1',
+            symbol: 'XRPUSDT',
+            quantity: 21.4,
+            price: 1.067,
+            realizedPnl: -0.01,
+            fee: 0.01,
+            reduceOnly: true,
+            occurredAt: openedAt.add(const Duration(minutes: 14)),
+            clientId: 'client-entry-emergency-close',
+          ),
+        ],
+        settlements: [
+          ExchangePositionSettlement(
+            positionId: 'position-1',
+            symbol: 'XRPUSDT',
+            funding: 0,
+            openedAt: openedAt,
+            closedAt: openedAt.add(const Duration(minutes: 14)),
+            realizedPnl: -0.01,
+            fee: 0.01,
+          ),
+        ],
+      );
 
-    await observer.reconcilePosition(
-      managed: managed(),
-      positionPnl: confirmed.forPositionId('position-1')!,
-      positionClosed: true,
-    );
+      await observer.reconcilePosition(
+        managed: managed(),
+        positionPnl: confirmed.forPositionId('position-1')!,
+        positionClosed: true,
+      );
 
-    final fill = store.ledger.events.singleWhere(
-      (event) => event.tradeId == 'emergency-fill-1',
-    );
-    expect(fill.type, TradingJournalEventType.positionClosed);
-    expect(
-      fill.details['closeReason'],
-      TradingJournalCloseReason.emergency.name,
-    );
-    final afterFill = TradingJournalProjector.project(
-      ledger: store.ledger,
-      journalTradeId: plan().journalTradeId,
-    );
-    expect(afterFill.state, TradingJournalTradeState.closed);
-    expect(afterFill.closeReason, TradingJournalCloseReason.emergency);
-  });
+      final fill = store.ledger.events.singleWhere(
+        (event) => event.tradeId == 'emergency-fill-1',
+      );
+      expect(fill.type, TradingJournalEventType.positionClosed);
+      expect(
+        fill.details['closeReason'],
+        TradingJournalCloseReason.emergency.name,
+      );
+      final afterFill = TradingJournalProjector.project(
+        ledger: store.ledger,
+        journalTradeId: plan().journalTradeId,
+      );
+      expect(afterFill.state, TradingJournalTradeState.closed);
+      expect(afterFill.closeReason, TradingJournalCloseReason.emergency);
+    },
+  );
 }
 
 final class _MemoryJournalStore implements TradingJournalStore {
