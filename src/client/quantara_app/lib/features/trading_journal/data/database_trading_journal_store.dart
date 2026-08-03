@@ -75,10 +75,7 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
     TradingJournalLedger ledger, {
     int minimumRevision = 0,
   }) async {
-    final existing = await database.read(
-      QuantaraDurableCategory.journal,
-      _key,
-    );
+    final existing = await database.read(QuantaraDurableCategory.journal, _key);
     final revision = existing == null
         ? (ledger.generation > minimumRevision
               ? ledger.generation
