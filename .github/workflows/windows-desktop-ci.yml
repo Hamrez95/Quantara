@@ -28,6 +28,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.44.8'
+  RC_VERSION: 1.2.0-rc.1
 
 jobs:
   windows:
@@ -53,14 +54,14 @@ jobs:
           dart --version
           cmake --version
 
-      - name: Build native Windows candidate
+      - name: Build native Windows release candidate
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner -PackageZip
 
-      - name: Upload Windows candidate
+      - name: Upload Windows release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-windows-preview
+          name: quantara-windows-${{ env.RC_VERSION }}
           path: dist/windows/quantara-windows-release.zip
           if-no-files-found: error
           retention-days: 14
