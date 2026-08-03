@@ -144,7 +144,7 @@ abstract final class ExchangeReinstallRecovery {
       }
 
       final complete = _protectionComplete(
-        claim: claim!,
+        claim: claim,
         position: position,
         protectionOrders: protectionOrders,
       );
