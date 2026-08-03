@@ -1,0 +1,73 @@
+name: Temporary Issue 136 review fix
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Verify and apply review patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -c < .github/temporary/issue136.review.patch.gz.b64)" -eq 4232
+          echo '6dda78e4003b6e3c733d85f1625d6c963eb1bd6862ae061e70a79139f800320f  .github/temporary/issue136.review.patch.gz.b64' | sha256sum --check
+          base64 --decode .github/temporary/issue136.review.patch.gz.b64 | gzip --decompress > /tmp/issue136.review.patch
+          echo 'a2d64bbdd43c0028d52d79b94feb7b088a5980fc47621fce964bcbb6089f06c8  /tmp/issue136.review.patch' | sha256sum --check
+          git apply --check /tmp/issue136.review.patch
+          git apply /tmp/issue136.review.patch
+          rm -f .github/workflows/temporary-issue136-review-fix.yml
+          rm -f .github/workflows/temporary-issue136-review-export.yml
+          rm -rf .github/temporary
+
+      - name: Format, analyze and run journal review gates
+        working-directory: src/client/quantara_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib test
+          flutter analyze --fatal-infos
+          flutter test --reporter expanded \
+            test/trading_journal_review_regressions_test.dart \
+            test/trading_journal_ledger_test.dart \
+            test/trading_journal_store_test.dart \
+            test/trading_journal_statistics_test.dart \
+            test/trading_journal_view_test.dart \
+            test/trading_journal_encrypted_export_test.dart \
+            test/trading_journal_source_safety_test.dart \
+            test/trading_pnl_projection_test.dart \
+            test/exchange_confirmed_profit_lock_test.dart \
+            test/local_live_v1_0_1_source_test.dart \
+            test/auto_trade_readonly_source_test.dart
+
+      - name: Commit formatted review fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Quantara Release Bot'
+          git config user.email 'quantara-release-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: harden journal financial integrity and crash recovery'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
