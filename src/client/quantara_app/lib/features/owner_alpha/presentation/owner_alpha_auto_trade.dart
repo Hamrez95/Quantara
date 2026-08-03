@@ -15,9 +15,10 @@ class _AutoTradeView extends StatefulWidget {
   State<_AutoTradeView> createState() => _AutoTradeViewState();
 }
 
-class _AutoTradeViewState extends State<_AutoTradeView> {
+class _AutoTradeViewState extends State<_AutoTradeView>
+    with WidgetsBindingObserver {
   late final LocalLiveTradeController _localController =
-      LocalLiveTradeController();
+      LocalLiveTradeController(accountController: widget.controller);
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
 
@@ -26,11 +27,31 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(
+      widget.controller.reconcile(
+        reason: PrivateAccountRefreshReason.accountPageOpened,
+        force: true,
+      ),
+    );
     unawaited(_localController.initialize());
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(
+      widget.controller.reconcile(
+        reason: PrivateAccountRefreshReason.appResume,
+        force: true,
+      ),
+    );
+    unawaited(_localController.refresh());
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _localController.dispose();
     super.dispose();
   }
@@ -244,8 +265,17 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
                 onConnect: _showConnectionDialog,
               )
             else ...[
+              if (widget.controller.reconciliation.health !=
+                  PrivateAccountReconciliationHealth.fresh) ...[
+                PrivateAccountReconciliationBanner(
+                  state: widget.controller.reconciliation,
+                  persian: _fa,
+                ),
+                const SizedBox(height: 12),
+              ],
               _AccountOverviewCard(
                 snapshot: snapshot,
+                reconciliation: widget.controller.reconciliation,
                 maskedApiKey: widget.controller.maskedApiKey ?? '••••••••',
                 onRefresh: widget.controller.isBusy
                     ? null
@@ -404,6 +434,10 @@ class _LocalLiveTradeControlCardState
     final entriesActive =
         status.state == LocalLiveTradeState.running && status.entriesEnabled;
     final canResumeEntries = status.canResumeEntries;
+    final phaseOneQuarantine = !ExchangeTruthPhaseOneGate.realEntriesAllowed;
+    final hasExistingPosition =
+        widget.accountController.snapshot?.positions.isNotEmpty ?? false;
+    final phaseOneStartBlocked = phaseOneQuarantine && !hasExistingPosition;
     final starting = status.state == LocalLiveTradeState.starting;
     final breaker = status.state == LocalLiveTradeState.circuitBreaker;
     final color = breaker
@@ -482,6 +516,26 @@ class _LocalLiveTradeControlCardState
             ),
             color: QuantaraColors.danger,
           ),
+          if (!ExchangeTruthPhaseOneGate.realEntriesAllowed) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'قرنطینه Phase 1 فعال است: ورود واقعی جدید کاملاً غیرفعال است. فقط در صورت وجود پوزیشن فعلی، سرویس می‌تواند در حالت مدیریت و تطبیق بدون Entry شروع شود.',
+                'Phase 1 quarantine is active: every new real entry is disabled. The service may start only in management-only reconciliation mode when an existing position is present.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
+          if (widget.accountController.reconciliation.blocksNewEntries) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'ورود واقعی تا همگام‌سازی تازه و بدون تناقض حساب Bitunix قفل است. مدیریت پوزیشن و حفاظت‌های موجود متوقف نمی‌شود.',
+                'Real entries are locked until Bitunix private-account truth is fresh and coherent. Existing position and protection management continues.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
           if (widget.controller.error != null) ...[
             const SizedBox(height: 10),
             _LocalLiveStatusNotice(
@@ -679,6 +733,11 @@ class _LocalLiveTradeControlCardState
                       widget.controller.isBusy ||
                           starting ||
                           breaker ||
+                          widget
+                              .accountController
+                              .reconciliation
+                              .blocksNewEntries ||
+                          phaseOneStartBlocked ||
                           (serviceActive && !canResumeEntries)
                       ? null
                       : _confirmStart,
@@ -689,7 +748,9 @@ class _LocalLiveTradeControlCardState
                         )
                       : const Icon(Icons.play_arrow_rounded),
                   label: Text(
-                    canResumeEntries
+                    phaseOneQuarantine && hasExistingPosition
+                        ? _t('شروع مدیریت', 'Start management')
+                        : canResumeEntries
                         ? _t('ازسرگیری ورود', 'Resume entries')
                         : _t('شروع ترید', 'Start trading'),
                     style: const TextStyle(fontWeight: FontWeight.w900),

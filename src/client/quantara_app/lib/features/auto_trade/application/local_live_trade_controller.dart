@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,14 +10,31 @@ import '../data/secure_auto_trade_credentials_store.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_entry_preflight.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/private_account_reconciliation.dart';
+import 'auto_trade_controller.dart';
 import 'local_live_trade_service.dart';
 
 final class LocalLiveTradeController extends ChangeNotifier {
-  LocalLiveTradeController({
-    this._credentialsStore = const SecureAutoTradeCredentialsStore(),
-  });
+  factory LocalLiveTradeController({
+    required AutoTradeController accountController,
+    AutoTradeCredentialsStore credentialsStore =
+        const SecureAutoTradeCredentialsStore(),
+    Duration accountPollInterval = const Duration(seconds: 20),
+  }) => LocalLiveTradeController._(
+    accountController,
+    credentialsStore,
+    accountPollInterval,
+  );
 
+  LocalLiveTradeController._(
+    this._accountController,
+    this._credentialsStore,
+    this._accountPollInterval,
+  );
+
+  final AutoTradeController _accountController;
   final AutoTradeCredentialsStore _credentialsStore;
+  final Duration _accountPollInterval;
 
   LocalLiveTradeStatus _status = LocalLiveTradeStatus(
     state: LocalLiveTradeState.stopped,
@@ -26,6 +44,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
   String? _error;
   bool _busy = false;
   bool _disposed = false;
+  bool _accountListenerAttached = false;
+  Timer? _accountPollTimer;
 
   LocalLiveTradeStatus get status => _status;
   String? get error => _error;
@@ -36,6 +56,10 @@ final class LocalLiveTradeController extends ChangeNotifier {
 
   Future<void> initialize() async {
     FlutterForegroundTask.addTaskDataCallback(_onTaskData);
+    if (!_accountListenerAttached) {
+      _accountController.addListener(_onAccountProjectionChanged);
+      _accountListenerAttached = true;
+    }
     final raw = await FlutterForegroundTask.getData<String>(
       key: localLiveStatusKey,
     );
@@ -54,6 +78,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
         entriesEnabled: false,
       );
     }
+    await _reconcileAccountFromStatus(force: true);
+    _updateAccountPolling();
     notifyListeners();
   }
 
@@ -75,8 +101,32 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'Connect and validate the Bitunix account before starting local live trading.',
         );
       }
+      final reconciled = await _accountController.reconcile(
+        reason: PrivateAccountRefreshReason.startPreflight,
+        force: true,
+      );
+      final account = _accountController.snapshot;
+      if (!reconciled ||
+          account == null ||
+          _accountController.reconciliation.blocksNewEntries) {
+        throw const LocalLiveTradeSafeException(
+          'New entries are blocked until a fresh, coherent Bitunix private-account reconciliation succeeds.',
+        );
+      }
 
-      await _ensureAtLeastOneAffordableSymbol(configuration, credentials);
+      final entriesEnabled = ExchangeTruthPhaseOneGate.realEntriesAllowed;
+      if (!entriesEnabled && account.positions.isEmpty) {
+        throw const LocalLiveTradeSafeException(
+          ExchangeTruthPhaseOneGate.reason,
+        );
+      }
+      if (entriesEnabled) {
+        await _ensureAtLeastOneAffordableSymbol(
+          configuration,
+          credentials,
+          account,
+        );
+      }
 
       final permission =
           await FlutterForegroundTask.checkNotificationPermission();
@@ -141,14 +191,18 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'configuration': configuration.toJson(),
           'apiKey': credentials.apiKey,
           'secretKey': credentials.secretKey,
+          'entriesEnabled': entriesEnabled,
         }),
       );
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.starting,
         updatedAt: DateTime.now().toUtc(),
-        message: 'Local live service is starting on this device.',
-        entriesEnabled: true,
+        message: entriesEnabled
+            ? 'Local live service is starting on this device.'
+            : 'Local live service is starting in management-only quarantine.',
+        entriesEnabled: entriesEnabled,
       );
+      _updateAccountPolling();
       return true;
     } on LocalLiveTradeSafeException catch (error) {
       _error = error.message;
@@ -171,11 +225,11 @@ final class LocalLiveTradeController extends ChangeNotifier {
   Future<void> _ensureAtLeastOneAffordableSymbol(
     LocalLiveTradeConfiguration configuration,
     BitunixApiCredentials credentials,
+    AutoTradeAccountSnapshot account,
   ) async {
     final client = http.Client();
     try {
       final exchange = BitunixLocalLiveApiClient(client: client);
-      final account = await exchange.fetchAccountSnapshot(credentials);
       if (!LocalLiveEntryPreflightPolicy.shouldCheckNewEntryAffordability(
         openPositionCount: account.positions.length,
       )) {
@@ -289,6 +343,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
         realizedPnl: _status.realizedPnl,
         entriesEnabled: false,
       );
+      _updateAccountPolling();
       return true;
     } on LocalLiveTradeSafeException catch (error) {
       _error = error.message;
@@ -310,6 +365,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
     );
     if (!_disposed && raw != null) {
       _applyStatus(raw);
+      await _reconcileAccountFromStatus(force: true);
+      _updateAccountPolling();
       notifyListeners();
     }
   }
@@ -350,8 +407,59 @@ final class LocalLiveTradeController extends ChangeNotifier {
 
   void _onTaskData(Object data) {
     if (_disposed || data is! String) return;
+    final previousOpenPositionCount = _status.openPositionCount;
+    final previousExchangeSync = _status.lastSuccessfulExchangeSync;
     _applyStatus(data);
+    final exchangeTruthChanged =
+        previousOpenPositionCount != _status.openPositionCount ||
+        previousExchangeSync != _status.lastSuccessfulExchangeSync;
+    unawaited(_reconcileAccountFromStatus(force: exchangeTruthChanged));
+    _updateAccountPolling();
     notifyListeners();
+  }
+
+  Future<void> _reconcileAccountFromStatus({required bool force}) async {
+    if (_disposed) return;
+    final exchangeSyncedAt = _status.lastSuccessfulExchangeSync;
+    if (exchangeSyncedAt == null) {
+      await _accountController.reconcile(
+        reason: PrivateAccountRefreshReason.localLiveEvent,
+        force: force,
+      );
+      return;
+    }
+    await _accountController.observeLocalLiveOpenPositions(
+      openPositionCount: _status.openPositionCount,
+      observedAt: _status.updatedAt,
+      exchangeSyncedAt: exchangeSyncedAt,
+    );
+  }
+
+  void _updateAccountPolling() {
+    if (_disposed || !_status.isRunning) {
+      _accountPollTimer?.cancel();
+      _accountPollTimer = null;
+      return;
+    }
+    _accountPollTimer ??= Timer.periodic(
+      _accountPollInterval,
+      (_) => unawaited(
+        _accountController.reconcile(
+          reason: PrivateAccountRefreshReason.activePolling,
+        ),
+      ),
+    );
+  }
+
+  void _onAccountProjectionChanged() {
+    if (_disposed || !_status.isRunning || !_status.entriesEnabled) return;
+    if (!_accountController.reconciliation.blocksNewEntries) return;
+    FlutterForegroundTask.sendDataToTask(
+      jsonEncode({
+        'type': 'block_entries_private_state',
+        'reason': _accountController.reconciliation.health.name,
+      }),
+    );
   }
 
   void _applyStatus(String raw) {
@@ -369,6 +477,12 @@ final class LocalLiveTradeController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _accountPollTimer?.cancel();
+    _accountPollTimer = null;
+    if (_accountListenerAttached) {
+      _accountController.removeListener(_onAccountProjectionChanged);
+      _accountListenerAttached = false;
+    }
     FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
     super.dispose();
   }

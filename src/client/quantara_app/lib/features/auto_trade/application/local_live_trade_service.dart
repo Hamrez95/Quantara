@@ -34,7 +34,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   final List<LocalLiveManagedPosition> _managed = [];
   final Set<String> _executedSetupIds = {};
   final List<LocalLiveAuditEvent> _audit = [];
-  bool _entriesEnabled = true;
+  bool _entriesEnabled = false;
   bool _cycleRunning = false;
   bool _destroyed = false;
   int _consecutiveFailures = 0;
@@ -142,7 +142,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _httpClient?.close();
         _httpClient = http.Client();
         _exchange = BitunixLocalLiveApiClient(client: _httpClient!);
-        _entriesEnabled = true;
+        _entriesEnabled = message['entriesEnabled'] == true;
         _destroyed = false;
         _sessionStartEquity = null;
         await FlutterForegroundTask.saveData(
@@ -151,11 +151,17 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         _auditEvent(
           'start',
-          'Guarded local live canary armed for ${configuration.symbols.length} symbols.',
+          _entriesEnabled
+              ? 'Guarded local live canary armed for ${configuration.symbols.length} symbols.'
+              : 'Local live recovery started in management-only exchange-truth quarantine.',
         );
         await _publish(
-          LocalLiveTradeState.running,
-          'Local live canary is armed on this Android device.',
+          _entriesEnabled
+              ? LocalLiveTradeState.running
+              : LocalLiveTradeState.managingOnly,
+          _entriesEnabled
+              ? 'Local live canary is armed on this Android device.'
+              : 'Phase 1 quarantine: new entries are disabled; existing positions remain managed.',
         );
         await _runCycle();
       case 'stop':
@@ -165,6 +171,17 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         await _publish(
           LocalLiveTradeState.managingOnly,
           'New entries stopped; existing exchange SL/TP orders remain active.',
+        );
+      case 'block_entries_private_state':
+        _entriesEnabled = false;
+        final reason = message['reason']?.toString() ?? 'unavailable';
+        _auditEvent(
+          'private_state_block',
+          'New entries blocked because the app private-account projection is $reason.',
+        );
+        await _publish(
+          LocalLiveTradeState.managingOnly,
+          'New entries blocked because private account truth is stale or divergent. Existing protected positions continue to be reconciled.',
         );
       case 'emergency_close':
         _entriesEnabled = false;
