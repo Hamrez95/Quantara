@@ -37,6 +37,26 @@ jobs:
           echo '11b7cbedb82d671bc5ef960b7e9436b0d670a6b9cb17f493e35d55085b66b89d  /tmp/issue135.patch' | sha256sum --check
           git apply --check /tmp/issue135.patch
           git apply /tmp/issue135.patch
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              'src/client/quantara_app/lib/features/auto_trade/domain/'
+              'auto_trade_models.dart'
+          )
+          source = path.read_text()
+          old = '''    final residualQuantity = math.max(
+              0,
+              position.quantity - totalTakeProfitQuantity,
+            );'''
+          new = '''    final residualQuantity = math.max(
+              0,
+              position.quantity - totalTakeProfitQuantity,
+            ).toDouble();'''
+          if old not in source:
+              raise SystemExit('Expected residual quantity expression not found')
+          path.write_text(source.replace(old, new, 1))
+          PY
           rm .github/workflows/temporary-issue135-patch.yml
           rm -rf .github/temporary
 
