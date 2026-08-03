@@ -75,6 +75,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
         openPositionCount: _status.openPositionCount,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
+        pnlProjection: _status.pnlProjection,
         entriesEnabled: false,
       );
     }
@@ -341,6 +342,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
         openPositionCount: _status.openPositionCount,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
+        pnlProjection: _status.pnlProjection,
         entriesEnabled: false,
       );
       _updateAccountPolling();

@@ -1,5 +1,18 @@
 part of 'owner_alpha_page.dart';
 
+String _pnlMetricText(TradingPnlMetric metric) {
+  final value = metric.value;
+  if (value == null) return '—';
+  final prefix = value > 0 ? '+' : '';
+  return '$prefix${value.toStringAsFixed(4)} ${metric.currency}';
+}
+
+Color? _pnlMetricColor(TradingPnlMetric metric) {
+  final value = metric.value;
+  if (value == null) return null;
+  return value >= 0 ? QuantaraColors.success : QuantaraColors.danger;
+}
+
 class _DisconnectedAccountCard extends StatelessWidget {
   const _DisconnectedAccountCard({required this.busy, required this.onConnect});
 
@@ -263,9 +276,8 @@ class _AccountOverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fa = Directionality.of(context) == TextDirection.rtl;
-    final pnlColor = snapshot.totalUnrealizedPnl >= 0
-        ? QuantaraColors.success
-        : QuantaraColors.danger;
+    final pnl = snapshot.authoritativePnl;
+    final pnlColor = _pnlMetricColor(pnl.accountUnrealized);
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,11 +333,27 @@ class _AccountOverviewCard extends StatelessWidget {
               ),
               MetricTile(
                 label: fa ? 'سود/زیان باز' : 'Unrealized P/L',
-                value: QuantaraNumberFormat.marketValue(
-                  snapshot.totalUnrealizedPnl,
-                  unit: snapshot.marginCoin,
-                ),
+                value: _pnlMetricText(pnl.accountUnrealized),
                 valueColor: pnlColor,
+              ),
+              MetricTile(
+                label: fa ? 'سود تحقق‌یافته ناخالص' : 'Realized gross',
+                value: _pnlMetricText(pnl.accountRealizedGross),
+                valueColor: _pnlMetricColor(pnl.accountRealizedGross),
+              ),
+              MetricTile(
+                label: fa ? 'کارمزد' : 'Fees',
+                value: _pnlMetricText(pnl.accountFees),
+              ),
+              MetricTile(
+                label: fa ? 'فاندینگ' : 'Funding',
+                value: _pnlMetricText(pnl.accountFunding),
+                valueColor: _pnlMetricColor(pnl.accountFunding),
+              ),
+              MetricTile(
+                label: fa ? 'سود/زیان خالص تحقق‌یافته' : 'Net realized',
+                value: _pnlMetricText(pnl.accountNetRealized),
+                valueColor: _pnlMetricColor(pnl.accountNetRealized),
               ),
               MetricTile(
                 label: fa ? 'پوزیشن باز' : 'Open positions',
@@ -350,6 +378,17 @@ class _AccountOverviewCard extends StatelessWidget {
             '${fa ? 'آخرین همگام‌سازی' : 'Last sync'}: ${snapshot.syncedAt.toLocal()}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          Text(
+            '${fa ? 'زمان حسابداری صرافی' : 'Exchange accounting as of'}: ${pnl.asOf.toLocal()} · ${pnl.isVerified ? (fa ? 'تأییدشده' : 'verified') : (fa ? 'نیازمند بررسی' : 'unverified')}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (pnl.warning != null)
+            Text(
+              pnl.warning!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: QuantaraColors.warning),
+            ),
           Text(
             '${fa ? 'چرخه تطبیق' : 'Reconciliation cycle'}: ${reconciliation.cycleId ?? '—'}',
             textDirection: TextDirection.ltr,
@@ -456,36 +495,80 @@ class _OpenPositionsCard extends StatelessWidget {
             )
           else
             for (final position in snapshot.positions) ...[
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  child: Text(
-                    position.symbol.isEmpty
-                        ? '?'
-                        : position.symbol.substring(0, 1),
-                  ),
-                ),
-                title: Text(
-                  '${position.symbol} · ${position.side}',
-                  textDirection: TextDirection.ltr,
-                ),
-                subtitle: Text(
-                  '${position.marginMode} · ${position.leverage}x · Qty ${position.quantity}',
-                  textDirection: TextDirection.ltr,
-                ),
-                trailing: Text(
-                  QuantaraNumberFormat.marketValue(
-                    position.unrealizedPnl,
-                    unit: 'USDT',
-                  ),
-                  textDirection: TextDirection.ltr,
-                  style: TextStyle(
-                    color: position.unrealizedPnl >= 0
-                        ? QuantaraColors.success
-                        : QuantaraColors.danger,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+              Builder(
+                builder: (context) {
+                  final positionPnl = snapshot.authoritativePnl.forPositionId(
+                    position.positionId,
+                  );
+                  final unrealized = positionPnl?.unrealized;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          child: Text(
+                            position.symbol.isEmpty
+                                ? '?'
+                                : position.symbol.substring(0, 1),
+                          ),
+                        ),
+                        title: Text(
+                          '${position.symbol} · ${position.side}',
+                          textDirection: TextDirection.ltr,
+                        ),
+                        subtitle: Text(
+                          '${position.marginMode} · ${position.leverage}x · Qty ${position.quantity}',
+                          textDirection: TextDirection.ltr,
+                        ),
+                        trailing: Text(
+                          unrealized == null ? '—' : _pnlMetricText(unrealized),
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(
+                            color: unrealized == null
+                                ? null
+                                : _pnlMetricColor(unrealized),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (positionPnl != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Wrap(
+                            spacing: 16,
+                            runSpacing: 10,
+                            children: [
+                              MetricTile(
+                                label: fa ? 'تحقق‌یافته' : 'Realized',
+                                value: _pnlMetricText(
+                                  positionPnl.realizedGross,
+                                ),
+                                valueColor: _pnlMetricColor(
+                                  positionPnl.realizedGross,
+                                ),
+                              ),
+                              MetricTile(
+                                label: fa ? 'کارمزد' : 'Fees',
+                                value: _pnlMetricText(positionPnl.fees),
+                              ),
+                              MetricTile(
+                                label: fa ? 'فاندینگ' : 'Funding',
+                                value: _pnlMetricText(positionPnl.funding),
+                              ),
+                              MetricTile(
+                                label: fa ? 'خالص' : 'Net',
+                                value: _pnlMetricText(positionPnl.netRealized),
+                                valueColor: _pnlMetricColor(
+                                  positionPnl.netRealized,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
               PositionProtectionSummary(
                 protection: snapshot.protectionForPosition(position),

@@ -1,5 +1,6 @@
 import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
+import 'trading_pnl_projection.dart';
 
 enum LocalLiveTradeState {
   stopped,
@@ -255,7 +256,8 @@ final class LocalLiveTradeStatus {
     this.lastSuccessfulExchangeSync,
     this.openPositionCount = 0,
     this.closedPositionCount = 0,
-    this.realizedPnl = 0,
+    this.realizedPnl,
+    this.pnlProjection,
     this.consecutiveFailures = 0,
     this.entriesEnabled = false,
   });
@@ -267,7 +269,12 @@ final class LocalLiveTradeStatus {
   final DateTime? lastSuccessfulExchangeSync;
   final int openPositionCount;
   final int closedPositionCount;
-  final double realizedPnl;
+  @Deprecated('Use pnlProjection metrics with source/scope/asOf metadata.')
+  final double? realizedPnl;
+  final TradingPnlProjection? pnlProjection;
+
+  double? get effectiveSessionNetPnl =>
+      pnlProjection?.accountNetRealized.value ?? realizedPnl;
   final int consecutiveFailures;
   final bool entriesEnabled;
 
@@ -291,6 +298,7 @@ final class LocalLiveTradeStatus {
     'openPositionCount': openPositionCount,
     'closedPositionCount': closedPositionCount,
     'realizedPnl': realizedPnl,
+    'pnlProjection': pnlProjection?.toJson(),
     'consecutiveFailures': consecutiveFailures,
     'entriesEnabled': entriesEnabled,
   };
@@ -314,10 +322,23 @@ final class LocalLiveTradeStatus {
     )?.toUtc(),
     openPositionCount: (json['openPositionCount'] as num?)?.toInt() ?? 0,
     closedPositionCount: (json['closedPositionCount'] as num?)?.toInt() ?? 0,
-    realizedPnl: (json['realizedPnl'] as num?)?.toDouble() ?? 0,
+    realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
+    pnlProjection: _pnlProjectionFromJson(json['pnlProjection']),
     consecutiveFailures: (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
     entriesEnabled: json['entriesEnabled'] == true,
   );
+}
+
+TradingPnlProjection? _pnlProjectionFromJson(Object? value) {
+  if (value is Map<String, Object?>) {
+    return TradingPnlProjection.fromJson(value);
+  }
+  if (value is Map<Object?, Object?>) {
+    return TradingPnlProjection.fromJson(
+      value.map((key, item) => MapEntry(key.toString(), item)),
+    );
+  }
+  return null;
 }
 
 final class LocalLiveAuditEvent {

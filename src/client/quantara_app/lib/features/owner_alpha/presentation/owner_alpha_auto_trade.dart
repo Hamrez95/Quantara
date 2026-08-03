@@ -583,12 +583,29 @@ class _LocalLiveTradeControlCardState
                     : QuantaraColors.cyan,
               ),
               StatusPill(
-                label:
-                    '${status.realizedPnl >= 0 ? '+' : ''}${status.realizedPnl.toStringAsFixed(2)} USDT',
-                color: status.realizedPnl >= 0
+                label: status.effectiveSessionNetPnl == null
+                    ? _t('خالص جلسه: ناموجود', 'Session net: unavailable')
+                    : '${status.effectiveSessionNetPnl! >= 0 ? '+' : ''}${status.effectiveSessionNetPnl!.toStringAsFixed(2)} USDT',
+                color: status.effectiveSessionNetPnl == null
+                    ? QuantaraColors.warning
+                    : status.effectiveSessionNetPnl! >= 0
                     ? QuantaraColors.success
                     : QuantaraColors.danger,
               ),
+              if (status.pnlProjection != null)
+                StatusPill(
+                  label: status.pnlProjection!.accountUnrealized.isAvailable
+                      ? _t(
+                          'باز ${_pnlMetricText(status.pnlProjection!.accountUnrealized)}',
+                          'Open ${_pnlMetricText(status.pnlProjection!.accountUnrealized)}',
+                        )
+                      : _t('باز: ناموجود', 'Open: unavailable'),
+                  color:
+                      _pnlMetricColor(
+                        status.pnlProjection!.accountUnrealized,
+                      ) ??
+                      QuantaraColors.warning,
+                ),
               StatusPill(
                 label: _t(
                   '${status.closedPositionCount} بسته',
