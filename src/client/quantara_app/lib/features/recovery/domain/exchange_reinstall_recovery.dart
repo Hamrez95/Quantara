@@ -104,10 +104,18 @@ abstract final class ExchangeReinstallRecovery {
     required List<RecoveryProtectionOrder> protectionOrders,
     required Set<String> recentClosedPositionIds,
   }) {
-    final claimsByPosition = {
-      for (final claim in restoredOwnership)
-        if (claim.positionId.trim().isNotEmpty) claim.positionId: claim,
-    };
+    final claimsByPosition = <String, RestoredPositionOwnership>{};
+    final ambiguousClaims = <String>{};
+    for (final claim in restoredOwnership) {
+      final positionId = claim.positionId.trim();
+      if (positionId.isEmpty || ambiguousClaims.contains(positionId)) continue;
+      if (claimsByPosition.containsKey(positionId)) {
+        claimsByPosition.remove(positionId);
+        ambiguousClaims.add(positionId);
+        continue;
+      }
+      claimsByPosition[positionId] = claim;
+    }
     final results = <RecoveredExchangePosition>[];
     final seen = <String>{};
 
@@ -177,7 +185,8 @@ abstract final class ExchangeReinstallRecovery {
     }
 
     for (final claim in restoredOwnership) {
-      if (seen.contains(claim.positionId) ||
+      if (ambiguousClaims.contains(claim.positionId) ||
+          seen.contains(claim.positionId) ||
           !recentClosedPositionIds.contains(claim.positionId)) {
         continue;
       }
@@ -240,31 +249,48 @@ abstract final class ExchangeReinstallRecovery {
     required RecoveryExchangePosition position,
     required List<RecoveryProtectionOrder> protectionOrders,
   }) {
+    final requiredQuantity = position.quantity.abs();
+    if (!requiredQuantity.isFinite || requiredQuantity <= 0) return false;
+
     final scoped = protectionOrders
         .where((order) => order.positionId == position.positionId)
         .toList(growable: false);
-    final stopId = claim.stopOrderId;
+    final uniqueOrderIds = <String>{};
+    for (final order in scoped) {
+      final orderId = order.orderId.trim();
+      final quantity = order.quantity.abs();
+      if (orderId.isEmpty ||
+          !uniqueOrderIds.add(orderId) ||
+          !quantity.isFinite ||
+          quantity <= 0) {
+        return false;
+      }
+    }
+
+    final stopId = claim.stopOrderId?.trim();
+    if (stopId == null || stopId.isEmpty) return false;
     final stopQuantity = scoped
         .where(
           (order) =>
               order.kind == RecoveryProtectionKind.stop &&
-              stopId != null &&
               order.orderId == stopId,
         )
-        .fold<double>(0, (total, order) => total + order.quantity);
-    final targetIds = claim.targetOrderIds.toSet();
-    final targets = scoped.where(
-      (order) =>
-          order.kind == RecoveryProtectionKind.takeProfit &&
-          targetIds.contains(order.orderId),
-    );
-    final targetQuantity = targets.fold<double>(
-      0,
-      (total, order) => total + order.quantity,
-    );
-    final tolerance = math.max(0.00000001, position.quantity.abs() * 0.000001);
-    return stopQuantity + tolerance >= position.quantity &&
-        targetQuantity + tolerance >= position.quantity;
+        .fold<double>(0, (total, order) => total + order.quantity.abs());
+    final targetIds = claim.targetOrderIds
+        .map((orderId) => orderId.trim())
+        .where((orderId) => orderId.isNotEmpty)
+        .toSet();
+    if (targetIds.isEmpty) return false;
+    final targetQuantity = scoped
+        .where(
+          (order) =>
+              order.kind == RecoveryProtectionKind.takeProfit &&
+              targetIds.contains(order.orderId),
+        )
+        .fold<double>(0, (total, order) => total + order.quantity.abs());
+    final tolerance = math.max(0.00000001, requiredQuantity * 0.000001);
+    return stopQuantity + tolerance >= requiredQuantity &&
+        targetQuantity + tolerance >= requiredQuantity;
   }
 
   static String _eventId(
