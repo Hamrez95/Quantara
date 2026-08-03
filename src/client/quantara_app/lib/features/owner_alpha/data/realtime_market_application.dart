@@ -375,8 +375,7 @@ final class RealtimeMarketApplication {
     RealtimeCandlePipelineUpdate update,
   ) async {
     _metrics.recordPipelineUpdate(update);
-    final synchronizer =
-        analysisGateway is RealtimeMarketAnalysisSynchronizer
+    final synchronizer = analysisGateway is RealtimeMarketAnalysisSynchronizer
         ? analysisGateway as RealtimeMarketAnalysisSynchronizer
         : null;
     if (synchronizer != null) {
