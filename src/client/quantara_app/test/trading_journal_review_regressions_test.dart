@@ -286,6 +286,101 @@ void main() {
     expect(finalExit.remainingQuantity, 0);
   });
 
+  test('a full TP ladder creates one final closed projection', () async {
+    final store = _MemoryJournalStore(
+      TradingJournalLedger.empty().appendPlan(plan()),
+    );
+    final observer = LocalLiveJournalObserver(store: store);
+    final projection = TradingPnlProjection.reconcile(
+      currency: 'USDT',
+      asOf: openedAt.add(const Duration(hours: 2)),
+      unrealizedByPosition: const {},
+      fills: [
+        ExchangePnlFill(
+          tradeId: 'trade-entry-target-close',
+          orderId: 'entry-order',
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          quantity: 21.4,
+          price: 1.0665,
+          realizedPnl: 0,
+          fee: 0.004,
+          reduceOnly: false,
+          occurredAt: openedAt.add(const Duration(minutes: 1)),
+        ),
+        ExchangePnlFill(
+          tradeId: 'trade-tp1-target-close',
+          orderId: 'tp-1',
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          quantity: 13.91,
+          price: 1.0603,
+          realizedPnl: 0.1,
+          fee: 0.009,
+          reduceOnly: true,
+          occurredAt: openedAt.add(const Duration(minutes: 20)),
+        ),
+        ExchangePnlFill(
+          tradeId: 'trade-tp2-target-close',
+          orderId: 'tp-2',
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          quantity: 4.28,
+          price: 1.0567,
+          realizedPnl: 0.05,
+          fee: 0.003,
+          reduceOnly: true,
+          occurredAt: openedAt.add(const Duration(minutes: 40)),
+        ),
+        ExchangePnlFill(
+          tradeId: 'trade-tp3-target-close',
+          orderId: 'tp-3',
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          quantity: 3.21,
+          price: 1.0531,
+          realizedPnl: 0.03,
+          fee: 0.002,
+          reduceOnly: true,
+          occurredAt: openedAt.add(const Duration(minutes: 60)),
+        ),
+      ],
+      settlements: [
+        ExchangePositionSettlement(
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          funding: 0,
+          openedAt: openedAt,
+          closedAt: openedAt.add(const Duration(minutes: 60)),
+          realizedPnl: 0.18,
+          fee: 0.018,
+        ),
+      ],
+    );
+
+    await observer.reconcilePosition(
+      managed: managed(),
+      positionPnl: projection.forPositionId('position-1')!,
+      positionClosed: true,
+    );
+
+    final journal = TradingJournalProjector.project(
+      ledger: store.ledger,
+      journalTradeId: plan().journalTradeId,
+    );
+    expect(journal.state, TradingJournalTradeState.closed);
+    expect(journal.highestTargetReached, 3);
+    expect(journal.closeReason, TradingJournalCloseReason.takeProfit3);
+    expect(
+      journal.timeline
+          .where(
+            (event) => event.type == TradingJournalEventType.positionClosed,
+          )
+          .length,
+      1,
+    );
+  });
+
   test(
     'profit-lock confirmation identity never conflicts with original stop',
     () async {

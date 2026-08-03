@@ -229,16 +229,27 @@ final class LocalLiveJournalObserver {
         ),
       );
     }
-    if (positionClosed &&
-        fills.every((fill) => managed.targetOrderIds.contains(fill.orderId))) {
-      final highestTarget = fills
+    final finalExit = exitFills.isEmpty ? null : exitFills.last;
+    final finalExitTargetIndex = finalExit == null
+        ? -1
+        : managed.targetOrderIds.indexOf(finalExit.orderId);
+    final needsSyntheticClose =
+        positionClosed && (finalExit == null || finalExitTargetIndex >= 0);
+    if (needsSyntheticClose) {
+      final highestTarget = exitFills
           .map((fill) => managed.targetOrderIds.indexOf(fill.orderId) + 1)
+          .where((index) => index > 0)
           .fold<int>(0, math.max);
+      final closureTarget = finalExitTargetIndex >= 0
+          ? finalExitTargetIndex + 1
+          : highestTarget;
       final closedAt =
-          positionPnl.settlement?.closedAt ??
-          (fills.isEmpty
-              ? DateTime.now().toUtc()
-              : fills.last.occurredAt.toUtc());
+          (positionPnl.settlement?.closedAt ??
+                  finalExit?.occurredAt ??
+                  (fills.isEmpty
+                      ? DateTime.now().toUtc()
+                      : fills.last.occurredAt))
+              .toUtc();
       await _append(
         TradingJournalEvent(
           eventId:
@@ -259,11 +270,11 @@ final class LocalLiveJournalObserver {
           positionId: managed.positionId,
           remainingQuantity: 0,
           details: {
-            'closeReason': highestTarget >= 3
+            'closeReason': closureTarget >= 3
                 ? TradingJournalCloseReason.takeProfit3.name
-                : highestTarget == 2
+                : closureTarget == 2
                 ? TradingJournalCloseReason.takeProfit2.name
-                : highestTarget == 1
+                : closureTarget == 1
                 ? TradingJournalCloseReason.takeProfit1.name
                 : TradingJournalCloseReason.exchange.name,
           },
