@@ -1,0 +1,105 @@
+name: Temporary Issue 135 review fix
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply official Bitunix query-shape review fix
+        shell: python
+        run: |
+          from pathlib import Path
+
+          client = Path(
+              'src/client/quantara_app/lib/features/auto_trade/data/'
+              'bitunix_private_api_client.dart'
+          )
+          source = client.read_text()
+          old = "            'positionMode': position.positionMode,\n"
+          if source.count(old) != 1:
+              raise SystemExit('Expected one positionMode TP/SL query parameter')
+          client.write_text(source.replace(old, '', 1))
+
+          test = Path(
+              'src/client/quantara_app/test/'
+              'bitunix_position_protection_reconciliation_test.dart'
+          )
+          source = test.read_text()
+          old = "      expect(protectionRequest.url.queryParameters['positionMode'], 'HEDGE');\n"
+          new = """      expect(
+                protectionRequest.url.queryParameters.containsKey('positionMode'),
+                isFalse,
+              );
+              expect(
+                protectionRequest.url.queryParameters.containsKey('side'),
+                isFalse,
+              );
+          """
+          if source.count(old) != 1:
+              raise SystemExit('Expected one TP/SL positionMode assertion')
+          test.write_text(source.replace(old, new, 1))
+
+          docs = Path(
+              'docs/physical-tests/'
+              'issue-135-position-protection-reconciliation.md'
+          )
+          source = docs.read_text()
+          old = (
+              "The TP/SL request is scoped by the open position's exchange "
+              "`positionId`, symbol, and position mode."
+          )
+          new = (
+              "The TP/SL request is scoped by the open position's exchange "
+              "`positionId` and symbol. Optional integer `side` and "
+              "`positionMode` filters are intentionally omitted because the "
+              "local position model carries their string forms."
+          )
+          if source.count(old) != 1:
+              raise SystemExit('Expected Issue 135 query scope documentation')
+          docs.write_text(source.replace(old, new, 1))
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Format, analyze, and run protection safety tests
+        working-directory: src/client/quantara_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib test
+          flutter analyze --fatal-infos
+          flutter test --reporter expanded \
+            test/bitunix_position_protection_reconciliation_test.dart \
+            test/position_protection_summary_test.dart \
+            test/auto_trade_readonly_source_test.dart
+
+      - name: Commit review fix and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/temporary-issue135-review-fix.yml
+          git config user.name 'Quantara Release Bot'
+          git config user.email 'quantara-release-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: use documented TP/SL query filters'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
