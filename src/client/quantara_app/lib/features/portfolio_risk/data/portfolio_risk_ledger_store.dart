@@ -84,7 +84,8 @@ final class DatabasePortfolioRiskLedgerStore
         'Portfolio risk mutation requires an atomic durable database.',
       );
     }
-    return database.mutateRecord<T>(
+    final atomicDatabase = database as QuantaraAtomicDurableDatabase;
+    return atomicDatabase.mutateRecord<T>(
       category: QuantaraDurableCategory.managedPositions,
       key: _recordKey,
       mutation: (currentRecord) async {
