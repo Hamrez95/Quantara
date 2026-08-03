@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/persistence/quantara_database_provider.dart';
+import '../../../core/persistence/quantara_durable_database.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
 
 @immutable
@@ -81,6 +83,7 @@ final class SharedPreferencesLocalLivePreferencesStore
     implements LocalLivePreferencesStore {
   const SharedPreferencesLocalLivePreferencesStore();
 
+  static const _recordKey = 'local-live-preferences';
   static const _symbolsKey = 'quantara.local-live.ui.symbols.v2';
   static const _timeframesKey = 'quantara.local-live.ui.timeframes.v2';
   static const _leverageKey = 'quantara.local-live.ui.leverage.v2';
@@ -95,6 +98,70 @@ final class SharedPreferencesLocalLivePreferencesStore
     required List<String> availableSymbols,
   }) async {
     final defaults = LocalLivePreferences.defaults(availableSymbols);
+    try {
+      final database = await QuantaraDatabaseProvider.instance;
+      final record = await database.read(
+        QuantaraDurableCategory.settings,
+        _recordKey,
+      );
+      if (record != null) {
+        return _decode(record.payload, defaults).normalized(availableSymbols);
+      }
+      final migrated = await _loadLegacy(defaults);
+      await _saveDatabase(database, migrated);
+      return migrated.normalized(availableSymbols);
+    } on Object {
+      return (await _loadLegacy(defaults)).normalized(availableSymbols);
+    }
+  }
+
+  @override
+  Future<void> save(LocalLivePreferences value) async {
+    try {
+      final database = await QuantaraDatabaseProvider.instance;
+      await _saveDatabase(database, value);
+    } on Object {
+      // The compatibility mirror below remains available during migration.
+    }
+    await _saveLegacy(value);
+  }
+
+  static LocalLivePreferences _decode(
+    Map<String, Object?> payload,
+    LocalLivePreferences defaults,
+  ) {
+    final symbols = payload['symbols'];
+    final timeframes = payload['timeframes'];
+    final allocation = payload['targetAllocation'];
+    return LocalLivePreferences(
+      symbols: symbols is List<Object?>
+          ? symbols.map((item) => item.toString()).toList(growable: false)
+          : defaults.symbols,
+      timeframes: timeframes is List<Object?>
+          ? timeframes.map((item) => item.toString()).toSet()
+          : defaults.timeframes,
+      leverage: _integer(payload['leverage'], fallback: defaults.leverage),
+      riskPercent: _number(
+        payload['riskPercent'],
+        fallback: defaults.riskPercent,
+      ),
+      dailyLossLimitPercent: _number(
+        payload['dailyLossLimitPercent'],
+        fallback: defaults.dailyLossLimitPercent,
+      ),
+      targetAllocation: ProfitProtectionTargetAllocation.fromFractions(
+        allocation is List<Object?>
+            ? allocation
+                  .map((item) => _number(item, fallback: 0))
+                  .toList(growable: false)
+            : defaults.targetAllocation.fractions,
+      ),
+    );
+  }
+
+  static Future<LocalLivePreferences> _loadLegacy(
+    LocalLivePreferences defaults,
+  ) async {
     final preferences = await SharedPreferences.getInstance();
     final targetAllocation = ProfitProtectionTargetAllocation.fromFractions([
       preferences.getDouble(_tp1Key) ?? defaults.targetAllocation.tp1Fraction,
@@ -113,11 +180,37 @@ final class SharedPreferencesLocalLivePreferencesStore
           preferences.getDouble(_dailyLossKey) ??
           defaults.dailyLossLimitPercent,
       targetAllocation: targetAllocation,
-    ).normalized(availableSymbols);
+    );
   }
 
-  @override
-  Future<void> save(LocalLivePreferences value) async {
+  static Future<void> _saveDatabase(
+    QuantaraDurableDatabase database,
+    LocalLivePreferences value,
+  ) async {
+    final existing = await database.read(
+      QuantaraDurableCategory.settings,
+      _recordKey,
+    );
+    await database.put(
+      QuantaraDurableRecord(
+        category: QuantaraDurableCategory.settings,
+        key: _recordKey,
+        schemaVersion: 1,
+        revision: (existing?.revision ?? 0) + 1,
+        updatedAt: DateTime.now().toUtc(),
+        payload: {
+          'symbols': value.symbols,
+          'timeframes': value.timeframes.toList(growable: false)..sort(),
+          'leverage': value.leverage,
+          'riskPercent': value.riskPercent,
+          'dailyLossLimitPercent': value.dailyLossLimitPercent,
+          'targetAllocation': value.targetAllocation.fractions,
+        },
+      ),
+    );
+  }
+
+  static Future<void> _saveLegacy(LocalLivePreferences value) async {
     final preferences = await SharedPreferences.getInstance();
     await Future.wait([
       preferences.setStringList(_symbolsKey, value.symbols),
@@ -134,3 +227,11 @@ final class SharedPreferencesLocalLivePreferencesStore
     ]);
   }
 }
+
+int _integer(Object? value, {required int fallback}) => value is num
+    ? value.toInt()
+    : int.tryParse(value?.toString() ?? '') ?? fallback;
+
+double _number(Object? value, {required double fallback}) => value is num
+    ? value.toDouble()
+    : double.tryParse(value?.toString() ?? '') ?? fallback;
