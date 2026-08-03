@@ -1,4 +1,4 @@
-name: Temporary portfolio initialization UX repair
+name: Temporary idempotent portfolio initialization UX repair
 
 on:
   push:
@@ -38,37 +38,25 @@ jobs:
           path = Path('src/client/quantara_app/lib/features/portfolio_risk/presentation/portfolio_risk_panel.dart')
           text = path.read_text()
 
-          notice_anchor = """                  tone: Theme.of(context).colorScheme.primary,
-                ),
-                if (_controller.error != null) ...[
-"""
-          notice_replacement = """                  tone: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 12),
-                _actions(),
-                if (_controller.error != null) ...[
-"""
-          if notice_replacement not in text:
-              if notice_anchor not in text:
-                  raise SystemExit('primary notice anchor changed')
-              text = text.replace(notice_anchor, notice_replacement, 1)
+          error_marker = '                if (_controller.error != null) ...['
+          always_actions = '                const SizedBox(height: 12),\n                _actions(),\n'
+          before_error = text.split(error_marker, 1)[0]
+          if '_actions(),' not in before_error:
+              if error_marker not in text:
+                  raise SystemExit('error marker changed')
+              text = text.replace(error_marker, always_actions + error_marker, 1)
 
-          snapshot_anchor = """                ] else if (snapshot != null) ...[
-                  const SizedBox(height: 16),
-                  _actions(),
-                  const SizedBox(height: 12),
-                  _status(snapshot),
-"""
-          snapshot_replacement = """                ] else if (snapshot != null) ...[
-                  const SizedBox(height: 16),
-                  _status(snapshot),
-"""
-          if snapshot_anchor in text:
-              text = text.replace(snapshot_anchor, snapshot_replacement, 1)
+          snapshot_pattern = re.compile(
+              r"(\] else if \(snapshot != null\) \.\.\.\[\s+const SizedBox\(height: 16\),)\s+_actions\(\),\s+const SizedBox\(height: 12\),",
+              re.S,
+          )
+          text = snapshot_pattern.sub(r"\1", text, count=1)
 
-          start = text.index('  Widget _actions() => Wrap(')
-          end = text.index('  Widget _positions(', start)
-          replacement = """  Widget _actions() {
+          method_pattern = re.compile(
+              r"  Widget _actions\(\)\s*=>\s*Wrap\(.*?(?=\n  Widget _positions\()",
+              re.S,
+          )
+          new_method = """  Widget _actions() {
     final disabled = _controller.loading && _controller.snapshot != null;
     return Wrap(
       spacing: 8,
@@ -110,9 +98,11 @@ jobs:
       ],
     );
   }
-
 """
-          text = text[:start] + replacement + text[end:]
+          text, count = method_pattern.subn(new_method, text, count=1)
+          if count != 1 and 'final disabled = _controller.loading' not in text:
+              raise SystemExit('actions method pattern changed')
+
           path.write_text(text)
           PY
 
