@@ -30,6 +30,8 @@ Account, position UI and Local Live notification consume this same projection. T
 - Conflicting duplicate exchange IDs make the projection unverified.
 - Closed-position history supplies position scope, funding and time bounds.
 - Trade rows without a position ID are attached only when symbol and position time bounds resolve to one unambiguous position.
+- Historical closed-position intervals are checked before a current same-symbol open position, preventing old fills from being assigned to the new position.
+- Overlapping closed intervals remain unverified instead of guessing an owner.
 - A failed funding-history read leaves confirmed realized gross and fees visible, but funding and net remain unavailable and the projection is not ready for risk gates.
 - Missing or stale values are never converted to zero.
 
@@ -48,11 +50,14 @@ The duplicate TP1 row in the fixture is reconciled once. The stop affects only t
 
 ## Automated focused gate
 
-On implementation commit `03eafe741e2e5af162e871308b0f01c7a46db3a4`:
+On formatted implementation head `216f168a5ad470c1b4c24545cd0c2b5ed71f2279`:
 
-- `flutter analyze --fatal-infos` passed;
+- `flutter analyze --fatal-infos` passed before the final review regression;
 - projection, Bitunix history mapping, TP/SL reconciliation, account-cycle, Local Live model, stale-state and source-safety tests passed;
-- all temporary source-transfer workflows and payloads were removed from the final diff.
+- final review added same-symbol historical identity and overlapping-interval fail-closed regressions;
+- all temporary source-transfer and formatting workflows and payloads were removed from the final diff.
+
+The final repository, Flutter, PWA, Windows and Android gates run from the clean evidence commit following this document update.
 
 ## Phase 1 quarantine
 
@@ -67,7 +72,8 @@ Do not create a new position for this checklist and do not cancel, move, resize,
 3. Confirm a stale account displays its stale timestamp and blocks new entries.
 4. Open an existing/recent position and confirm its exchange fill IDs are not duplicated after manual refresh, app resume or process restart.
 5. For a TP1-then-stop trade, confirm TP1 and the remaining stop appear as separate realized components and final net includes all fees and funding.
-6. Confirm Local Live notification and Account UI show the same session/account projection and timestamp.
-7. Confirm no action in this checklist changes exchange protection orders.
+6. Confirm an older closed XRP trade remains separate from a newer open XRP position.
+7. Confirm Local Live notification and Account UI show the same session/account projection and timestamp.
+8. Confirm no action in this checklist changes exchange protection orders.
 
 `main` and Draft Release PR #131 remain untouched.
