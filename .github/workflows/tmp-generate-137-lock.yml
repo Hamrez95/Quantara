@@ -1,0 +1,31 @@
+name: Temporary generate PR 149 lockfile
+
+on:
+  push:
+    branches:
+      - feat/137-encrypted-recovery-database
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve deterministic dependencies
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-149-generated-pubspec-lock
+          path: src/client/quantara_app/pubspec.lock
+          if-no-files-found: error
+          retention-days: 1
