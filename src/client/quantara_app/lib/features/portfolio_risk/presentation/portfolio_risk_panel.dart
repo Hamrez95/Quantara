@@ -49,10 +49,17 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
               children: [
                 _header(),
                 const SizedBox(height: 12),
-                _safetyNotice(),
+                _notice(
+                  icon: Icons.lock_outline_rounded,
+                  text: _t(
+                    'ورود واقعی سخت‌افزاری غیرفعال است. این بخش فقط تصمیم، رزرو و بازیابی بودجه را شبیه‌سازی می‌کند.',
+                    'Real entry is hard-disabled. This panel only simulates decisions, reservations, and recovery.',
+                  ),
+                  tone: Theme.of(context).colorScheme.primary,
+                ),
                 if (_controller.error != null) ...[
                   const SizedBox(height: 12),
-                  _messageBox(
+                  _notice(
                     icon: Icons.error_outline_rounded,
                     text: _t(
                       'خواندن دفتر ریسک ناموفق بود؛ ورود جدید مسدود می‌ماند.',
@@ -62,15 +69,22 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                   ),
                 ],
                 if (_controller.loading && snapshot == null) ...[
-                  const SizedBox(height: 20),
-                  const Center(child: CircularProgressIndicator()),
+                  const SizedBox(height: 12),
+                  _notice(
+                    icon: Icons.hourglass_top_rounded,
+                    text: _t(
+                      'در حال خواندن دفتر ریسک؛ تا تکمیل بازیابی، ورود جدید مسدود است.',
+                      'Reading the risk ledger; new entries remain blocked until recovery completes.',
+                    ),
+                    tone: Theme.of(context).colorScheme.secondary,
+                  ),
                 ] else if (snapshot != null) ...[
                   const SizedBox(height: 16),
                   _budgetGrid(snapshot),
                   const SizedBox(height: 16),
                   _status(snapshot),
                   const SizedBox(height: 16),
-                  _simulationActions(),
+                  _actions(),
                   const SizedBox(height: 16),
                   _positions(snapshot),
                 ],
@@ -82,8 +96,10 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
     );
   }
 
-  Widget _header() => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _header() => Wrap(
+    spacing: 12,
+    runSpacing: 10,
+    crossAxisAlignment: WrapCrossAlignment.center,
     children: [
       Container(
         width: 48,
@@ -94,8 +110,8 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
         ),
         child: const Icon(Icons.account_balance_wallet_outlined),
       ),
-      const SizedBox(width: 12),
-      Expanded(
+      ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -108,14 +124,13 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             const SizedBox(height: 4),
             Text(
               _t(
-                'ظرفیت هم‌زمان بر اساس ریسک روزانه و مارجین آزاد، نه تعداد ثابت پوزیشن',
+                'ظرفیت هم‌زمان بر اساس ریسک روزانه و مارجین آزاد است، نه تعداد ثابت پوزیشن.',
                 'Concurrent capacity is based on daily risk and free margin, not a fixed position count.',
               ),
             ),
           ],
         ),
       ),
-      const SizedBox(width: 8),
       Chip(
         avatar: const Icon(Icons.science_outlined, size: 18),
         label: Text(_t('شبیه‌سازی', 'Simulation')),
@@ -123,70 +138,31 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
     ],
   );
 
-  Widget _safetyNotice() => _messageBox(
-    icon: Icons.lock_outline_rounded,
-    text: _t(
-      'ورود واقعی در این نسخه سخت‌افزاری غیرفعال است. این پنل فقط تصمیم، رزرو و بازیابی بودجه را شبیه‌سازی می‌کند و هیچ سفارش واقعی را تغییر نمی‌دهد.',
-      'Real entry is hard-disabled in this build. This panel only simulates decisions, reservations, and recovery; it cannot mutate exchange orders.',
-    ),
-    tone: Theme.of(context).colorScheme.primary,
-  );
-
   Widget _budgetGrid(PortfolioRiskSnapshot snapshot) {
     final risk = snapshot.dailyRisk;
     final margin = snapshot.margin;
     final items = <({String label, String value})>[
-      (
-        label: _t('سقف ریسک روزانه', 'Daily risk limit'),
-        value: _money(risk.limit),
-      ),
-      (
-        label: _t('ضرر محقق‌شده', 'Realized loss'),
-        value: _money(risk.realizedLoss),
-      ),
+      (label: _t('سقف ریسک روزانه', 'Daily risk limit'), value: _money(risk.limit)),
+      (label: _t('ضرر محقق‌شده', 'Realized loss'), value: _money(risk.realizedLoss)),
       (label: _t('ریسک پوزیشن باز', 'Open risk'), value: _money(risk.openRisk)),
-      (
-        label: _t('ریسک Pending', 'Pending risk'),
-        value: _money(risk.pendingRisk),
-      ),
-      (
-        label: _t('ریسک مبهم', 'Ambiguous risk'),
-        value: _money(risk.ambiguousRisk),
-      ),
-      (
-        label: _t('ریسک باقی‌مانده', 'Available risk'),
-        value: _money(risk.available),
-      ),
-      (
-        label: _t('مارجین استفاده‌شده', 'Used margin'),
-        value: _money(margin.usedMargin),
-      ),
-      (
-        label: _t('مارجین رزرو', 'Reserved margin'),
-        value: _money(margin.reservedMargin),
-      ),
-      (
-        label: _t('مارجین آزاد', 'Free margin'),
-        value: _money(margin.freeMargin),
-      ),
-      (
-        label: _t('بافر ایمنی', 'Safety buffer'),
-        value: _money(margin.safetyBuffer),
-      ),
-      (
-        label: _t('ظرفیت مارجین', 'Spendable margin'),
-        value: _money(margin.spendable),
-      ),
-      (
-        label: _t('پوزیشن باز', 'Open positions'),
-        value: snapshot.openPositionCount.toString(),
-      ),
+      (label: _t('ریسک Pending', 'Pending risk'), value: _money(risk.pendingRisk)),
+      (label: _t('ریسک مبهم', 'Ambiguous risk'), value: _money(risk.ambiguousRisk)),
+      (label: _t('ریسک باقی‌مانده', 'Available risk'), value: _money(risk.available)),
+      (label: _t('مارجین استفاده‌شده', 'Used margin'), value: _money(margin.usedMargin)),
+      (label: _t('مارجین رزرو', 'Reserved margin'), value: _money(margin.reservedMargin)),
+      (label: _t('مارجین آزاد', 'Free margin'), value: _money(margin.freeMargin)),
+      (label: _t('بافر ایمنی', 'Safety buffer'), value: _money(margin.safetyBuffer)),
+      (label: _t('ظرفیت مارجین', 'Spendable margin'), value: _money(margin.spendable)),
+      (label: _t('پوزیشن باز', 'Open positions'), value: snapshot.openPositionCount.toString()),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900
+        final scale = MediaQuery.textScalerOf(context).scale(16) / 16;
+        final columns = scale >= 1.6 || constraints.maxWidth < 480
+            ? 1
+            : constraints.maxWidth >= 900
             ? 4
-            : constraints.maxWidth >= 560
+            : constraints.maxWidth >= 620
             ? 3
             : 2;
         final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
@@ -201,23 +177,19 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                   constraints: const BoxConstraints(minHeight: 82),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        item.label,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                      Text(item.label, style: Theme.of(context).textTheme.bodySmall),
                       const SizedBox(height: 6),
                       Text(
                         item.value,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
                   ),
@@ -230,12 +202,14 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
   }
 
   Widget _status(PortfolioRiskSnapshot snapshot) {
-    final blocked = snapshot.blockReason != PortfolioEntryBlockReason.none;
     final last = _controller.lastDecision;
-    final decisionText = last == null
+    final blocked = snapshot.blockReason != PortfolioEntryBlockReason.none;
+    final text = blocked
+        ? _blockLabel(snapshot.blockReason)
+        : last == null
         ? _t(
-            'برای نمونه ابتدا ۳ دلار و سپس ۴ دلار رزرو کن؛ از سقف ۱۰ دلار، ۳ دلار باقی می‌ماند.',
-            'Reserve 3 USDT and then 4 USDT; 3 USDT remains from the 10 USDT limit.',
+            'ابتدا ۳ و سپس ۴ USDT رزرو کن؛ از سقف ۱۰ USDT، سه واحد باقی می‌ماند.',
+            'Reserve 3 and then 4 USDT; 3 USDT remains from the 10 USDT limit.',
           )
         : last.allowed
         ? _t(
@@ -243,39 +217,32 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             'Reservation accepted; remaining risk is ${_money(last.availableRiskAfter)}.',
           )
         : _blockLabel(last.reason);
-    return _messageBox(
-      icon: blocked || (last != null && !last.allowed)
-          ? Icons.block_rounded
-          : Icons.verified_user_outlined,
-      text: blocked ? _blockLabel(snapshot.blockReason) : decisionText,
-      tone: blocked || (last != null && !last.allowed)
+    final failed = blocked || (last != null && !last.allowed);
+    return _notice(
+      icon: failed ? Icons.block_rounded : Icons.verified_user_outlined,
+      text: text,
+      tone: failed
           ? Theme.of(context).colorScheme.error
           : Theme.of(context).colorScheme.tertiary,
     );
   }
 
-  Widget _simulationActions() => Wrap(
+  Widget _actions() => Wrap(
     spacing: 8,
     runSpacing: 8,
     children: [
       FilledButton.tonalIcon(
-        onPressed: _controller.loading
-            ? null
-            : () => _controller.reserveExample(3),
+        onPressed: _controller.loading ? null : () => _controller.reserveExample(3),
         icon: const Icon(Icons.add_chart_rounded),
         label: Text(_t('رزرو ۳ USDT', 'Reserve 3 USDT')),
       ),
       FilledButton.tonalIcon(
-        onPressed: _controller.loading
-            ? null
-            : () => _controller.reserveExample(4),
+        onPressed: _controller.loading ? null : () => _controller.reserveExample(4),
         icon: const Icon(Icons.add_chart_rounded),
         label: Text(_t('رزرو ۴ USDT', 'Reserve 4 USDT')),
       ),
       OutlinedButton.icon(
-        onPressed: _controller.loading
-            ? null
-            : () => _controller.reserveExample(8),
+        onPressed: _controller.loading ? null : () => _controller.reserveExample(8),
         icon: const Icon(Icons.rule_rounded),
         label: Text(_t('آزمون Reject با ۸', 'Try rejected 8')),
       ),
@@ -302,7 +269,7 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
 
   Widget _positions(PortfolioRiskSnapshot snapshot) {
     if (snapshot.positions.isEmpty) {
-      return _messageBox(
+      return _notice(
         icon: Icons.inbox_outlined,
         text: _t(
           'هنوز Reservation فعالی وجود ندارد.',
@@ -322,15 +289,15 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
         ),
         const SizedBox(height: 8),
         for (final position in snapshot.positions) ...[
-          _positionTile(position, snapshot.dailyRisk.limit),
+          _position(position, snapshot.dailyRisk.limit),
           const SizedBox(height: 8),
         ],
       ],
     );
   }
 
-  Widget _positionTile(PositionRiskReservation position, double dailyLimit) {
-    final riskPercent = dailyLimit <= 0
+  Widget _position(PositionRiskReservation position, double dailyLimit) {
+    final percent = dailyLimit <= 0
         ? 0
         : position.maximumLoss / dailyLimit * 100;
     return Container(
@@ -349,15 +316,11 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             children: [
               Text(
                 position.symbol,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              Chip(
-                label: Text(
-                  position.side == PortfolioSide.long ? 'LONG' : 'SHORT',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
                 ),
               ),
+              Chip(label: Text(position.side == PortfolioSide.long ? 'LONG' : 'SHORT')),
               Chip(label: Text(position.lifecycle.name)),
               Chip(label: Text(position.verification.name)),
             ],
@@ -367,10 +330,7 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             spacing: 16,
             runSpacing: 8,
             children: [
-              _fact(
-                _t('ورود', 'Entry'),
-                position.entryPrice.toStringAsFixed(4),
-              ),
+              _fact(_t('ورود', 'Entry'), position.entryPrice.toStringAsFixed(4)),
               _fact(
                 _t('استاپ تأییدشده', 'Confirmed stop'),
                 position.currentExchangeConfirmedStop.toStringAsFixed(4),
@@ -379,14 +339,11 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                 _t('تعداد', 'Quantity'),
                 position.plannedQuantity.toStringAsFixed(4),
               ),
-              _fact(
-                _t('حداکثر زیان', 'Maximum loss'),
-                _money(position.maximumLoss),
-              ),
+              _fact(_t('حداکثر زیان', 'Maximum loss'), _money(position.maximumLoss)),
               _fact(_t('مارجین', 'Margin'), _money(position.reservedMargin)),
               _fact(
                 _t('سهم از سقف', 'Daily limit share'),
-                '${riskPercent.toStringAsFixed(1)}%',
+                '${percent.toStringAsFixed(1)}%',
               ),
             ],
           ),
@@ -407,7 +364,7 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
     ),
   );
 
-  Widget _messageBox({
+  Widget _notice({
     required IconData icon,
     required String text,
     required Color tone,
@@ -442,10 +399,8 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
       'حداقل یک پوزیشن Protection تأییدشده ندارد.',
       'At least one position lacks verified protection.',
     ),
-    PortfolioEntryBlockReason.unsupportedMarginMode => _t(
-      'فقط Isolated Margin مجاز است.',
-      'Only isolated margin is allowed.',
-    ),
+    PortfolioEntryBlockReason.unsupportedMarginMode =>
+      _t('فقط Isolated Margin مجاز است.', 'Only isolated margin is allowed.'),
     PortfolioEntryBlockReason.duplicateCandidate => _t(
       'Candidate یا Trade تکراری است.',
       'The candidate or trade is duplicated.',
