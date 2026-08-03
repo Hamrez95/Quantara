@@ -1,0 +1,44 @@
+name: Cleanup merged Quantara branches once
+
+on:
+  push:
+    branches:
+      - release/1.2.0-rc.1
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/1.2.0-rc.1
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Delete merged and temporary branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          for branch in \
+            tmp/126-rebuild-base \
+            feat/101-candle-event-pipeline \
+            feat/101-realtime-application-composition \
+            feat/101-realtime-e2e-benchmark \
+            feat/101-realtime-analysis-context \
+            feat/97-99-port-validated-local-live \
+            feat/80-port-windows-desktop-foundation \
+            feat/101-realtime-production-wiring
+          do
+            git push origin --delete "$branch" || true
+          done
+
+          git rm .github/workflows/cleanup-merged-branches-once.yml
+          git config user.name 'quantara-ci'
+          git config user.email 'quantara-ci@users.noreply.github.com'
+          git commit -m 'chore: remove merged development branches'
+          git push origin HEAD:release/1.2.0-rc.1
