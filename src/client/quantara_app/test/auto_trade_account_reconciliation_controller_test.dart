@@ -31,7 +31,7 @@ void main() {
 
       await controller.initialize();
 
-      expect(requestCount, 3);
+      expect(requestCount, 4);
       expect(
         controller.reconciliation.health,
         PrivateAccountReconciliationHealth.fresh,
@@ -46,7 +46,7 @@ void main() {
       );
 
       expect(reconciled, isTrue);
-      expect(requestCount, 6);
+      expect(requestCount, 8);
       expect(controller.snapshot?.positions, hasLength(1));
       expect(controller.reconciliation.cycleId, isNot(initialCycle));
       expect(
@@ -156,6 +156,7 @@ http.Response _successResponse(String path) {
       },
     ],
     '/api/v1/futures/trade/get_pending_orders' => {'orderList': <Object>[]},
+    '/api/v1/futures/tpsl/get_pending_orders' => {'orderList': <Object>[]},
     _ => throw StateError('Unexpected Bitunix path: $path'),
   };
   return http.Response(jsonEncode({'code': 0, 'data': data}), 200);

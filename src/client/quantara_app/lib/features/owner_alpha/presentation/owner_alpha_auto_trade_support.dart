@@ -332,8 +332,16 @@ class _AccountOverviewCard extends StatelessWidget {
                 value: snapshot.positions.length.toString(),
               ),
               MetricTile(
-                label: fa ? 'سفارش باز' : 'Open orders',
+                label: fa ? 'کل سفارش‌های Pending' : 'Pending total',
+                value: snapshot.totalPendingOrderCount.toString(),
+              ),
+              MetricTile(
+                label: fa ? 'فید سفارش عادی' : 'Regular feed',
                 value: snapshot.orders.length.toString(),
+              ),
+              MetricTile(
+                label: fa ? 'سفارش حفاظتی' : 'Protection orders',
+                value: snapshot.protectionOrders.length.toString(),
               ),
             ],
           ),
@@ -414,13 +422,19 @@ class _AutoTradeUniversePreview extends StatelessWidget {
 }
 
 class _OpenPositionsCard extends StatelessWidget {
-  const _OpenPositionsCard({required this.snapshot});
+  const _OpenPositionsCard({
+    required this.snapshot,
+    required this.reconciliation,
+  });
 
   final AutoTradeAccountSnapshot snapshot;
+  final PrivateAccountReconciliationState reconciliation;
 
   @override
   Widget build(BuildContext context) {
     final fa = Directionality.of(context) == TextDirection.rtl;
+    final stale =
+        reconciliation.health == PrivateAccountReconciliationHealth.stale;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,6 +487,11 @@ class _OpenPositionsCard extends StatelessWidget {
                   ),
                 ),
               ),
+              PositionProtectionSummary(
+                protection: snapshot.protectionForPosition(position),
+                stale: stale,
+                persian: fa,
+              ),
               const Divider(height: 1),
             ],
         ],
@@ -489,27 +508,36 @@ class _OpenOrdersCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fa = Directionality.of(context) == TextDirection.rtl;
+    final regularOrders = snapshot.regularOrdersNotRepresentedByProtection;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            fa ? 'سفارش‌های باز Bitunix' : 'Open Bitunix orders',
+            fa ? 'سفارش‌های Pending Bitunix' : 'Pending Bitunix orders',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
+          const SizedBox(height: 5),
+          Text(
+            fa
+                ? '${snapshot.orders.length} ردیف عادی + ${snapshot.protectionOrders.length} ردیف حفاظتی · ${snapshot.totalPendingOrderCount} سفارش یکتا'
+                : '${snapshot.orders.length} regular feed rows + ${snapshot.protectionOrders.length} protection rows · ${snapshot.totalPendingOrderCount} unique orders',
+            textDirection: TextDirection.ltr,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 12),
-          if (snapshot.orders.isEmpty)
+          if (snapshot.totalPendingOrderCount == 0)
             _CompactEmptyState(
               icon: Icons.receipt_long_outlined,
-              title: fa ? 'سفارش بازی وجود ندارد' : 'No open orders',
+              title: fa ? 'سفارش Pending وجود ندارد' : 'No pending orders',
               message: fa
-                  ? 'پس از ورود، حدضرر کامل و سه هدف مرحله‌ای باید در خود صرافی تأیید شوند.'
-                  : 'After entry, the full stop and three staged targets must be confirmed by the exchange.',
+                  ? 'سفارش‌های عادی و Position TP/SL با دو مسیر مستقل خوانده می‌شوند.'
+                  : 'Regular orders and Position TP/SL are read through independent exchange paths.',
             )
-          else
-            for (final order in snapshot.orders) ...[
+          else ...[
+            for (final order in regularOrders) ...[
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.receipt_long_outlined),
@@ -518,15 +546,47 @@ class _OpenOrdersCard extends StatelessWidget {
                   textDirection: TextDirection.ltr,
                 ),
                 subtitle: Text(
-                  'Qty ${order.filledQuantity}/${order.quantity} · ${order.leverage}x · ${order.marginMode}',
+                  'Regular · Qty ${order.filledQuantity}/${order.quantity} · ${order.leverage}x · ${order.marginMode}',
                   textDirection: TextDirection.ltr,
                 ),
               ),
               const Divider(height: 1),
             ],
+            for (final order in snapshot.protectionOrders) ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.shield_outlined),
+                title: Text(
+                  '${order.symbol} · Position TP/SL',
+                  textDirection: TextDirection.ltr,
+                ),
+                subtitle: Text(
+                  _protectionOrderDescription(order),
+                  textDirection: TextDirection.ltr,
+                ),
+              ),
+              const Divider(height: 1),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  static String _protectionOrderDescription(AutoTradeProtectionOrder order) {
+    final values = <String>[];
+    if (order.stopLossPrice != null) {
+      values.add(
+        'SL ${order.stopLossPrice} · Qty ${order.stopLossQuantity ?? '—'}',
+      );
+    }
+    if (order.takeProfitPrice != null) {
+      values.add(
+        'TP ${order.takeProfitPrice} · Qty ${order.takeProfitQuantity ?? '—'}',
+      );
+    }
+    values.add('ID ${order.exchangeId.isEmpty ? '—' : order.exchangeId}');
+    return values.join(' · ');
   }
 }
 

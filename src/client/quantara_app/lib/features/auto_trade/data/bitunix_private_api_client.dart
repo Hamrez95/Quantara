@@ -46,10 +46,67 @@ final class BitunixPrivateApiClient {
     }
 
     final positionMaps = _mapList(positionsResponse['data']);
+    final positions = positionMaps
+        .map(_positionFromJson)
+        .toList(growable: false);
     final orderData = ordersResponse['data'];
     final orderMaps = orderData is Map<String, Object?>
         ? _mapList(orderData['orderList'])
         : const <Map<String, Object?>>[];
+    final protectionOrders = <AutoTradeProtectionOrder>[];
+    final protectionVerifications = <String, AutoTradeProtectionVerification>{};
+
+    for (final position in positions) {
+      final positionId = position.positionId.trim();
+      final attemptedAt = _utcNow().toUtc();
+      if (positionId.isEmpty) {
+        protectionVerifications[positionId] =
+            AutoTradeProtectionVerification.unverified(
+              asOf: attemptedAt,
+              reason: 'Bitunix returned a position without a position ID.',
+            );
+        continue;
+      }
+      try {
+        final response =
+            await _signedGet('/api/v1/futures/tpsl/get_pending_orders', {
+              'limit': '100',
+              'positionId': positionId,
+              'skip': '0',
+              'symbol': position.symbol,
+            }, credentials);
+        final maps = _protectionMapList(response['data']);
+        var verified = true;
+        String? reason;
+        for (final item in maps) {
+          final itemPositionId = _string(item['positionId']);
+          final exchangeId = _string(
+            item['id'],
+            fallback: _string(item['orderId']),
+          );
+          if (itemPositionId != positionId || exchangeId.isEmpty) {
+            verified = false;
+            reason = itemPositionId != positionId
+                ? 'Bitunix returned a TP/SL row for a different position.'
+                : 'Bitunix returned a TP/SL row without an exchange ID.';
+            continue;
+          }
+          protectionOrders.add(_protectionOrderFromJson(item));
+        }
+        protectionVerifications[positionId] = verified
+            ? AutoTradeProtectionVerification.verified(asOf: _utcNow().toUtc())
+            : AutoTradeProtectionVerification.unverified(
+                asOf: _utcNow().toUtc(),
+                reason: reason ?? 'Position TP/SL response was ambiguous.',
+              );
+      } on AutoTradeSafeException catch (error) {
+        protectionVerifications[positionId] =
+            AutoTradeProtectionVerification.unverified(
+              asOf: _utcNow().toUtc(),
+              reason: error.message,
+            );
+      }
+    }
 
     return AutoTradeAccountSnapshot(
       marginCoin: _string(account['marginCoin'], fallback: 'USDT'),
@@ -59,8 +116,10 @@ final class BitunixPrivateApiClient {
       crossUnrealizedPnl: _number(account['crossUnrealizedPNL']),
       isolatedUnrealizedPnl: _number(account['isolationUnrealizedPNL']),
       positionMode: _string(account['positionMode'], fallback: 'UNKNOWN'),
-      positions: positionMaps.map(_positionFromJson).toList(growable: false),
+      positions: positions,
       orders: orderMaps.map(_orderFromJson).toList(growable: false),
+      protectionOrders: List.unmodifiable(protectionOrders),
+      protectionVerifications: Map.unmodifiable(protectionVerifications),
       syncedAt: _utcNow().toUtc(),
     );
   }
@@ -171,6 +230,32 @@ final class BitunixPrivateApiClient {
         reduceOnly: value['reduceOnly'] == true,
       );
 
+  static AutoTradeProtectionOrder _protectionOrderFromJson(
+    Map<String, Object?> value,
+  ) => AutoTradeProtectionOrder(
+    exchangeId: _string(value['id'], fallback: _string(value['orderId'])),
+    positionId: _string(value['positionId']),
+    symbol: _string(value['symbol']),
+    takeProfitPrice: _optionalPositiveNumber(value['tpPrice']),
+    takeProfitQuantity: _optionalPositiveNumber(value['tpQty']),
+    takeProfitStopType: _optionalString(value['tpStopType']),
+    takeProfitOrderType: _optionalString(value['tpOrderType']),
+    stopLossPrice: _optionalPositiveNumber(value['slPrice']),
+    stopLossQuantity: _optionalPositiveNumber(value['slQty']),
+    stopLossStopType: _optionalString(value['slStopType']),
+    stopLossOrderType: _optionalString(value['slOrderType']),
+  );
+
+  static List<Map<String, Object?>> _protectionMapList(Object? value) {
+    if (value is List<Object?>) return _mapList(value);
+    if (value is Map<String, Object?> && value['orderList'] is List<Object?>) {
+      return _mapList(value['orderList']);
+    }
+    throw const AutoTradeSafeException(
+      'Bitunix position TP/SL data was empty or malformed.',
+    );
+  }
+
   static Map<String, Object?>? _firstMap(Object? value) {
     if (value is Map<String, Object?>) return value;
     final values = _mapList(value);
@@ -191,6 +276,19 @@ final class BitunixPrivateApiClient {
   static double _number(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double? _optionalPositiveNumber(Object? value) {
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString().trim() ?? '');
+    if (parsed == null || !parsed.isFinite || parsed <= 0) return null;
+    return parsed;
+  }
+
+  static String? _optionalString(Object? value) {
+    final parsed = value?.toString().trim() ?? '';
+    return parsed.isEmpty ? null : parsed;
   }
 
   static int _integer(Object? value, {required int fallback}) {
