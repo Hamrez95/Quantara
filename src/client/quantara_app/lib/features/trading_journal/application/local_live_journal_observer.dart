@@ -174,6 +174,30 @@ final class LocalLiveJournalObserver {
     required bool positionClosed,
   }) async {
     final id = journalTradeId(managed.positionId);
+    if (!positionPnl.isVerified) {
+      final asOf = positionPnl.asOf.toUtc();
+      await _append(
+        TradingJournalEvent(
+          eventId:
+              'pnl-deferred:${managed.positionId}:${asOf.millisecondsSinceEpoch}',
+          journalTradeId: id,
+          type: TradingJournalEventType.staleDetected,
+          occurredAt: asOf,
+          recordedAt: DateTime.now().toUtc(),
+          source: TradingJournalFactSource.quantara,
+          quality: TradingJournalFactQuality.stale,
+          scope: TradingJournalScope.position,
+          currency: positionPnl.realizedGross.currency,
+          asOf: asOf,
+          positionId: managed.positionId,
+          details: const {
+            'message':
+                'Authoritative exchange PnL was not verified; economic journal facts were deferred.',
+          },
+        ),
+      );
+      return;
+    }
     final fills = [...positionPnl.fills]
       ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
     final exitFills = fills.where((fill) => fill.reduceOnly).toList();
@@ -203,9 +227,7 @@ final class LocalLiveJournalObserver {
           occurredAt: fill.occurredAt.toUtc(),
           recordedAt: DateTime.now().toUtc(),
           source: TradingJournalFactSource.exchange,
-          quality: positionPnl.isVerified
-              ? TradingJournalFactQuality.confirmed
-              : TradingJournalFactQuality.unverified,
+          quality: TradingJournalFactQuality.confirmed,
           scope: TradingJournalScope.position,
           currency: positionPnl.realizedGross.currency,
           asOf: positionPnl.asOf.toUtc(),
@@ -224,6 +246,8 @@ final class LocalLiveJournalObserver {
             if (!isTarget)
               'closeReason': fill.orderId == managed.stopOrderId
                   ? TradingJournalCloseReason.stop.name
+                  : (fill.clientId?.endsWith('-emergency-close') ?? false)
+                  ? TradingJournalCloseReason.emergency.name
                   : TradingJournalCloseReason.exchange.name,
           },
         ),
@@ -259,9 +283,7 @@ final class LocalLiveJournalObserver {
           occurredAt: closedAt,
           recordedAt: DateTime.now().toUtc(),
           source: TradingJournalFactSource.exchange,
-          quality: positionPnl.isVerified
-              ? TradingJournalFactQuality.confirmed
-              : TradingJournalFactQuality.unverified,
+          quality: TradingJournalFactQuality.confirmed,
           scope: TradingJournalScope.position,
           currency: positionPnl.realizedGross.currency,
           asOf: positionPnl.asOf.toUtc(),
@@ -292,9 +314,7 @@ final class LocalLiveJournalObserver {
           occurredAt: settlement.closedAt.toUtc(),
           recordedAt: DateTime.now().toUtc(),
           source: TradingJournalFactSource.exchange,
-          quality: positionPnl.isVerified
-              ? TradingJournalFactQuality.confirmed
-              : TradingJournalFactQuality.unverified,
+          quality: TradingJournalFactQuality.confirmed,
           scope: TradingJournalScope.position,
           currency: positionPnl.funding.currency,
           asOf: positionPnl.asOf.toUtc(),
@@ -357,23 +377,30 @@ final class LocalLiveJournalObserver {
     required String identity,
     required String message,
     TradingJournalFactQuality quality = TradingJournalFactQuality.confirmed,
-  }) => _append(
-    TradingJournalEvent(
-      eventId: '$identity:${managed.positionId}',
-      journalTradeId: journalTradeId(managed.positionId),
-      type: type,
-      occurredAt: DateTime.now().toUtc(),
-      recordedAt: DateTime.now().toUtc(),
-      source: TradingJournalFactSource.quantara,
-      quality: quality,
-      scope: TradingJournalScope.position,
-      currency: 'USDT',
-      asOf: DateTime.now().toUtc(),
-      exchangeEventId: identity,
-      positionId: managed.positionId,
-      details: {'message': message},
-    ),
-  );
+  }) {
+    final effectiveType =
+        type == TradingJournalEventType.positionClosed &&
+            identity.startsWith('emergency-close-request:')
+        ? TradingJournalEventType.reconciliationStarted
+        : type;
+    return _append(
+      TradingJournalEvent(
+        eventId: '$identity:${managed.positionId}',
+        journalTradeId: journalTradeId(managed.positionId),
+        type: effectiveType,
+        occurredAt: DateTime.now().toUtc(),
+        recordedAt: DateTime.now().toUtc(),
+        source: TradingJournalFactSource.quantara,
+        quality: quality,
+        scope: TradingJournalScope.position,
+        currency: 'USDT',
+        asOf: DateTime.now().toUtc(),
+        exchangeEventId: identity,
+        positionId: managed.positionId,
+        details: {'message': message, 'requestedType': type.name},
+      ),
+    );
+  }
 
   Future<bool> _appendPlan(TradingJournalPlan plan) async {
     try {
