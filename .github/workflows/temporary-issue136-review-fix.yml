@@ -37,7 +37,7 @@ jobs:
           echo 'a2d64bbdd43c0028d52d79b94feb7b088a5980fc47621fce964bcbb6089f06c8  /tmp/issue136.review.patch' | sha256sum --check
           git apply --check /tmp/issue136.review.patch
           git apply /tmp/issue136.review.patch
-          sed -i 's/return pointer;/return pointer!;/g' src/client/quantara_app/lib/features/trading_journal/data/trading_journal_store.dart
+          python3 -c "from pathlib import Path; p=Path('src/client/quantara_app/lib/features/trading_journal/data/trading_journal_store.dart'); s=p.read_text(); s=s.replace('if (_tryDecode(preferences.getString(pointedKey)) != null) return pointer;', 'if (_tryDecode(preferences.getString(pointedKey)) != null) {\n        return pointer!;\n      }').replace('return pointer;', 'return pointer!;'); p.write_text(s)"
           rm -f .github/workflows/temporary-issue136-review-fix.yml
           rm -f .github/workflows/temporary-issue136-review-export.yml
           rm -rf .github/temporary
