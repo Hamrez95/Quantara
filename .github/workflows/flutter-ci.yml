@@ -49,18 +49,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create temporary source archive
-        shell: bash
-        run: git -C "$GITHUB_WORKSPACE" archive --format=zip --output="$GITHUB_WORKSPACE/quantara-source.zip" HEAD
-
-      - name: Upload temporary source archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: quantara-source
-          path: quantara-source.zip
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:

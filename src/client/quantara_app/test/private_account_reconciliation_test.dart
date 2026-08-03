@@ -31,27 +31,30 @@ void main() {
     syncedAt: syncedAt,
   );
 
-  test('stale private truth blocks entries but preserves position management', () {
-    final fresh = PrivateAccountReconciliationState.fresh(
-      snapshot: snapshot,
-      cycleId: 'cycle-1',
-      completedAt: syncedAt,
-    );
+  test(
+    'stale private truth blocks entries but preserves position management',
+    () {
+      final fresh = PrivateAccountReconciliationState.fresh(
+        snapshot: snapshot,
+        cycleId: 'cycle-1',
+        completedAt: syncedAt,
+      );
 
-    expect(fresh.health, PrivateAccountReconciliationHealth.fresh);
-    expect(fresh.blocksNewEntries, isFalse);
-    expect(fresh.allowsExistingPositionManagement, isTrue);
+      expect(fresh.health, PrivateAccountReconciliationHealth.fresh);
+      expect(fresh.blocksNewEntries, isFalse);
+      expect(fresh.allowsExistingPositionManagement, isTrue);
 
-    final stale = fresh.evaluateFreshness(
-      now: syncedAt.add(const Duration(minutes: 2)),
-      staleAfter: const Duration(seconds: 45),
-    );
+      final stale = fresh.evaluateFreshness(
+        now: syncedAt.add(const Duration(minutes: 2)),
+        staleAfter: const Duration(seconds: 45),
+      );
 
-    expect(stale.health, PrivateAccountReconciliationHealth.stale);
-    expect(stale.blocksNewEntries, isTrue);
-    expect(stale.allowsExistingPositionManagement, isTrue);
-    expect(stale.snapshot, same(snapshot));
-  });
+      expect(stale.health, PrivateAccountReconciliationHealth.stale);
+      expect(stale.blocksNewEntries, isTrue);
+      expect(stale.allowsExistingPositionManagement, isTrue);
+      expect(stale.snapshot, same(snapshot));
+    },
+  );
 
   test('newer Local Live count divergence fails closed until reconciled', () {
     final fresh = PrivateAccountReconciliationState.fresh(
@@ -79,21 +82,24 @@ void main() {
     expect(recovered.blocksNewEntries, isFalse);
   });
 
-  test('failed refresh never replaces a last-known position with fake zeroes', () {
-    final fresh = PrivateAccountReconciliationState.fresh(
-      snapshot: snapshot,
-      cycleId: 'cycle-1',
-      completedAt: syncedAt,
-    );
+  test(
+    'failed refresh never replaces a last-known position with fake zeroes',
+    () {
+      final fresh = PrivateAccountReconciliationState.fresh(
+        snapshot: snapshot,
+        cycleId: 'cycle-1',
+        completedAt: syncedAt,
+      );
 
-    final failed = fresh.markRefreshFailure(
-      attemptedAt: syncedAt.add(const Duration(seconds: 20)),
-      warning: 'Private account refresh failed.',
-    );
+      final failed = fresh.markRefreshFailure(
+        attemptedAt: syncedAt.add(const Duration(seconds: 20)),
+        warning: 'Private account refresh failed.',
+      );
 
-    expect(failed.health, PrivateAccountReconciliationHealth.stale);
-    expect(failed.snapshot?.positions, hasLength(1));
-    expect(failed.snapshot?.available, 27.85);
-    expect(failed.blocksNewEntries, isTrue);
-  });
+      expect(failed.health, PrivateAccountReconciliationHealth.stale);
+      expect(failed.snapshot?.positions, hasLength(1));
+      expect(failed.snapshot?.available, 27.85);
+      expect(failed.blocksNewEntries, isTrue);
+    },
+  );
 }

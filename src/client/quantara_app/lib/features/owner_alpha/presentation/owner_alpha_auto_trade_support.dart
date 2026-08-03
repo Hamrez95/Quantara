@@ -248,12 +248,14 @@ class _SafetyChip extends StatelessWidget {
 class _AccountOverviewCard extends StatelessWidget {
   const _AccountOverviewCard({
     required this.snapshot,
+    required this.reconciliation,
     required this.maskedApiKey,
     required this.onRefresh,
     required this.onDisconnect,
   });
 
   final AutoTradeAccountSnapshot snapshot;
+  final PrivateAccountReconciliationState reconciliation;
   final String maskedApiKey;
   final Future<bool> Function()? onRefresh;
   final VoidCallback? onDisconnect;
@@ -338,6 +340,11 @@ class _AccountOverviewCard extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             '${fa ? 'آخرین همگام‌سازی' : 'Last sync'}: ${snapshot.syncedAt.toLocal()}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Text(
+            '${fa ? 'چرخه تطبیق' : 'Reconciliation cycle'}: ${reconciliation.cycleId ?? '—'}',
+            textDirection: TextDirection.ltr,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
