@@ -359,7 +359,9 @@ final class SembastQuantaraDurableDatabase
         final next = result.nextRecord;
         if (next != null) {
           if (next.category != category || next.key != key) {
-            throw StateError('Atomic mutation changed durable record identity.');
+            throw StateError(
+              'Atomic mutation changed durable record identity.',
+            );
           }
           _validateRecord(next);
           await _putWithClient(transaction, next);

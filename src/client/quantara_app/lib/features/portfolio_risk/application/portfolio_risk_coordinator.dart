@@ -35,10 +35,7 @@ final class PortfolioRiskCoordinator {
     if (atomic != null) {
       return atomic.mutate<PortfolioRiskLedger>((current) async {
         final ledger = _normalize(current, timestamp);
-        return PortfolioRiskLedgerMutation(
-          value: ledger,
-          nextLedger: ledger,
-        );
+        return PortfolioRiskLedgerMutation(value: ledger, nextLedger: ledger);
       });
     }
     return _serialValue(() => _loadUnlocked(timestamp));
@@ -185,10 +182,7 @@ final class PortfolioRiskCoordinator {
           now: now,
           dailyRiskLimit: dailyRiskLimit,
         );
-        return PortfolioRiskLedgerMutation(
-          value: initial,
-          nextLedger: initial,
-        );
+        return PortfolioRiskLedgerMutation(value: initial, nextLedger: initial);
       });
     }
     return _serialValue(() async {
@@ -234,10 +228,7 @@ final class PortfolioRiskCoordinator {
     return normalized;
   }
 
-  PortfolioRiskLedger _normalize(
-    PortfolioRiskLedger? current,
-    DateTime now,
-  ) {
+  PortfolioRiskLedger _normalize(PortfolioRiskLedger? current, DateTime now) {
     if (current == null) {
       return PortfolioRiskLedger.initial(
         tradingDay: TradingDayId.start(
