@@ -75,10 +75,7 @@ void main() {
         durableDatabaseSource,
         contains('Secret-like fields are forbidden in durable data.'),
       );
-      expect(
-        durableDatabaseSource,
-        contains("normalized.contains('apikey')"),
-      );
+      expect(durableDatabaseSource, contains("normalized.contains('apikey')"));
       expect(
         durableDatabaseSource,
         contains("normalized.contains('credential')"),
