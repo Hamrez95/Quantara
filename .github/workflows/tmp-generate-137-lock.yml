@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/137-encrypted-recovery-database
+  pull_request:
+    branches:
+      - dev
 
 permissions:
   contents: read
