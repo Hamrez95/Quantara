@@ -43,6 +43,8 @@ jobs:
           echo '2e2c84800485abb7e0f613ff753315c8ce87442618a3c6f8fe25a23743e2b508  /tmp/issue143.patch' | sha256sum --check
           git apply --check /tmp/issue143.patch
           git apply /tmp/issue143.patch
+          sed -i "/market_regime_models.dart/d" src/client/quantara_app/test/configurable_tp_allocation_test.dart
+          sed -i 's/      const value = LocalLivePreferences(/      final value = LocalLivePreferences(/' src/client/quantara_app/test/local_live_preferences_store_test.dart
           rm -f .github/workflows/temporary-issue143-patch.yml
           rm -f .github/workflows/temporary-issue143-source-export.yml
           rm -rf .github/temporary
