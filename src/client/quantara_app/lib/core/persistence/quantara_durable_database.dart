@@ -52,14 +52,20 @@ final class QuantaraDurableRecord {
 
   String get storageKey => '${category.name}\u001f$key';
 
-  String get checksum => sha256.convert(utf8.encode(_canonicalJson({
-    'category': category.name,
-    'key': key,
-    'schemaVersion': schemaVersion,
-    'revision': revision,
-    'updatedAt': updatedAt.toUtc().toIso8601String(),
-    'payload': payload,
-  }))).toString();
+  String get checksum => sha256
+      .convert(
+        utf8.encode(
+          _canonicalJson({
+            'category': category.name,
+            'key': key,
+            'schemaVersion': schemaVersion,
+            'revision': revision,
+            'updatedAt': updatedAt.toUtc().toIso8601String(),
+            'payload': payload,
+          }),
+        ),
+      )
+      .toString();
 
   Map<String, Object?> toStorageMap() => {
     'category': category.name,
@@ -76,9 +82,8 @@ final class QuantaraDurableRecord {
     final categoryName = map['category']?.toString() ?? '';
     final category = QuantaraDurableCategory.values.firstWhere(
       (item) => item.name == categoryName,
-      orElse: () => throw const FormatException(
-        'Unsupported durable record category.',
-      ),
+      orElse: () =>
+          throw const FormatException('Unsupported durable record category.'),
     );
     final payloadRaw = map['payload'];
     if (payloadRaw is! Map<Object?, Object?>) {
@@ -89,8 +94,8 @@ final class QuantaraDurableRecord {
       key: map['key']?.toString() ?? '',
       schemaVersion: _integer(map['schemaVersion']),
       revision: _integer(map['revision']),
-      updatedAt: DateTime.tryParse(map['updatedAt']?.toString() ?? '')
-              ?.toUtc() ??
+      updatedAt:
+          DateTime.tryParse(map['updatedAt']?.toString() ?? '')?.toUtc() ??
           (throw const FormatException('Invalid durable record timestamp.')),
       payload: _stringMap(payloadRaw),
     );
@@ -116,9 +121,8 @@ final class QuantaraRestoreResult {
   final bool alreadyApplied;
 }
 
-typedef QuantaraDatabaseMigration = Future<void> Function(
-  QuantaraMigrationTransaction transaction,
-);
+typedef QuantaraDatabaseMigration =
+    Future<void> Function(QuantaraMigrationTransaction transaction);
 
 abstract interface class QuantaraDurableDatabase {
   Future<QuantaraDatabaseHealth> initialize();
@@ -149,26 +153,24 @@ final class QuantaraMigrationTransaction {
     QuantaraDurableCategory category,
     String key,
   ) async {
-    final raw = await _recordsStore.record(_recordKey(category, key)).get(
-          _transaction,
-        );
+    final raw = await _recordsStore
+        .record(_recordKey(category, key))
+        .get(_transaction);
     return raw == null ? null : QuantaraDurableRecord.fromStorageMap(raw);
   }
 
   Future<void> put(QuantaraDurableRecord record) async {
     _validateRecord(record);
-    await _recordsStore.record(record.storageKey).put(
-          _transaction,
-          record.toStorageMap(),
-        );
+    await _recordsStore
+        .record(record.storageKey)
+        .put(_transaction, record.toStorageMap());
   }
 
   Future<void> delete(QuantaraDurableCategory category, String key) =>
       _recordsStore.record(_recordKey(category, key)).delete(_transaction);
 }
 
-final class SembastQuantaraDurableDatabase
-    implements QuantaraDurableDatabase {
+final class SembastQuantaraDurableDatabase implements QuantaraDurableDatabase {
   SembastQuantaraDurableDatabase({
     required DatabaseFactory factory,
     required String path,
@@ -197,7 +199,8 @@ final class SembastQuantaraDurableDatabase
   Database? _database;
   Future<void> _writeTail = Future<void>.value();
 
-  Database get _db => _database ??
+  Database get _db =>
+      _database ??
       (throw StateError('Durable database has not been initialized.'));
 
   @override
@@ -347,10 +350,9 @@ final class SembastQuantaraDurableDatabase
               existing.checksum == incoming.checksum) {
             continue;
           }
-          await _records.record(incoming.storageKey).put(
-                transaction,
-                incoming.toStorageMap(),
-              );
+          await _records
+              .record(incoming.storageKey)
+              .put(transaction, incoming.toStorageMap());
           imported++;
         }
         await _restoreReceipts.record(normalizedId).put(transaction, {
@@ -373,7 +375,10 @@ final class SembastQuantaraDurableDatabase
     await database?.close();
   }
 
-  Future<void> _putWithClient(DatabaseClient client, QuantaraDurableRecord record) async {
+  Future<void> _putWithClient(
+    DatabaseClient client,
+    QuantaraDurableRecord record,
+  ) async {
     final existingRaw = await _records.record(record.storageKey).get(client);
     if (existingRaw != null) {
       final existing = QuantaraDurableRecord.fromStorageMap(existingRaw);
@@ -449,10 +454,10 @@ void _validateRecord(QuantaraDurableRecord record) {
 bool _containsSecretLikeField(Object? value) {
   if (value is Map<Object?, Object?>) {
     for (final entry in value.entries) {
-      final normalized = entry.key
-          .toString()
-          .toLowerCase()
-          .replaceAll(RegExp('[^a-z]'), '');
+      final normalized = entry.key.toString().toLowerCase().replaceAll(
+        RegExp('[^a-z]'),
+        '',
+      );
       if (normalized.contains('apikey') ||
           normalized.contains('secret') ||
           normalized.contains('credential') ||
