@@ -29,55 +29,75 @@ final class PortfolioRiskCoordinator {
   final int timezoneOffsetMinutes;
   static Future<void> _globalTail = Future<void>.value();
 
-  Future<PortfolioRiskLedger> load({DateTime? now}) => _serialValue(() async {
+  Future<PortfolioRiskLedger> load({DateTime? now}) {
     final timestamp = (now ?? DateTime.now()).toUtc();
-    final current = await store.load();
-    if (current == null) {
-      final initial = PortfolioRiskLedger.initial(
-        tradingDay: TradingDayId.start(
-          now: timestamp,
-          timezoneOffsetMinutes: timezoneOffsetMinutes,
-        ),
-        dailyRiskLimit: defaultDailyRiskLimit,
-      );
-      await store.save(initial);
-      return initial;
+    final atomic = _atomicStore;
+    if (atomic != null) {
+      return atomic.mutate<PortfolioRiskLedger>((current) async {
+        final ledger = _normalize(current, timestamp);
+        return PortfolioRiskLedgerMutation(
+          value: ledger,
+          nextLedger: ledger,
+        );
+      });
     }
-    final rolled = current.rollTradingDay(
-      now: timestamp,
-      nextDailyRiskLimit: defaultDailyRiskLimit,
-    );
-    if (rolled.revision != current.revision) await store.save(rolled);
-    return rolled;
-  });
+    return _serialValue(() => _loadUnlocked(timestamp));
+  }
 
   Future<PortfolioReservationOutcome> reserve({
     required PortfolioEntryCandidate candidate,
     required PortfolioAccountTruth account,
     DateTime? now,
-  }) => _serialValue(() async {
+  }) {
     final timestamp = (now ?? DateTime.now()).toUtc();
-    var ledger = await _loadUnlocked(timestamp);
-    final effectiveAccount = _withLedgerReservations(account, ledger);
-    final decision = policy.evaluate(
-      ledger: ledger,
-      candidate: candidate,
-      account: effectiveAccount,
-    );
-    if (decision.allowed) {
-      ledger = ledger.reserve(
-        candidate: candidate,
-        decision: decision,
-        createdAt: timestamp,
-      );
-      await store.save(ledger);
+    final atomic = _atomicStore;
+    if (atomic != null) {
+      return atomic.mutate<PortfolioReservationOutcome>((current) async {
+        var ledger = _normalize(current, timestamp);
+        final decision = policy.evaluate(
+          ledger: ledger,
+          candidate: candidate,
+          account: _withLedgerReservations(account, ledger),
+        );
+        if (decision.allowed) {
+          ledger = ledger.reserve(
+            candidate: candidate,
+            decision: decision,
+            createdAt: timestamp,
+          );
+        }
+        return PortfolioRiskLedgerMutation(
+          value: PortfolioReservationOutcome(
+            decision: decision,
+            ledger: ledger,
+            snapshot: ledger.snapshot(account),
+          ),
+          nextLedger: ledger,
+        );
+      });
     }
-    return PortfolioReservationOutcome(
-      decision: decision,
-      ledger: ledger,
-      snapshot: ledger.snapshot(account),
-    );
-  });
+    return _serialValue(() async {
+      var ledger = await _loadUnlocked(timestamp);
+      final decision = policy.evaluate(
+        ledger: ledger,
+        candidate: candidate,
+        account: _withLedgerReservations(account, ledger),
+      );
+      if (decision.allowed) {
+        ledger = ledger.reserve(
+          candidate: candidate,
+          decision: decision,
+          createdAt: timestamp,
+        );
+        await store.save(ledger);
+      }
+      return PortfolioReservationOutcome(
+        decision: decision,
+        ledger: ledger,
+        snapshot: ledger.snapshot(account),
+      );
+    });
+  }
 
   Future<PortfolioRiskLedger> release({
     required String reservationId,
@@ -148,67 +168,114 @@ final class PortfolioRiskCoordinator {
   Future<PortfolioRiskSnapshot> snapshot({
     required PortfolioAccountTruth account,
     DateTime? now,
-  }) => _serialValue(() async {
-    final ledger = await _loadUnlocked((now ?? DateTime.now()).toUtc());
+  }) async {
+    final ledger = await load(now: now);
     return ledger.snapshot(account);
-  });
+  }
 
   Future<PortfolioRiskLedger> resetSimulation({
     required DateTime now,
     double? dailyRiskLimit,
-  }) => _serialValue(() async {
-    final current = await store.load();
-    final initial = PortfolioRiskLedger(
-      schemaVersion: 1,
-      revision: (current?.revision ?? 0) + 1,
-      tradingDay: TradingDayId.start(
+  }) {
+    final atomic = _atomicStore;
+    if (atomic != null) {
+      return atomic.mutate<PortfolioRiskLedger>((current) async {
+        final initial = _resetLedger(
+          current: current,
+          now: now,
+          dailyRiskLimit: dailyRiskLimit,
+        );
+        return PortfolioRiskLedgerMutation(
+          value: initial,
+          nextLedger: initial,
+        );
+      });
+    }
+    return _serialValue(() async {
+      final initial = _resetLedger(
+        current: await store.load(),
         now: now,
-        timezoneOffsetMinutes:
-            current?.tradingDay.timezoneOffsetMinutes ?? timezoneOffsetMinutes,
-      ),
-      dailyRiskLimit: dailyRiskLimit ?? defaultDailyRiskLimit,
-      realizedLoss: 0,
-      realizedProfit: 0,
-      reservations: const [],
-      processedEventIds: const {},
-    );
-    await store.save(initial);
-    return initial;
-  });
+        dailyRiskLimit: dailyRiskLimit,
+      );
+      await store.save(initial);
+      return initial;
+    });
+  }
 
   Future<PortfolioRiskLedger> _mutate({
     required PortfolioRiskLedger Function(PortfolioRiskLedger ledger) mutation,
     DateTime? now,
-  }) => _serialValue(() async {
-    final current = await _loadUnlocked((now ?? DateTime.now()).toUtc());
-    final next = mutation(current);
-    if (next.revision != current.revision ||
-        next.processedEventIds.length != current.processedEventIds.length) {
-      await store.save(next);
+  }) {
+    final timestamp = (now ?? DateTime.now()).toUtc();
+    final atomic = _atomicStore;
+    if (atomic != null) {
+      return atomic.mutate<PortfolioRiskLedger>((current) async {
+        final next = mutation(_normalize(current, timestamp));
+        return PortfolioRiskLedgerMutation(value: next, nextLedger: next);
+      });
     }
-    return next;
-  });
+    return _serialValue(() async {
+      final current = await _loadUnlocked(timestamp);
+      final next = mutation(current);
+      if (next.revision != current.revision ||
+          next.processedEventIds.length != current.processedEventIds.length) {
+        await store.save(next);
+      }
+      return next;
+    });
+  }
 
   Future<PortfolioRiskLedger> _loadUnlocked(DateTime now) async {
     final current = await store.load();
+    final normalized = _normalize(current, now);
+    if (current == null || normalized.revision != current.revision) {
+      await store.save(normalized);
+    }
+    return normalized;
+  }
+
+  PortfolioRiskLedger _normalize(
+    PortfolioRiskLedger? current,
+    DateTime now,
+  ) {
     if (current == null) {
-      final initial = PortfolioRiskLedger.initial(
+      return PortfolioRiskLedger.initial(
         tradingDay: TradingDayId.start(
           now: now,
           timezoneOffsetMinutes: timezoneOffsetMinutes,
         ),
         dailyRiskLimit: defaultDailyRiskLimit,
       );
-      await store.save(initial);
-      return initial;
     }
-    final rolled = current.rollTradingDay(
+    return current.rollTradingDay(
       now: now,
       nextDailyRiskLimit: defaultDailyRiskLimit,
     );
-    if (rolled.revision != current.revision) await store.save(rolled);
-    return rolled;
   }
+
+  PortfolioRiskLedger _resetLedger({
+    required PortfolioRiskLedger? current,
+    required DateTime now,
+    required double? dailyRiskLimit,
+  }) => PortfolioRiskLedger(
+    schemaVersion: 1,
+    revision: (current?.revision ?? 0) + 1,
+    tradingDay: TradingDayId.start(
+      now: now,
+      timezoneOffsetMinutes:
+          current?.tradingDay.timezoneOffsetMinutes ?? timezoneOffsetMinutes,
+    ),
+    dailyRiskLimit: dailyRiskLimit ?? defaultDailyRiskLimit,
+    realizedLoss: 0,
+    realizedProfit: 0,
+    reservations: const [],
+    processedEventIds: const {},
+  );
+
+  AtomicPortfolioRiskLedgerStore? get _atomicStore =>
+      store is AtomicPortfolioRiskLedgerStore
+      ? store as AtomicPortfolioRiskLedgerStore
+      : null;
 
   PortfolioAccountTruth _withLedgerReservations(
     PortfolioAccountTruth account,
