@@ -1,4 +1,4 @@
-name: Temporary deterministic portfolio risk repair
+name: Temporary idempotent portfolio risk repair
 
 on:
   push:
@@ -18,43 +18,49 @@ jobs:
         with:
           ref: feat/150-portfolio-risk-budget
 
-      - name: Apply exact reviewed fixes
+      - name: Apply idempotent reviewed fixes
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
+          diagnostics = []
           models = Path('src/client/quantara_app/lib/features/portfolio_risk/domain/portfolio_risk_models.dart')
           text = models.read_text()
-          replacements = [
-              (
-                  'final class PositionRiskReservation {\n  PositionRiskReservation({',
-                  'final class PositionRiskReservation {\n  const PositionRiskReservation({',
-              ),
-              (
-                  '    final result = math.max(0, priceRisk + costRisk);',
-                  '    final result = math.max(0, priceRisk + costRisk).toDouble();',
-              ),
-              (
-                  """    if (index < 0)
-      return _copy(processedEventIds: {...processedEventIds, eventId});
-""",
-                  """    if (index < 0) {
-      return _copy(processedEventIds: {...processedEventIds, eventId});
-    }
-""",
-              ),
-          ]
-          for old, new in replacements:
-              if old not in text:
-                  raise SystemExit(f'missing replacement anchor: {old[:60]!r}')
-              text = text.replace(old, new, 1)
 
-          start = text.index('    final maximumLoss = PortfolioRiskMath.maximumLoss(')
-          end = text.index('    if (maximumLoss > ledger.dailyRisk.available + 1e-9) {', start)
-          old = text[start:end]
-          new = """    late final double maximumLoss;
+          before = text
+          text = text.replace(
+              'final class PositionRiskReservation {\n  PositionRiskReservation({',
+              'final class PositionRiskReservation {\n  const PositionRiskReservation({',
+              1,
+          )
+          diagnostics.append(f'const_constructor={text != before}')
+
+          before = text
+          text = text.replace(
+              'final result = math.max(0, priceRisk + costRisk);',
+              'final result = math.max(0, priceRisk + costRisk).toDouble();',
+              1,
+          )
+          diagnostics.append(f'double_result={text != before}')
+
+          before = text
+          text = re.sub(
+              r"    if \(index < 0\)\s+return _copy\(processedEventIds: \{\.\.\.processedEventIds, eventId\}\);",
+              "    if (index < 0) {\n      return _copy(processedEventIds: {...processedEventIds, eventId});\n    }",
+              text,
+              count=1,
+          )
+          diagnostics.append(f'curly_braces={text != before}')
+
+          before = text
+          pattern = re.compile(
+              r"    final maximumLoss = PortfolioRiskMath\.maximumLoss\(.*?\n    \);\n(?=    if \(maximumLoss > ledger\.dailyRisk\.available)",
+              re.S,
+          )
+          replacement = """    late final double maximumLoss;
     try {
       maximumLoss = PortfolioRiskMath.maximumLoss(
         side: candidate.side,
@@ -71,12 +77,12 @@ jobs:
       return blocked(PortfolioEntryBlockReason.invalidInput);
     }
 """
-          text = text[:start] + new + text[end:]
+          text, count = pattern.subn(replacement, text, count=1)
+          diagnostics.append(f'fail_closed_math={count == 1}')
           models.write_text(text)
 
           tests = Path('src/client/quantara_app/test/portfolio_risk_policy_test.dart')
           test_text = tests.read_text()
-          marker = "  test('prior-day open risk continues after idempotent daily reset', () {\n"
           addition = """  test('wrong-side stop fails closed instead of throwing', () {
     final invalid = PortfolioEntryCandidate(
       reservationId: 'reservation-invalid-stop',
@@ -133,20 +139,28 @@ jobs:
   });
 
 """
-          if addition not in test_text:
-              if marker not in test_text:
-                  raise SystemExit('missing test marker')
-              test_text = test_text.replace(marker, addition + marker, 1)
+          if "wrong-side stop fails closed instead of throwing" not in test_text:
+              marker = "  test('prior-day open risk continues after idempotent daily reset', () {\n"
+              if marker in test_text:
+                  test_text = test_text.replace(marker, addition + marker, 1)
+                  diagnostics.append('regression_tests=True')
+              else:
+                  diagnostics.append('regression_tests=False')
+          else:
+              diagnostics.append('regression_tests=already_present')
           tests.write_text(test_text)
+
+          Path('.github/tmp-150-repair-result').write_text('\n'.join(diagnostics) + '\n')
           PY
 
-      - name: Commit exact fixes
+      - name: Commit patch and diagnostics
         shell: bash
         run: |
           set -euo pipefail
           git add src/client/quantara_app/lib/features/portfolio_risk/domain/portfolio_risk_models.dart \
-                  src/client/quantara_app/test/portfolio_risk_policy_test.dart
+                  src/client/quantara_app/test/portfolio_risk_policy_test.dart \
+                  .github/tmp-150-repair-result
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(portfolio-risk): fail closed and correct reservation accounting'
+          git commit -m 'fix(portfolio-risk): apply fail-closed analyzer repairs'
           git push origin HEAD:feat/150-portfolio-risk-budget
