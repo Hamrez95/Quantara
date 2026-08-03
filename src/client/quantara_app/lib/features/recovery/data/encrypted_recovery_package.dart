@@ -97,7 +97,9 @@ abstract final class EncryptedRecoveryPackage {
     ]) {
       if (envelope[requiredKey] == null ||
           envelope[requiredKey].toString().trim().isEmpty) {
-        throw FormatException('Recovery envelope field $requiredKey is missing.');
+        throw FormatException(
+          'Recovery envelope field $requiredKey is missing.',
+        );
       }
     }
     final iterations = _integer(envelope['iterations']);
@@ -158,7 +160,9 @@ abstract final class EncryptedRecoveryPackage {
       }
       final record = QuantaraDurableRecord.fromStorageMap(raw);
       if (!_includedCategories.contains(record.category)) {
-        throw const FormatException('Recovery package contained forbidden data.');
+        throw const FormatException(
+          'Recovery package contained forbidden data.',
+        );
       }
       records.add(record);
     }
@@ -206,8 +210,7 @@ abstract final class EncryptedRecoveryPackage {
       throw FormatException('$label must be a JSON object.');
     }
     return {
-      for (final entry in decoded.entries)
-        entry.key.toString(): entry.value,
+      for (final entry in decoded.entries) entry.key.toString(): entry.value,
     };
   }
 
