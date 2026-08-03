@@ -246,7 +246,7 @@ final class LocalLiveJournalObserver {
             if (!isTarget)
               'closeReason': fill.orderId == managed.stopOrderId
                   ? TradingJournalCloseReason.stop.name
-                  : (fill.clientId?.endsWith('-emergency-close') ?? false)
+                  : fill.clientId.endsWith('-emergency-close')
                   ? TradingJournalCloseReason.emergency.name
                   : TradingJournalCloseReason.exchange.name,
           },
