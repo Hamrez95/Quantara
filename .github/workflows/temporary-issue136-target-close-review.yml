@@ -1,0 +1,269 @@
+name: Temporary Issue 136 target-close review
+
+on:
+  push:
+    paths:
+      - .github/workflows/temporary-issue136-target-close-review.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-and-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/136-event-sourced-trading-journal
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Apply final-target closure review fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          observer = Path('src/client/quantara_app/lib/features/trading_journal/application/local_live_journal_observer.dart')
+          source = observer.read_text()
+          old = """    if (positionClosed &&
+                  fills.every((fill) => managed.targetOrderIds.contains(fill.orderId))) {
+                final highestTarget = fills
+                    .map((fill) => managed.targetOrderIds.indexOf(fill.orderId) + 1)
+                    .fold<int>(0, math.max);
+                final closedAt =
+                    positionPnl.settlement?.closedAt ??
+                    (fills.isEmpty
+                        ? DateTime.now().toUtc()
+                        : fills.last.occurredAt.toUtc());
+                await _append(
+                  TradingJournalEvent(
+                    eventId:
+                        'position-closed:${managed.positionId}:${closedAt.millisecondsSinceEpoch}',
+                    journalTradeId: id,
+                    type: TradingJournalEventType.positionClosed,
+                    occurredAt: closedAt,
+                    recordedAt: DateTime.now().toUtc(),
+                    source: TradingJournalFactSource.exchange,
+                    quality: positionPnl.isVerified
+                        ? TradingJournalFactQuality.confirmed
+                        : TradingJournalFactQuality.unverified,
+                    scope: TradingJournalScope.position,
+                    currency: positionPnl.realizedGross.currency,
+                    asOf: positionPnl.asOf.toUtc(),
+                    exchangeEventId:
+                        'position-closed:${managed.positionId}:${closedAt.millisecondsSinceEpoch}',
+                    positionId: managed.positionId,
+                    remainingQuantity: 0,
+                    details: {
+                      'closeReason': highestTarget >= 3
+                          ? TradingJournalCloseReason.takeProfit3.name
+                          : highestTarget == 2
+                          ? TradingJournalCloseReason.takeProfit2.name
+                          : highestTarget == 1
+                          ? TradingJournalCloseReason.takeProfit1.name
+                          : TradingJournalCloseReason.exchange.name,
+                    },
+                  ),
+                );
+              }
+          """
+          new = """    final finalExit = exitFills.isEmpty ? null : exitFills.last;
+              final finalExitTargetIndex = finalExit == null
+                  ? -1
+                  : managed.targetOrderIds.indexOf(finalExit.orderId);
+              final needsSyntheticClose =
+                  positionClosed &&
+                  (finalExit == null || finalExitTargetIndex >= 0);
+              if (needsSyntheticClose) {
+                final highestTarget = exitFills
+                    .map((fill) => managed.targetOrderIds.indexOf(fill.orderId) + 1)
+                    .where((index) => index > 0)
+                    .fold<int>(0, math.max);
+                final closureTarget = finalExitTargetIndex >= 0
+                    ? finalExitTargetIndex + 1
+                    : highestTarget;
+                final closedAt =
+                    (positionPnl.settlement?.closedAt ??
+                            finalExit?.occurredAt ??
+                            (fills.isEmpty
+                                ? DateTime.now().toUtc()
+                                : fills.last.occurredAt))
+                        .toUtc();
+                await _append(
+                  TradingJournalEvent(
+                    eventId:
+                        'position-closed:${managed.positionId}:${closedAt.millisecondsSinceEpoch}',
+                    journalTradeId: id,
+                    type: TradingJournalEventType.positionClosed,
+                    occurredAt: closedAt,
+                    recordedAt: DateTime.now().toUtc(),
+                    source: TradingJournalFactSource.exchange,
+                    quality: positionPnl.isVerified
+                        ? TradingJournalFactQuality.confirmed
+                        : TradingJournalFactQuality.unverified,
+                    scope: TradingJournalScope.position,
+                    currency: positionPnl.realizedGross.currency,
+                    asOf: positionPnl.asOf.toUtc(),
+                    exchangeEventId:
+                        'position-closed:${managed.positionId}:${closedAt.millisecondsSinceEpoch}',
+                    positionId: managed.positionId,
+                    remainingQuantity: 0,
+                    details: {
+                      'closeReason': closureTarget >= 3
+                          ? TradingJournalCloseReason.takeProfit3.name
+                          : closureTarget == 2
+                          ? TradingJournalCloseReason.takeProfit2.name
+                          : closureTarget == 1
+                          ? TradingJournalCloseReason.takeProfit1.name
+                          : TradingJournalCloseReason.exchange.name,
+                    },
+                  ),
+                );
+              }
+          """
+          if old not in source:
+              raise SystemExit('target-close observer block not found')
+          observer.write_text(source.replace(old, new, 1))
+
+          test_file = Path('src/client/quantara_app/test/trading_journal_review_regressions_test.dart')
+          tests = test_file.read_text()
+          marker = """  test(
+              'profit-lock confirmation identity never conflicts with original stop',
+          """
+          regression = """  test('a full TP ladder creates one final closed projection', () async {
+              final store = _MemoryJournalStore(
+                TradingJournalLedger.empty().appendPlan(plan()),
+              );
+              final observer = LocalLiveJournalObserver(store: store);
+              final projection = TradingPnlProjection.reconcile(
+                currency: 'USDT',
+                asOf: openedAt.add(const Duration(hours: 2)),
+                unrealizedByPosition: const {},
+                fills: [
+                  ExchangePnlFill(
+                    tradeId: 'trade-entry-target-close',
+                    orderId: 'entry-order',
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    quantity: 21.4,
+                    price: 1.0665,
+                    realizedPnl: 0,
+                    fee: 0.004,
+                    reduceOnly: false,
+                    occurredAt: openedAt.add(const Duration(minutes: 1)),
+                  ),
+                  ExchangePnlFill(
+                    tradeId: 'trade-tp1-target-close',
+                    orderId: 'tp-1',
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    quantity: 13.91,
+                    price: 1.0603,
+                    realizedPnl: 0.1,
+                    fee: 0.009,
+                    reduceOnly: true,
+                    occurredAt: openedAt.add(const Duration(minutes: 20)),
+                  ),
+                  ExchangePnlFill(
+                    tradeId: 'trade-tp2-target-close',
+                    orderId: 'tp-2',
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    quantity: 4.28,
+                    price: 1.0567,
+                    realizedPnl: 0.05,
+                    fee: 0.003,
+                    reduceOnly: true,
+                    occurredAt: openedAt.add(const Duration(minutes: 40)),
+                  ),
+                  ExchangePnlFill(
+                    tradeId: 'trade-tp3-target-close',
+                    orderId: 'tp-3',
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    quantity: 3.21,
+                    price: 1.0531,
+                    realizedPnl: 0.03,
+                    fee: 0.002,
+                    reduceOnly: true,
+                    occurredAt: openedAt.add(const Duration(minutes: 60)),
+                  ),
+                ],
+                settlements: [
+                  ExchangePositionSettlement(
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    funding: 0,
+                    openedAt: openedAt,
+                    closedAt: openedAt.add(const Duration(minutes: 60)),
+                    realizedPnl: 0.18,
+                    fee: 0.018,
+                  ),
+                ],
+              );
+
+              await observer.reconcilePosition(
+                managed: managed(),
+                positionPnl: projection.forPositionId('position-1')!,
+                positionClosed: true,
+              );
+
+              final journal = TradingJournalProjector.project(
+                ledger: store.ledger,
+                journalTradeId: plan().journalTradeId,
+              );
+              expect(journal.state, TradingJournalTradeState.closed);
+              expect(journal.highestTargetReached, 3);
+              expect(journal.closeReason, TradingJournalCloseReason.takeProfit3);
+              expect(
+                journal.timeline
+                    .where(
+                      (event) =>
+                          event.type == TradingJournalEventType.positionClosed,
+                    )
+                    .length,
+                1,
+              );
+            });
+
+          """
+          if marker not in tests:
+              raise SystemExit('target-close regression insertion point not found')
+          test_file.write_text(tests.replace(marker, regression + marker, 1))
+          PY
+
+      - name: Format, analyze and test journal safety
+        working-directory: src/client/quantara_app
+        shell: bash
+        run: |
+          dart format \
+            lib/features/trading_journal/application/local_live_journal_observer.dart \
+            test/trading_journal_review_regressions_test.dart
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test \
+            test/trading_journal_ledger_test.dart \
+            test/trading_journal_store_test.dart \
+            test/trading_journal_statistics_test.dart \
+            test/trading_journal_view_test.dart \
+            test/trading_journal_encrypted_export_test.dart \
+            test/trading_journal_review_regressions_test.dart \
+            test/trading_journal_source_safety_test.dart
+
+      - name: Remove temporary workflow and push clean result
+        shell: bash
+        run: |
+          rm -f .github/workflows/temporary-issue136-target-close-review.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: close journal projections after final target fills"
+          git push origin HEAD:feat/136-event-sourced-trading-journal
