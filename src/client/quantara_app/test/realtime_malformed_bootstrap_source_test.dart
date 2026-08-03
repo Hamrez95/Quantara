@@ -16,6 +16,9 @@ void main() {
     final page = File(
       'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
     ).readAsStringSync();
+    final autoTrade = File(
+      'lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart',
+    ).readAsStringSync();
 
     expect(backfill, contains('allowedMalformedRows'));
     expect(backfill, contains('maximumMalformedRecentRows'));
@@ -29,7 +32,7 @@ void main() {
     expect(production, contains('closedCandleLimit: 120'));
     expect(page, contains('health.quarantinedStreams'));
     expect(page, contains('Degraded live monitoring'));
-    expect(page, contains('canResumeEntries'));
-    expect(page, contains('Resume entries'));
+    expect(autoTrade, contains('canResumeEntries'));
+    expect(autoTrade, contains('Resume entries'));
   });
 }
