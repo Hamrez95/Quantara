@@ -121,8 +121,20 @@ final class QuantaraRestoreResult {
   final bool alreadyApplied;
 }
 
+final class QuantaraAtomicRecordMutation<T> {
+  const QuantaraAtomicRecordMutation({required this.value, this.nextRecord});
+
+  final T value;
+  final QuantaraDurableRecord? nextRecord;
+}
+
 typedef QuantaraDatabaseMigration =
     Future<void> Function(QuantaraMigrationTransaction transaction);
+
+typedef QuantaraAtomicRecordMutator<T> =
+    Future<QuantaraAtomicRecordMutation<T>> Function(
+      QuantaraDurableRecord? current,
+    );
 
 abstract interface class QuantaraDurableDatabase {
   Future<QuantaraDatabaseHealth> initialize();
@@ -141,6 +153,14 @@ abstract interface class QuantaraDurableDatabase {
     required Iterable<QuantaraDurableRecord> records,
   });
   Future<void> close();
+}
+
+abstract interface class QuantaraAtomicDurableDatabase {
+  Future<T> mutateRecord<T>({
+    required QuantaraDurableCategory category,
+    required String key,
+    required QuantaraAtomicRecordMutator<T> mutation,
+  });
 }
 
 final class QuantaraMigrationTransaction {
@@ -170,7 +190,8 @@ final class QuantaraMigrationTransaction {
       _recordsStore.record(_recordKey(category, key)).delete(_transaction);
 }
 
-final class SembastQuantaraDurableDatabase implements QuantaraDurableDatabase {
+final class SembastQuantaraDurableDatabase
+    implements QuantaraDurableDatabase, QuantaraAtomicDurableDatabase {
   factory SembastQuantaraDurableDatabase({
     required DatabaseFactory factory,
     required String path,
@@ -316,6 +337,39 @@ final class SembastQuantaraDurableDatabase implements QuantaraDurableDatabase {
       _serial(() => _records.record(_recordKey(category, key)).delete(_db));
 
   @override
+  Future<T> mutateRecord<T>({
+    required QuantaraDurableCategory category,
+    required String key,
+    required QuantaraAtomicRecordMutator<T> mutation,
+  }) {
+    if (category == QuantaraDurableCategory.secret) {
+      throw ArgumentError('Secret records are forbidden in durable storage.');
+    }
+    if (key.trim().isEmpty || key.length > 240) {
+      throw ArgumentError.value(key, 'key');
+    }
+    return _serialValue(() async {
+      return _db.transaction((transaction) async {
+        final storageKey = _recordKey(category, key);
+        final raw = await _records.record(storageKey).get(transaction);
+        final current = raw == null
+            ? null
+            : QuantaraDurableRecord.fromStorageMap(raw);
+        final result = await mutation(current);
+        final next = result.nextRecord;
+        if (next != null) {
+          if (next.category != category || next.key != key) {
+            throw StateError('Atomic mutation changed durable record identity.');
+          }
+          _validateRecord(next);
+          await _putWithClient(transaction, next);
+        }
+        return result.value;
+      });
+    });
+  }
+
+  @override
   Future<QuantaraRestoreResult> restoreBatch({
     required String restoreId,
     required Iterable<QuantaraDurableRecord> records,
@@ -404,9 +458,12 @@ final class SembastQuantaraDurableDatabase implements QuantaraDurableDatabase {
     await _records.record(record.storageKey).put(client, record.toStorageMap());
   }
 
-  Future<void> _serial(Future<void> Function() operation) {
+  Future<void> _serial(Future<void> Function() operation) =>
+      _serialValue<void>(operation);
+
+  Future<T> _serialValue<T>(Future<T> Function() operation) {
     final result = _writeTail.then((_) => operation());
-    _writeTail = result.catchError((Object _) {});
+    _writeTail = result.then<void>((_) {}).catchError((Object _) {});
     return result;
   }
 
