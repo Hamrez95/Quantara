@@ -483,12 +483,15 @@ abstract final class PlatformRealtimeMarketHostFactory {
     );
     final application = RealtimeMarketApplication(
       universe: RealtimeSettingsUniverse.build(settings),
-      backfillSource: BitunixCandleBackfillSource(client: client),
+      backfillSource: BitunixCandleBackfillSource(
+        client: client,
+        maximumMalformedRecentRows: 8,
+      ),
       fleetFactory: const BitunixRealtimePublicStreamFleetFactory(),
       analysisGateway: analysisGateway,
       candidateCoordinator: coordinator,
       projection: projection,
-      closedCandleLimit: 200,
+      closedCandleLimit: 120,
       bootstrapSpacing: const Duration(milliseconds: 120),
       maximumPendingEventsPerStream: 64,
       maximumLatencySamples: 512,

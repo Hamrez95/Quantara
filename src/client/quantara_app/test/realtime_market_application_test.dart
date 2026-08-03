@@ -86,6 +86,93 @@ void main() {
     });
 
     test(
+      'quarantines one failed stream and connects the healthy stream',
+      () async {
+        final avax = RealtimeCandleStreamKey(
+          symbol: 'AVAXUSDT',
+          interval: BitunixKlineInterval.fifteenMinutes,
+        );
+        final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
+        final source = _SelectiveBackfillSource(
+          recent: _candles(historyStart, 20, interval: key.interval.duration),
+          failures: {avax.id: const FormatException('invalid AVAX OHLC')},
+        );
+        final fleetFactory = _FakeFleetFactory();
+        final application = RealtimeMarketApplication(
+          universe: RealtimeMarketUniverse([key, avax]),
+          backfillSource: source,
+          fleetFactory: fleetFactory,
+          analysisGateway: const _EmptyAnalysisGateway(),
+          candidateCoordinator: RealtimeCandidateCoordinator(
+            registry: RealtimeCandidateRegistry(),
+            auditStore: _FakeAuditStore(),
+          ),
+          projection: _FakeProjection(),
+          closedCandleLimit: 20,
+          bootstrapSpacing: Duration.zero,
+          clock: clock.call,
+          delay: (_) async {},
+        );
+
+        await application.start();
+        await _flushMicrotasks();
+
+        expect(application.state, RealtimeMarketRuntimeState.live);
+        expect(application.health.configuredStreams, 2);
+        expect(application.health.activeStreams, 1);
+        expect(application.health.quarantinedStreams, 1);
+        expect(application.health.bootstrapFaults, 1);
+        expect(application.health.degraded, isTrue);
+        expect(application.health.discoveryHealthy, isFalse);
+        expect(fleetFactory.subscriptions, hasLength(1));
+        expect(fleetFactory.subscriptions.single.symbol, 'BTCUSDT');
+        expect(application.health.lastFaultMessage, contains(avax.id));
+
+        await application.stop();
+      },
+    );
+
+    test('fails startup when every configured stream is quarantined', () async {
+      final avax = RealtimeCandleStreamKey(
+        symbol: 'AVAXUSDT',
+        interval: BitunixKlineInterval.fifteenMinutes,
+      );
+      final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
+      final source = _SelectiveBackfillSource(
+        recent: _candles(historyStart, 20, interval: key.interval.duration),
+        failures: {
+          key.id: const FormatException('invalid BTC OHLC'),
+          avax.id: const FormatException('invalid AVAX OHLC'),
+        },
+      );
+      final fleetFactory = _FakeFleetFactory();
+      final application = RealtimeMarketApplication(
+        universe: RealtimeMarketUniverse([key, avax]),
+        backfillSource: source,
+        fleetFactory: fleetFactory,
+        analysisGateway: const _EmptyAnalysisGateway(),
+        candidateCoordinator: RealtimeCandidateCoordinator(
+          registry: RealtimeCandidateRegistry(),
+          auditStore: _FakeAuditStore(),
+        ),
+        projection: _FakeProjection(),
+        closedCandleLimit: 20,
+        bootstrapSpacing: Duration.zero,
+        clock: clock.call,
+        delay: (_) async {},
+      );
+
+      await expectLater(application.start(), throwsStateError);
+
+      expect(application.state, RealtimeMarketRuntimeState.failed);
+      expect(application.health.activeStreams, 0);
+      expect(application.health.quarantinedStreams, 2);
+      expect(application.health.bootstrapFaults, 2);
+      expect(fleetFactory.fleets, isEmpty);
+      await application.stop();
+    });
+
+    test(
       'stops a constructed fleet after synchronous startup failure',
       () async {
         final clock = _MutableClock(DateTime.utc(2026, 8, 2, 10, 59));
@@ -385,6 +472,31 @@ final class _MutableClock {
   DateTime now;
 
   DateTime call() => now;
+}
+
+final class _SelectiveBackfillSource implements RealtimeCandleBackfillSource {
+  _SelectiveBackfillSource({required this.recent, required this.failures});
+
+  final List<ChartCandle> recent;
+  final Map<String, Object> failures;
+
+  @override
+  Future<List<ChartCandle>> loadRecentClosed({
+    required RealtimeCandleStreamKey key,
+    required int limit,
+    required DateTime nowUtc,
+  }) async {
+    final failure = failures[key.id];
+    if (failure != null) throw failure;
+    return recent.sublist(recent.length - limit);
+  }
+
+  @override
+  Future<List<ChartCandle>> loadClosedRange({
+    required RealtimeCandleStreamKey key,
+    required DateTime fromInclusiveUtc,
+    required DateTime toExclusiveUtc,
+  }) async => const [];
 }
 
 final class _FakeBackfillSource implements RealtimeCandleBackfillSource {

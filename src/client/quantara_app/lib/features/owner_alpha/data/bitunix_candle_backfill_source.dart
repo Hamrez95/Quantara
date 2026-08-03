@@ -29,6 +29,7 @@ final class BitunixCandleBackfillSource
     required this.client,
     this.timeout = const Duration(seconds: 10),
     this.requestSpacing = const Duration(milliseconds: 120),
+    this.maximumMalformedRecentRows = 8,
     String apiOrigin = 'https://fapi.bitunix.com',
     CandleBackfillDelay? delay,
   }) : apiOrigin = _validateOrigin(apiOrigin),
@@ -43,6 +44,13 @@ final class BitunixCandleBackfillSource
         'Bitunix public market REST is limited to ten requests per second.',
       );
     }
+    if (maximumMalformedRecentRows < 0 || maximumMalformedRecentRows > 20) {
+      throw ArgumentError.value(
+        maximumMalformedRecentRows,
+        'maximumMalformedRecentRows',
+        'Expected a bounded value from 0 to 20.',
+      );
+    }
   }
 
   static const int maximumPageSize = 200;
@@ -51,6 +59,7 @@ final class BitunixCandleBackfillSource
   final http.Client client;
   final Duration timeout;
   final Duration requestSpacing;
+  final int maximumMalformedRecentRows;
   final Uri apiOrigin;
   final CandleBackfillDelay delay;
 
@@ -77,6 +86,7 @@ final class BitunixCandleBackfillSource
         'limit': '$maximumPageSize',
         'type': 'LAST_PRICE',
       },
+      allowedMalformedRows: maximumMalformedRecentRows,
     );
     final closed = candles
         .where(
@@ -174,6 +184,7 @@ final class BitunixCandleBackfillSource
   Future<List<ChartCandle>> _request({
     required RealtimeCandleStreamKey key,
     required Map<String, String> query,
+    int allowedMalformedRows = 0,
   }) async {
     final uri = apiOrigin
         .resolve('/api/v1/futures/market/kline')
@@ -202,34 +213,42 @@ final class BitunixCandleBackfillSource
     }
 
     final byTime = <DateTime, ChartCandle>{};
+    var malformedRows = 0;
     for (final raw in rawData) {
-      final item = _object(raw);
-      final openTime = DateTime.fromMillisecondsSinceEpoch(
-        _integer(item['time'], 'time'),
-        isUtc: true,
-      );
-      if (openTime.isBefore(DateTime.utc(2020))) {
-        throw const FormatException('Bitunix returned an invalid candle time.');
+      try {
+        final item = _object(raw);
+        final openTime = DateTime.fromMillisecondsSinceEpoch(
+          _integer(item['time'], 'time'),
+          isUtc: true,
+        );
+        if (openTime.isBefore(DateTime.utc(2020))) {
+          throw const FormatException(
+            'Bitunix returned an invalid candle time.',
+          );
+        }
+        final open = _positive(item['open'], 'open');
+        final high = _positive(item['high'], 'high');
+        final low = _positive(item['low'], 'low');
+        final close = _positive(item['close'], 'close');
+        final candle = ChartCandle(
+          openTime: openTime,
+          open: open,
+          high: high,
+          low: low,
+          close: close,
+          volume: _nonNegative(
+            item['baseVol'] ?? item['volume'] ?? item['quoteVol'],
+            'baseVol',
+          ),
+        );
+        if (!candle.isValid) {
+          throw FormatException('Bitunix returned invalid OHLC for ${key.id}.');
+        }
+        byTime[openTime] = candle;
+      } on FormatException {
+        if (malformedRows >= allowedMalformedRows) rethrow;
+        malformedRows++;
       }
-      final open = _positive(item['open'], 'open');
-      final high = _positive(item['high'], 'high');
-      final low = _positive(item['low'], 'low');
-      final close = _positive(item['close'], 'close');
-      final candle = ChartCandle(
-        openTime: openTime,
-        open: open,
-        high: high,
-        low: low,
-        close: close,
-        volume: _nonNegative(
-          item['baseVol'] ?? item['volume'] ?? item['quoteVol'],
-          'baseVol',
-        ),
-      );
-      if (!candle.isValid) {
-        throw FormatException('Bitunix returned invalid OHLC for ${key.id}.');
-      }
-      byTime[openTime] = candle;
     }
     final result = byTime.values.toList(growable: false)
       ..sort((left, right) => left.openTime.compareTo(right.openTime));
