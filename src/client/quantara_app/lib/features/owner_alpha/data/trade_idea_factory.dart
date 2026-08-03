@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../market_analysis/domain/market_chart_models.dart';
+import '../../market_analysis/domain/market_regime_models.dart';
 import '../domain/owner_alpha_models.dart';
 import 'advanced_strategy_engine.dart';
 import 'strategy_engine_v2.dart';
@@ -304,6 +305,7 @@ abstract final class TradeIdeaFactory {
       ),
       strategy: AnalysisStrategy.structureZones,
       strategyVersion: strategyVersion(AnalysisStrategy.structureZones),
+      marketRegime: MarketRegime.directionalTrend,
     );
   }
 

@@ -342,11 +342,14 @@ class _LocalLiveTradeControlCard extends StatefulWidget {
 
 class _LocalLiveTradeControlCardState
     extends State<_LocalLiveTradeControlCard> {
+  final LocalLivePreferencesStore _preferencesStore =
+      const SharedPreferencesLocalLivePreferencesStore();
   final Set<String> _enabledSymbols = {};
   final Set<String> _enabledTimeframes = {'1h', '4h'};
   int _leverage = 10;
   double _riskPercent = 0.10;
   double _dailyLossLimit = 1;
+  bool _preferencesLoaded = false;
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
 
@@ -356,7 +359,43 @@ class _LocalLiveTradeControlCardState
   void initState() {
     super.initState();
     _enabledSymbols.addAll(widget.analysisController.symbols.take(4));
+    unawaited(_restorePreferences());
   }
+
+  Future<void> _restorePreferences() async {
+    final value = await _preferencesStore.load(
+      availableSymbols: widget.analysisController.symbols,
+    );
+    if (!mounted) return;
+    setState(() {
+      _enabledSymbols
+        ..clear()
+        ..addAll(value.symbols);
+      _enabledTimeframes
+        ..clear()
+        ..addAll(value.timeframes);
+      _leverage = value.leverage;
+      _riskPercent = value.riskPercent;
+      _dailyLossLimit = value.dailyLossLimitPercent;
+      _preferencesLoaded = true;
+    });
+  }
+
+  LocalLivePreferences get _currentPreferences => LocalLivePreferences(
+    symbols: _enabledSymbols.toList(growable: false),
+    timeframes: Set.unmodifiable(_enabledTimeframes),
+    leverage: _leverage,
+    riskPercent: _riskPercent,
+    dailyLossLimitPercent: _dailyLossLimit,
+  ).normalized(widget.analysisController.symbols);
+
+  void _mutateAndSave(VoidCallback mutation) {
+    setState(mutation);
+    unawaited(_preferencesStore.save(_currentPreferences));
+  }
+
+  Future<void> _persistPreferences() =>
+      _preferencesStore.save(_currentPreferences);
 
   @override
   Widget build(BuildContext context) {
@@ -428,8 +467,8 @@ class _LocalLiveTradeControlCardState
           const SizedBox(height: 12),
           _BoundaryNotice(
             text: _t(
-              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. نسخه Canary فقط یک پوزیشن هم‌زمان و حداکثر ۰٫۲۵٪ ریسک در هر معامله دارد، Isolated است و هر ورود باید با SL صرافی و سه TP تأیید شود.',
-              'This mode can submit real futures orders. Canary is limited to one concurrent position and 0.25% risk per trade, uses isolated margin, and requires exchange-confirmed SL plus three targets.',
+              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. فقط یک پوزیشن هم‌زمان و Isolated مجاز است؛ ریسک قابل تنظیم تا ۲٪ و سقف ضرر روزانه تا ۱۰٪ باز شده، اما هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.',
+              'This mode can submit real futures orders. It remains isolated and limited to one concurrent position; risk is adjustable up to 2% and the daily cap up to 10%, while every entry still requires a full exchange-confirmed stop and three targets.',
             ),
             color: QuantaraColors.danger,
           ),
@@ -483,8 +522,13 @@ class _LocalLiveTradeControlCardState
             ],
           ),
           const Divider(height: 28),
+          if (!_preferencesLoaded) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: 12),
+          ],
           AbsorbPointer(
-            absorbing: running || widget.controller.isBusy,
+            absorbing:
+                running || widget.controller.isBusy || !_preferencesLoaded,
             child: Opacity(
               opacity: running ? 0.60 : 1,
               child: Column(
@@ -510,7 +554,7 @@ class _LocalLiveTradeControlCardState
                           ),
                           label: Text(symbol, textDirection: TextDirection.ltr),
                           selected: _enabledSymbols.contains(symbol),
-                          onSelected: (selected) => setState(() {
+                          onSelected: (selected) => _mutateAndSave(() {
                             if (selected) {
                               _enabledSymbols.add(symbol);
                             } else {
@@ -531,14 +575,14 @@ class _LocalLiveTradeControlCardState
                   Wrap(
                     spacing: 8,
                     children: [
-                      for (final timeframe in const ['15m', '1h', '4h'])
+                      for (final timeframe in const ['5m', '15m', '1h', '4h'])
                         FilterChip(
                           label: Text(
                             timeframe,
                             textDirection: TextDirection.ltr,
                           ),
                           selected: _enabledTimeframes.contains(timeframe),
-                          onSelected: (selected) => setState(() {
+                          onSelected: (selected) => _mutateAndSave(() {
                             if (selected) {
                               _enabledTimeframes.add(timeframe);
                             } else {
@@ -552,36 +596,49 @@ class _LocalLiveTradeControlCardState
                   _numberRow(
                     label: _t('اهرم عمومی', 'Global leverage'),
                     value: '${_leverage}x',
-                    onMinus: () =>
-                        setState(() => _leverage = math.max(1, _leverage - 1)),
-                    onPlus: () => setState(
+                    onMinus: () => _mutateAndSave(
+                      () => _leverage = math.max(1, _leverage - 1),
+                    ),
+                    onPlus: () => _mutateAndSave(
                       () => _leverage = math.min(125, _leverage + 1),
                     ),
                   ),
                   _numberRow(
                     label: _t('ریسک هر معامله', 'Risk per trade'),
                     value: '${_riskPercent.toStringAsFixed(2)}%',
-                    onMinus: () => setState(
-                      () => _riskPercent = math.max(0.05, _riskPercent - 0.05),
-                    ),
-                    onPlus: () => setState(
-                      () => _riskPercent = math.min(0.25, _riskPercent + 0.05),
-                    ),
+                    onMinus: () => _mutateAndSave(() {
+                      final step = _riskPercent > 0.50 ? 0.25 : 0.05;
+                      _riskPercent = math.max(0.05, _riskPercent - step);
+                    }),
+                    onPlus: () => _mutateAndSave(() {
+                      final step = _riskPercent >= 0.50 ? 0.25 : 0.05;
+                      _riskPercent = math.min(2.0, _riskPercent + step);
+                    }),
                   ),
                   _numberRow(
                     label: _t('سقف ضرر روزانه', 'Daily loss cap'),
                     value: '${_dailyLossLimit.toStringAsFixed(2)}%',
-                    onMinus: () => setState(
-                      () => _dailyLossLimit = math.max(
-                        0.25,
-                        _dailyLossLimit - 0.25,
-                      ),
-                    ),
-                    onPlus: () => setState(
-                      () =>
-                          _dailyLossLimit = math.min(2, _dailyLossLimit + 0.25),
-                    ),
+                    onMinus: () => _mutateAndSave(() {
+                      final step = _dailyLossLimit > 3 ? 1.0 : 0.25;
+                      _dailyLossLimit = math.max(0.25, _dailyLossLimit - step);
+                    }),
+                    onPlus: () => _mutateAndSave(() {
+                      final step = _dailyLossLimit >= 3 ? 1.0 : 0.25;
+                      _dailyLossLimit = math.min(10, _dailyLossLimit + step);
+                    }),
                   ),
+                  if (_riskPercent > 0.50 ||
+                      _dailyLossLimit > 3 ||
+                      _leverage > 25) ...[
+                    const SizedBox(height: 8),
+                    _BoundaryNotice(
+                      text: _t(
+                        'حالت پیشرفته فعال است. اهرم بالا فقط مارجین را کم می‌کند و فاصله لیکویید را کاهش می‌دهد؛ ریسک بالاتر مستقیماً زیان مجاز هر معامله را افزایش می‌دهد.',
+                        'Advanced settings are active. Higher leverage reduces required margin but narrows liquidation distance; higher risk directly increases allowed loss per trade.',
+                      ),
+                      color: QuantaraColors.warning,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -685,6 +742,7 @@ class _LocalLiveTradeControlCardState
   }
 
   Future<void> _confirmStart() async {
+    if (!_preferencesLoaded) return;
     if (!widget.accountController.isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -710,6 +768,35 @@ class _LocalLiveTradeControlCardState
         ),
       );
       return;
+    }
+    if (_riskPercent > 0.50 || _dailyLossLimit > 3 || _leverage > 25) {
+      final advancedConfirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(_t('تأیید تنظیمات پرریسک', 'Confirm advanced risk')),
+          content: Text(
+            _t(
+              'این تنظیمات می‌توانند زیان واقعی را سریع‌تر افزایش دهند. Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و همچنان فقط یک پوزیشن Isolated باز می‌کند. ادامه می‌دهی؟',
+              'These settings can increase real losses faster. Quantara will not widen stops, increase risk after losses, or open more than one isolated position. Continue?',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(_t('بازگشت', 'Go back')),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: QuantaraColors.danger,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(_t('ریسک را می‌پذیرم', 'I accept the risk')),
+            ),
+          ],
+        ),
+      );
+      if (advancedConfirmed != true || !mounted) return;
     }
     final confirmed = await showDialog<bool>(
       context: context,
@@ -763,6 +850,8 @@ class _LocalLiveTradeControlCardState
       ),
     );
     if (confirmed != true || !mounted) return;
+    await _persistPreferences();
+    if (!mounted) return;
     final started = await widget.controller.start(
       LocalLiveTradeConfiguration(
         symbols: _enabledSymbols.toList(growable: false),
@@ -849,7 +938,12 @@ class _LocalLiveTradeControlCardState
                   final event = events[index];
                   return ListTile(
                     leading: const Icon(Icons.shield_outlined),
-                    title: Text(event.message),
+                    title: Text(
+                      LocalLiveMessageLocalizer.localize(
+                        event.message,
+                        persian: _fa,
+                      ),
+                    ),
                     subtitle: Text(
                       '${event.symbol ?? event.type} · ${event.at.toLocal()}',
                       textDirection: TextDirection.ltr,

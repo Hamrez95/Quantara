@@ -127,6 +127,7 @@ abstract final class AdvancedStrategyEngine {
       capital: capital,
       riskPercent: riskPercent,
       strategy: AnalysisStrategy.structureZones,
+      marketRegime: regime.regime,
       long: long,
       entryCenter: candle.close,
       stop: stop,
@@ -254,6 +255,7 @@ abstract final class AdvancedStrategyEngine {
       capital: capital,
       riskPercent: riskPercent,
       strategy: AnalysisStrategy.structureZones,
+      marketRegime: regime.regime,
       long: selectedLong,
       entryCenter: candle.close,
       stop: stop,
@@ -364,6 +366,7 @@ abstract final class AdvancedStrategyEngine {
       capital: capital,
       riskPercent: riskPercent,
       strategy: AnalysisStrategy.trendPullback,
+      marketRegime: regime.regime,
       long: long,
       entryCenter: candle.close,
       stop: stop,
@@ -435,6 +438,7 @@ abstract final class AdvancedStrategyEngine {
     required double capital,
     required double riskPercent,
     required AnalysisStrategy strategy,
+    required MarketRegime marketRegime,
     required bool long,
     required double entryCenter,
     required double stop,
@@ -523,10 +527,12 @@ abstract final class AdvancedStrategyEngine {
       reasons: List.unmodifiable(reasons),
       strategy: strategy,
       strategyVersion: version,
+      marketRegime: marketRegime,
     );
   }
 
   static Duration _durationFor(String timeframe) => switch (timeframe) {
+    '5m' => const Duration(minutes: 5),
     '15m' => const Duration(minutes: 15),
     '1h' => const Duration(hours: 1),
     '4h' => const Duration(hours: 4),

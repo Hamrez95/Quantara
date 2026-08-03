@@ -64,7 +64,7 @@ void main() {
     );
 
     test('Sara risk manager blocks excessive risk and concurrency', () {
-      expect(() => configuration(risk: 0.30).validate(), throwsFormatException);
+      expect(() => configuration(risk: 2.01).validate(), throwsFormatException);
       expect(
         () => configuration(positions: 2).validate(),
         throwsFormatException,

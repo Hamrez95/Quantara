@@ -26,9 +26,17 @@ void main() {
     expect(validConfiguration().validate, returnsNormally);
   });
 
-  test('rejects risk above the 0.25 percent canary ceiling', () {
+  test('accepts bounded advanced risk and rejects values above 2 percent', () {
     expect(
-      () => validConfiguration(riskPercent: 0.30).validate(),
+      validConfiguration(riskPercent: 2, dailyLossLimitPercent: 10).validate,
+      returnsNormally,
+    );
+    expect(
+      () => validConfiguration(riskPercent: 2.01).validate(),
+      throwsFormatException,
+    );
+    expect(
+      () => validConfiguration(dailyLossLimitPercent: 10.01).validate(),
       throwsFormatException,
     );
   });
@@ -40,9 +48,13 @@ void main() {
     );
   });
 
-  test('rejects unsupported execution timeframes', () {
+  test('accepts 5m and rejects unsupported execution timeframes', () {
     expect(
-      () => validConfiguration(timeframes: const ['5m']).validate(),
+      validConfiguration(timeframes: const ['5m']).validate,
+      returnsNormally,
+    );
+    expect(
+      () => validConfiguration(timeframes: const ['2m']).validate(),
       throwsFormatException,
     );
   });
