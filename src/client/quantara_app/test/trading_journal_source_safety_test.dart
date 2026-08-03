@@ -54,9 +54,11 @@ void main() {
     expect(ownerPage, contains('DatabaseTradingJournalStore()'));
     expect(
       ownerPage,
-      isNot(contains(
-        'TradingJournalController(store: SharedPreferencesTradingJournalStore())',
-      )),
+      isNot(
+        contains(
+          'TradingJournalController(store: SharedPreferencesTradingJournalStore())',
+        ),
+      ),
     );
     expect(databaseStore, contains('QuantaraDurableCategory.journal'));
     expect(databaseStore, contains('_legacyStore.replace(persisted)'));

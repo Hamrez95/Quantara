@@ -65,40 +65,45 @@ void main() {
         details: const {'targetIndex': 1},
       );
 
-  test('legacy journal migrates once and database remains authoritative', () async {
-    final database = SembastQuantaraDurableDatabase(
-      factory: databaseFactoryMemory,
-      path: 'journal-migration.db',
-    );
-    await database.initialize();
-    final legacy = _MemoryTradingJournalStore(
-      TradingJournalLedger.empty().appendPlan(plan('journal-1')),
-    );
-    final store = DatabaseTradingJournalStore(
-      databaseFactory: () async => database,
-      legacyStore: legacy,
-    );
+  test(
+    'legacy journal migrates once and database remains authoritative',
+    () async {
+      final database = SembastQuantaraDurableDatabase(
+        factory: databaseFactoryMemory,
+        path: 'journal-migration.db',
+      );
+      await database.initialize();
+      final legacy = _MemoryTradingJournalStore(
+        TradingJournalLedger.empty().appendPlan(plan('journal-1')),
+      );
+      final store = DatabaseTradingJournalStore(
+        databaseFactory: () async => database,
+        legacyStore: legacy,
+      );
 
-    final migrated = await store.load();
-    final durable = await database.read(
-      QuantaraDurableCategory.journal,
-      'ledger',
-    );
+      final migrated = await store.load();
+      final durable = await database.read(
+        QuantaraDurableCategory.journal,
+        'ledger',
+      );
 
-    expect(migrated.plans.single.journalTradeId, 'journal-1');
-    expect(durable, isNotNull);
-    expect(durable!.revision, greaterThanOrEqualTo(1));
-    expect(legacy.replaceCalls, 1);
+      expect(migrated.plans.single.journalTradeId, 'journal-1');
+      expect(durable, isNotNull);
+      expect(durable!.revision, greaterThanOrEqualTo(1));
+      expect(legacy.replaceCalls, 1);
 
-    legacy.ledger = TradingJournalLedger.empty().appendPlan(plan('legacy-only'));
-    final reloaded = await DatabaseTradingJournalStore(
-      databaseFactory: () async => database,
-      legacyStore: legacy,
-    ).load();
+      legacy.ledger = TradingJournalLedger.empty().appendPlan(
+        plan('legacy-only'),
+      );
+      final reloaded = await DatabaseTradingJournalStore(
+        databaseFactory: () async => database,
+        legacyStore: legacy,
+      ).load();
 
-    expect(reloaded.plans.single.journalTradeId, 'journal-1');
-    expect(legacy.loadCalls, 1);
-  });
+      expect(reloaded.plans.single.journalTradeId, 'journal-1');
+      expect(legacy.loadCalls, 1);
+    },
+  );
 
   test('database append is idempotent and mirrors verified state', () async {
     final database = SembastQuantaraDurableDatabase(
@@ -125,39 +130,42 @@ void main() {
     expect(legacy.replaceCalls, greaterThanOrEqualTo(2));
   });
 
-  test('unverified durable journal remains authoritative over legacy', () async {
-    final database = SembastQuantaraDurableDatabase(
-      factory: databaseFactoryMemory,
-      path: 'journal-unverified.db',
-    );
-    await database.initialize();
-    final unverified = TradingJournalLedger.empty().withIntegrityWarning(
-      'Durable journal requires review.',
-    );
-    await database.put(
-      QuantaraDurableRecord(
-        category: QuantaraDurableCategory.journal,
-        key: 'ledger',
-        schemaVersion: 1,
-        revision: 1,
-        updatedAt: DateTime.utc(2026, 8, 4),
-        payload: unverified.toJson(),
-      ),
-    );
-    final legacy = _MemoryTradingJournalStore(
-      TradingJournalLedger.empty().appendPlan(plan('must-not-fallback')),
-    );
-    final store = DatabaseTradingJournalStore(
-      databaseFactory: () async => database,
-      legacyStore: legacy,
-    );
+  test(
+    'unverified durable journal remains authoritative over legacy',
+    () async {
+      final database = SembastQuantaraDurableDatabase(
+        factory: databaseFactoryMemory,
+        path: 'journal-unverified.db',
+      );
+      await database.initialize();
+      final unverified = TradingJournalLedger.empty().withIntegrityWarning(
+        'Durable journal requires review.',
+      );
+      await database.put(
+        QuantaraDurableRecord(
+          category: QuantaraDurableCategory.journal,
+          key: 'ledger',
+          schemaVersion: 1,
+          revision: 1,
+          updatedAt: DateTime.utc(2026, 8, 4),
+          payload: unverified.toJson(),
+        ),
+      );
+      final legacy = _MemoryTradingJournalStore(
+        TradingJournalLedger.empty().appendPlan(plan('must-not-fallback')),
+      );
+      final store = DatabaseTradingJournalStore(
+        databaseFactory: () async => database,
+        legacyStore: legacy,
+      );
 
-    final loaded = await store.load();
-    expect(loaded.integrity, TradingJournalIntegrity.unverified);
-    expect(loaded.warnings, contains('Durable journal requires review.'));
-    expect(loaded.plans, isEmpty);
-    expect(legacy.loadCalls, 0);
-  });
+      final loaded = await store.load();
+      expect(loaded.integrity, TradingJournalIntegrity.unverified);
+      expect(loaded.warnings, contains('Durable journal requires review.'));
+      expect(loaded.plans, isEmpty);
+      expect(legacy.loadCalls, 0);
+    },
+  );
 }
 
 final class _MemoryTradingJournalStore implements TradingJournalStore {
