@@ -7,6 +7,7 @@ on:
     paths:
       - 'scripts/apply-129-fix.py'
       - '.github/workflows/apply-129-fix-once.yml'
+      - 'docs/v1.2/issue-129-fix-trigger.md'
 
 permissions:
   contents: write
@@ -23,6 +24,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
       - name: Apply guarded malformed-OHLC isolation
         run: python scripts/apply-129-fix.py
 
@@ -34,6 +42,7 @@ jobs:
         run: |
           rm scripts/apply-129-fix.py
           rm .github/workflows/apply-129-fix-once.yml
+          rm docs/v1.2/issue-129-fix-trigger.md
 
       - name: Commit product fix
         run: |
