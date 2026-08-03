@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    '5m, persisted controls and regime-aware protected exits stay wired',
+    '5m, persisted controls and exchange-confirmed protected exits stay wired',
     () {
       final root = Directory.current.path;
       String source(String path) => File('$root/$path').readAsStringSync();
@@ -21,18 +21,35 @@ void main() {
       final policy = source(
         'lib/features/owner_alpha/domain/profit_protection_policy.dart',
       );
+      final stopPolicy = source(
+        'lib/features/auto_trade/domain/profit_lock_stop_policy.dart',
+      );
+      final executor = source(
+        'lib/features/auto_trade/application/profit_lock_promotion_executor.dart',
+      );
 
       expect(repository, contains("['5m', '15m', '1h', '4h', '1D']"));
       expect(repository, contains("'5m' => const Duration(minutes: 5)"));
       expect(ui, contains('SharedPreferencesLocalLivePreferencesStore'));
       expect(ui, contains("['5m', '15m', '1h', '4h']"));
       expect(service, contains('ProfitProtectionPolicy.forIdea'));
-      expect(service, contains('managed.targetFractions.first'));
-      expect(service, contains('managed.targetFractions.last'));
-      expect(policy, contains('[0.50, 0.25, 0.25]'));
-      expect(policy, contains('[0.40, 0.25, 0.35]'));
-      expect(policy, contains('[0.40, 0.30, 0.30]'));
-      expect(policy, contains('No tranche is smaller than 25%'));
+      expect(service, contains('ConfirmedTargetFillProgress.reconcile'));
+      expect(service, contains('targetOrderIds: managed.targetOrderIds'));
+      expect(service, contains('ProfitLockStopPolicy.afterTp1'));
+      expect(service, contains('ProfitLockStopPolicy.afterTp2'));
+      expect(service, isNot(contains('position.quantity / managed.initialQuantity')));
+      expect(stopPolicy, contains('fill.orderId.trim()'));
+      expect(stopPolicy, contains('seenTradeIds.add(tradeId)'));
+      expect(
+        stopPolicy,
+        contains('observedRemainingQuantity is intentionally not used'),
+      );
+      expect(executor, contains('requestMutation(decision.proposedStop)'));
+      expect(executor, contains('Never resend mutation'));
+      expect(policy, contains('tp1Fraction: 0.65'));
+      expect(policy, contains('tp2Fraction: 0.20'));
+      expect(policy, contains('tp3Fraction: 0.15'));
+      expect(policy, contains('targetAllocation: allocation'));
     },
   );
 }
