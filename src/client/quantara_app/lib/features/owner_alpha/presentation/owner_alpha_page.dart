@@ -21,6 +21,7 @@ import '../../auto_trade/data/secure_auto_trade_server_config_store.dart';
 import '../../auto_trade/data/unattended_auto_trade_api_client.dart';
 import '../../auto_trade/domain/auto_trade_models.dart';
 import '../../auto_trade/domain/private_account_reconciliation.dart';
+import '../../auto_trade/domain/trading_pnl_projection.dart';
 import '../../auto_trade/domain/unattended_auto_trade_models.dart';
 import '../../auto_trade/presentation/private_account_reconciliation_banner.dart';
 import '../../auto_trade/presentation/position_protection_summary.dart';

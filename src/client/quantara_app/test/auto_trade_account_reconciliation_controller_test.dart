@@ -14,9 +14,9 @@ void main() {
     'controller reconciles Local Live divergence into a new authoritative cycle',
     () async {
       var now = DateTime.utc(2026, 8, 3, 11, 27);
-      var requestCount = 0;
+      final requestedPaths = <String>[];
       final client = MockClient((request) async {
-        requestCount++;
+        requestedPaths.add(request.url.path);
         return _successResponse(request.url.path);
       });
       final controller = AutoTradeController(
@@ -31,7 +31,18 @@ void main() {
 
       await controller.initialize();
 
-      expect(requestCount, 4);
+      expect(requestedPaths, hasLength(6));
+      expect(
+        requestedPaths,
+        containsAll(<String>[
+          '/api/v1/futures/account',
+          '/api/v1/futures/position/get_pending_positions',
+          '/api/v1/futures/trade/get_pending_orders',
+          '/api/v1/futures/tpsl/get_pending_orders',
+          '/api/v1/futures/position/get_history_positions',
+          '/api/v1/futures/trade/get_history_trades',
+        ]),
+      );
       expect(
         controller.reconciliation.health,
         PrivateAccountReconciliationHealth.fresh,
@@ -46,7 +57,10 @@ void main() {
       );
 
       expect(reconciled, isTrue);
-      expect(requestCount, 8);
+      expect(requestedPaths, hasLength(12));
+      for (final path in requestedPaths.toSet()) {
+        expect(requestedPaths.where((item) => item == path), hasLength(2));
+      }
       expect(controller.snapshot?.positions, hasLength(1));
       expect(controller.reconciliation.cycleId, isNot(initialCycle));
       expect(
@@ -157,6 +171,10 @@ http.Response _successResponse(String path) {
     ],
     '/api/v1/futures/trade/get_pending_orders' => {'orderList': <Object>[]},
     '/api/v1/futures/tpsl/get_pending_orders' => {'orderList': <Object>[]},
+    '/api/v1/futures/position/get_history_positions' => {
+      'positionList': <Object>[],
+    },
+    '/api/v1/futures/trade/get_history_trades' => {'tradeList': <Object>[]},
     _ => throw StateError('Unexpected Bitunix path: $path'),
   };
   return http.Response(jsonEncode({'code': 0, 'data': data}), 200);

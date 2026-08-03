@@ -13,6 +13,7 @@ import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/trading_pnl_projection.dart';
 
 const localLiveConfigurationKey = 'quantara.local-live.configuration.v1';
 const localLiveStatusKey = 'quantara.local-live.status.v1';
@@ -20,6 +21,11 @@ const localLiveManagedPositionsKey = 'quantara.local-live.positions.v1';
 const localLiveExecutedSetupIdsKey = 'quantara.local-live.executed.v1';
 const localLiveAuditKey = 'quantara.local-live.audit.v1';
 const localLiveSessionStartEquityKey = 'quantara.local-live.start-equity.v1';
+const localLiveSessionIdKey = 'quantara.local-live.session-id.v1';
+const localLiveSessionStartedAtKey =
+    'quantara.local-live.session-started-at.v1';
+const localLiveSessionPositionIdsKey =
+    'quantara.local-live.session-positions.v1';
 
 @pragma('vm:entry-point')
 void quantaraLocalLiveStartCallback() {
@@ -39,7 +45,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   bool _destroyed = false;
   int _consecutiveFailures = 0;
   int _closedPositionCount = 0;
-  double _realizedPnl = 0;
+  TradingPnlProjection? _sessionPnlProjection;
+  String? _sessionId;
+  DateTime? _sessionStartedAt;
+  final Set<String> _sessionPositionIds = {};
   double? _sessionStartEquity;
   DateTime? _lastScanAt;
   DateTime? _lastExchangeSync;
@@ -144,7 +153,18 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _exchange = BitunixLocalLiveApiClient(client: _httpClient!);
         _entriesEnabled = message['entriesEnabled'] == true;
         _destroyed = false;
-        _sessionStartEquity = null;
+        if (_managed.isEmpty ||
+            _sessionId == null ||
+            _sessionStartedAt == null) {
+          final startedAt = DateTime.now().toUtc();
+          _sessionStartedAt = startedAt;
+          _sessionId =
+              'local-${startedAt.microsecondsSinceEpoch.toRadixString(36)}';
+          _sessionStartEquity = null;
+          _sessionPnlProjection = null;
+          _sessionPositionIds.clear();
+          await _persistSessionMetadata();
+        }
         await FlutterForegroundTask.saveData(
           key: localLiveConfigurationKey,
           value: jsonEncode(configuration.toJson()),
@@ -206,6 +226,24 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       final account = await exchange.fetchAccountSnapshot(credentials);
       final positions = await exchange.fetchPositions(credentials);
       _lastExchangeSync = DateTime.now().toUtc();
+      final sessionId = _sessionId;
+      final sessionStartedAt = _sessionStartedAt;
+      _sessionPnlProjection = sessionId == null || sessionStartedAt == null
+          ? account.authoritativePnl
+          : account.authoritativePnl.forSession(
+              sessionId: sessionId,
+              startedAt: sessionStartedAt,
+              ownedPositionIds: Set.unmodifiable(_sessionPositionIds),
+            );
+      if (!account.authoritativePnl.isVerified ||
+          !account.authoritativePnl.fillsAvailable) {
+        _entriesEnabled = false;
+        _auditEvent(
+          'pnl_projection_block',
+          account.authoritativePnl.warning ??
+              'Exchange PnL history is unavailable or unverified.',
+        );
+      }
       _sessionStartEquity ??= account.estimatedEquity;
       if (_sessionStartEquity != null) {
         await FlutterForegroundTask.saveData(
@@ -619,7 +657,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           marketRegime: idea.marketRegime,
         ),
       );
+      _sessionPositionIds.add(position.positionId);
       _executedSetupIds.add(idea.setupId);
+      await _persistSessionMetadata();
       await _persistState();
       _auditEvent(
         'position_protected',
@@ -645,7 +685,13 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           positionId: managed.positionId,
           credentials: credentials,
         );
-        if (history.isNotEmpty) _realizedPnl += history.first.netPnl;
+        if (history.isEmpty) {
+          _auditEvent(
+            'pnl_pending',
+            'Closed position history is not available yet; PnL remains unavailable.',
+            symbol: managed.symbol,
+          );
+        }
         _managed.remove(managed);
         _closedPositionCount++;
         _auditEvent(
@@ -832,6 +878,24 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _managed.clear();
       }
     }
+    _sessionPositionIds.addAll(
+      _managed
+          .map((position) => position.positionId)
+          .where((id) => id.isNotEmpty),
+    );
+    final sessionPositionsRaw = await FlutterForegroundTask.getData<String>(
+      key: localLiveSessionPositionIdsKey,
+    );
+    if (sessionPositionsRaw != null) {
+      try {
+        final decoded = jsonDecode(sessionPositionsRaw);
+        if (decoded is List<Object?>) {
+          _sessionPositionIds.addAll(decoded.whereType<String>());
+        }
+      } on FormatException {
+        // Managed position IDs above remain authoritative for recovery.
+      }
+    }
     final executed = await FlutterForegroundTask.getData<String>(
       key: localLiveExecutedSetupIdsKey,
     );
@@ -847,6 +911,31 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     }
     _sessionStartEquity = await FlutterForegroundTask.getData<double>(
       key: localLiveSessionStartEquityKey,
+    );
+    _sessionId = await FlutterForegroundTask.getData<String>(
+      key: localLiveSessionIdKey,
+    );
+    final startedAtRaw = await FlutterForegroundTask.getData<String>(
+      key: localLiveSessionStartedAtKey,
+    );
+    _sessionStartedAt = DateTime.tryParse(startedAtRaw ?? '')?.toUtc();
+  }
+
+  Future<void> _persistSessionMetadata() async {
+    final sessionId = _sessionId;
+    final sessionStartedAt = _sessionStartedAt;
+    if (sessionId == null || sessionStartedAt == null) return;
+    await FlutterForegroundTask.saveData(
+      key: localLiveSessionIdKey,
+      value: sessionId,
+    );
+    await FlutterForegroundTask.saveData(
+      key: localLiveSessionStartedAtKey,
+      value: sessionStartedAt.toUtc().toIso8601String(),
+    );
+    await FlutterForegroundTask.saveData(
+      key: localLiveSessionPositionIdsKey,
+      value: jsonEncode(_sessionPositionIds.toList(growable: false)),
     );
   }
 
@@ -910,7 +999,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       lastSuccessfulExchangeSync: _lastExchangeSync,
       openPositionCount: _managed.length,
       closedPositionCount: _closedPositionCount,
-      realizedPnl: _realizedPnl,
+      realizedPnl: null,
+      pnlProjection: _sessionPnlProjection,
       consecutiveFailures: _consecutiveFailures,
       entriesEnabled: _entriesEnabled,
     );
@@ -926,9 +1016,24 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           : state == LocalLiveTradeState.managingOnly
           ? 'Quantara · Managing protected positions'
           : 'Quantara · Local live canary',
-      notificationText:
-          '${_managed.length} open · ${_realizedPnl.toStringAsFixed(2)} USDT realized',
+      notificationText: _notificationPnlText(),
     );
+  }
+
+  String _notificationPnlText() {
+    final projection = _sessionPnlProjection;
+    if (projection == null) {
+      return '${_managed.length} open · session PnL unavailable';
+    }
+    final net = projection.accountNetRealized;
+    final unrealized = projection.accountUnrealized;
+    final netText = net.isAvailable
+        ? '${net.value! >= 0 ? '+' : ''}${net.value!.toStringAsFixed(2)} ${net.currency}'
+        : 'unavailable';
+    final openText = unrealized.isAvailable
+        ? '${unrealized.value! >= 0 ? '+' : ''}${unrealized.value!.toStringAsFixed(2)} ${unrealized.currency}'
+        : 'unavailable';
+    return '${_managed.length} open · session net $netText · open $openText';
   }
 
   String _safeError(Object error) {

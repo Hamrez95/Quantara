@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'trading_pnl_projection.dart';
+
 enum AutoTradeConnectionState { disconnected, connecting, readOnly, error }
 
 enum AutoTradeProtectionStatus {
@@ -36,6 +38,7 @@ final class AutoTradeAccountSnapshot {
     required this.syncedAt,
     this.protectionOrders = const [],
     this.protectionVerifications = const {},
+    this.pnlProjection,
   });
 
   final String marginCoin;
@@ -56,6 +59,15 @@ final class AutoTradeAccountSnapshot {
   /// Per-position verification evidence for the dedicated TP/SL read.
   final Map<String, AutoTradeProtectionVerification> protectionVerifications;
 
+  final TradingPnlProjection? pnlProjection;
+
+  TradingPnlProjection get authoritativePnl =>
+      pnlProjection ??
+      TradingPnlProjection.unavailable(
+        currency: marginCoin,
+        asOf: syncedAt,
+        warning: 'Exchange PnL history has not been reconciled.',
+      );
   final DateTime syncedAt;
 
   double get totalUnrealizedPnl => crossUnrealizedPnl + isolatedUnrealizedPnl;
@@ -129,6 +141,10 @@ final class AutoTradePosition {
     required this.unrealizedPnl,
     required this.liquidationPrice,
     required this.averageOpenPrice,
+    this.realizedPnl,
+    this.fee,
+    this.funding,
+    this.openedAt,
   });
 
   final String positionId;
@@ -142,6 +158,10 @@ final class AutoTradePosition {
   final double unrealizedPnl;
   final double liquidationPrice;
   final double averageOpenPrice;
+  final double? realizedPnl;
+  final double? fee;
+  final double? funding;
+  final DateTime? openedAt;
 }
 
 final class AutoTradeOrder {

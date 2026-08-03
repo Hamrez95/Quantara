@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 
 import '../domain/auto_trade_models.dart';
+import '../domain/trading_pnl_projection.dart';
+import 'bitunix_pnl_mapper.dart';
 import 'bitunix_request_signer.dart';
 
 final class BitunixPrivateApiClient {
@@ -55,6 +57,17 @@ final class BitunixPrivateApiClient {
         : const <Map<String, Object?>>[];
     final protectionOrders = <AutoTradeProtectionOrder>[];
     final protectionVerifications = <String, AutoTradeProtectionVerification>{};
+    final unrealizedByPosition = <String, ExchangeUnrealizedPnl>{
+      for (final position in positions)
+        position.positionId: ExchangeUnrealizedPnl(
+          positionId: position.positionId,
+          symbol: position.symbol,
+          value: position.unrealizedPnl,
+          realizedPnl: position.realizedPnl,
+          fee: position.fee,
+          funding: position.funding,
+        ),
+    };
 
     for (final position in positions) {
       final positionId = position.positionId.trim();
@@ -108,6 +121,58 @@ final class BitunixPrivateApiClient {
       }
     }
 
+    var settlementsAvailable = true;
+    var fillsAvailable = true;
+    var sourceVerified = true;
+    final pnlWarnings = <String>[];
+    List<ExchangePositionSettlement> settlements = const [];
+    List<ExchangePnlFill> fills = const [];
+    try {
+      final response = await _signedGet(
+        '/api/v1/futures/position/get_history_positions',
+        const {'limit': '100'},
+        credentials,
+      );
+      final parsed = BitunixPnlMapper.settlements(response['data']);
+      settlements = parsed.values;
+      sourceVerified = sourceVerified && parsed.verified;
+      if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
+    } on AutoTradeSafeException catch (error) {
+      settlementsAvailable = false;
+      pnlWarnings.add(error.message);
+    }
+    try {
+      final response = await _signedGet(
+        '/api/v1/futures/trade/get_history_trades',
+        const {'limit': '100'},
+        credentials,
+      );
+      final parsed = BitunixPnlMapper.fills(
+        response['data'],
+        openPositions: unrealizedByPosition.values,
+        settlements: settlements,
+      );
+      fills = parsed.values;
+      sourceVerified = sourceVerified && parsed.verified;
+      if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
+    } on AutoTradeSafeException catch (error) {
+      fillsAvailable = false;
+      sourceVerified = false;
+      pnlWarnings.add(error.message);
+    }
+    final pnlAsOf = _utcNow().toUtc();
+    final pnlProjection = TradingPnlProjection.reconcile(
+      currency: _string(account['marginCoin'], fallback: 'USDT'),
+      asOf: pnlAsOf,
+      unrealizedByPosition: unrealizedByPosition,
+      fills: fills,
+      settlements: settlements,
+      fillsAvailable: fillsAvailable,
+      settlementsAvailable: settlementsAvailable,
+      sourceVerified: sourceVerified,
+      warning: pnlWarnings.isEmpty ? null : pnlWarnings.toSet().join(' '),
+    );
+
     return AutoTradeAccountSnapshot(
       marginCoin: _string(account['marginCoin'], fallback: 'USDT'),
       available: _number(account['available']),
@@ -120,7 +185,8 @@ final class BitunixPrivateApiClient {
       orders: orderMaps.map(_orderFromJson).toList(growable: false),
       protectionOrders: List.unmodifiable(protectionOrders),
       protectionVerifications: Map.unmodifiable(protectionVerifications),
-      syncedAt: _utcNow().toUtc(),
+      pnlProjection: pnlProjection,
+      syncedAt: pnlAsOf,
     );
   }
 
@@ -214,6 +280,10 @@ final class BitunixPrivateApiClient {
         unrealizedPnl: _number(value['unrealizedPNL']),
         liquidationPrice: _number(value['liqPrice']),
         averageOpenPrice: _number(value['avgOpenPrice']),
+        realizedPnl: _optionalNumber(value['realizedPNL']),
+        fee: _optionalNumber(value['fee']),
+        funding: _optionalNumber(value['funding']),
+        openedAt: _timestamp(value['ctime']),
       );
 
   static AutoTradeOrder _orderFromJson(Map<String, Object?> value) =>
@@ -276,6 +346,21 @@ final class BitunixPrivateApiClient {
   static double _number(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double? _optionalNumber(Object? value) {
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString().trim() ?? '');
+    return parsed != null && parsed.isFinite ? parsed : null;
+  }
+
+  static DateTime? _timestamp(Object? value) {
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(parsed, isUtc: true);
   }
 
   static double? _optionalPositiveNumber(Object? value) {
