@@ -80,6 +80,8 @@ final class RealtimeMarketHealthSnapshot {
   const RealtimeMarketHealthSnapshot({
     required this.state,
     required this.configuredStreams,
+    this.activeStreams = 0,
+    this.quarantinedStreams = 0,
     required this.activeShards,
     required this.liveShards,
     required this.eventsReceived,
@@ -90,6 +92,7 @@ final class RealtimeMarketHealthSnapshot {
     required this.candidateEvaluations,
     required this.candidateCommits,
     required this.reconnectTransitions,
+    this.bootstrapFaults = 0,
     required this.malformedPayloadFaults,
     required this.backpressureFaults,
     required this.p95TransportLag,
@@ -101,6 +104,8 @@ final class RealtimeMarketHealthSnapshot {
 
   final RealtimeMarketRuntimeState state;
   final int configuredStreams;
+  final int activeStreams;
+  final int quarantinedStreams;
   final int activeShards;
   final int liveShards;
   final int eventsReceived;
@@ -111,6 +116,7 @@ final class RealtimeMarketHealthSnapshot {
   final int candidateEvaluations;
   final int candidateCommits;
   final int reconnectTransitions;
+  final int bootstrapFaults;
   final int malformedPayloadFaults;
   final int backpressureFaults;
   final Duration p95TransportLag;
@@ -121,6 +127,11 @@ final class RealtimeMarketHealthSnapshot {
 
   bool get discoveryHealthy =>
       state == RealtimeMarketRuntimeState.live &&
+      activeStreams > 0 &&
+      quarantinedStreams == 0 &&
       activeShards > 0 &&
       liveShards == activeShards;
+
+  bool get degraded =>
+      state == RealtimeMarketRuntimeState.live && quarantinedStreams > 0;
 }

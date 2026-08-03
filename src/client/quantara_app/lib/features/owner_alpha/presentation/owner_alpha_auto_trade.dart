@@ -400,12 +400,18 @@ class _LocalLiveTradeControlCardState
   @override
   Widget build(BuildContext context) {
     final status = widget.controller.status;
-    final running = status.isRunning;
+    final serviceActive = status.isRunning;
+    final entriesActive =
+        status.state == LocalLiveTradeState.running && status.entriesEnabled;
+    final canResumeEntries = status.canResumeEntries;
+    final starting = status.state == LocalLiveTradeState.starting;
     final breaker = status.state == LocalLiveTradeState.circuitBreaker;
     final color = breaker
         ? QuantaraColors.danger
-        : running
+        : entriesActive
         ? QuantaraColors.success
+        : serviceActive
+        ? QuantaraColors.warning
         : QuantaraColors.cyan;
     final localizedStatus = LocalLiveMessageLocalizer.localize(
       status.message,
@@ -426,8 +432,10 @@ class _LocalLiveTradeControlCardState
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  running
+                  entriesActive
                       ? Icons.play_circle_fill_rounded
+                      : serviceActive
+                      ? Icons.pause_circle_filled_rounded
                       : Icons.phone_android_rounded,
                   color: color,
                 ),
@@ -458,8 +466,10 @@ class _LocalLiveTradeControlCardState
               StatusPill(
                 label: _stateLabel(status.state),
                 color: color,
-                icon: running
+                icon: entriesActive
                     ? Icons.shield_rounded
+                    : serviceActive
+                    ? Icons.pause_circle_outline_rounded
                     : Icons.stop_circle_outlined,
               ),
             ],
@@ -491,6 +501,16 @@ class _LocalLiveTradeControlCardState
               ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
+          if (canResumeEntries) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'ورود جدید متوقف است و هیچ پوزیشن بازی برای مدیریت وجود ندارد. برای فعال‌سازی دوباره، دکمه «ازسرگیری ورود» را بزن و همه تأییدهای پول واقعی را دوباره انجام بده.',
+                'New entries are stopped and there is no open position to manage. Use Resume entries and repeat every real-money confirmation to arm entries again.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -528,9 +548,11 @@ class _LocalLiveTradeControlCardState
           ],
           AbsorbPointer(
             absorbing:
-                running || widget.controller.isBusy || !_preferencesLoaded,
+                serviceActive ||
+                widget.controller.isBusy ||
+                !_preferencesLoaded,
             child: Opacity(
-              opacity: running ? 0.60 : 1,
+              opacity: serviceActive ? 0.60 : 1,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -653,7 +675,11 @@ class _LocalLiveTradeControlCardState
                     foregroundColor: QuantaraColors.ink,
                     minimumSize: const Size.fromHeight(52),
                   ),
-                  onPressed: widget.controller.isBusy || running || breaker
+                  onPressed:
+                      widget.controller.isBusy ||
+                          starting ||
+                          breaker ||
+                          (serviceActive && !canResumeEntries)
                       ? null
                       : _confirmStart,
                   icon: widget.controller.isBusy
@@ -663,7 +689,9 @@ class _LocalLiveTradeControlCardState
                         )
                       : const Icon(Icons.play_arrow_rounded),
                   label: Text(
-                    _t('شروع ترید', 'Start trading'),
+                    canResumeEntries
+                        ? _t('ازسرگیری ورود', 'Resume entries')
+                        : _t('شروع ترید', 'Start trading'),
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -675,7 +703,7 @@ class _LocalLiveTradeControlCardState
                     foregroundColor: QuantaraColors.danger,
                     minimumSize: const Size.fromHeight(52),
                   ),
-                  onPressed: widget.controller.isBusy || !running
+                  onPressed: widget.controller.isBusy || !serviceActive
                       ? null
                       : _confirmStop,
                   icon: const Icon(Icons.stop_circle_outlined),
