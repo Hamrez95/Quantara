@@ -28,7 +28,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.44.8'
-  RC_VERSION: 1.2.0-rc.1
+  RC_VERSION: 1.2.0-rc.2
 
 jobs:
   windows:
