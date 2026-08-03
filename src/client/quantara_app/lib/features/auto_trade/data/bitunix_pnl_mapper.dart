@@ -122,13 +122,6 @@ final class BitunixPnlMapper {
     required List<ExchangeUnrealizedPnl> openPositions,
     required List<ExchangePositionSettlement> settlements,
   }) {
-    final openMatches = openPositions
-        .where((item) => item.symbol.toUpperCase() == symbol)
-        .map((item) => item.positionId)
-        .where((item) => item.trim().isNotEmpty)
-        .toSet();
-    if (openMatches.length == 1) return openMatches.single;
-
     final at = occurredAt.toUtc();
     final closedMatches = settlements
         .where((item) {
@@ -141,6 +134,14 @@ final class BitunixPnlMapper {
         .where((item) => item.isNotEmpty)
         .toSet();
     if (closedMatches.length == 1) return closedMatches.single;
+    if (closedMatches.length > 1) return null;
+
+    final openMatches = openPositions
+        .where((item) => item.symbol.toUpperCase() == symbol)
+        .map((item) => item.positionId)
+        .where((item) => item.trim().isNotEmpty)
+        .toSet();
+    if (openMatches.length == 1) return openMatches.single;
     return null;
   }
 
