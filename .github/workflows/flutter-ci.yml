@@ -34,7 +34,8 @@ env:
   FLUTTER_VERSION: '3.44.8'
   ANDROID_PACKAGE: com.quantara.quantara_app.alpha
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  PREVIEW_ARTIFACT: quantara-android-1.0.0-preview
+  RC_VERSION: 1.2.0-rc.2
+  ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.2
 
 jobs:
   flutter:
@@ -88,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics-1.0.0
+          name: flutter-diagnostics-${{ env.RC_VERSION }}
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
@@ -100,7 +101,7 @@ jobs:
           flutter build web --release
           --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
 
-      - name: Compile API-configured Android preview
+      - name: Compile API-configured Android RC
         run: >-
           flutter build apk --release
           --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
@@ -108,10 +109,10 @@ jobs:
       - name: Build offline-first web PWA
         run: flutter build web --release
 
-      - name: Build universal Android preview APK
+      - name: Build universal Android RC APK
         run: flutter build apk --release
 
-      - name: Verify preview identity and manifest safety declarations
+      - name: Verify RC identity and manifest safety declarations
         shell: bash
         run: |
           set -euo pipefail
@@ -131,7 +132,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-merged-manifest-1.0.0-preview
+          name: android-merged-manifest-${{ env.RC_VERSION }}
           path: src/client/quantara_app/merged-manifest.xml
           if-no-files-found: ignore
           retention-days: 14
@@ -144,7 +145,7 @@ jobs:
           test -x "$zipalign_path"
           "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Build ABI-split Android preview APKs
+      - name: Build ABI-split Android RC APKs
         run: flutter build apk --release --split-per-abi
 
       - name: Verify arm64 APK 16KB ZIP alignment
@@ -155,18 +156,18 @@ jobs:
           test -x "$zipalign_path"
           "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 
-      - name: Upload web preview
+      - name: Upload PWA release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-1.0.0-preview
+          name: quantara-pwa-${{ env.RC_VERSION }}
           path: src/client/quantara_app/build/web
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
 
-      - name: Upload Android 1.0 preview candidate
+      - name: Upload Android release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PREVIEW_ARTIFACT }}
+          name: ${{ env.ANDROID_RC_ARTIFACT }}
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -186,10 +187,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Android preview candidate
+      - name: Download Android release candidate
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.PREVIEW_ARTIFACT }}
+          name: ${{ env.ANDROID_RC_ARTIFACT }}
           path: apk
 
       - name: Enable KVM group permissions
@@ -212,7 +213,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics-1.0.0-preview
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-${{ env.RC_VERSION }}
           path: |
             android-start.txt
             android-pid.txt

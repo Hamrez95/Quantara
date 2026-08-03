@@ -1,4 +1,5 @@
 import '../../market_analysis/domain/market_chart_models.dart';
+import '../../market_analysis/domain/market_regime_models.dart';
 
 enum TradeDirection { long, short, wait }
 
@@ -94,6 +95,7 @@ final class TradeIdea {
     this.rejectionReason = SetupRejectionReason.none,
     this.strategy = AnalysisStrategy.structureZones,
     this.strategyVersion = '1.1',
+    this.marketRegime = MarketRegime.transition,
   });
 
   final String symbol;
@@ -120,10 +122,12 @@ final class TradeIdea {
   final SetupRejectionReason rejectionReason;
   final AnalysisStrategy strategy;
   final String strategyVersion;
+  final MarketRegime marketRegime;
 
   DateTime get createdAt => candleClosedAt;
 
   Duration get validityWindow => switch (timeframe) {
+    '5m' => const Duration(minutes: 15),
     '15m' => const Duration(minutes: 45),
     '1h' => const Duration(hours: 3),
     '4h' => const Duration(hours: 12),
@@ -326,6 +330,9 @@ final class SignalJournalEntry {
     required this.selectedLeverage,
     required this.summary,
     required this.invalidation,
+    this.confidencePercent = 0,
+    this.riskReward,
+    this.marketRegime = MarketRegime.transition,
     this.sizingCapital = 0,
     this.outcome = SignalOutcome.pendingEntry,
     this.highestTargetHit = 0,
@@ -363,6 +370,9 @@ final class SignalJournalEntry {
     selectedLeverage: idea.recommendedLeverage!,
     summary: idea.summary,
     invalidation: idea.invalidation,
+    confidencePercent: idea.confidencePercent,
+    riskReward: idea.riskReward,
+    marketRegime: idea.marketRegime,
     sizingCapital: sizingCapital,
   );
 
@@ -387,6 +397,9 @@ final class SignalJournalEntry {
   final int selectedLeverage;
   final String summary;
   final String invalidation;
+  final int confidencePercent;
+  final double? riskReward;
+  final MarketRegime marketRegime;
   final double sizingCapital;
   final SignalOutcome outcome;
   final int highestTargetHit;
@@ -460,6 +473,9 @@ final class SignalJournalEntry {
     selectedLeverage: selectedLeverage ?? this.selectedLeverage,
     summary: summary,
     invalidation: invalidation,
+    confidencePercent: confidencePercent,
+    riskReward: riskReward,
+    marketRegime: marketRegime,
     sizingCapital: sizingCapital,
     outcome: outcome ?? this.outcome,
     highestTargetHit: highestTargetHit ?? this.highestTargetHit,
@@ -494,6 +510,9 @@ final class SignalJournalEntry {
     'selectedLeverage': selectedLeverage,
     'summary': summary,
     'invalidation': invalidation,
+    'confidencePercent': confidencePercent,
+    'riskReward': riskReward,
+    'marketRegime': marketRegime.name,
     'sizingCapital': sizingCapital,
     'outcome': outcome.name,
     'highestTargetHit': highestTargetHit,
@@ -564,6 +583,14 @@ final class SignalJournalEntry {
             .toInt(),
         summary: value['summary'] as String,
         invalidation: value['invalidation'] as String,
+        confidencePercent: ((value['confidencePercent'] as num?)?.toInt() ?? 0)
+            .clamp(0, 100)
+            .toInt(),
+        riskReward: (value['riskReward'] as num?)?.toDouble(),
+        marketRegime: MarketRegime.values.firstWhere(
+          (item) => item.name == value['marketRegime'],
+          orElse: () => MarketRegime.transition,
+        ),
         sizingCapital: (value['sizingCapital'] as num?)?.toDouble() ?? 0,
         outcome: outcome,
         highestTargetHit: ((value['highestTargetHit'] as num?)?.toInt() ?? 0)

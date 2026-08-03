@@ -1,0 +1,67 @@
+name: Windows desktop build
+
+on:
+  push:
+    branches:
+      - dev
+      - 'feat/**'
+      - 'release/**'
+    paths:
+      - 'src/client/quantara_app/**'
+      - 'scripts/build-windows.ps1'
+      - '.github/workflows/windows-desktop-ci.yml'
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'src/client/quantara_app/**'
+      - 'scripts/build-windows.ps1'
+      - '.github/workflows/windows-desktop-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.44.8'
+  RC_VERSION: 1.2.0-rc.2
+
+jobs:
+  windows:
+    name: Generate, test, and compile Windows desktop
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Display tool versions
+        shell: pwsh
+        run: |
+          flutter --version
+          dart --version
+          cmake --version
+
+      - name: Build native Windows release candidate
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner -PackageZip
+
+      - name: Upload Windows release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-windows-${{ env.RC_VERSION }}
+          path: dist/windows/quantara-windows-release.zip
+          if-no-files-found: error
+          retention-days: 14
