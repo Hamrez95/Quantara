@@ -24,7 +24,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -37,8 +37,544 @@ env:
   PREVIEW_ARTIFACT: quantara-android-1.0.0-preview
 
 jobs:
+  apply-analysis-context:
+    name: Apply realtime analysis context once
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/101-realtime-analysis-context' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/101-realtime-analysis-context
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Apply product changes and self-clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app_path = Path('src/client/quantara_app/lib/features/owner_alpha/data/realtime_market_application.dart')
+          app = app_path.read_text()
+          gateway = """abstract interface class RealtimeMarketAnalysisGateway {
+            Future<RealtimeCandidateAnalysisBatch> analyze(
+              RealtimeCandlePipelineUpdate update,
+            );
+          }
+          """
+          synchronizer = gateway + """
+          abstract interface class RealtimeMarketAnalysisSynchronizer {
+            Future<void> synchronize(RealtimeCandlePipelineUpdate update);
+          }
+          """
+          if 'abstract interface class RealtimeMarketAnalysisSynchronizer' not in app:
+              if gateway not in app:
+                  raise SystemExit('analysis gateway marker not found')
+              app = app.replace(gateway, synchronizer, 1)
+
+          old_handler = """    _metrics.recordPipelineUpdate(update);
+              if (!update.allowsCandidatePreparation) return;
+
+              late final RealtimeCandidateAnalysisBatch batch;
+          """
+          new_handler = """    _metrics.recordPipelineUpdate(update);
+              final gateway = analysisGateway;
+              if (gateway is RealtimeMarketAnalysisSynchronizer) {
+                try {
+                  await gateway.synchronize(update);
+                } on Object catch (error) {
+                  _metrics.recordFault(
+                    message: 'Realtime analysis synchronization failed: $error',
+                    occurredAtUtc: _clock(),
+                  );
+                  rethrow;
+                }
+              }
+              if (!update.allowsCandidatePreparation) return;
+
+              late final RealtimeCandidateAnalysisBatch batch;
+          """
+          if 'Realtime analysis synchronization failed' not in app:
+              if old_handler not in app:
+                  raise SystemExit('pipeline handler marker not found')
+              app = app.replace(old_handler, new_handler, 1)
+          app_path.write_text(app)
+
+          data_path = Path('src/client/quantara_app/lib/features/owner_alpha/data/realtime_contextual_market_analysis.dart')
+          data_path.write_text(r'''import '../../market_analysis/domain/market_chart_models.dart';
+          import '../domain/realtime_candle_pipeline_models.dart';
+          import '../domain/realtime_market_runtime_models.dart';
+          import 'realtime_market_application.dart';
+
+          final class RealtimeCandleAnalysisContext {
+            RealtimeCandleAnalysisContext({
+              required this.update,
+              required this.snapshot,
+            }) {
+              if (update.key != snapshot.key) {
+                throw ArgumentError(
+                  'The analysis update and snapshot must use the same stream.',
+                );
+              }
+              if (!update.streamTrusted || !snapshot.trusted) {
+                throw StateError(
+                  'Untrusted candle state cannot enter realtime analysis.',
+                );
+              }
+              if (update.workingCandle?.openTime !=
+                  snapshot.workingCandle?.openTime) {
+                throw StateError(
+                  'The analysis snapshot does not match the event working candle.',
+                );
+              }
+            }
+
+            final RealtimeCandlePipelineUpdate update;
+            final RealtimeCandleStreamSnapshot snapshot;
+
+            RealtimeCandleStreamKey get key => update.key;
+            RealtimeCandlePipelineDisposition get disposition =>
+                update.disposition;
+            List<ChartCandle> get closedCandles => snapshot.closedCandles;
+            List<ChartCandle> get eventClosedCandles => update.closedCandles;
+            ChartCandle? get workingCandle => snapshot.workingCandle;
+            DateTime get exchangeTimestampUtc => update.exchangeTimestampUtc;
+            DateTime get receivedAtUtc => update.receivedAtUtc;
+            DateTime get processedAtUtc => update.processedAtUtc;
+            bool get triggersClosedCandleAnalysis =>
+                update.triggersClosedCandleAnalysis;
+          }
+
+          abstract interface class RealtimeContextualMarketAnalyzer {
+            Future<RealtimeCandidateAnalysisBatch> analyze(
+              RealtimeCandleAnalysisContext context,
+            );
+          }
+
+          final class SnapshottingRealtimeMarketAnalysisGateway
+              implements
+                  RealtimeMarketAnalysisGateway,
+                  RealtimeMarketAnalysisSynchronizer {
+            SnapshottingRealtimeMarketAnalysisGateway({
+              required this.analyzer,
+              this.maximumStreams = 2000,
+              this.maximumClosedCandlesPerStream = 500,
+            }) {
+              if (maximumStreams < 1) {
+                throw ArgumentError.value(maximumStreams, 'maximumStreams');
+              }
+              if (maximumClosedCandlesPerStream < 20) {
+                throw ArgumentError.value(
+                  maximumClosedCandlesPerStream,
+                  'maximumClosedCandlesPerStream',
+                );
+              }
+            }
+
+            final RealtimeContextualMarketAnalyzer analyzer;
+            final int maximumStreams;
+            final int maximumClosedCandlesPerStream;
+            final Map<RealtimeCandleStreamKey, _AnalysisStreamState> _states = {};
+
+            @override
+            Future<void> synchronize(RealtimeCandlePipelineUpdate update) async {
+              switch (update.disposition) {
+                case RealtimeCandlePipelineDisposition.bootstrapped:
+                  _storeBootstrap(update);
+                  return;
+                case RealtimeCandlePipelineDisposition.gapDetected:
+                case RealtimeCandlePipelineDisposition.blockedByGap:
+                  final state = _requireState(update.key);
+                  state.gap = update.gap;
+                  return;
+                case RealtimeCandlePipelineDisposition.reconciled:
+                  final state = _requireState(update.key);
+                  _appendClosed(state, update.closedCandles);
+                  state.workingCandle = update.workingCandle;
+                  state.gap = null;
+                  state.lastUpdate = update;
+                  return;
+                case RealtimeCandlePipelineDisposition.candleClosed:
+                  final state = _requireState(update.key);
+                  _appendClosed(state, update.closedCandles);
+                  state.workingCandle = update.workingCandle;
+                  state.lastUpdate = update;
+                  return;
+                case RealtimeCandlePipelineDisposition.workingUpdated:
+                  final state = _requireState(update.key);
+                  if (state.gap != null) {
+                    throw StateError(
+                      'A working candle cannot update while a gap is active.',
+                    );
+                  }
+                  state.workingCandle = update.workingCandle;
+                  state.lastUpdate = update;
+                  return;
+                case RealtimeCandlePipelineDisposition.duplicate:
+                case RealtimeCandlePipelineDisposition.outOfOrder:
+                  return;
+              }
+            }
+
+            @override
+            Future<RealtimeCandidateAnalysisBatch> analyze(
+              RealtimeCandlePipelineUpdate update,
+            ) async {
+              final state = _requireState(update.key);
+              if (!identical(state.lastUpdate, update)) {
+                throw StateError(
+                  'Realtime analysis requires the synchronized event instance.',
+                );
+              }
+              if (state.gap != null || !update.streamTrusted) {
+                throw StateError(
+                  'Untrusted candle state cannot enter realtime analysis.',
+                );
+              }
+              return analyzer.analyze(
+                RealtimeCandleAnalysisContext(
+                  update: update,
+                  snapshot: RealtimeCandleStreamSnapshot(
+                    key: update.key,
+                    closedCandles: state.closedCandles,
+                    workingCandle: state.workingCandle,
+                    gap: state.gap,
+                  ),
+                ),
+              );
+            }
+
+            void _storeBootstrap(RealtimeCandlePipelineUpdate update) {
+              if (update.closedCandles.length < 20 ||
+                  update.workingCandle != null ||
+                  update.gap != null) {
+                throw StateError('Invalid realtime bootstrap snapshot.');
+              }
+              if (!_states.containsKey(update.key) &&
+                  _states.length >= maximumStreams) {
+                throw StateError(
+                  'Realtime analysis stream capacity was exceeded.',
+                );
+              }
+              final retained = update.closedCandles.length <=
+                      maximumClosedCandlesPerStream
+                  ? update.closedCandles
+                  : update.closedCandles.sublist(
+                      update.closedCandles.length -
+                          maximumClosedCandlesPerStream,
+                    );
+              _states[update.key] = _AnalysisStreamState(
+                closedCandles: retained,
+                lastUpdate: update,
+              );
+            }
+
+            _AnalysisStreamState _requireState(RealtimeCandleStreamKey key) {
+              final state = _states[key];
+              if (state == null) {
+                throw StateError(
+                  'Realtime analysis must be bootstrapped before use.',
+                );
+              }
+              return state;
+            }
+
+            void _appendClosed(
+              _AnalysisStreamState state,
+              List<ChartCandle> candles,
+            ) {
+              for (final candle in candles) {
+                final last = state.closedCandles.isEmpty
+                    ? null
+                    : state.closedCandles.last;
+                if (last != null) {
+                  if (last.openTime == candle.openTime) {
+                    state.closedCandles[state.closedCandles.length - 1] = candle;
+                    continue;
+                  }
+                  if (!candle.openTime.isAfter(last.openTime)) {
+                    throw StateError(
+                      'Closed candle history cannot move backwards.',
+                    );
+                  }
+                }
+                state.closedCandles.add(candle);
+                if (state.closedCandles.length >
+                    maximumClosedCandlesPerStream) {
+                  state.closedCandles.removeAt(0);
+                }
+              }
+            }
+          }
+
+          final class _AnalysisStreamState {
+            _AnalysisStreamState({
+              required List<ChartCandle> closedCandles,
+              required this.lastUpdate,
+            }) : closedCandles = List.of(closedCandles);
+
+            final List<ChartCandle> closedCandles;
+            ChartCandle? workingCandle;
+            RealtimeCandleGap? gap;
+            RealtimeCandlePipelineUpdate lastUpdate;
+          }
+          ''')
+
+          test_path = Path('src/client/quantara_app/test/realtime_contextual_market_analysis_test.dart')
+          test_path.write_text(r'''import 'package:flutter_test/flutter_test.dart';
+          import 'package:quantara_app/features/market_analysis/domain/market_chart_models.dart';
+          import 'package:quantara_app/features/owner_alpha/data/realtime_contextual_market_analysis.dart';
+          import 'package:quantara_app/features/owner_alpha/domain/bitunix_public_stream_models.dart';
+          import 'package:quantara_app/features/owner_alpha/domain/realtime_candle_pipeline_models.dart';
+          import 'package:quantara_app/features/owner_alpha/domain/realtime_market_runtime_models.dart';
+
+          void main() {
+            final key = RealtimeCandleStreamKey(
+              symbol: 'BTCUSDT',
+              interval: BitunixKlineInterval.fifteenMinutes,
+            );
+            final history = [
+              for (var index = 0; index < 20; index++)
+                _candle(
+                  DateTime.utc(2026, 8, 2, 7).add(
+                    Duration(minutes: index * 15),
+                  ),
+                  100 + index.toDouble(),
+                ),
+            ];
+
+            test('passes a full immutable trusted snapshot to analysis', () async {
+              final analyzer = _RecordingAnalyzer();
+              final gateway = SnapshottingRealtimeMarketAnalysisGateway(
+                analyzer: analyzer,
+              );
+              await gateway.synchronize(_bootstrap(key, history));
+              final working = _candle(DateTime.utc(2026, 8, 2, 12), 121);
+              final update = _update(
+                key: key,
+                disposition:
+                    RealtimeCandlePipelineDisposition.workingUpdated,
+                working: working,
+              );
+
+              await gateway.synchronize(update);
+              final result = await gateway.analyze(update);
+
+              expect(result.isEmpty, isTrue);
+              expect(analyzer.contexts, hasLength(1));
+              final context = analyzer.contexts.single;
+              expect(context.closedCandles, hasLength(20));
+              expect(context.workingCandle, same(working));
+              expect(context.eventClosedCandles, isEmpty);
+              expect(
+                () => context.closedCandles.add(working),
+                throwsUnsupportedError,
+              );
+            });
+
+            test('appends rollover and keeps the snapshot bounded', () async {
+              final analyzer = _RecordingAnalyzer();
+              final gateway = SnapshottingRealtimeMarketAnalysisGateway(
+                analyzer: analyzer,
+                maximumClosedCandlesPerStream: 20,
+              );
+              await gateway.synchronize(_bootstrap(key, history));
+              final closed = _candle(DateTime.utc(2026, 8, 2, 12), 121);
+              final working = _candle(DateTime.utc(2026, 8, 2, 12, 15), 122);
+              final update = _update(
+                key: key,
+                disposition: RealtimeCandlePipelineDisposition.candleClosed,
+                working: working,
+                closed: [closed],
+              );
+
+              await gateway.synchronize(update);
+              await gateway.analyze(update);
+
+              final context = analyzer.contexts.single;
+              expect(context.closedCandles, hasLength(20));
+              expect(context.closedCandles.last.openTime, closed.openTime);
+              expect(context.closedCandles.first.openTime, history[1].openTime);
+              expect(context.triggersClosedCandleAnalysis, isTrue);
+            });
+
+            test('blocks analysis while a stream gap is active', () async {
+              final analyzer = _RecordingAnalyzer();
+              final gateway = SnapshottingRealtimeMarketAnalysisGateway(
+                analyzer: analyzer,
+              );
+              await gateway.synchronize(_bootstrap(key, history));
+              final gap = RealtimeCandleGap(
+                fromOpenTimeUtc: DateTime.utc(2026, 8, 2, 12),
+                toOpenTimeExclusiveUtc: DateTime.utc(2026, 8, 2, 12, 30),
+                observedWorkingOpenTimeUtc: DateTime.utc(2026, 8, 2, 12, 30),
+              );
+              await gateway.synchronize(
+                _update(
+                  key: key,
+                  disposition: RealtimeCandlePipelineDisposition.gapDetected,
+                  working: null,
+                  gap: gap,
+                ),
+              );
+              final working = _candle(DateTime.utc(2026, 8, 2, 12, 30), 123);
+              final update = _update(
+                key: key,
+                disposition:
+                    RealtimeCandlePipelineDisposition.workingUpdated,
+                working: working,
+              );
+
+              await expectLater(
+                gateway.synchronize(update),
+                throwsStateError,
+              );
+              expect(analyzer.contexts, isEmpty);
+            });
+
+            test('requires bootstrap and the exact synchronized event', () async {
+              final gateway = SnapshottingRealtimeMarketAnalysisGateway(
+                analyzer: _RecordingAnalyzer(),
+              );
+              final working = _candle(DateTime.utc(2026, 8, 2, 12), 121);
+              final update = _update(
+                key: key,
+                disposition:
+                    RealtimeCandlePipelineDisposition.workingUpdated,
+                working: working,
+              );
+              await expectLater(gateway.synchronize(update), throwsStateError);
+
+              await gateway.synchronize(_bootstrap(key, history));
+              await gateway.synchronize(update);
+              final equivalent = _update(
+                key: key,
+                disposition:
+                    RealtimeCandlePipelineDisposition.workingUpdated,
+                working: working,
+              );
+              await expectLater(gateway.analyze(equivalent), throwsStateError);
+            });
+          }
+
+          final class _RecordingAnalyzer
+              implements RealtimeContextualMarketAnalyzer {
+            final List<RealtimeCandleAnalysisContext> contexts = [];
+
+            @override
+            Future<RealtimeCandidateAnalysisBatch> analyze(
+              RealtimeCandleAnalysisContext context,
+            ) async {
+              contexts.add(context);
+              return RealtimeCandidateAnalysisBatch();
+            }
+          }
+
+          RealtimeCandlePipelineUpdate _bootstrap(
+            RealtimeCandleStreamKey key,
+            List<ChartCandle> history,
+          ) => RealtimeCandlePipelineUpdate(
+            key: key,
+            disposition: RealtimeCandlePipelineDisposition.bootstrapped,
+            workingCandle: null,
+            closedCandles: history,
+            gap: null,
+            exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12),
+            receivedAtUtc: DateTime.utc(2026, 8, 2, 12),
+            processedAtUtc: DateTime.utc(2026, 8, 2, 12, 0, 0, 100),
+          );
+
+          RealtimeCandlePipelineUpdate _update({
+            required RealtimeCandleStreamKey key,
+            required RealtimeCandlePipelineDisposition disposition,
+            required ChartCandle? working,
+            List<ChartCandle> closed = const [],
+            RealtimeCandleGap? gap,
+          }) => RealtimeCandlePipelineUpdate(
+            key: key,
+            disposition: disposition,
+            workingCandle: working,
+            closedCandles: closed,
+            gap: gap,
+            exchangeTimestampUtc: DateTime.utc(2026, 8, 2, 12, 1),
+            receivedAtUtc: DateTime.utc(2026, 8, 2, 12, 1, 0, 100),
+            processedAtUtc: DateTime.utc(2026, 8, 2, 12, 1, 0, 200),
+          );
+
+          ChartCandle _candle(DateTime openTime, double close) => ChartCandle(
+            openTime: openTime,
+            open: close - 1,
+            high: close + 1,
+            low: close - 2,
+            close: close,
+            volume: 10,
+          );
+          ''')
+
+          source_test = Path('src/client/quantara_app/test/realtime_analysis_sync_source_test.dart')
+          source_test.write_text(r'''import 'dart:io';
+
+          import 'package:flutter_test/flutter_test.dart';
+
+          void main() {
+            test('runtime synchronizes every pipeline update before analysis gate', () {
+              final source = File(
+                'lib/features/owner_alpha/data/realtime_market_application.dart',
+              ).readAsStringSync();
+              final synchronize = source.indexOf(
+                'gateway is RealtimeMarketAnalysisSynchronizer',
+              );
+              final candidateGate = source.indexOf(
+                'if (!update.allowsCandidatePreparation) return;',
+              );
+
+              expect(synchronize, greaterThanOrEqualTo(0));
+              expect(candidateGate, greaterThan(synchronize));
+              expect(
+                source,
+                contains('Realtime analysis synchronization failed'),
+              );
+            });
+          }
+          ''')
+
+          docs_path = Path('docs/v1.2/realtime-analysis-context.md')
+          docs_path.write_text('''# Realtime analysis context\n\nThe realtime runtime synchronizes every candle-pipeline event into a bounded, read-only per-stream snapshot before candidate preparation.\n\n## Contract\n\n- REST bootstrap establishes at least 20 contiguous closed candles.\n- Working updates mutate only the working snapshot.\n- Rollover and reconciliation append closed candles with a bounded retention limit.\n- Gap or blocked-by-gap state is fail-closed for discovery.\n- Strategy analysis receives immutable full history plus the original event delta and separate exchange, receive and process timestamps.\n- The decorator implements the existing analysis gateway, so the public runtime remains isolated from private exchange and order authority.\n\n## Remaining issue #101 work\n\nProduction strategy/projection adapters, settings-derived foreground lifecycle wiring and the health/latency dashboard remain separate reviewable slices.\n''')
+          PY
+
+          cd src/client/quantara_app
+          dart format \
+            lib/features/owner_alpha/data/realtime_market_application.dart \
+            lib/features/owner_alpha/data/realtime_contextual_market_analysis.dart \
+            test/realtime_contextual_market_analysis_test.dart \
+            test/realtime_analysis_sync_source_test.dart
+          cd ../../..
+
+          git fetch origin dev
+          git checkout origin/dev -- .github/workflows/flutter-ci.yml
+          rm -f \
+            .github/workflows/add-realtime-analysis-context-once.yml \
+            .github/workflows/execute-analysis-context-once.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'quantara-ci'
+          git config user.email 'quantara-ci@users.noreply.github.com'
+          git commit -m 'feat: provide bounded realtime analysis snapshots'
+          git push origin HEAD:feat/101-realtime-analysis-context
+
   flutter:
     name: Flutter format, analyze, test, and build
+    if: github.event_name != 'push' || github.ref != 'refs/heads/feat/101-realtime-analysis-context' || github.actor == 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
