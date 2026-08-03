@@ -1,0 +1,69 @@
+name: Temporary Issue 139 patch
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Verify and apply implementation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -c < .github/temporary/issue139.patch.gz.b64)" -eq 9872
+          echo '3839843bf9d1edf0b713c5716bd7d7f471f66b35bb11cff43aac7986a54595df  .github/temporary/issue139.patch.gz.b64' | sha256sum --check
+          base64 --decode .github/temporary/issue139.patch.gz.b64 | gzip --decompress > /tmp/issue139.patch
+          echo 'fb8cfd63e105ec9ee1f8dbbf124e3b0c0a24eddfa9e73b338c2737f5e826059e  /tmp/issue139.patch' | sha256sum --check
+          git apply --check /tmp/issue139.patch
+          git apply /tmp/issue139.patch
+          rm .github/workflows/temporary-issue139-patch.yml
+          rm .github/workflows/temporary-issue139-source-export.yml
+          rm -rf .github/temporary
+
+      - name: Format, analyze, and run focused reconciliation tests
+        working-directory: src/client/quantara_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib test
+          flutter analyze --fatal-infos
+          flutter test --reporter expanded \
+            test/trading_pnl_projection_test.dart \
+            test/bitunix_pnl_reconciliation_test.dart \
+            test/bitunix_position_protection_reconciliation_test.dart \
+            test/auto_trade_account_reconciliation_controller_test.dart \
+            test/local_live_trade_models_test.dart \
+            test/private_account_reconciliation_test.dart \
+            test/auto_trade_readonly_source_test.dart
+
+      - name: Commit formatted implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Quantara Release Bot'
+          git config user.email 'quantara-release-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: reconcile authoritative exchange PnL projection'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
