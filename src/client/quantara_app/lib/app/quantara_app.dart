@@ -190,21 +190,29 @@ final class _QuantaraHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return Column(
       children: [
-        child,
-        PositionedDirectional(
-          end: 16,
-          bottom: 20,
+        Material(
+          color: Theme.of(context).colorScheme.surfaceContainer,
           child: SafeArea(
-            child: FloatingActionButton.extended(
-              heroTag: 'portfolio-risk-launcher',
-              onPressed: () => _showPortfolioRisk(context),
-              icon: const Icon(Icons.account_balance_wallet_outlined),
-              label: Text(_persian ? 'ریسک پرتفوی' : 'Portfolio risk'),
+            bottom: false,
+            child: SizedBox(
+              height: 44,
+              child: Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton.icon(
+                  onPressed: () => _showPortfolioRisk(context),
+                  icon: const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    size: 20,
+                  ),
+                  label: Text(_persian ? 'ریسک پرتفوی' : 'Portfolio risk'),
+                ),
+              ),
             ),
           ),
         ),
+        Expanded(child: child),
       ],
     );
   }
