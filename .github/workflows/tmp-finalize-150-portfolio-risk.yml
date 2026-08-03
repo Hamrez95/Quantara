@@ -1,0 +1,166 @@
+name: Temporary finalize issue 150 portfolio risk
+
+on:
+  push:
+    branches:
+      - feat/150-portfolio-risk-budget
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/150-portfolio-risk-budget
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Apply reviewed composition fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          owner = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          owner_text = owner.read_text()
+          import_anchor = "import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';\n"
+          portfolio_import = "import '../../portfolio_risk/presentation/portfolio_risk_panel.dart';\n"
+          if portfolio_import not in owner_text:
+              if import_anchor not in owner_text:
+                  raise SystemExit('Owner Alpha import anchor changed.')
+              owner_text = owner_text.replace(import_anchor, import_anchor + portfolio_import)
+          owner.write_text(owner_text)
+
+          auto = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart')
+          auto_text = auto.read_text()
+          old = """            _LocalLiveTradeControlCard(
+              controller: _localController,
+              accountController: widget.controller,
+              analysisController: widget.analysisController,
+            ),
+            const SizedBox(height: 16),
+            _LockedServerModeCard(
+"""
+          new = """            _LocalLiveTradeControlCard(
+              controller: _localController,
+              accountController: widget.controller,
+              analysisController: widget.analysisController,
+            ),
+            const SizedBox(height: 16),
+            const PortfolioRiskPanel(),
+            const SizedBox(height: 16),
+            _LockedServerModeCard(
+"""
+          if new not in auto_text:
+              if old not in auto_text:
+                  raise SystemExit('Auto Trade panel anchor changed.')
+              auto_text = auto_text.replace(old, new)
+          auto.write_text(auto_text)
+
+          coordinator = Path('src/client/quantara_app/lib/features/portfolio_risk/application/portfolio_risk_coordinator.dart')
+          coordinator_text = coordinator.read_text()
+          coordinator_text = coordinator_text.replace(
+              'snapshot: ledger.snapshot(_withLedgerReservations(account, ledger)),',
+              'snapshot: ledger.snapshot(account),',
+          )
+          coordinator_text = coordinator_text.replace(
+              'return ledger.snapshot(_withLedgerReservations(account, ledger));',
+              'return ledger.snapshot(account);',
+          )
+          coordinator.write_text(coordinator_text)
+
+          models = Path('src/client/quantara_app/lib/features/portfolio_risk/domain/portfolio_risk_models.dart')
+          models_text = models.read_text()
+          old_math = """    final maximumLoss = PortfolioRiskMath.maximumLoss(
+      side: candidate.side,
+      entryPrice: candidate.entryPrice,
+      stopPrice: candidate.stopPrice,
+      quantity: candidate.plannedQuantity,
+      contractMultiplier: candidate.contractMultiplier,
+      entryFeeRate: candidate.entryFeeRate,
+      exitFeeRate: candidate.exitFeeRate,
+      slippageRate: candidate.slippageRate,
+      fundingReserve: candidate.fundingReserve,
+    );
+"""
+          new_math = """    late final double maximumLoss;
+    try {
+      maximumLoss = PortfolioRiskMath.maximumLoss(
+        side: candidate.side,
+        entryPrice: candidate.entryPrice,
+        stopPrice: candidate.stopPrice,
+        quantity: candidate.plannedQuantity,
+        contractMultiplier: candidate.contractMultiplier,
+        entryFeeRate: candidate.entryFeeRate,
+        exitFeeRate: candidate.exitFeeRate,
+        slippageRate: candidate.slippageRate,
+        fundingReserve: candidate.fundingReserve,
+      );
+    } on FormatException {
+      return blocked(PortfolioEntryBlockReason.invalidInput);
+    }
+"""
+          if new_math not in models_text:
+              if old_math not in models_text:
+                  raise SystemExit('Portfolio risk math anchor changed.')
+              models_text = models_text.replace(old_math, new_math)
+          models.write_text(models_text)
+          PY
+      - name: Restore locked packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get --enforce-lockfile
+      - name: Format reviewed files
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/portfolio_risk
+          lib/features/owner_alpha/presentation/owner_alpha_page.dart
+          lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart
+          test/portfolio_risk_policy_test.dart
+          test/portfolio_risk_panel_test.dart
+          test/portfolio_risk_source_safety_test.dart
+      - name: Analyze portfolio risk slice
+        working-directory: src/client/quantara_app
+        run: >-
+          flutter analyze --fatal-infos
+          lib/features/portfolio_risk
+          test/portfolio_risk_policy_test.dart
+          test/portfolio_risk_panel_test.dart
+          test/portfolio_risk_source_safety_test.dart
+      - name: Run focused portfolio tests
+        working-directory: src/client/quantara_app
+        run: >-
+          flutter test --reporter expanded
+          test/portfolio_risk_policy_test.dart
+          test/portfolio_risk_panel_test.dart
+          test/portfolio_risk_source_safety_test.dart
+      - name: Commit finalized slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            src/client/quantara_app/lib/features/portfolio_risk \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart \
+            src/client/quantara_app/test/portfolio_risk_policy_test.dart \
+            src/client/quantara_app/test/portfolio_risk_panel_test.dart \
+            src/client/quantara_app/test/portfolio_risk_source_safety_test.dart
+          if git diff --cached --quiet; then
+            echo 'Portfolio risk slice is already finalized.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(portfolio-risk): finalize safe simulation slice'
+          git push origin HEAD:feat/150-portfolio-risk-budget
