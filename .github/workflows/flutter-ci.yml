@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - feat/150-portfolio-risk-budget
+  pull_request:
+    branches:
+      - dev
 
 permissions:
   contents: write
 
 jobs:
   repair:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -55,7 +57,6 @@ jobs:
           )
           diagnostics.append(f'curly_braces={text != before}')
 
-          before = text
           pattern = re.compile(
               r"    final maximumLoss = PortfolioRiskMath\.maximumLoss\(.*?\n    \);\n(?=    if \(maximumLoss > ledger\.dailyRisk\.available)",
               re.S,
@@ -153,13 +154,17 @@ jobs:
           Path('.github/tmp-150-repair-result').write_text('\n'.join(diagnostics) + '\n')
           PY
 
-      - name: Commit patch and diagnostics
+      - name: Commit patch when needed
         shell: bash
         run: |
           set -euo pipefail
           git add src/client/quantara_app/lib/features/portfolio_risk/domain/portfolio_risk_models.dart \
                   src/client/quantara_app/test/portfolio_risk_policy_test.dart \
                   .github/tmp-150-repair-result
+          if git diff --cached --quiet; then
+            echo 'Repair already applied.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix(portfolio-risk): apply fail-closed analyzer repairs'
