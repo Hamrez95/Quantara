@@ -111,8 +111,10 @@ void main() {
     );
 
     expect(find.text('ژورنال معاملات'), findsOneWidget);
-    expect(Directionality.of(tester.element(find.text('ژورنال معاملات'))),
-        TextDirection.rtl);
+    expect(
+      Directionality.of(tester.element(find.text('ژورنال معاملات'))),
+      TextDirection.rtl,
+    );
     expect(find.text('XRPUSDT'), findsOneWidget);
     expect(find.textContaining('0.031'), findsOneWidget);
 
@@ -150,8 +152,10 @@ void main() {
     );
 
     expect(find.text('Trading Journal'), findsOneWidget);
-    expect(Directionality.of(tester.element(find.text('Trading Journal'))),
-        TextDirection.ltr);
+    expect(
+      Directionality.of(tester.element(find.text('Trading Journal'))),
+      TextDirection.ltr,
+    );
     expect(find.text('BTCUSDT'), findsOneWidget);
     expect(find.text('XRPUSDT'), findsOneWidget);
 
@@ -177,7 +181,7 @@ void main() {
       projections: const [],
       error: 'Journal integrity check failed.',
     );
-    expect(find.textContaining('integrity'), findsOneWidget);
+    expect(find.text('Journal integrity check failed.'), findsOneWidget);
 
     await pump(
       tester,
