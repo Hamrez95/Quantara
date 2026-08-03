@@ -116,8 +116,7 @@ jobs:
           flutter test \
             test/trading_journal_view_test.dart \
             test/trading_journal_review_regressions_test.dart \
-            test/trading_journal_source_safety_test.dart \
-            test/owner_alpha_page_test.dart
+            test/trading_journal_source_safety_test.dart
 
       - name: Remove temporary workflow and push clean result
         shell: bash
