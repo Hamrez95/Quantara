@@ -1,9 +1,9 @@
 name: Temporary Issue 137 format export
 
 on:
-  push:
-    paths:
-      - .github/workflows/temporary-issue137-format-export.yml
+  pull_request:
+    branches:
+      - dev
 
 permissions:
   contents: read
@@ -12,7 +12,7 @@ jobs:
   format-export:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout branch
+      - name: Checkout pull request head
         uses: actions/checkout@v4
         with:
           ref: feat/137-encrypted-recovery-database
