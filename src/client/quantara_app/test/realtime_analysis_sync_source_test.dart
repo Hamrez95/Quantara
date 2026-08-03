@@ -7,14 +7,18 @@ void main() {
     final source = File(
       'lib/features/owner_alpha/data/realtime_market_application.dart',
     ).readAsStringSync();
+    final capabilityCheck = source.indexOf(
+      'analysisGateway is RealtimeMarketAnalysisSynchronizer',
+    );
     final synchronize = source.indexOf(
-      'gateway is RealtimeMarketAnalysisSynchronizer',
+      'await synchronizer.synchronize(update);',
     );
     final candidateGate = source.indexOf(
       'if (!update.allowsCandidatePreparation) return;',
     );
 
-    expect(synchronize, greaterThanOrEqualTo(0));
+    expect(capabilityCheck, greaterThanOrEqualTo(0));
+    expect(synchronize, greaterThan(capabilityCheck));
     expect(candidateGate, greaterThan(synchronize));
     expect(source, contains('Realtime analysis synchronization failed'));
   });
