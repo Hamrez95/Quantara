@@ -15,14 +15,22 @@ import 'auto_trade_controller.dart';
 import 'local_live_trade_service.dart';
 
 final class LocalLiveTradeController extends ChangeNotifier {
-  LocalLiveTradeController({
+  factory LocalLiveTradeController({
     required AutoTradeController accountController,
     AutoTradeCredentialsStore credentialsStore =
         const SecureAutoTradeCredentialsStore(),
     Duration accountPollInterval = const Duration(seconds: 20),
-  }) : _accountController = accountController,
-       _credentialsStore = credentialsStore,
-       _accountPollInterval = accountPollInterval;
+  }) => LocalLiveTradeController._(
+    accountController,
+    credentialsStore,
+    accountPollInterval,
+  );
+
+  LocalLiveTradeController._(
+    this._accountController,
+    this._credentialsStore,
+    this._accountPollInterval,
+  );
 
   final AutoTradeController _accountController;
   final AutoTradeCredentialsStore _credentialsStore;
