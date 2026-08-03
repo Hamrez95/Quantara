@@ -37,6 +37,7 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
   Object? _error;
   bool _loading = false;
   int _sequence = 0;
+  Future<void>? _initialization;
 
   PortfolioRiskSnapshot? get snapshot => _snapshot;
   PortfolioEntryDecision? get lastDecision => _lastDecision;
@@ -44,27 +45,23 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
   bool get loading => _loading;
   bool get accountFresh => _account.fresh;
 
-  Future<void> initialize() async {
-    if (_loading) return;
-    _loading = true;
+  Future<void> initialize() => _initialization ??= _initializeOnce();
+
+  Future<void> _initializeOnce() async {
+    _setLoading(true);
     _error = null;
-    notifyListeners();
     try {
       _snapshot = await _coordinator.snapshot(account: _account);
     } on Object catch (error) {
       _error = error;
     } finally {
-      _loading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
   Future<void> reserveExample(double riskAmount) async {
-    if (_loading) return;
-    _loading = true;
-    _error = null;
-    notifyListeners();
-    try {
+    await initialize();
+    await _runExclusive(() async {
       final sequence = ++_sequence;
       final symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
       final symbol = symbols[(sequence - 1) % symbols.length];
@@ -97,20 +94,12 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
       );
       _lastDecision = outcome.decision;
       _snapshot = outcome.snapshot;
-    } on Object catch (error) {
-      _error = error;
-    } finally {
-      _loading = false;
-      notifyListeners();
-    }
+    });
   }
 
   Future<void> reset() async {
-    if (_loading) return;
-    _loading = true;
-    _error = null;
-    notifyListeners();
-    try {
+    await initialize();
+    await _runExclusive(() async {
       await _coordinator.resetSimulation(
         now: DateTime.now().toUtc(),
         dailyRiskLimit: 10,
@@ -118,27 +107,44 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
       _sequence = 0;
       _lastDecision = null;
       _snapshot = await _coordinator.snapshot(account: _account);
-    } on Object catch (error) {
-      _error = error;
-    } finally {
-      _loading = false;
-      notifyListeners();
-    }
+    });
   }
 
   Future<void> toggleFreshness() async {
-    _account = PortfolioAccountTruth(
-      asOf: DateTime.now().toUtc(),
-      fresh: !_account.fresh,
-      allOpenPositionsProtected: _account.allOpenPositionsProtected,
-      marginMode: _account.marginMode,
-      freeMargin: _account.freeMargin,
-      usedMargin: _account.usedMargin,
-      maintenanceMargin: _account.maintenanceMargin,
-      pendingMarginReservations: _account.pendingMarginReservations,
-      safetyBuffer: _account.safetyBuffer,
-      feeReserve: _account.feeReserve,
-    );
     await initialize();
+    await _runExclusive(() async {
+      _account = PortfolioAccountTruth(
+        asOf: DateTime.now().toUtc(),
+        fresh: !_account.fresh,
+        allOpenPositionsProtected: _account.allOpenPositionsProtected,
+        marginMode: _account.marginMode,
+        freeMargin: _account.freeMargin,
+        usedMargin: _account.usedMargin,
+        maintenanceMargin: _account.maintenanceMargin,
+        pendingMarginReservations: _account.pendingMarginReservations,
+        safetyBuffer: _account.safetyBuffer,
+        feeReserve: _account.feeReserve,
+      );
+      _snapshot = await _coordinator.snapshot(account: _account);
+    });
+  }
+
+  Future<void> _runExclusive(Future<void> Function() operation) async {
+    if (_loading) return;
+    _setLoading(true);
+    _error = null;
+    try {
+      await operation();
+    } on Object catch (error) {
+      _error = error;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  void _setLoading(bool value) {
+    if (_loading == value) return;
+    _loading = value;
+    notifyListeners();
   }
 }
