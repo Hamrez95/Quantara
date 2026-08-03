@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/portfolio_risk_ledger_store.dart';
@@ -38,6 +40,7 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
   bool _loading = false;
   int _sequence = 0;
   Future<void>? _initialization;
+  Future<void> _operationTail = Future<void>.value();
 
   PortfolioRiskSnapshot? get snapshot => _snapshot;
   PortfolioEntryDecision? get lastDecision => _lastDecision;
@@ -59,87 +62,85 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
     }
   }
 
-  Future<void> reserveExample(double riskAmount) async {
-    await initialize();
-    await _runExclusive(() async {
-      final sequence = ++_sequence;
-      final symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
-      final symbol = symbols[(sequence - 1) % symbols.length];
-      final side = sequence.isOdd ? PortfolioSide.long : PortfolioSide.short;
-      final entry = 100.0;
-      final stop = side == PortfolioSide.long ? 99.0 : 101.0;
-      final outcome = await _coordinator.reserve(
-        candidate: PortfolioEntryCandidate(
-          reservationId: 'simulation-reservation-$sequence',
-          journalTradeId: 'simulation-trade-$sequence',
-          candidateId: 'simulation-candidate-$sequence',
-          symbol: symbol,
-          assetGroup: 'crypto',
-          side: side,
-          strategy: 'portfolio-budget-simulation',
-          plannedQuantity: riskAmount,
-          entryPrice: entry,
-          stopPrice: stop,
-          contractMultiplier: 1,
-          entryFeeRate: 0,
-          exitFeeRate: 0,
-          slippageRate: 0,
-          fundingReserve: 0,
-          requiredMargin: riskAmount * 2,
-          leverage: 10,
-          minimumQuantity: 0.001,
-          minimumNotional: 1,
-        ),
-        account: _account,
-      );
-      _lastDecision = outcome.decision;
-      _snapshot = outcome.snapshot;
-    });
-  }
+  Future<void> reserveExample(double riskAmount) => _enqueue(() async {
+    final sequence = ++_sequence;
+    final symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT'];
+    final symbol = symbols[(sequence - 1) % symbols.length];
+    final side = sequence.isOdd ? PortfolioSide.long : PortfolioSide.short;
+    final entry = 100.0;
+    final stop = side == PortfolioSide.long ? 99.0 : 101.0;
+    final outcome = await _coordinator.reserve(
+      candidate: PortfolioEntryCandidate(
+        reservationId: 'simulation-reservation-$sequence',
+        journalTradeId: 'simulation-trade-$sequence',
+        candidateId: 'simulation-candidate-$sequence',
+        symbol: symbol,
+        assetGroup: 'crypto',
+        side: side,
+        strategy: 'portfolio-budget-simulation',
+        plannedQuantity: riskAmount,
+        entryPrice: entry,
+        stopPrice: stop,
+        contractMultiplier: 1,
+        entryFeeRate: 0,
+        exitFeeRate: 0,
+        slippageRate: 0,
+        fundingReserve: 0,
+        requiredMargin: riskAmount * 2,
+        leverage: 10,
+        minimumQuantity: 0.001,
+        minimumNotional: 1,
+      ),
+      account: _account,
+    );
+    _lastDecision = outcome.decision;
+    _snapshot = outcome.snapshot;
+  });
 
-  Future<void> reset() async {
-    await initialize();
-    await _runExclusive(() async {
-      await _coordinator.resetSimulation(
-        now: DateTime.now().toUtc(),
-        dailyRiskLimit: 10,
-      );
-      _sequence = 0;
-      _lastDecision = null;
-      _snapshot = await _coordinator.snapshot(account: _account);
-    });
-  }
+  Future<void> reset() => _enqueue(() async {
+    await _coordinator.resetSimulation(
+      now: DateTime.now().toUtc(),
+      dailyRiskLimit: 10,
+    );
+    _sequence = 0;
+    _lastDecision = null;
+    _snapshot = await _coordinator.snapshot(account: _account);
+  });
 
-  Future<void> toggleFreshness() async {
-    await initialize();
-    await _runExclusive(() async {
-      _account = PortfolioAccountTruth(
-        asOf: DateTime.now().toUtc(),
-        fresh: !_account.fresh,
-        allOpenPositionsProtected: _account.allOpenPositionsProtected,
-        marginMode: _account.marginMode,
-        freeMargin: _account.freeMargin,
-        usedMargin: _account.usedMargin,
-        maintenanceMargin: _account.maintenanceMargin,
-        pendingMarginReservations: _account.pendingMarginReservations,
-        safetyBuffer: _account.safetyBuffer,
-        feeReserve: _account.feeReserve,
-      );
-      _snapshot = await _coordinator.snapshot(account: _account);
-    });
-  }
+  Future<void> toggleFreshness() => _enqueue(() async {
+    _account = PortfolioAccountTruth(
+      asOf: DateTime.now().toUtc(),
+      fresh: !_account.fresh,
+      allOpenPositionsProtected: _account.allOpenPositionsProtected,
+      marginMode: _account.marginMode,
+      freeMargin: _account.freeMargin,
+      usedMargin: _account.usedMargin,
+      maintenanceMargin: _account.maintenanceMargin,
+      pendingMarginReservations: _account.pendingMarginReservations,
+      safetyBuffer: _account.safetyBuffer,
+      feeReserve: _account.feeReserve,
+    );
+    _snapshot = await _coordinator.snapshot(account: _account);
+  });
 
-  Future<void> _runExclusive(Future<void> Function() operation) async {
-    if (_loading) return;
-    _setLoading(true);
-    _error = null;
-    try {
-      await operation();
-    } on Object catch (error) {
-      _error = error;
-    } finally {
-      _setLoading(false);
-    }
+  Future<void> _enqueue(Future<void> Function() operation) {
+    final completer = Completer<void>();
+    final next = _operationTail.then((_) async {
+      await initialize();
+      _setLoading(true);
+      _error = null;
+      try {
+        await operation();
+        completer.complete();
+      } on Object catch (error, stackTrace) {
+        _error = error;
+        completer.completeError(error, stackTrace);
+      } finally {
+        _setLoading(false);
+      }
+    });
+    _operationTail = next.catchError((Object _) {});
+    return completer.future;
   }
 
   void _setLoading(bool value) {
