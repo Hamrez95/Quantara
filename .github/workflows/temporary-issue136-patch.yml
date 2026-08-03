@@ -27,7 +27,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verify and apply Issue 136 patch
+      - name: Verify and apply Issue 136 patches
         shell: bash
         run: |
           set -euo pipefail
@@ -44,118 +44,14 @@ jobs:
           echo '019a4eb0c2bae64dee18998e3073087c0bd204061e8780d4fb85bbe404194b2e  /tmp/issue136.patch' | sha256sum --check
           git apply --check /tmp/issue136.patch
           git apply /tmp/issue136.patch
-          python3 - <<'PY'
-          from pathlib import Path
 
-          service_path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
-          service = service_path.read_text()
-          service = service.replace(
-              """          decision: decision,
-          priceTolerance: priceTolerance,""",
-              """          decision: decision,
-          previousStop: currentStop,
-          priceTolerance: priceTolerance,""",
-          )
-          signature = """    required int stage,
-    required ProfitLockStopDecision decision,
-    required double priceTolerance,"""
-          assert signature in service
-          service = service.replace(
-              signature,
-              """    required int stage,
-    required ProfitLockStopDecision decision,
-    required double previousStop,
-    required double priceTolerance,""",
-              1,
-          )
-          service = service.replace(
-              """        previousStop: decision.proposedStop,
-        proposedStop: decision.proposedStop,""",
-              """        previousStop: previousStop,
-        proposedStop: decision.proposedStop,""",
-              1,
-          )
-          duplicate = """      await _journalObserver.recordStopMove(
-        managed: finalized,
-        stage: stage,
-        previousStop: current.originalStopLoss,
-        proposedStop: decision.proposedStop,
-        confirmed: true,
-        reason: decision.reason,
-        orderId: execution.orderId ?? finalized.stopOrderId,
-      );
-"""
-          assert duplicate in service
-          service = service.replace(duplicate, '', 1)
-          service = service.replace(
-              """      previousStop: current.profitLockProgress.pendingProposedStop ??
-          current.originalStopLoss,
-      proposedStop: decision.proposedStop,""",
-              """      previousStop: previousStop,
-      proposedStop: decision.proposedStop,""",
-              1,
-          )
-          confirmed_anchor = """      final finalized = pending.copyWith(
-        stopOrderId: execution.orderId ?? pending.stopOrderId,
-        profitLockProgress: pending.profitLockProgress.copyWith(
-          confirmedStage: stage,
-          clearPendingStage: true,
-          clearPendingStop: true,
-          clearWarning: true,
-        ),
-      );
-      _auditEvent("""
-          assert confirmed_anchor in service
-          service = service.replace(
-              confirmed_anchor,
-              """      final finalized = pending.copyWith(
-        stopOrderId: execution.orderId ?? pending.stopOrderId,
-        profitLockProgress: pending.profitLockProgress.copyWith(
-          confirmedStage: stage,
-          clearPendingStage: true,
-          clearPendingStop: true,
-          clearWarning: true,
-        ),
-      );
-      await _journalObserver.recordStopMove(
-        managed: finalized,
-        stage: stage,
-        previousStop: previousStop,
-        proposedStop: decision.proposedStop,
-        confirmed: true,
-        reason: decision.reason,
-        orderId: execution.orderId ?? finalized.stopOrderId,
-      );
-      _auditEvent(""",
-              1,
-          )
-          service_path.write_text(service)
+          test "$(wc -c < .github/temporary/issue136.fix.patch.gz.b64)" -eq 1840
+          echo 'd78b8c211f965cfd5844f9e682fafc8503a395f56577040f4cf9d8188f5e3ccb  .github/temporary/issue136.fix.patch.gz.b64' | sha256sum --check
+          base64 --decode .github/temporary/issue136.fix.patch.gz.b64 | gzip --decompress > /tmp/issue136.fix.patch
+          echo '5a329e9431ed0d9134e5377bcead97f44abda25278ad86137ef31786c6bace52  /tmp/issue136.fix.patch' | sha256sum --check
+          git apply --check /tmp/issue136.fix.patch
+          git apply /tmp/issue136.fix.patch
 
-          observer_path = Path('src/client/quantara_app/lib/features/trading_journal/application/local_live_journal_observer.dart')
-          observer = observer_path.read_text()
-          observer = observer.replace(
-              'final remaining = math.max(0, managed.initialQuantity - cumulative);',
-              'final remaining = math.max(0, managed.initialQuantity - cumulative).toDouble();',
-          )
-          observer = observer.replace(
-              "if (warning != null) 'warning': warning,",
-              "'warning': warning,",
-          )
-          observer_path.write_text(observer)
-
-          controller_path = Path('src/client/quantara_app/lib/features/trading_journal/application/trading_journal_controller.dart')
-          controller = controller_path.read_text()
-          controller = controller.replace(
-              'TradingJournalController({required TradingJournalStore store}) : _store = store;',
-              'TradingJournalController({required this.store});',
-          )
-          controller = controller.replace(
-              'final TradingJournalStore _store;',
-              'final TradingJournalStore store;',
-          )
-          controller = controller.replace('_store.', 'store.')
-          controller_path.write_text(controller)
-          PY
           rm -f .github/workflows/temporary-issue136-patch.yml
           rm -f .github/workflows/temporary-issue136-source-export.yml
           rm -rf .github/temporary
