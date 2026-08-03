@@ -355,10 +355,11 @@ final class SembastQuantaraDurableDatabase implements QuantaraDurableDatabase {
           if (existing != null && existing.revision > incoming.revision) {
             continue;
           }
-          if (existing != null &&
-              existing.revision == incoming.revision &&
-              existing.checksum == incoming.checksum) {
-            continue;
+          if (existing != null && existing.revision == incoming.revision) {
+            if (existing.checksum == incoming.checksum) {
+              continue;
+            }
+            throw StateError('Conflicting durable record revision.');
           }
           await _records
               .record(incoming.storageKey)
@@ -455,8 +456,7 @@ void _validateRecord(QuantaraDurableRecord record) {
   if (record.schemaVersion <= 0 || record.revision < 0) {
     throw ArgumentError('Invalid durable record version.');
   }
-  if (record.category != QuantaraDurableCategory.cache &&
-      _containsSecretLikeField(record.payload)) {
+  if (_containsSecretLikeField(record.payload)) {
     throw ArgumentError('Secret-like fields are forbidden in durable data.');
   }
 }
