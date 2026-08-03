@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/persistence/quantara_database_provider.dart';
 import '../../../core/persistence/quantara_durable_database.dart';
 import '../domain/trading_journal_models.dart';
@@ -17,23 +19,16 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
   static Future<void> _globalTail = Future<void>.value();
 
   @override
-  Future<TradingJournalLedger> load() async {
-    await _globalTail;
+  Future<TradingJournalLedger> load() => _serialValue(() async {
     final database = await _databaseFactory();
     final record = await database.read(QuantaraDurableCategory.journal, _key);
     if (record != null) {
       return TradingJournalLedger.fromJson(record.payload);
     }
     final legacy = await _legacyStore.load();
-    if (legacy.plans.isEmpty &&
-        legacy.events.isEmpty &&
-        legacy.generation == 0 &&
-        legacy.warnings.isEmpty) {
-      return legacy;
-    }
-    await _write(database, legacy, minimumRevision: 1);
-    return legacy;
-  }
+    if (_isEmpty(legacy)) return legacy;
+    return _write(database, legacy, minimumRevision: 1);
+  });
 
   @override
   Future<void> replace(TradingJournalLedger ledger) => _serial(() async {
@@ -61,16 +56,11 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
     final record = await database.read(QuantaraDurableCategory.journal, _key);
     if (record != null) return TradingJournalLedger.fromJson(record.payload);
     final legacy = await _legacyStore.load();
-    if (legacy.plans.isNotEmpty ||
-        legacy.events.isNotEmpty ||
-        legacy.generation > 0 ||
-        legacy.warnings.isNotEmpty) {
-      await _write(database, legacy, minimumRevision: 1);
-    }
-    return legacy;
+    if (_isEmpty(legacy)) return legacy;
+    return _write(database, legacy, minimumRevision: 1);
   }
 
-  Future<void> _write(
+  Future<TradingJournalLedger> _write(
     QuantaraDurableDatabase database,
     TradingJournalLedger ledger, {
     int minimumRevision = 0,
@@ -94,6 +84,13 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
         payload: persisted.toJson(),
       ),
     );
+    try {
+      await _legacyStore.replace(persisted);
+    } on Object {
+      // The durable database is authoritative. The temporary rollback mirror
+      // must never make a verified database commit appear to have failed.
+    }
+    return persisted;
   }
 
   Future<void> _serial(Future<void> Function() operation) {
@@ -101,4 +98,23 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
     _globalTail = result.catchError((Object _) {});
     return result;
   }
+
+  Future<T> _serialValue<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    final result = _globalTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } on Object catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    _globalTail = result.catchError((Object _) {});
+    return completer.future;
+  }
+
+  static bool _isEmpty(TradingJournalLedger ledger) =>
+      ledger.plans.isEmpty &&
+      ledger.events.isEmpty &&
+      ledger.generation == 0 &&
+      ledger.warnings.isEmpty;
 }
