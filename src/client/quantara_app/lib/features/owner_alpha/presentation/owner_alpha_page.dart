@@ -755,10 +755,10 @@ class _LiveBoundaryStrip extends StatelessWidget {
     final status = health == null
         ? strings.t('در حال آماده‌سازی', 'Preparing')
         : switch (health.state) {
-            RealtimeMarketRuntimeState.live => strings.t(
-              'پایش زنده',
-              'Live monitoring',
-            ),
+            RealtimeMarketRuntimeState.live =>
+              health.degraded
+                  ? strings.t('پایش زنده محدود', 'Degraded live monitoring')
+                  : strings.t('پایش زنده', 'Live monitoring'),
             RealtimeMarketRuntimeState.paused => strings.t(
               'پایش متوقف',
               'Monitoring paused',
@@ -779,17 +779,24 @@ class _LiveBoundaryStrip extends StatelessWidget {
             'Public Bitunix data · no API key · no real orders',
           )
         : strings.t(
-            '${health.configuredStreams} جریان · ${health.liveShards}/${health.activeShards} اتصال · تأخیر p95 شبکه ${health.p95TransportLag.inMilliseconds}ms · پردازش ${health.p95PipelineLatency.inMilliseconds}ms',
-            '${health.configuredStreams} streams · ${health.liveShards}/${health.activeShards} shards · p95 transport ${health.p95TransportLag.inMilliseconds}ms · processing ${health.p95PipelineLatency.inMilliseconds}ms',
+            '${health.activeStreams}/${health.configuredStreams} جریان سالم · ${health.liveShards}/${health.activeShards} اتصال · تأخیر p95 شبکه ${health.p95TransportLag.inMilliseconds}ms · پردازش ${health.p95PipelineLatency.inMilliseconds}ms',
+            '${health.activeStreams}/${health.configuredStreams} healthy streams · ${health.liveShards}/${health.activeShards} shards · p95 transport ${health.p95TransportLag.inMilliseconds}ms · processing ${health.p95PipelineLatency.inMilliseconds}ms',
           );
     final limitation = strings.t(
       'در این نسخه آزمایشی، پایش بلادرنگ فقط وقتی اپ یا تب باز است ادامه دارد.',
       'In this release candidate, realtime monitoring continues only while the app or tab is open.',
     );
     final error = monitor.error;
+    final degradedDetail = health != null && health.quarantinedStreams > 0
+        ? strings.t(
+            '${health.quarantinedStreams} جریان به‌دلیل داده ناسالم قرنطینه شد؛ سایر نمادها فعال مانده‌اند.',
+            '${health.quarantinedStreams} stream was quarantined for malformed data; healthy symbols remain active.',
+          )
+        : null;
+    final detail = error ?? degradedDetail ?? limitation;
     return Semantics(
       container: true,
-      label: '$status. $metrics. $limitation',
+      label: '$status. $metrics. $detail',
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: (healthy ? QuantaraColors.success : QuantaraColors.cyan)
@@ -830,11 +837,11 @@ class _LiveBoundaryStrip extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      error == null ? limitation : '$limitation $error',
+                      detail,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: error == null
-                            ? scheme.onSurfaceVariant
-                            : scheme.error,
+                        color: error != null || degradedDetail != null
+                            ? scheme.error
+                            : scheme.onSurfaceVariant,
                       ),
                     ),
                   ],

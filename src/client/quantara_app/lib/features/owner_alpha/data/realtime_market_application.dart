@@ -187,6 +187,8 @@ final class RealtimeMarketApplication {
   late final RealtimeMarketEventBus _eventBus;
   late final RealtimeCandlePipelineCoordinator _candleCoordinator;
   final Map<int, BitunixPublicConnectionState> _shardStates = {};
+  final List<RealtimeCandleStreamKey> _activeStreams = [];
+  final Map<String, String> _quarantinedStreamFaults = {};
   Future<void> _lifecycleTail = Future.value();
   Future<void>? _fleetRun;
   RealtimePublicStreamFleet? _fleet;
@@ -199,6 +201,8 @@ final class RealtimeMarketApplication {
   RealtimeMarketHealthSnapshot get health => _metrics.snapshot(
     state: _state,
     configuredStreams: universe.streams.length,
+    activeStreams: _activeStreams.length,
+    quarantinedStreams: _quarantinedStreamFaults.length,
     activeShards: _fleet?.shardCount ?? 0,
     liveShards: _shardStates.values
         .where((state) => state == BitunixPublicConnectionState.live)
@@ -250,20 +254,45 @@ final class RealtimeMarketApplication {
       }
 
       _setState(RealtimeMarketRuntimeState.bootstrapping);
+      _activeStreams.clear();
+      _quarantinedStreamFaults.clear();
       for (var index = 0; index < universe.streams.length; index++) {
-        await _candleCoordinator.bootstrap(
-          key: universe.streams[index],
-          closedCandleLimit: closedCandleLimit,
-        );
+        final stream = universe.streams[index];
+        try {
+          await _candleCoordinator.bootstrap(
+            key: stream,
+            closedCandleLimit: closedCandleLimit,
+          );
+          _activeStreams.add(stream);
+        } on Object catch (error) {
+          final message = error.toString();
+          _quarantinedStreamFaults[stream.id] = message;
+          _metrics.recordBootstrapFault(
+            streamId: stream.id,
+            message: message,
+            occurredAtUtc: _clock(),
+          );
+        }
         if (index + 1 < universe.streams.length &&
             bootstrapSpacing > Duration.zero) {
           await _delay(bootstrapSpacing);
         }
       }
+      if (_activeStreams.isEmpty) {
+        throw StateError(
+          'Realtime bootstrap failed for every configured stream.',
+        );
+      }
 
       _shardStates.clear();
       final fleet = fleetFactory.build(
-        subscriptions: universe.subscriptions,
+        subscriptions: [
+          for (final stream in _activeStreams)
+            BitunixPublicSubscription.kline(
+              symbol: stream.symbol,
+              interval: stream.interval,
+            ),
+        ],
         onEvent: _handlePublicEvent,
         onFault: _handleTransportFault,
         onState: _handleShardState,
@@ -496,6 +525,7 @@ final class _RealtimeMarketMetrics {
   int candidateEvaluations = 0;
   int candidateCommits = 0;
   int reconnectTransitions = 0;
+  int bootstrapFaults = 0;
   int malformedPayloadFaults = 0;
   int backpressureFaults = 0;
   DateTime? lastEventAtUtc;
@@ -537,6 +567,18 @@ final class _RealtimeMarketMetrics {
     _record(_pipelineLatencyMicros, _nonNegative(latency).inMicroseconds);
   }
 
+  void recordBootstrapFault({
+    required String streamId,
+    required String message,
+    required DateTime occurredAtUtc,
+  }) {
+    bootstrapFaults++;
+    recordFault(
+      message: 'Realtime bootstrap quarantined $streamId: $message',
+      occurredAtUtc: occurredAtUtc,
+    );
+  }
+
   void recordTransportFault(BitunixPublicStreamFault fault) {
     if (fault.kind == BitunixPublicStreamFaultKind.malformedPayload) {
       malformedPayloadFaults++;
@@ -557,11 +599,15 @@ final class _RealtimeMarketMetrics {
   RealtimeMarketHealthSnapshot snapshot({
     required RealtimeMarketRuntimeState state,
     required int configuredStreams,
+    required int activeStreams,
+    required int quarantinedStreams,
     required int activeShards,
     required int liveShards,
   }) => RealtimeMarketHealthSnapshot(
     state: state,
     configuredStreams: configuredStreams,
+    activeStreams: activeStreams,
+    quarantinedStreams: quarantinedStreams,
     activeShards: activeShards,
     liveShards: liveShards,
     eventsReceived: eventsReceived,
@@ -572,6 +618,7 @@ final class _RealtimeMarketMetrics {
     candidateEvaluations: candidateEvaluations,
     candidateCommits: candidateCommits,
     reconnectTransitions: reconnectTransitions,
+    bootstrapFaults: bootstrapFaults,
     malformedPayloadFaults: malformedPayloadFaults,
     backpressureFaults: backpressureFaults,
     p95TransportLag: _p95(_transportLagMicros),

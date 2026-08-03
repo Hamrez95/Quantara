@@ -44,6 +44,90 @@ void main() {
       expect(candles.last.openTime, start.add(const Duration(minutes: 95)));
     });
 
+    test('skips a bounded malformed row in recent history', () async {
+      final start = DateTime.utc(2026, 8, 2, 10);
+      final now = start.add(const Duration(minutes: 150));
+      final client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'code': 0,
+            'data': [
+              for (var index = 0; index < 30; index++)
+                index == 3
+                    ? {
+                        ..._jsonCandle(
+                          start.add(Duration(minutes: index * 5)),
+                          index,
+                        ),
+                        'high': '99',
+                        'close': '101',
+                      }
+                    : _jsonCandle(
+                        start.add(Duration(minutes: index * 5)),
+                        index,
+                      ),
+            ],
+          }),
+          200,
+        );
+      });
+      final source = BitunixCandleBackfillSource(client: client);
+
+      final candles = await source.loadRecentClosed(
+        key: key,
+        limit: 20,
+        nowUtc: now,
+      );
+
+      expect(candles, hasLength(20));
+      expect(candles.every((candle) => candle.isValid), isTrue);
+      expect(candles.any((candle) => candle.openTime == start), isFalse);
+    });
+
+    test(
+      'fails recent history after the malformed-row budget is exceeded',
+      () async {
+        final start = DateTime.utc(2026, 8, 2, 10);
+        final client = MockClient((request) async {
+          return http.Response(
+            jsonEncode({
+              'code': 0,
+              'data': [
+                for (var index = 0; index < 24; index++)
+                  index < 2
+                      ? {
+                          ..._jsonCandle(
+                            start.add(Duration(minutes: index * 5)),
+                            index,
+                          ),
+                          'high': '99',
+                          'close': '101',
+                        }
+                      : _jsonCandle(
+                          start.add(Duration(minutes: index * 5)),
+                          index,
+                        ),
+              ],
+            }),
+            200,
+          );
+        });
+        final source = BitunixCandleBackfillSource(
+          client: client,
+          maximumMalformedRecentRows: 1,
+        );
+
+        await expectLater(
+          source.loadRecentClosed(
+            key: key,
+            limit: 20,
+            nowUtc: start.add(const Duration(minutes: 120)),
+          ),
+          throwsFormatException,
+        );
+      },
+    );
+
     test('paginates an exact range beyond the 200-candle API limit', () async {
       final start = DateTime.utc(2026, 8, 1);
       final end = start.add(const Duration(minutes: 5 * 201));
@@ -168,6 +252,13 @@ void main() {
           () => BitunixCandleBackfillSource(
             client: MockClient((request) async => http.Response('{}', 200)),
             requestSpacing: const Duration(milliseconds: 99),
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => BitunixCandleBackfillSource(
+            client: MockClient((request) async => http.Response('{}', 200)),
+            maximumMalformedRecentRows: 21,
           ),
           throwsArgumentError,
         );
