@@ -37,10 +37,7 @@ void main() {
       }
       expect(rejection, isA<ArgumentError>());
       expect(rejection.toString(), isNot(contains(canary)));
-      expect(
-        await source.read(QuantaraDurableCategory.journal, key),
-        isNull,
-      );
+      expect(await source.read(QuantaraDurableCategory.journal, key), isNull);
     }
 
     await expectRejected(
@@ -157,7 +154,10 @@ void main() {
       expect(journal?.payload.toString(), contains('fill:trade-1'));
       expect(journal?.payload.toString(), contains('order-1'));
       expect(journal?.payload.toString(), isNot(contains('clientId')));
-      expect(journal?.payload.toString(), isNot(contains(privateClientReference)));
+      expect(
+        journal?.payload.toString(),
+        isNot(contains(privateClientReference)),
+      );
     },
   );
 
