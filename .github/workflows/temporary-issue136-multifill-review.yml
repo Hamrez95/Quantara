@@ -1,0 +1,203 @@
+name: Temporary Issue 136 multi-fill review
+
+on:
+  push:
+    paths:
+      - .github/workflows/temporary-issue136-multifill-review.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-and-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/136-event-sourced-trading-journal
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Apply multi-fill close review fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          observer = Path('src/client/quantara_app/lib/features/trading_journal/application/local_live_journal_observer.dart')
+          source = observer.read_text()
+          old = """    var cumulativeExitQuantity = 0.0;
+              for (final fill in fills) {
+                if (fill.reduceOnly) cumulativeExitQuantity += fill.quantity;
+                final targetIndex = managed.targetOrderIds.indexOf(fill.orderId);
+                final isTarget = targetIndex >= 0;
+                final remaining = math
+                    .max(0, managed.initialQuantity - cumulativeExitQuantity)
+                    .toDouble();
+                await _append(
+                  TradingJournalEvent(
+                    eventId: 'fill:${fill.tradeId}',
+                    journalTradeId: id,
+                    type: !fill.reduceOnly
+                        ? TradingJournalEventType.entryPartiallyFilled
+                        : isTarget
+                        ? TradingJournalEventType.takeProfitFilled
+                        : positionClosed
+                        ? TradingJournalEventType.positionClosed
+                        : TradingJournalEventType.positionPartiallyClosed,
+          """
+          new = """    final exitFills = fills.where((fill) => fill.reduceOnly).toList();
+              final finalExitTradeId = positionClosed && exitFills.isNotEmpty
+                  ? exitFills.last.tradeId
+                  : null;
+              var cumulativeExitQuantity = 0.0;
+              for (final fill in fills) {
+                if (fill.reduceOnly) cumulativeExitQuantity += fill.quantity;
+                final targetIndex = managed.targetOrderIds.indexOf(fill.orderId);
+                final isTarget = targetIndex >= 0;
+                final isFinalExit = fill.reduceOnly && fill.tradeId == finalExitTradeId;
+                final remaining = math
+                    .max(0, managed.initialQuantity - cumulativeExitQuantity)
+                    .toDouble();
+                await _append(
+                  TradingJournalEvent(
+                    eventId: 'fill:${fill.tradeId}',
+                    journalTradeId: id,
+                    type: !fill.reduceOnly
+                        ? TradingJournalEventType.entryPartiallyFilled
+                        : isTarget
+                        ? TradingJournalEventType.takeProfitFilled
+                        : isFinalExit
+                        ? TradingJournalEventType.positionClosed
+                        : TradingJournalEventType.positionPartiallyClosed,
+          """
+          if old not in source:
+              raise SystemExit('observer review target not found')
+          observer.write_text(source.replace(old, new, 1))
+
+          test_file = Path('src/client/quantara_app/test/trading_journal_review_regressions_test.dart')
+          tests = test_file.read_text()
+          marker = """  test(
+              'profit-lock confirmation identity never conflicts with original stop',
+          """
+          regression = """  test('only the final non-target exit fill closes the position', () async {
+              final store = _MemoryJournalStore(
+                TradingJournalLedger.empty().appendPlan(plan()),
+              );
+              final observer = LocalLiveJournalObserver(store: store);
+              final projection = TradingPnlProjection.reconcile(
+                currency: 'USDT',
+                asOf: openedAt.add(const Duration(hours: 1)),
+                unrealizedByPosition: const {},
+                fills: [
+                  ExchangePnlFill(
+                    tradeId: 'trade-entry-multi-close',
+                    orderId: 'entry-order',
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    quantity: 21.4,
+                    price: 1.0665,
+                    realizedPnl: 0,
+                    fee: 0.004,
+                    reduceOnly: false,
+                    occurredAt: openedAt.add(const Duration(minutes: 1)),
+                  ),
+                  ExchangePnlFill(
+                    tradeId: 'trade-stop-part-1',
+                    orderId: 'stop-1',
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    quantity: 10,
+                    price: 1.0688,
+                    realizedPnl: -0.1,
+                    fee: 0.005,
+                    reduceOnly: true,
+                    occurredAt: openedAt.add(const Duration(minutes: 40)),
+                  ),
+                  ExchangePnlFill(
+                    tradeId: 'trade-stop-part-2',
+                    orderId: 'stop-1',
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    quantity: 11.4,
+                    price: 1.0691,
+                    realizedPnl: -0.114,
+                    fee: 0.006,
+                    reduceOnly: true,
+                    occurredAt: openedAt.add(const Duration(minutes: 41)),
+                  ),
+                ],
+                settlements: [
+                  ExchangePositionSettlement(
+                    positionId: 'position-1',
+                    symbol: 'XRPUSDT',
+                    funding: 0,
+                    openedAt: openedAt,
+                    closedAt: openedAt.add(const Duration(minutes: 41)),
+                    realizedPnl: -0.214,
+                    fee: 0.015,
+                  ),
+                ],
+              );
+
+              await observer.reconcilePosition(
+                managed: managed(),
+                positionPnl: projection.forPositionId('position-1')!,
+                positionClosed: true,
+              );
+
+              final firstExit = store.ledger.events.singleWhere(
+                (item) => item.tradeId == 'trade-stop-part-1',
+              );
+              final finalExit = store.ledger.events.singleWhere(
+                (item) => item.tradeId == 'trade-stop-part-2',
+              );
+              expect(
+                firstExit.type,
+                TradingJournalEventType.positionPartiallyClosed,
+              );
+              expect(firstExit.remainingQuantity, closeTo(11.4, 0.000001));
+              expect(finalExit.type, TradingJournalEventType.positionClosed);
+              expect(finalExit.remainingQuantity, 0);
+            });
+
+          """
+          if marker not in tests:
+              raise SystemExit('review regression insertion point not found')
+          test_file.write_text(tests.replace(marker, regression + marker, 1))
+          PY
+
+      - name: Format, analyze and test journal safety
+        working-directory: src/client/quantara_app
+        shell: bash
+        run: |
+          dart format \
+            lib/features/trading_journal/application/local_live_journal_observer.dart \
+            test/trading_journal_review_regressions_test.dart
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test \
+            test/trading_journal_ledger_test.dart \
+            test/trading_journal_store_test.dart \
+            test/trading_journal_statistics_test.dart \
+            test/trading_journal_view_test.dart \
+            test/trading_journal_encrypted_export_test.dart \
+            test/trading_journal_review_regressions_test.dart \
+            test/trading_journal_source_safety_test.dart
+
+      - name: Remove temporary workflow and push clean result
+        shell: bash
+        run: |
+          rm -f .github/workflows/temporary-issue136-multifill-review.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: classify only the final multi-fill exit as closed"
+          git push origin HEAD:feat/136-event-sourced-trading-journal
