@@ -49,7 +49,7 @@ Focused tests cover:
 - ambiguous mutation response and restart-safe pending state;
 - source-level protection against duplicate mutation loops.
 
-Focused format, strict analyzer and safety tests passed on implementation head `8749e05ddc4d8e8e80a37213fa8a36f7de4f8d43`.
+Focused format, strict analyzer and safety tests passed on implementation head `8749e05ddc4d8e8e80a37213fa8a36f7de4f8d43`. The legacy source guard was upgraded to reject the removed quantity-ratio heuristic and require exchange fill identity; its formatted clean head is `fe0bc0f6e3954847954d033a0cd6b8338cc2ad2b`.
 
 ## Physical Samsung checklist — external gate
 
