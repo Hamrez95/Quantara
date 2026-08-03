@@ -12,10 +12,7 @@ void main() {
   test('wrong-side stop fails closed without throwing', () {
     final decision = policy.evaluate(
       ledger: PortfolioRiskLedger.initial(
-        tradingDay: TradingDayId.start(
-          now: now,
-          timezoneOffsetMinutes: 0,
-        ),
+        tradingDay: TradingDayId.start(now: now, timezoneOffsetMinutes: 0),
         dailyRiskLimit: 10,
       ),
       candidate: PortfolioEntryCandidate(
@@ -47,55 +44,58 @@ void main() {
     expect(decision.liveExecutionAllowed, isFalse);
   });
 
-  test('snapshot counts exchange and ledger margin reservations once', () async {
-    final database = SembastQuantaraDurableDatabase(
-      factory: databaseFactoryMemory,
-      path: 'portfolio-margin-review.db',
-    );
-    await database.initialize();
-    final coordinator = PortfolioRiskCoordinator(
-      store: DatabasePortfolioRiskLedgerStore(
-        databaseFactory: () async => database,
-      ),
-      policy: policy,
-      defaultDailyRiskLimit: 10,
-    );
-    final account = _account(now, pendingMarginReservations: 2);
+  test(
+    'snapshot counts exchange and ledger margin reservations once',
+    () async {
+      final database = SembastQuantaraDurableDatabase(
+        factory: databaseFactoryMemory,
+        path: 'portfolio-margin-review.db',
+      );
+      await database.initialize();
+      final coordinator = PortfolioRiskCoordinator(
+        store: DatabasePortfolioRiskLedgerStore(
+          databaseFactory: () async => database,
+        ),
+        policy: policy,
+        defaultDailyRiskLimit: 10,
+      );
+      final account = _account(now, pendingMarginReservations: 2);
 
-    final outcome = await coordinator.reserve(
-      candidate: PortfolioEntryCandidate(
-        reservationId: 'reservation-btc',
-        journalTradeId: 'trade-btc',
-        candidateId: 'candidate-btc',
-        symbol: 'BTCUSDT',
-        assetGroup: 'crypto-major',
-        side: PortfolioSide.long,
-        strategy: 'review-regression',
-        plannedQuantity: 3,
-        entryPrice: 100,
-        stopPrice: 99,
-        contractMultiplier: 1,
-        entryFeeRate: 0,
-        exitFeeRate: 0,
-        slippageRate: 0,
-        fundingReserve: 0,
-        requiredMargin: 6,
-        leverage: 10,
-        minimumQuantity: 0.001,
-        minimumNotional: 1,
-      ),
-      account: account,
-      now: now,
-    );
+      final outcome = await coordinator.reserve(
+        candidate: PortfolioEntryCandidate(
+          reservationId: 'reservation-btc',
+          journalTradeId: 'trade-btc',
+          candidateId: 'candidate-btc',
+          symbol: 'BTCUSDT',
+          assetGroup: 'crypto-major',
+          side: PortfolioSide.long,
+          strategy: 'review-regression',
+          plannedQuantity: 3,
+          entryPrice: 100,
+          stopPrice: 99,
+          contractMultiplier: 1,
+          entryFeeRate: 0,
+          exitFeeRate: 0,
+          slippageRate: 0,
+          fundingReserve: 0,
+          requiredMargin: 6,
+          leverage: 10,
+          minimumQuantity: 0.001,
+          minimumNotional: 1,
+        ),
+        account: account,
+        now: now,
+      );
 
-    expect(outcome.decision.allowed, isTrue);
-    expect(outcome.snapshot.margin.reservedMargin, 8);
-    final refreshed = await coordinator.snapshot(account: account, now: now);
-    expect(refreshed.margin.reservedMargin, 8);
-    expect(refreshed.margin.spendable, 92);
+      expect(outcome.decision.allowed, isTrue);
+      expect(outcome.snapshot.margin.reservedMargin, 8);
+      final refreshed = await coordinator.snapshot(account: account, now: now);
+      expect(refreshed.margin.reservedMargin, 8);
+      expect(refreshed.margin.spendable, 92);
 
-    await database.close();
-  });
+      await database.close();
+    },
+  );
 }
 
 PortfolioAccountTruth _account(
