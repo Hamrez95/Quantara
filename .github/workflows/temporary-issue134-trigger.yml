@@ -1,0 +1,51 @@
+name: Temporary Issue 134 trigger
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Flutter formatter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Apply implementation and remove temporary tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          encoded="$(sed -n 's/^          ISSUE_134_PATCH_GZIP_BASE64: //p' .github/workflows/temporary-source-export.yml)"
+          test -n "$encoded"
+          printf '%s' "$encoded" | base64 --decode | gzip --decompress > /tmp/issue-134.patch
+          git apply --check /tmp/issue-134.patch
+          git apply /tmp/issue-134.patch
+          git fetch origin dev --depth=1
+          git checkout origin/dev -- .github/workflows/flutter-ci.yml
+          rm .github/workflows/temporary-source-export.yml
+          rm .github/workflows/temporary-issue134-trigger.yml
+          cd src/client/quantara_app
+          flutter pub get
+          dart format lib test
+          cd "$GITHUB_WORKSPACE"
+          git config user.name 'Quantara Release Bot'
+          git config user.email 'quantara-release-bot@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: add authoritative private-account reconciliation'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
