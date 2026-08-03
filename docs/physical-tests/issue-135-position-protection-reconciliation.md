@@ -20,6 +20,10 @@ The private account projection reads regular pending orders from `/api/v1/future
 
 The automated fixture represents `XRPUSDT` short, isolated, 10x, quantity `21.4`, entry `1.0665`, stop `1.0691`, and take-profits `1.0603`, `1.0567`, and `1.0531`. The four protection rows total exactly `21.4` TP quantity and produce zero residual.
 
+## Focused automated gate
+
+On formatted implementation head `6deac3a4d97fc77b27c48980e54a606f79b6ce5d`, strict analyzer and the focused API, reconciliation, widget, stale-state, and source-safety test set passed. The source-safety test confirms the private client contains only the read-only TP/SL pending-order path and no TP/SL placement, cancellation, or modification path.
+
 ## External gate
 
 Only after all automated gates pass, execute the read-only Samsung checklist on Issue #135 and Epic #140. The checklist must not create an entry or cancel, move, resize, weaken, or replace any existing position, stop, or take-profit order.
