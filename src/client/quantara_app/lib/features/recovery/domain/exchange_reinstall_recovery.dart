@@ -114,7 +114,8 @@ abstract final class ExchangeReinstallRecovery {
     for (final position in exchangePositions) {
       if (!seen.add(position.positionId)) continue;
       final claim = claimsByPosition[position.positionId];
-      final ownershipProven = claim != null &&
+      final ownershipProven =
+          claim != null &&
           _ownershipEvidence(
             claim: claim,
             position: position,
@@ -215,10 +216,12 @@ abstract final class ExchangeReinstallRecovery {
     required List<RecoveryProtectionOrder> protectionOrders,
   }) {
     if (claim.positionId != position.positionId) return false;
-    final clientMatch = claim.clientId.trim().isNotEmpty &&
+    final clientMatch =
+        claim.clientId.trim().isNotEmpty &&
         position.clientId.trim().isNotEmpty &&
         claim.clientId == position.clientId;
-    final entryMatch = claim.entryOrderId.trim().isNotEmpty &&
+    final entryMatch =
+        claim.entryOrderId.trim().isNotEmpty &&
         regularOrderIds.contains(claim.entryOrderId);
     final knownProtectionIds = {
       if (claim.stopOrderId != null) claim.stopOrderId!,
