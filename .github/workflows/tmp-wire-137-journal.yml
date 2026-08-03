@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/137-encrypted-recovery-database
+  pull_request:
+    branches:
+      - dev
 
 permissions:
   contents: write
@@ -22,7 +25,7 @@ jobs:
           flutter-version: 3.44.8
           channel: stable
           cache: true
-      - name: Wire database-first runtime and fail-closed regression
+      - name: Wire database-first runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -35,77 +38,13 @@ jobs:
           new_import = "import '../../trading_journal/data/database_trading_journal_store.dart';"
           old_runtime = "TradingJournalController(store: SharedPreferencesTradingJournalStore());"
           new_runtime = "TradingJournalController(store: DatabaseTradingJournalStore());"
-          if old_import not in text or old_runtime not in text:
-              raise SystemExit('Owner Alpha journal wiring did not match expected source.')
-          owner.write_text(text.replace(old_import, new_import).replace(old_runtime, new_runtime))
-
-          test_file = Path('src/client/quantara_app/test/database_trading_journal_store_test.dart')
-          test_text = test_file.read_text()
-          old_test = """  test('malformed durable journal fails closed instead of using legacy', () async {
-            final database = SembastQuantaraDurableDatabase(
-              factory: databaseFactoryMemory,
-              path: 'journal-corruption.db',
-            );
-            await database.initialize();
-            await database.put(
-              QuantaraDurableRecord(
-                category: QuantaraDurableCategory.journal,
-                key: 'ledger',
-                schemaVersion: 1,
-                revision: 1,
-                updatedAt: DateTime.utc(2026, 8, 4),
-                payload: const {'schemaVersion': 1, 'generation': 'invalid'},
-              ),
-            );
-            final legacy = _MemoryTradingJournalStore(
-              TradingJournalLedger.empty().appendPlan(plan('must-not-fallback')),
-            );
-            final store = DatabaseTradingJournalStore(
-              databaseFactory: () async => database,
-              legacyStore: legacy,
-            );
-
-            await expectLater(store.load(), throwsA(anything));
-            expect(legacy.loadCalls, 0);
-          });
-          """
-          new_test = """  test('unverified durable journal remains authoritative over legacy', () async {
-            final database = SembastQuantaraDurableDatabase(
-              factory: databaseFactoryMemory,
-              path: 'journal-unverified.db',
-            );
-            await database.initialize();
-            final unverified = TradingJournalLedger.empty().withIntegrityWarning(
-              'Durable journal requires review.',
-            );
-            await database.put(
-              QuantaraDurableRecord(
-                category: QuantaraDurableCategory.journal,
-                key: 'ledger',
-                schemaVersion: 1,
-                revision: 1,
-                updatedAt: DateTime.utc(2026, 8, 4),
-                payload: unverified.toJson(),
-              ),
-            );
-            final legacy = _MemoryTradingJournalStore(
-              TradingJournalLedger.empty().appendPlan(plan('must-not-fallback')),
-            );
-            final store = DatabaseTradingJournalStore(
-              databaseFactory: () async => database,
-              legacyStore: legacy,
-            );
-
-            final loaded = await store.load();
-            expect(loaded.integrity, TradingJournalIntegrity.unverified);
-            expect(loaded.warnings, contains('Durable journal requires review.'));
-            expect(loaded.plans, isEmpty);
-            expect(legacy.loadCalls, 0);
-          });
-          """
-          if old_test not in test_text:
-              raise SystemExit('Database journal regression block did not match expected source.')
-          test_file.write_text(test_text.replace(old_test, new_test))
+          if old_import in text:
+              text = text.replace(old_import, new_import)
+          if old_runtime in text:
+              text = text.replace(old_runtime, new_runtime)
+          if new_import not in text or new_runtime not in text:
+              raise SystemExit('Database-first journal wiring was not established.')
+          owner.write_text(text)
           PY
       - name: Verify lockfile and format reviewed files
         working-directory: src/client/quantara_app
