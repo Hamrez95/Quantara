@@ -72,7 +72,6 @@ final class BitunixPrivateApiClient {
             await _signedGet('/api/v1/futures/tpsl/get_pending_orders', {
               'limit': '100',
               'positionId': positionId,
-              'positionMode': position.positionMode,
               'skip': '0',
               'symbol': position.symbol,
             }, credentials);

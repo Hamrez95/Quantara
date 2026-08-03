@@ -83,7 +83,14 @@ void main() {
         'xrp-position-1',
       );
       expect(protectionRequest.url.queryParameters['symbol'], 'XRPUSDT');
-      expect(protectionRequest.url.queryParameters['positionMode'], 'HEDGE');
+      expect(
+        protectionRequest.url.queryParameters.containsKey('positionMode'),
+        isFalse,
+      );
+      expect(
+        protectionRequest.url.queryParameters.containsKey('side'),
+        isFalse,
+      );
 
       expect(snapshot.orders, hasLength(1));
       expect(snapshot.protectionOrders, hasLength(4));

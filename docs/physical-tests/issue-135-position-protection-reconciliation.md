@@ -2,7 +2,7 @@
 
 ## Read-only exchange boundary
 
-The private account projection reads regular pending orders from `/api/v1/futures/trade/get_pending_orders` and Position TP/SL rows independently from `/api/v1/futures/tpsl/get_pending_orders`. The TP/SL request is scoped by the open position's exchange `positionId`, symbol, and position mode. No placement, cancellation, replacement, or modification endpoint is part of this projection.
+The private account projection reads regular pending orders from `/api/v1/futures/trade/get_pending_orders` and Position TP/SL rows independently from `/api/v1/futures/tpsl/get_pending_orders`. The TP/SL request is scoped by the open position's exchange `positionId` and symbol. Optional integer `side` and `positionMode` filters are intentionally omitted because the local position model carries their string forms. No placement, cancellation, replacement, or modification endpoint is part of this projection.
 
 ## Reconciliation model
 
