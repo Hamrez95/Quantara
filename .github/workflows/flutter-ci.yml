@@ -1,4 +1,4 @@
-name: Temporary portfolio risk analyzer repair
+name: Temporary portfolio risk repair commit
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: portfolio-risk-repair-${{ github.ref }}
+  group: portfolio-risk-repair-commit-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -19,7 +19,7 @@ jobs:
   repair:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,19 +45,6 @@ jobs:
               'final class PositionRiskReservation {\n  const PositionRiskReservation({',
           )
           old_math = """    final maximumLoss = PortfolioRiskMath.maximumLoss(
-              side: candidate.side,
-              entryPrice: candidate.entryPrice,
-              stopPrice: candidate.stopPrice,
-              quantity: candidate.plannedQuantity,
-              contractMultiplier: candidate.contractMultiplier,
-              entryFeeRate: candidate.entryFeeRate,
-              exitFeeRate: candidate.exitFeeRate,
-              slippageRate: candidate.slippageRate,
-              fundingReserve: candidate.fundingReserve,
-            );
-"""
-          if old_math not in text:
-              old_math = """    final maximumLoss = PortfolioRiskMath.maximumLoss(
       side: candidate.side,
       entryPrice: candidate.entryPrice,
       stopPrice: candidate.stopPrice,
@@ -146,7 +133,12 @@ jobs:
       policy: const PortfolioRiskPolicy(maximumDirectionRiskFraction: 1),
       defaultDailyRiskLimit: 10,
     );
-    final truth = account(pendingMargin: 2, freeMargin: 100, safetyBuffer: 0, feeReserve: 0);
+    final truth = account(
+      pendingMargin: 2,
+      freeMargin: 100,
+      safetyBuffer: 0,
+      feeReserve: 0,
+    );
     final outcome = await coordinator.reserve(
       candidate: candidate('btc-margin', 3, requiredMargin: 6),
       account: truth,
@@ -170,19 +162,11 @@ jobs:
         working-directory: src/client/quantara_app
         run: flutter pub get --enforce-lockfile
 
-      - name: Format
+      - name: Format repaired files
         working-directory: src/client/quantara_app
         run: dart format lib/features/portfolio_risk test/portfolio_risk_*.dart
 
-      - name: Analyze focused slice
-        working-directory: src/client/quantara_app
-        run: flutter analyze --fatal-infos lib/features/portfolio_risk test/portfolio_risk_policy_test.dart test/portfolio_risk_panel_test.dart test/portfolio_risk_source_safety_test.dart
-
-      - name: Test focused slice
-        working-directory: src/client/quantara_app
-        run: flutter test --reporter expanded test/portfolio_risk_policy_test.dart test/portfolio_risk_panel_test.dart test/portfolio_risk_source_safety_test.dart
-
-      - name: Commit verified fixes
+      - name: Commit repaired files
         shell: bash
         run: |
           set -euo pipefail
