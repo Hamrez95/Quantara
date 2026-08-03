@@ -115,7 +115,7 @@ void main() {
   );
 
   test(
-    'secret records are rejected by the durable database boundary',
+    'secret records and secret-like cache fields are rejected at the boundary',
     () async {
       final database = SembastQuantaraDurableDatabase(
         factory: databaseFactoryMemory,
@@ -135,6 +135,26 @@ void main() {
           ),
         ),
         throwsArgumentError,
+      );
+      await expectLater(
+        database.put(
+          QuantaraDurableRecord(
+            category: QuantaraDurableCategory.cache,
+            key: 'forbidden-credential-cache',
+            schemaVersion: 1,
+            revision: 1,
+            updatedAt: DateTime.utc(2026, 8, 3),
+            payload: const {'accessToken': 'must-never-persist'},
+          ),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        await database.read(
+          QuantaraDurableCategory.cache,
+          'forbidden-credential-cache',
+        ),
+        isNull,
       );
       await database.close();
     },
