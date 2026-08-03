@@ -24,6 +24,8 @@ The automated fixture represents `XRPUSDT` short, isolated, 10x, quantity `21.4`
 
 On formatted implementation head `6deac3a4d97fc77b27c48980e54a606f79b6ce5d`, strict analyzer and the focused API, reconciliation, widget, stale-state, and source-safety test set passed. The source-safety test confirms the private client contains only the read-only TP/SL pending-order path and no TP/SL placement, cancellation, or modification path.
 
+The Bitunix query-shape review fix passed strict analyzer and focused protection tests on `dfd8e78c423552a393d9aec0eada21b9438c84f8`. The final request uses only the documented string filters `positionId` and `symbol`, plus pagination, and omits optional integer `side` and `positionMode` filters.
+
 ## External gate
 
 Only after all automated gates pass, execute the read-only Samsung checklist on Issue #135 and Epic #140. The checklist must not create an entry or cancel, move, resize, weaken, or replace any existing position, stop, or take-profit order.
