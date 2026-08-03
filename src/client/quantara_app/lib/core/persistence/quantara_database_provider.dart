@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import 'quantara_database_provider_stub.dart'
     if (dart.library.io) 'quantara_database_provider_io.dart'
-    if (dart.library.html) 'quantara_database_provider_web.dart' as platform;
+    if (dart.library.html) 'quantara_database_provider_web.dart'
+    as platform;
 import 'quantara_durable_database.dart';
 
 abstract final class QuantaraDatabaseProvider {
