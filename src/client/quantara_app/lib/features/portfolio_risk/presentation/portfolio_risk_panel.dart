@@ -57,6 +57,8 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                   ),
                   tone: Theme.of(context).colorScheme.primary,
                 ),
+                const SizedBox(height: 12),
+                _actions(),
                 if (_controller.error != null) ...[
                   const SizedBox(height: 12),
                   _notice(
@@ -80,8 +82,6 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                   ),
                 ] else if (snapshot != null) ...[
                   const SizedBox(height: 16),
-                  _actions(),
-                  const SizedBox(height: 12),
                   _status(snapshot),
                   const SizedBox(height: 16),
                   _budgetGrid(snapshot),
@@ -264,51 +264,48 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
     );
   }
 
-  Widget _actions() => Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: [
-      FilledButton.tonalIcon(
-        onPressed: _controller.loading
-            ? null
-            : () => _controller.reserveExample(3),
-        icon: const Icon(Icons.add_chart_rounded),
-        label: Text(_t('رزرو ۳ USDT', 'Reserve 3 USDT')),
-      ),
-      FilledButton.tonalIcon(
-        onPressed: _controller.loading
-            ? null
-            : () => _controller.reserveExample(4),
-        icon: const Icon(Icons.add_chart_rounded),
-        label: Text(_t('رزرو ۴ USDT', 'Reserve 4 USDT')),
-      ),
-      OutlinedButton.icon(
-        onPressed: _controller.loading
-            ? null
-            : () => _controller.reserveExample(8),
-        icon: const Icon(Icons.rule_rounded),
-        label: Text(_t('آزمون Reject با ۸', 'Try rejected 8')),
-      ),
-      OutlinedButton.icon(
-        onPressed: _controller.loading ? null : _controller.toggleFreshness,
-        icon: Icon(
-          _controller.accountFresh
-              ? Icons.cloud_off_outlined
-              : Icons.cloud_done_outlined,
+  Widget _actions() {
+    final disabled = _controller.loading && _controller.snapshot != null;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.tonalIcon(
+          onPressed: disabled ? null : () => _controller.reserveExample(3),
+          icon: const Icon(Icons.add_chart_rounded),
+          label: Text(_t('رزرو ۳ USDT', 'Reserve 3 USDT')),
         ),
-        label: Text(
-          _controller.accountFresh
-              ? _t('شبیه‌سازی داده Stale', 'Simulate stale data')
-              : _t('بازگردانی داده Fresh', 'Restore fresh data'),
+        FilledButton.tonalIcon(
+          onPressed: disabled ? null : () => _controller.reserveExample(4),
+          icon: const Icon(Icons.add_chart_rounded),
+          label: Text(_t('رزرو ۴ USDT', 'Reserve 4 USDT')),
         ),
-      ),
-      TextButton.icon(
-        onPressed: _controller.loading ? null : _controller.reset,
-        icon: const Icon(Icons.restart_alt_rounded),
-        label: Text(_t('بازنشانی مثال', 'Reset example')),
-      ),
-    ],
-  );
+        OutlinedButton.icon(
+          onPressed: disabled ? null : () => _controller.reserveExample(8),
+          icon: const Icon(Icons.rule_rounded),
+          label: Text(_t('آزمون Reject با ۸', 'Try rejected 8')),
+        ),
+        OutlinedButton.icon(
+          onPressed: disabled ? null : _controller.toggleFreshness,
+          icon: Icon(
+            _controller.accountFresh
+                ? Icons.cloud_off_outlined
+                : Icons.cloud_done_outlined,
+          ),
+          label: Text(
+            _controller.accountFresh
+                ? _t('شبیه‌سازی داده Stale', 'Simulate stale data')
+                : _t('بازگردانی داده Fresh', 'Restore fresh data'),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: disabled ? null : _controller.reset,
+          icon: const Icon(Icons.restart_alt_rounded),
+          label: Text(_t('بازنشانی مثال', 'Reset example')),
+        ),
+      ],
+    );
+  }
 
   Widget _positions(PortfolioRiskSnapshot snapshot) {
     if (snapshot.positions.isEmpty) {
