@@ -51,6 +51,8 @@ abstract final class SignalTimeframePriorityResolver {
         ? '1h'
         : group.any((entry) => entry.timeframe == '15m')
         ? '15m'
+        : group.any((entry) => entry.timeframe == '5m')
+        ? '5m'
         : group.any((entry) => entry.timeframe == '1D')
         ? '1D'
         : group.first.timeframe;

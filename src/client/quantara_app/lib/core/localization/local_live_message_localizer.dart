@@ -82,6 +82,24 @@ abstract final class LocalLiveMessageLocalizer {
           'برای بازکردن پوزیشن Isolated جدید، مارجین USDT قابل استفاده وجود ندارد.',
       'Quantara could not confirm an affordable API-supported symbol from the selected allow-list.':
           'Quantara نتوانست میان نمادهای انتخاب‌شده، نمادی معتبر و متناسب با موجودی تأیید کند.',
+      'No actionable setup passed the selected strategy and timeframe filters.':
+          'هیچ ستاپ قابل اجرایی از فیلتر استراتژی و تایم‌فریم‌های انتخاب‌شده عبور نکرد.',
+      'Actionable setups were skipped because selected timeframes disagreed on direction.':
+          'ستاپ‌های قابل بررسی به‌دلیل تضاد جهت در تایم‌فریم‌های انتخاب‌شده رد شدند.',
+      'The highest-ranked setup was already executed in this local-live history.':
+          'ستاپ برتر قبلاً در تاریخچه ترید محلی اجرا شده و دوباره وارد نمی‌شود.',
+      'The highest-ranked setup was expired or missing a complete protected plan.':
+          'ستاپ برتر منقضی شده یا برنامه کامل Entry، SL و سه TP را ندارد.',
+      'The highest-ranked setup is valid but the live mark price is outside its entry zone.':
+          'ستاپ معتبر است، اما قیمت لحظه‌ای هنوز داخل محدوده ورود قرار ندارد.',
+      'The selected instrument is closed or unavailable for API futures execution.':
+          'نماد انتخاب‌شده بسته است یا اجرای فیوچرز API برای آن در دسترس نیست.',
+      'Calculated position size is below the exchange minimum for three protected target tranches.':
+          'حجم محاسبه‌شده برای تقسیم ایمن بین سه حد سود، از حداقل صرافی کمتر است.',
+      'Available margin is below the protected entry requirement including the safety buffer.':
+          'مارجین آزاد برای ورود محافظت‌شده همراه با حاشیه ایمنی کافی نیست.',
+      'TP1 largest reduction observed; remaining position moved beyond break-even including costs.':
+          'بخش اصلی حجم در TP1 بسته شد و استاپ باقی‌مانده با احتساب هزینه‌ها به محدوده ریسک‌فری منتقل شد.',
     };
     final known = exact[value];
     if (known != null) return known;

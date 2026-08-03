@@ -153,6 +153,7 @@ abstract final class StrategyEngineV2 {
     return _buildIdea(
       analysis: analysis,
       strategy: AnalysisStrategy.trendPullback,
+      marketRegime: regime.regime,
       capital: capital,
       riskPercent: riskPercent,
       long: long,
@@ -291,6 +292,7 @@ abstract final class StrategyEngineV2 {
     return _buildIdea(
       analysis: analysis,
       strategy: AnalysisStrategy.momentumContinuation,
+      marketRegime: regime.regime,
       capital: capital,
       riskPercent: riskPercent,
       long: long,
@@ -336,6 +338,7 @@ abstract final class StrategyEngineV2 {
   static TradeIdea _buildIdea({
     required TimeframeChartAnalysis analysis,
     required AnalysisStrategy strategy,
+    required MarketRegime marketRegime,
     required double capital,
     required double riskPercent,
     required bool long,
@@ -428,6 +431,7 @@ abstract final class StrategyEngineV2 {
       reasons: List.unmodifiable(reasons),
       strategy: strategy,
       strategyVersion: version,
+      marketRegime: marketRegime,
     );
   }
 
@@ -473,6 +477,7 @@ abstract final class StrategyEngineV2 {
 
   static Duration _durationFor(String timeframe) {
     return switch (timeframe) {
+      '5m' => const Duration(minutes: 5),
       '15m' => const Duration(minutes: 15),
       '1h' => const Duration(hours: 1),
       '4h' => const Duration(hours: 4),

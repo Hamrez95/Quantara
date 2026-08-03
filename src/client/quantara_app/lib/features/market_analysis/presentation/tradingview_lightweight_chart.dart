@@ -66,6 +66,7 @@ abstract final class ChartSignalOverlayPolicy {
   }
 
   static Duration _timeframeDuration(String timeframe) => switch (timeframe) {
+    '5m' => const Duration(minutes: 5),
     '15m' => const Duration(minutes: 15),
     '1h' => const Duration(hours: 1),
     '4h' => const Duration(hours: 4),
