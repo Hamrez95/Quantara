@@ -42,7 +42,8 @@ Review regressions additionally prove:
 - stop-promotion identity does not conflict with the original stop;
 - journal persistence failure does not escape into exchange management;
 - nested secret-like export fields are recursively redacted;
-- a recovered valid slot remains available after another interrupted write.
+- a recovered valid slot remains available after another interrupted write;
+- when a stop or manual exit is filled in multiple exchange trades, intermediate fills remain `positionPartiallyClosed` and only the final exit fill closes the journal position.
 
 All temporary patch/export workflows and payloads were removed from the final diff before the full release gates.
 
