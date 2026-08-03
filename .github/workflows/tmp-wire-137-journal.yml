@@ -1,0 +1,135 @@
+name: Temporary wire PR 149 journal
+
+on:
+  push:
+    branches:
+      - feat/137-encrypted-recovery-database
+
+permissions:
+  contents: write
+
+jobs:
+  wire-journal:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/137-encrypted-recovery-database
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Wire database-first runtime and fail-closed regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          owner = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          text = owner.read_text()
+          old_import = "import '../../trading_journal/data/trading_journal_store.dart';"
+          new_import = "import '../../trading_journal/data/database_trading_journal_store.dart';"
+          old_runtime = "TradingJournalController(store: SharedPreferencesTradingJournalStore());"
+          new_runtime = "TradingJournalController(store: DatabaseTradingJournalStore());"
+          if old_import not in text or old_runtime not in text:
+              raise SystemExit('Owner Alpha journal wiring did not match expected source.')
+          owner.write_text(text.replace(old_import, new_import).replace(old_runtime, new_runtime))
+
+          test_file = Path('src/client/quantara_app/test/database_trading_journal_store_test.dart')
+          test_text = test_file.read_text()
+          old_test = """  test('malformed durable journal fails closed instead of using legacy', () async {
+            final database = SembastQuantaraDurableDatabase(
+              factory: databaseFactoryMemory,
+              path: 'journal-corruption.db',
+            );
+            await database.initialize();
+            await database.put(
+              QuantaraDurableRecord(
+                category: QuantaraDurableCategory.journal,
+                key: 'ledger',
+                schemaVersion: 1,
+                revision: 1,
+                updatedAt: DateTime.utc(2026, 8, 4),
+                payload: const {'schemaVersion': 1, 'generation': 'invalid'},
+              ),
+            );
+            final legacy = _MemoryTradingJournalStore(
+              TradingJournalLedger.empty().appendPlan(plan('must-not-fallback')),
+            );
+            final store = DatabaseTradingJournalStore(
+              databaseFactory: () async => database,
+              legacyStore: legacy,
+            );
+
+            await expectLater(store.load(), throwsA(anything));
+            expect(legacy.loadCalls, 0);
+          });
+          """
+          new_test = """  test('unverified durable journal remains authoritative over legacy', () async {
+            final database = SembastQuantaraDurableDatabase(
+              factory: databaseFactoryMemory,
+              path: 'journal-unverified.db',
+            );
+            await database.initialize();
+            final unverified = TradingJournalLedger.empty().withIntegrityWarning(
+              'Durable journal requires review.',
+            );
+            await database.put(
+              QuantaraDurableRecord(
+                category: QuantaraDurableCategory.journal,
+                key: 'ledger',
+                schemaVersion: 1,
+                revision: 1,
+                updatedAt: DateTime.utc(2026, 8, 4),
+                payload: unverified.toJson(),
+              ),
+            );
+            final legacy = _MemoryTradingJournalStore(
+              TradingJournalLedger.empty().appendPlan(plan('must-not-fallback')),
+            );
+            final store = DatabaseTradingJournalStore(
+              databaseFactory: () async => database,
+              legacyStore: legacy,
+            );
+
+            final loaded = await store.load();
+            expect(loaded.integrity, TradingJournalIntegrity.unverified);
+            expect(loaded.warnings, contains('Durable journal requires review.'));
+            expect(loaded.plans, isEmpty);
+            expect(legacy.loadCalls, 0);
+          });
+          """
+          if old_test not in test_text:
+              raise SystemExit('Database journal regression block did not match expected source.')
+          test_file.write_text(test_text.replace(old_test, new_test))
+          PY
+      - name: Verify lockfile and format reviewed files
+        working-directory: src/client/quantara_app
+        run: |
+          flutter pub get --enforce-lockfile
+          dart format \
+            lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            lib/features/trading_journal/data/database_trading_journal_store.dart \
+            test/database_trading_journal_store_test.dart \
+            test/trading_journal_source_safety_test.dart
+      - name: Commit reviewed journal wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            src/client/quantara_app/lib/features/trading_journal/data/database_trading_journal_store.dart \
+            src/client/quantara_app/test/database_trading_journal_store_test.dart \
+            src/client/quantara_app/test/trading_journal_source_safety_test.dart
+          if git diff --cached --quiet; then
+            echo 'Journal wiring is already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(journal): wire database-first durable runtime'
+          git push origin HEAD:feat/137-encrypted-recovery-database
