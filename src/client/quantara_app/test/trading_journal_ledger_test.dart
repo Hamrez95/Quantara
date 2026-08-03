@@ -109,8 +109,9 @@ void main() {
 
     final first = ledger.appendEvent(tp1);
     final duplicate = first.appendEvent(
-      TradingJournalEvent.fromJson(tp1.toJson())
-          .copyWith(eventId: 'retry-local-tp1'),
+      TradingJournalEvent.fromJson(
+        tp1.toJson(),
+      ).copyWith(eventId: 'retry-local-tp1'),
     );
 
     expect(duplicate.events, hasLength(1));

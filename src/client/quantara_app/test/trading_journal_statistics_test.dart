@@ -125,8 +125,10 @@ void main() {
     );
 
     expect(projection.netPnl, isNull);
-    expect(projection.counterfactualOutcome!.classification,
-        TradingJournalCounterfactualClassification.wouldWin);
+    expect(
+      projection.counterfactualOutcome!.classification,
+      TradingJournalCounterfactualClassification.wouldWin,
+    );
     expect(projection.counterfactualOutcome!.highestTargetReached, 2);
   });
 }

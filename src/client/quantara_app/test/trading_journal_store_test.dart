@@ -70,22 +70,29 @@ void main() {
         details: const {'targetIndex': 1},
       );
 
-  test('dual-slot store commits atomically and reloads latest generation', () async {
-    final store = SharedPreferencesTradingJournalStore();
-    await store.replace(TradingJournalLedger.empty().appendPlan(plan('journal-1')));
-    await store.appendEvent(fill('local-1', 'trade-1'));
+  test(
+    'dual-slot store commits atomically and reloads latest generation',
+    () async {
+      final store = SharedPreferencesTradingJournalStore();
+      await store.replace(
+        TradingJournalLedger.empty().appendPlan(plan('journal-1')),
+      );
+      await store.appendEvent(fill('local-1', 'trade-1'));
 
-    final restored = await SharedPreferencesTradingJournalStore().load();
+      final restored = await SharedPreferencesTradingJournalStore().load();
 
-    expect(restored.plans, hasLength(1));
-    expect(restored.events, hasLength(1));
-    expect(restored.events.single.tradeId, 'trade-1');
-    expect(restored.generation, greaterThanOrEqualTo(2));
-  });
+      expect(restored.plans, hasLength(1));
+      expect(restored.events, hasLength(1));
+      expect(restored.events.single.tradeId, 'trade-1');
+      expect(restored.generation, greaterThanOrEqualTo(2));
+    },
+  );
 
   test('corrupt active slot falls back to previous verified slot', () async {
     final store = SharedPreferencesTradingJournalStore();
-    await store.replace(TradingJournalLedger.empty().appendPlan(plan('journal-1')));
+    await store.replace(
+      TradingJournalLedger.empty().appendPlan(plan('journal-1')),
+    );
     await store.appendEvent(fill('local-1', 'trade-1'));
 
     final preferences = await SharedPreferences.getInstance();
@@ -105,7 +112,9 @@ void main() {
 
   test('crash before pointer flip keeps old committed snapshot', () async {
     final store = SharedPreferencesTradingJournalStore();
-    await store.replace(TradingJournalLedger.empty().appendPlan(plan('journal-1')));
+    await store.replace(
+      TradingJournalLedger.empty().appendPlan(plan('journal-1')),
+    );
     final before = await store.load();
 
     final preferences = await SharedPreferences.getInstance();

@@ -10,6 +10,8 @@ import '../../owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../../owner_alpha/data/trade_idea_factory.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
+import '../../trading_journal/application/local_live_journal_observer.dart';
+import '../../trading_journal/domain/trading_journal_models.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_trade_models.dart';
@@ -56,6 +58,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   DateTime? _lastExchangeSync;
   String? _lastAuditFingerprint;
   DateTime? _lastAuditAt;
+  final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -649,30 +652,35 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           'TP ladder placement failed; emergency close was submitted.',
         );
       }
-      _managed.add(
-        LocalLiveManagedPosition(
-          setupId: idea.setupId,
-          symbol: idea.symbol,
-          timeframe: idea.timeframe,
-          direction: idea.direction,
-          positionId: position.positionId,
-          entryOrderId: placed.orderId,
-          clientId: clientId,
-          initialQuantity: quantity,
-          entryPrice: position.averageOpenPrice > 0
-              ? position.averageOpenPrice
-              : entryPrice,
-          originalStopLoss: stopLoss,
-          targets: idea.targets.take(3).toList(growable: false),
-          leverage: leverage,
-          openedAt: DateTime.now().toUtc(),
-          stopOrderId: stopOrderId,
-          targetAllocation: configuration.targetAllocation,
-          targetQuantities: targetQuantities,
-          targetOrderIds: targetOrderIds,
-          costBufferRate: profitPlan.costBufferRate,
-          marketRegime: idea.marketRegime,
-        ),
+      final managedPosition = LocalLiveManagedPosition(
+        setupId: idea.setupId,
+        symbol: idea.symbol,
+        timeframe: idea.timeframe,
+        direction: idea.direction,
+        positionId: position.positionId,
+        entryOrderId: placed.orderId,
+        clientId: clientId,
+        initialQuantity: quantity,
+        entryPrice: position.averageOpenPrice > 0
+            ? position.averageOpenPrice
+            : entryPrice,
+        originalStopLoss: stopLoss,
+        targets: idea.targets.take(3).toList(growable: false),
+        leverage: leverage,
+        openedAt: DateTime.now().toUtc(),
+        stopOrderId: stopOrderId,
+        targetAllocation: configuration.targetAllocation,
+        targetQuantities: targetQuantities,
+        targetOrderIds: targetOrderIds,
+        costBufferRate: profitPlan.costBufferRate,
+        marketRegime: idea.marketRegime,
+      );
+      _managed.add(managedPosition);
+      await _journalObserver.recordProtectedPosition(
+        idea: idea,
+        managed: managedPosition,
+        account: account,
+        riskPercent: configuration.riskPercent,
       );
       _sessionPositionIds.add(position.positionId);
       _executedSetupIds.add(idea.setupId);
@@ -700,10 +708,18 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     final exchange = _exchange!;
     final credentials = _credentials!;
     for (final managed in List<LocalLiveManagedPosition>.of(_managed)) {
+      final positionPnl = pnlProjection.forPositionId(managed.positionId);
       final position = positions
           .where((item) => item.positionId == managed.positionId)
           .firstOrNull;
       if (position == null || position.quantity <= 0) {
+        if (positionPnl != null) {
+          await _journalObserver.reconcilePosition(
+            managed: managed,
+            positionPnl: positionPnl,
+            positionClosed: true,
+          );
+        }
         final history = await exchange.fetchClosedPositions(
           positionId: managed.positionId,
           credentials: credentials,
@@ -784,7 +800,6 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         }
       }
 
-      final positionPnl = pnlProjection.forPositionId(managed.positionId);
       if (positionPnl == null || !positionPnl.isVerified) {
         _entriesEnabled = false;
         final progress = managed.profitLockProgress.copyWith(
@@ -825,6 +840,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         continue;
       }
 
+      await _journalObserver.reconcilePosition(
+        managed: managed,
+        positionPnl: positionPnl,
+        positionClosed: false,
+      );
       final fillProgress = ConfirmedTargetFillProgress.reconcile(
         targetOrderIds: managed.targetOrderIds,
         targetQuantities: managed.targetQuantities,
@@ -896,6 +916,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           position: position,
           stage: 1,
           decision: decision,
+          previousStop: currentStop,
           priceTolerance: priceTolerance,
           quantityTolerance: quantityTolerance,
         );
@@ -930,6 +951,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           position: position,
           stage: 2,
           decision: decision,
+          previousStop: currentStop,
           priceTolerance: priceTolerance,
           quantityTolerance: quantityTolerance,
         );
@@ -945,10 +967,20 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     required BitunixLivePosition position,
     required int stage,
     required ProfitLockStopDecision decision,
+    required double previousStop,
     required double priceTolerance,
     required double quantityTolerance,
   }) async {
     if (!decision.requiresMutation) {
+      await _journalObserver.recordStopMove(
+        managed: current,
+        stage: stage,
+        previousStop: previousStop,
+        proposedStop: decision.proposedStop,
+        confirmed: true,
+        reason: decision.reason,
+        orderId: current.stopOrderId,
+      );
       final finalized = current.copyWith(
         profitLockProgress: current.profitLockProgress.copyWith(
           confirmedStage: stage,
@@ -974,6 +1006,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     );
     _replaceManaged(original, pending);
     await _persistState();
+    await _journalObserver.recordStopMove(
+      managed: pending,
+      stage: stage,
+      previousStop: previousStop,
+      proposedStop: decision.proposedStop,
+      confirmed: false,
+      reason: decision.reason,
+    );
 
     final exchange = _exchange!;
     final credentials = _credentials!;
@@ -1011,6 +1051,15 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           clearPendingStop: true,
           clearWarning: true,
         ),
+      );
+      await _journalObserver.recordStopMove(
+        managed: finalized,
+        stage: stage,
+        previousStop: previousStop,
+        proposedStop: decision.proposedStop,
+        confirmed: true,
+        reason: decision.reason,
+        orderId: execution.orderId ?? finalized.stopOrderId,
       );
       _auditEvent(
         stage == 1 ? 'risk_free_confirmed' : 'runner_confirmed',
@@ -1126,6 +1175,13 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         position: position,
         clientId: '${managed.clientId}-emergency-close',
         credentials: credentials,
+      );
+      await _journalObserver.recordLifecycle(
+        managed: managed,
+        type: TradingJournalEventType.positionClosed,
+        identity: 'emergency-close-request:${managed.positionId}',
+        message: 'Reduce-only emergency close submitted.',
+        quality: TradingJournalFactQuality.calculated,
       );
       _auditEvent(
         'emergency_close',

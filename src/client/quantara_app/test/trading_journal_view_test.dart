@@ -183,11 +183,7 @@ void main() {
     );
     expect(find.text('Journal integrity check failed.'), findsOneWidget);
 
-    await pump(
-      tester,
-      locale: const Locale('en'),
-      projections: const [],
-    );
+    await pump(tester, locale: const Locale('en'), projections: const []);
     expect(find.text('No journal records yet.'), findsOneWidget);
   });
 }

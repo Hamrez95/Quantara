@@ -31,6 +31,9 @@ import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../strategy_lab/data/strategy_lab_runner.dart';
 import '../../strategy_lab/data/platform_strategy_lab_session_store.dart';
 import '../../strategy_lab/domain/strategy_lab_models.dart';
+import '../../trading_journal/application/trading_journal_controller.dart';
+import '../../trading_journal/data/trading_journal_store.dart';
+import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
 import '../data/owner_alpha_settings_transfer.dart';
@@ -95,6 +98,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
         apiClient: UnattendedAutoTradeApiClient(client: _autoTradeHttpClient),
         configStore: const SecureAutoTradeServerConfigStore(),
       );
+  late final TradingJournalController _journalController =
+      TradingJournalController(store: SharedPreferencesTradingJournalStore());
   late final OwnerAlphaController _controller = OwnerAlphaController(
     repository: widget.repository,
     settingsStore: widget.settingsStore,
@@ -111,6 +116,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     unawaited(_controller.initialize());
     unawaited(_autoTradeController.initialize());
     unawaited(_unattendedAutoTradeController.initialize());
+    unawaited(_journalController.initialize());
   }
 
   @override
@@ -118,6 +124,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     _controller.dispose();
     _autoTradeController.dispose();
     _unattendedAutoTradeController.dispose();
+    _journalController.dispose();
     _autoTradeHttpClient.close();
     super.dispose();
   }
@@ -191,6 +198,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             controller: _controller,
             autoTradeController: _autoTradeController,
             unattendedAutoTradeController: _unattendedAutoTradeController,
+            journalController: _journalController,
             destination: _destination,
             themeMode: widget.themeMode,
             locale: widget.locale,
@@ -503,9 +511,10 @@ const _destinations = [
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
   _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
+  _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _mobileDestinationIndexes = [0, 1, 2, 3, 5, 6];
+const _mobileDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
@@ -513,7 +522,8 @@ String _destinationLabel(AppStrings strings, int index) => switch (index) {
   3 => strings.watchlist,
   4 => strings.strategyLab,
   5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',
-  6 => strings.profile,
+  6 => strings.isPersian ? 'ژورنال' : 'Journal',
+  7 => strings.profile,
   _ => strings.radar,
 };
 
@@ -529,6 +539,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.controller,
     required this.autoTradeController,
     required this.unattendedAutoTradeController,
+    required this.journalController,
     required this.destination,
     required this.themeMode,
     required this.locale,
@@ -544,6 +555,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   final OwnerAlphaController controller;
   final AutoTradeController autoTradeController;
   final UnattendedAutoTradeController unattendedAutoTradeController;
+  final TradingJournalController journalController;
   final int destination;
   final ThemeMode themeMode;
   final Locale locale;
@@ -589,13 +601,24 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  if (destination == 6)
+                  if (destination == 7)
                     _ProfileView(
                       controller: controller,
                       themeMode: themeMode,
                       locale: locale,
                       onToggleTheme: onToggleTheme,
                       onLocaleChanged: onLocaleChanged,
+                    )
+                  else if (destination == 6)
+                    AnimatedBuilder(
+                      animation: journalController,
+                      builder: (context, _) => TradingJournalView(
+                        locale: locale,
+                        projections: journalController.projections,
+                        statistics: journalController.statistics,
+                        isLoading: journalController.isLoading,
+                        error: journalController.error,
+                      ),
                     )
                   else if (destination == 5)
                     _AutoTradeView(
