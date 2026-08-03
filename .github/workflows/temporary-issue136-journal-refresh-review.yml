@@ -1,0 +1,130 @@
+name: Temporary Issue 136 journal refresh review
+
+on:
+  push:
+    paths:
+      - .github/workflows/temporary-issue136-journal-refresh-review.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-and-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/136-event-sourced-trading-journal
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Refresh journal whenever its destination opens
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          source = page.read_text()
+          marker = """  void _openAnalysis(String symbol, [String? timeframe, String? setupId]) {
+          """
+          method = """  void _selectDestination(int value) {
+              if (_destination != value) {
+                setState(() => _destination = value);
+              }
+              if (value == 6) {
+                unawaited(_journalController.refresh());
+              }
+            }
+
+          """
+          if marker not in source:
+              raise SystemExit('destination helper insertion point not found')
+          source = source.replace(marker, method + marker, 1)
+          source = source.replace(
+              "onOpenStrategyLab: () => setState(() => _destination = 4),",
+              "onOpenStrategyLab: () => _selectDestination(4),",
+              1,
+          )
+          old_desktop = """                    onDestinationSelected: (value) {
+                                setState(() => _destination = value);
+                              },
+          """
+          if old_desktop not in source:
+              raise SystemExit('desktop destination callback not found')
+          source = source.replace(
+              old_desktop,
+              "                    onDestinationSelected: _selectDestination,\n",
+              1,
+          )
+          old_mobile = """              onDestinationSelected: (value) {
+                        setState(() => _destination = _mobileDestinationIndexes[value]);
+                      },
+          """
+          new_mobile = """              onDestinationSelected: (value) {
+                        _selectDestination(_mobileDestinationIndexes[value]);
+                      },
+          """
+          if old_mobile not in source:
+              raise SystemExit('mobile destination callback not found')
+          page.write_text(source.replace(old_mobile, new_mobile, 1))
+
+          test_file = Path('src/client/quantara_app/test/trading_journal_source_safety_test.dart')
+          tests = test_file.read_text()
+          observer_marker = """    final observer = source(
+                'lib/features/trading_journal/application/local_live_journal_observer.dart',
+              );
+          """
+          observer_replacement = observer_marker + """    final ownerPage = source(
+                'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
+              );
+          """
+          if observer_marker not in tests:
+              raise SystemExit('source test owner page insertion point not found')
+          tests = tests.replace(observer_marker, observer_replacement, 1)
+          assertion_marker = """    expect(observer, contains('must never change'));
+          """
+          assertions = assertion_marker + """    expect(ownerPage, contains('void _selectDestination(int value)'));
+              expect(ownerPage, contains('unawaited(_journalController.refresh())'));
+              expect(ownerPage, contains('onDestinationSelected: _selectDestination'));
+              expect(
+                ownerPage,
+                contains('_selectDestination(_mobileDestinationIndexes[value])'),
+              );
+          """
+          if assertion_marker not in tests:
+              raise SystemExit('source test assertion insertion point not found')
+          test_file.write_text(tests.replace(assertion_marker, assertions, 1))
+          PY
+
+      - name: Format, analyze and test journal navigation
+        working-directory: src/client/quantara_app
+        shell: bash
+        run: |
+          dart format \
+            lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            test/trading_journal_source_safety_test.dart
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test \
+            test/trading_journal_view_test.dart \
+            test/trading_journal_review_regressions_test.dart \
+            test/trading_journal_source_safety_test.dart \
+            test/owner_alpha_page_test.dart
+
+      - name: Remove temporary workflow and push clean result
+        shell: bash
+        run: |
+          rm -f .github/workflows/temporary-issue136-journal-refresh-review.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: refresh the journal projection when its tab opens"
+          git push origin HEAD:feat/136-event-sourced-trading-journal
