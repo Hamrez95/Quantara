@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../../core/persistence/quantara_database_provider.dart';
 import '../../../core/persistence/quantara_durable_database.dart';
 import '../domain/portfolio_risk_models.dart';
@@ -139,5 +141,22 @@ final class DatabasePortfolioRiskLedgerStore
   static bool _sameLedger(
     PortfolioRiskLedger left,
     PortfolioRiskLedger right,
-  ) => left.toJson().toString() == right.toJson().toString();
+  ) => _canonicalJson(left.toJson()) == _canonicalJson(right.toJson());
+
+  static String _canonicalJson(Object? value) {
+    Object? normalize(Object? input) {
+      if (input is Map<Object?, Object?>) {
+        final keys = input.keys.map((key) => key.toString()).toList()..sort();
+        return <String, Object?>{
+          for (final key in keys) key: normalize(input[key]),
+        };
+      }
+      if (input is Iterable<Object?>) {
+        return input.map(normalize).toList(growable: false);
+      }
+      return input;
+    }
+
+    return jsonEncode(normalize(value));
+  }
 }
