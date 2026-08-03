@@ -1,22 +1,23 @@
-name: Temporary issue 150 formatter
+name: Temporary issue 150 formatted sources
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/150-portfolio-risk-budget
+      - dev
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  format-and-wire:
+  format-sources:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout branch
+      - name: Checkout pull request
         uses: actions/checkout@v4
-        with:
-          ref: feat/150-portfolio-risk-budget
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -133,22 +134,16 @@ jobs:
           test/portfolio_risk_panel_test.dart
           test/portfolio_risk_source_safety_test.dart
 
-      - name: Commit formatted sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add \
-            src/client/quantara_app/lib/features/portfolio_risk \
-            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
-            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart \
-            src/client/quantara_app/test/portfolio_risk_policy_test.dart \
-            src/client/quantara_app/test/portfolio_risk_panel_test.dart \
+      - name: Upload formatted source set
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-150-formatted-sources
+          path: |
+            src/client/quantara_app/lib/features/portfolio_risk
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart
+            src/client/quantara_app/test/portfolio_risk_policy_test.dart
+            src/client/quantara_app/test/portfolio_risk_panel_test.dart
             src/client/quantara_app/test/portfolio_risk_source_safety_test.dart
-          if git diff --cached --quiet; then
-            echo 'No formatting changes remain.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'style(portfolio-risk): wire and format issue 150'
-          git push origin HEAD:feat/150-portfolio-risk-budget
+          if-no-files-found: error
+          retention-days: 1
