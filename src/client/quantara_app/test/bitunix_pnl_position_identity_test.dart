@@ -46,51 +46,54 @@ void main() {
     },
   );
 
-  test('overlapping closed intervals remain unverified instead of guessing', () {
-    final occurredAt = DateTime.utc(2026, 8, 3, 12);
-    final result = BitunixPnlMapper.fills(
-      {
-        'tradeList': [
-          {
-            'tradeId': 'ambiguous-fill',
-            'orderId': 'ambiguous-order',
-            'symbol': 'XRPUSDT',
-            'qty': '1',
-            'price': '1.0603',
-            'realizedPNL': '0.010',
-            'fee': '0.001',
-            'reduceOnly': true,
-            'ctime': occurredAt.millisecondsSinceEpoch,
-          },
+  test(
+    'overlapping closed intervals remain unverified instead of guessing',
+    () {
+      final occurredAt = DateTime.utc(2026, 8, 3, 12);
+      final result = BitunixPnlMapper.fills(
+        {
+          'tradeList': [
+            {
+              'tradeId': 'ambiguous-fill',
+              'orderId': 'ambiguous-order',
+              'symbol': 'XRPUSDT',
+              'qty': '1',
+              'price': '1.0603',
+              'realizedPNL': '0.010',
+              'fee': '0.001',
+              'reduceOnly': true,
+              'ctime': occurredAt.millisecondsSinceEpoch,
+            },
+          ],
+        },
+        openPositions: const [
+          ExchangeUnrealizedPnl(
+            positionId: 'current-open-xrp',
+            symbol: 'XRPUSDT',
+            value: 0,
+          ),
         ],
-      },
-      openPositions: const [
-        ExchangeUnrealizedPnl(
-          positionId: 'current-open-xrp',
-          symbol: 'XRPUSDT',
-          value: 0,
-        ),
-      ],
-      settlements: [
-        ExchangePositionSettlement(
-          positionId: 'closed-xrp-a',
-          symbol: 'XRPUSDT',
-          funding: 0,
-          openedAt: DateTime.utc(2026, 8, 3, 11),
-          closedAt: DateTime.utc(2026, 8, 3, 12, 30),
-        ),
-        ExchangePositionSettlement(
-          positionId: 'closed-xrp-b',
-          symbol: 'XRPUSDT',
-          funding: 0,
-          openedAt: DateTime.utc(2026, 8, 3, 11, 30),
-          closedAt: DateTime.utc(2026, 8, 3, 12, 15),
-        ),
-      ],
-    );
+        settlements: [
+          ExchangePositionSettlement(
+            positionId: 'closed-xrp-a',
+            symbol: 'XRPUSDT',
+            funding: 0,
+            openedAt: DateTime.utc(2026, 8, 3, 11),
+            closedAt: DateTime.utc(2026, 8, 3, 12, 30),
+          ),
+          ExchangePositionSettlement(
+            positionId: 'closed-xrp-b',
+            symbol: 'XRPUSDT',
+            funding: 0,
+            openedAt: DateTime.utc(2026, 8, 3, 11, 30),
+            closedAt: DateTime.utc(2026, 8, 3, 12, 15),
+          ),
+        ],
+      );
 
-    expect(result.verified, isFalse);
-    expect(result.values.single.positionId, isEmpty);
-    expect(result.warning, contains('ambiguous-fill'));
-  });
+      expect(result.verified, isFalse);
+      expect(result.values.single.positionId, isEmpty);
+      expect(result.warning, contains('ambiguous-fill'));
+    },
+  );
 }
