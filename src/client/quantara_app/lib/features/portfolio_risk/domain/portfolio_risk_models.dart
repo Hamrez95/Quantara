@@ -246,7 +246,7 @@ final class PortfolioEntryCandidate {
 
 @immutable
 final class PositionRiskReservation {
-  PositionRiskReservation({
+  const PositionRiskReservation({
     required this.reservationId,
     required this.journalTradeId,
     required this.candidateId,
@@ -586,17 +586,22 @@ final class PortfolioRiskPolicy {
       return blocked(PortfolioEntryBlockReason.exchangeMinimum);
     }
 
-    final maximumLoss = PortfolioRiskMath.maximumLoss(
-      side: candidate.side,
-      entryPrice: candidate.entryPrice,
-      stopPrice: candidate.stopPrice,
-      quantity: candidate.plannedQuantity,
-      contractMultiplier: candidate.contractMultiplier,
-      entryFeeRate: candidate.entryFeeRate,
-      exitFeeRate: candidate.exitFeeRate,
-      slippageRate: candidate.slippageRate,
-      fundingReserve: candidate.fundingReserve,
-    );
+    late final double maximumLoss;
+    try {
+      maximumLoss = PortfolioRiskMath.maximumLoss(
+        side: candidate.side,
+        entryPrice: candidate.entryPrice,
+        stopPrice: candidate.stopPrice,
+        quantity: candidate.plannedQuantity,
+        contractMultiplier: candidate.contractMultiplier,
+        entryFeeRate: candidate.entryFeeRate,
+        exitFeeRate: candidate.exitFeeRate,
+        slippageRate: candidate.slippageRate,
+        fundingReserve: candidate.fundingReserve,
+      );
+    } on FormatException {
+      return blocked(PortfolioEntryBlockReason.invalidInput);
+    }
     if (maximumLoss > ledger.dailyRisk.available + 1e-9) {
       return blocked(
         PortfolioEntryBlockReason.riskBudgetInsufficient,
@@ -723,7 +728,7 @@ abstract final class PortfolioRiskMath {
     final priceRisk =
         directionalLossPerUnit * remainingQuantity * contractMultiplier;
     final costRisk = entryFee + exitFee + slippageReserve + fundingReserve;
-    final result = math.max(0, priceRisk + costRisk);
+    final result = math.max(0, priceRisk + costRisk).toDouble();
     if (!result.isFinite) {
       throw const FormatException('Confirmed open risk is invalid.');
     }
@@ -916,8 +921,9 @@ final class PortfolioRiskLedger {
     final index = reservations.indexWhere(
       (item) => item.reservationId == reservationId && item.pending,
     );
-    if (index < 0)
+    if (index < 0) {
       return _copy(processedEventIds: {...processedEventIds, eventId});
+    }
     final source = reservations[index];
     if (fillQuantity > source.plannedQuantity + 1e-9) {
       throw const FormatException('Fill exceeds pending quantity.');
