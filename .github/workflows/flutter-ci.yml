@@ -1,131 +1,224 @@
-name: Temporary idempotent portfolio initialization UX repair
+name: Flutter client CI
 
 on:
   push:
     branches:
-      - feat/150-portfolio-risk-budget
+      - main
+      - dev
+      - 'feat/**'
+      - 'fix/**'
+      - 'release/**'
+    paths:
+      - 'src/client/quantara_app/**'
+      - 'scripts/android-cold-start-smoke.sh'
+      - '.github/workflows/flutter-ci.yml'
+  pull_request:
+    branches:
+      - main
+      - dev
+      - 'feat/**'
+      - 'fix/**'
+    paths:
+      - 'src/client/quantara_app/**'
+      - 'scripts/android-cold-start-smoke.sh'
+      - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: flutter-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FLUTTER_VERSION: '3.44.8'
+  ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+  ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
+  RC_VERSION: 1.2.0-rc.2
+  ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.2
 
 jobs:
-  repair:
-    if: github.actor != 'github-actions[bot]'
+  flutter:
+    name: Flutter format, analyze, test, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: feat/150-portfolio-risk-budget
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - name: Keep controls visible while initialization is pending
+      - name: Display tool versions
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Restore packages
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --fatal-infos > flutter-analyze.log 2>&1
+          status=$?
+          cat flutter-analyze.log
+          exit $status
+
+      - name: Run widget and safety tests
+        shell: bash
+        run: |
+          set +e
+          flutter test --reporter expanded > flutter-test.log 2>&1
+          status=$?
+          cat flutter-test.log
+          exit $status
+
+      - name: Upload Flutter diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-diagnostics-${{ env.RC_VERSION }}
+          path: |
+            src/client/quantara_app/flutter-analyze.log
+            src/client/quantara_app/flutter-test.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Compile API-configured web PWA
+        run: >-
+          flutter build web --release
+          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
+
+      - name: Compile API-configured Android RC
+        run: >-
+          flutter build apk --release
+          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
+
+      - name: Build offline-first web PWA
+        run: flutter build web --release
+
+      - name: Build universal Android RC APK
+        run: flutter build apk --release
+
+      - name: Verify RC identity and manifest safety declarations
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          test -x "$apkanalyzer_path"
+          "$apkanalyzer_path" manifest application-id build/app/outputs/flutter-apk/app-release.apk | grep -Fxq "$ANDROID_PACKAGE"
+          "$apkanalyzer_path" manifest print build/app/outputs/flutter-apk/app-release.apk > merged-manifest.xml
+          grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
+          grep -Fq "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
+          grep -Eq 'android:foregroundServiceType="(specialUse|0x40000000)"' merged-manifest.xml
+          grep -Fq "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" merged-manifest.xml
+          ! grep -Fq "android.permission.RECEIVE_BOOT_COMPLETED" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RebootReceiver" merged-manifest.xml
+          ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
 
-          path = Path('src/client/quantara_app/lib/features/portfolio_risk/presentation/portfolio_risk_panel.dart')
-          text = path.read_text()
+      - name: Upload merged Android manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-merged-manifest-${{ env.RC_VERSION }}
+          path: src/client/quantara_app/merged-manifest.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
-          error_marker = '                if (_controller.error != null) ...['
-          always_actions = '                const SizedBox(height: 12),\n                _actions(),\n'
-          before_error = text.split(error_marker, 1)[0]
-          if '_actions(),' not in before_error:
-              if error_marker not in text:
-                  raise SystemExit('error marker changed')
-              text = text.replace(error_marker, always_actions + error_marker, 1)
-
-          snapshot_pattern = re.compile(
-              r"(\] else if \(snapshot != null\) \.\.\.\[\s+const SizedBox\(height: 16\),)\s+_actions\(\),\s+const SizedBox\(height: 12\),",
-              re.S,
-          )
-          text = snapshot_pattern.sub(r"\1", text, count=1)
-
-          method_pattern = re.compile(
-              r"  Widget _actions\(\)\s*=>\s*Wrap\(.*?(?=\n  Widget _positions\()",
-              re.S,
-          )
-          new_method = """  Widget _actions() {
-    final disabled = _controller.loading && _controller.snapshot != null;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        FilledButton.tonalIcon(
-          onPressed: disabled ? null : () => _controller.reserveExample(3),
-          icon: const Icon(Icons.add_chart_rounded),
-          label: Text(_t('رزرو ۳ USDT', 'Reserve 3 USDT')),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: disabled ? null : () => _controller.reserveExample(4),
-          icon: const Icon(Icons.add_chart_rounded),
-          label: Text(_t('رزرو ۴ USDT', 'Reserve 4 USDT')),
-        ),
-        OutlinedButton.icon(
-          onPressed: disabled ? null : () => _controller.reserveExample(8),
-          icon: const Icon(Icons.rule_rounded),
-          label: Text(_t('آزمون Reject با ۸', 'Try rejected 8')),
-        ),
-        OutlinedButton.icon(
-          onPressed: disabled ? null : _controller.toggleFreshness,
-          icon: Icon(
-            _controller.accountFresh
-                ? Icons.cloud_off_outlined
-                : Icons.cloud_done_outlined,
-          ),
-          label: Text(
-            _controller.accountFresh
-                ? _t('شبیه‌سازی داده Stale', 'Simulate stale data')
-                : _t('بازگردانی داده Fresh', 'Restore fresh data'),
-          ),
-        ),
-        TextButton.icon(
-          onPressed: disabled ? null : _controller.reset,
-          icon: const Icon(Icons.restart_alt_rounded),
-          label: Text(_t('بازنشانی مثال', 'Reset example')),
-        ),
-      ],
-    );
-  }
-"""
-          text, count = method_pattern.subn(new_method, text, count=1)
-          if count != 1 and 'final disabled = _controller.loading' not in text:
-              raise SystemExit('actions method pattern changed')
-
-          path.write_text(text)
-          PY
-
-      - name: Restore packages and format
-        working-directory: src/client/quantara_app
-        run: |
-          flutter pub get --enforce-lockfile
-          dart format \
-            lib/features/portfolio_risk/application/portfolio_risk_simulation_controller.dart \
-            lib/features/portfolio_risk/presentation/portfolio_risk_panel.dart
-
-      - name: Commit initialization UX repair
+      - name: Verify universal APK 16KB ZIP alignment
         shell: bash
         run: |
           set -euo pipefail
-          git add \
-            src/client/quantara_app/lib/features/portfolio_risk/application/portfolio_risk_simulation_controller.dart \
-            src/client/quantara_app/lib/features/portfolio_risk/presentation/portfolio_risk_panel.dart
-          if git diff --cached --quiet; then
-            echo 'Initialization UX is already repaired.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix(portfolio-risk): keep controls available during initialization'
-          git push origin HEAD:feat/150-portfolio-risk-budget
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -x "$zipalign_path"
+          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Build ABI-split Android RC APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Verify arm64 APK 16KB ZIP alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -x "$zipalign_path"
+          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
+      - name: Upload PWA release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-pwa-${{ env.RC_VERSION }}
+          path: src/client/quantara_app/build/web
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Android release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ANDROID_RC_ARTIFACT }}
+          path: |
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  android-launch:
+    name: Android ${{ matrix.api-level }} cold-start smoke
+    needs: flutter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [34, 35, 36]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Android release candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ANDROID_RC_ARTIFACT }}
+          path: apk
+
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot hardware-accelerated emulator and verify cold start
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
+          script: bash scripts/android-cold-start-smoke.sh apk/app-release.apk
+
+      - name: Upload Android launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-${{ env.RC_VERSION }}
+          path: |
+            android-start.txt
+            android-pid.txt
+            android-pid-after-settle.txt
+            android-logcat.txt
+            android-jobscheduler.txt
+          if-no-files-found: ignore
+          retention-days: 14
