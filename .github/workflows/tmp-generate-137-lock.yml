@@ -25,10 +25,19 @@ jobs:
       - name: Resolve deterministic dependencies
         working-directory: src/client/quantara_app
         run: flutter pub get
-      - name: Upload generated lockfile
+      - name: Format changed recovery tests
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          test/encrypted_recovery_package_test.dart
+          test/recovery_source_safety_test.dart
+      - name: Upload generated sources
         uses: actions/upload-artifact@v4
         with:
-          name: pr-149-generated-pubspec-lock
-          path: src/client/quantara_app/pubspec.lock
+          name: pr-149-generated-sources
+          path: |
+            src/client/quantara_app/pubspec.lock
+            src/client/quantara_app/test/encrypted_recovery_package_test.dart
+            src/client/quantara_app/test/recovery_source_safety_test.dart
           if-no-files-found: error
           retention-days: 1
