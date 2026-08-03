@@ -171,14 +171,24 @@ final class QuantaraMigrationTransaction {
 }
 
 final class SembastQuantaraDurableDatabase implements QuantaraDurableDatabase {
-  SembastQuantaraDurableDatabase({
+  factory SembastQuantaraDurableDatabase({
     required DatabaseFactory factory,
     required String path,
+    int targetSchemaVersion = quantaraDurableDatabaseSchemaVersion,
+    Map<int, QuantaraDatabaseMigration>? migrations,
+  }) => SembastQuantaraDurableDatabase._(
+    factory,
+    path,
+    targetSchemaVersion: targetSchemaVersion,
+    migrations: migrations,
+  );
+
+  SembastQuantaraDurableDatabase._(
+    this._factory,
+    this._path, {
     this.targetSchemaVersion = quantaraDurableDatabaseSchemaVersion,
     Map<int, QuantaraDatabaseMigration>? migrations,
-  }) : _factory = factory,
-       _path = path,
-       _migrations = Map.unmodifiable({
+  }) : _migrations = Map.unmodifiable({
          1: _migrationV1,
          2: _migrationV2,
          ...?migrations,
