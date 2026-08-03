@@ -1,4 +1,4 @@
-name: Temporary portfolio risk repair commit
+name: Temporary deterministic portfolio risk repair
 
 on:
   push:
@@ -8,30 +8,17 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: portfolio-risk-repair-commit-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  FLUTTER_VERSION: '3.44.8'
-
 jobs:
   repair:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/150-portfolio-risk-budget
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - name: Apply reviewed fail-closed fixes
+      - name: Apply exact reviewed fixes
         shell: bash
         run: |
           set -euo pipefail
@@ -40,23 +27,34 @@ jobs:
 
           models = Path('src/client/quantara_app/lib/features/portfolio_risk/domain/portfolio_risk_models.dart')
           text = models.read_text()
-          text = text.replace(
-              'final class PositionRiskReservation {\n  PositionRiskReservation({',
-              'final class PositionRiskReservation {\n  const PositionRiskReservation({',
-          )
-          old_math = """    final maximumLoss = PortfolioRiskMath.maximumLoss(
-      side: candidate.side,
-      entryPrice: candidate.entryPrice,
-      stopPrice: candidate.stopPrice,
-      quantity: candidate.plannedQuantity,
-      contractMultiplier: candidate.contractMultiplier,
-      entryFeeRate: candidate.entryFeeRate,
-      exitFeeRate: candidate.exitFeeRate,
-      slippageRate: candidate.slippageRate,
-      fundingReserve: candidate.fundingReserve,
-    );
-"""
-          new_math = """    late final double maximumLoss;
+          replacements = [
+              (
+                  'final class PositionRiskReservation {\n  PositionRiskReservation({',
+                  'final class PositionRiskReservation {\n  const PositionRiskReservation({',
+              ),
+              (
+                  '    final result = math.max(0, priceRisk + costRisk);',
+                  '    final result = math.max(0, priceRisk + costRisk).toDouble();',
+              ),
+              (
+                  """    if (index < 0)
+      return _copy(processedEventIds: {...processedEventIds, eventId});
+""",
+                  """    if (index < 0) {
+      return _copy(processedEventIds: {...processedEventIds, eventId});
+    }
+""",
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'missing replacement anchor: {old[:60]!r}')
+              text = text.replace(old, new, 1)
+
+          start = text.index('    final maximumLoss = PortfolioRiskMath.maximumLoss(')
+          end = text.index('    if (maximumLoss > ledger.dailyRisk.available + 1e-9) {', start)
+          old = text[start:end]
+          new = """    late final double maximumLoss;
     try {
       maximumLoss = PortfolioRiskMath.maximumLoss(
         side: candidate.side,
@@ -73,28 +71,12 @@ jobs:
       return blocked(PortfolioEntryBlockReason.invalidInput);
     }
 """
-          if old_math not in text:
-              raise SystemExit('maximum loss anchor changed')
-          text = text.replace(old_math, new_math, 1)
-          text = text.replace(
-              '    final result = math.max(0, priceRisk + costRisk);',
-              '    final result = math.max(0, priceRisk + costRisk).toDouble();',
-          )
-          text = text.replace(
-              """    if (index < 0)
-      return _copy(processedEventIds: {...processedEventIds, eventId});
-""",
-              """    if (index < 0) {
-      return _copy(processedEventIds: {...processedEventIds, eventId});
-    }
-""",
-          )
+          text = text[:start] + new + text[end:]
           models.write_text(text)
 
           tests = Path('src/client/quantara_app/test/portfolio_risk_policy_test.dart')
           test_text = tests.read_text()
-          anchor = """  test('prior-day open risk continues after idempotent daily reset', () {
-"""
+          marker = "  test('prior-day open risk continues after idempotent daily reset', () {\n"
           addition = """  test('wrong-side stop fails closed instead of throwing', () {
     final invalid = PortfolioEntryCandidate(
       reservationId: 'reservation-invalid-stop',
@@ -152,33 +134,19 @@ jobs:
 
 """
           if addition not in test_text:
-              if anchor not in test_text:
-                  raise SystemExit('test insertion anchor changed')
-              test_text = test_text.replace(anchor, addition + anchor, 1)
+              if marker not in test_text:
+                  raise SystemExit('missing test marker')
+              test_text = test_text.replace(marker, addition + marker, 1)
           tests.write_text(test_text)
           PY
 
-      - name: Restore packages
-        working-directory: src/client/quantara_app
-        run: flutter pub get --enforce-lockfile
-
-      - name: Format repaired files
-        working-directory: src/client/quantara_app
-        run: dart format lib/features/portfolio_risk test/portfolio_risk_*.dart
-
-      - name: Commit repaired files
+      - name: Commit exact fixes
         shell: bash
         run: |
           set -euo pipefail
-          git add src/client/quantara_app/lib/features/portfolio_risk \
-                  src/client/quantara_app/test/portfolio_risk_policy_test.dart \
-                  src/client/quantara_app/test/portfolio_risk_panel_test.dart \
-                  src/client/quantara_app/test/portfolio_risk_source_safety_test.dart
+          git add src/client/quantara_app/lib/features/portfolio_risk/domain/portfolio_risk_models.dart \
+                  src/client/quantara_app/test/portfolio_risk_policy_test.dart
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if git diff --cached --quiet; then
-            echo 'No changes to commit.'
-            exit 0
-          fi
           git commit -m 'fix(portfolio-risk): fail closed and correct reservation accounting'
           git push origin HEAD:feat/150-portfolio-risk-budget
