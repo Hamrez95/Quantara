@@ -208,6 +208,84 @@ void main() {
     expect(journal.netPnl, closeTo(0.031, 0.000001));
   });
 
+  test('only the final non-target exit fill closes the position', () async {
+    final store = _MemoryJournalStore(
+      TradingJournalLedger.empty().appendPlan(plan()),
+    );
+    final observer = LocalLiveJournalObserver(store: store);
+    final projection = TradingPnlProjection.reconcile(
+      currency: 'USDT',
+      asOf: openedAt.add(const Duration(hours: 1)),
+      unrealizedByPosition: const {},
+      fills: [
+        ExchangePnlFill(
+          tradeId: 'trade-entry-multi-close',
+          orderId: 'entry-order',
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          quantity: 21.4,
+          price: 1.0665,
+          realizedPnl: 0,
+          fee: 0.004,
+          reduceOnly: false,
+          occurredAt: openedAt.add(const Duration(minutes: 1)),
+        ),
+        ExchangePnlFill(
+          tradeId: 'trade-stop-part-1',
+          orderId: 'stop-1',
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          quantity: 10,
+          price: 1.0688,
+          realizedPnl: -0.1,
+          fee: 0.005,
+          reduceOnly: true,
+          occurredAt: openedAt.add(const Duration(minutes: 40)),
+        ),
+        ExchangePnlFill(
+          tradeId: 'trade-stop-part-2',
+          orderId: 'stop-1',
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          quantity: 11.4,
+          price: 1.0691,
+          realizedPnl: -0.114,
+          fee: 0.006,
+          reduceOnly: true,
+          occurredAt: openedAt.add(const Duration(minutes: 41)),
+        ),
+      ],
+      settlements: [
+        ExchangePositionSettlement(
+          positionId: 'position-1',
+          symbol: 'XRPUSDT',
+          funding: 0,
+          openedAt: openedAt,
+          closedAt: openedAt.add(const Duration(minutes: 41)),
+          realizedPnl: -0.214,
+          fee: 0.015,
+        ),
+      ],
+    );
+
+    await observer.reconcilePosition(
+      managed: managed(),
+      positionPnl: projection.forPositionId('position-1')!,
+      positionClosed: true,
+    );
+
+    final firstExit = store.ledger.events.singleWhere(
+      (item) => item.tradeId == 'trade-stop-part-1',
+    );
+    final finalExit = store.ledger.events.singleWhere(
+      (item) => item.tradeId == 'trade-stop-part-2',
+    );
+    expect(firstExit.type, TradingJournalEventType.positionPartiallyClosed);
+    expect(firstExit.remainingQuantity, closeTo(11.4, 0.000001));
+    expect(finalExit.type, TradingJournalEventType.positionClosed);
+    expect(finalExit.remainingQuantity, 0);
+  });
+
   test(
     'profit-lock confirmation identity never conflicts with original stop',
     () async {

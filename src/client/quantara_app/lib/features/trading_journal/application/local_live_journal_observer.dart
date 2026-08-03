@@ -176,11 +176,16 @@ final class LocalLiveJournalObserver {
     final id = journalTradeId(managed.positionId);
     final fills = [...positionPnl.fills]
       ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
+    final exitFills = fills.where((fill) => fill.reduceOnly).toList();
+    final finalExitTradeId = positionClosed && exitFills.isNotEmpty
+        ? exitFills.last.tradeId
+        : null;
     var cumulativeExitQuantity = 0.0;
     for (final fill in fills) {
       if (fill.reduceOnly) cumulativeExitQuantity += fill.quantity;
       final targetIndex = managed.targetOrderIds.indexOf(fill.orderId);
       final isTarget = targetIndex >= 0;
+      final isFinalExit = fill.reduceOnly && fill.tradeId == finalExitTradeId;
       final remaining = math
           .max(0, managed.initialQuantity - cumulativeExitQuantity)
           .toDouble();
@@ -192,7 +197,7 @@ final class LocalLiveJournalObserver {
               ? TradingJournalEventType.entryPartiallyFilled
               : isTarget
               ? TradingJournalEventType.takeProfitFilled
-              : positionClosed
+              : isFinalExit
               ? TradingJournalEventType.positionClosed
               : TradingJournalEventType.positionPartiallyClosed,
           occurredAt: fill.occurredAt.toUtc(),
