@@ -142,18 +142,51 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
     final risk = snapshot.dailyRisk;
     final margin = snapshot.margin;
     final items = <({String label, String value})>[
-      (label: _t('سقف ریسک روزانه', 'Daily risk limit'), value: _money(risk.limit)),
-      (label: _t('ضرر محقق‌شده', 'Realized loss'), value: _money(risk.realizedLoss)),
+      (
+        label: _t('سقف ریسک روزانه', 'Daily risk limit'),
+        value: _money(risk.limit),
+      ),
+      (
+        label: _t('ضرر محقق‌شده', 'Realized loss'),
+        value: _money(risk.realizedLoss),
+      ),
       (label: _t('ریسک پوزیشن باز', 'Open risk'), value: _money(risk.openRisk)),
-      (label: _t('ریسک Pending', 'Pending risk'), value: _money(risk.pendingRisk)),
-      (label: _t('ریسک مبهم', 'Ambiguous risk'), value: _money(risk.ambiguousRisk)),
-      (label: _t('ریسک باقی‌مانده', 'Available risk'), value: _money(risk.available)),
-      (label: _t('مارجین استفاده‌شده', 'Used margin'), value: _money(margin.usedMargin)),
-      (label: _t('مارجین رزرو', 'Reserved margin'), value: _money(margin.reservedMargin)),
-      (label: _t('مارجین آزاد', 'Free margin'), value: _money(margin.freeMargin)),
-      (label: _t('بافر ایمنی', 'Safety buffer'), value: _money(margin.safetyBuffer)),
-      (label: _t('ظرفیت مارجین', 'Spendable margin'), value: _money(margin.spendable)),
-      (label: _t('پوزیشن باز', 'Open positions'), value: snapshot.openPositionCount.toString()),
+      (
+        label: _t('ریسک Pending', 'Pending risk'),
+        value: _money(risk.pendingRisk),
+      ),
+      (
+        label: _t('ریسک مبهم', 'Ambiguous risk'),
+        value: _money(risk.ambiguousRisk),
+      ),
+      (
+        label: _t('ریسک باقی‌مانده', 'Available risk'),
+        value: _money(risk.available),
+      ),
+      (
+        label: _t('مارجین استفاده‌شده', 'Used margin'),
+        value: _money(margin.usedMargin),
+      ),
+      (
+        label: _t('مارجین رزرو', 'Reserved margin'),
+        value: _money(margin.reservedMargin),
+      ),
+      (
+        label: _t('مارجین آزاد', 'Free margin'),
+        value: _money(margin.freeMargin),
+      ),
+      (
+        label: _t('بافر ایمنی', 'Safety buffer'),
+        value: _money(margin.safetyBuffer),
+      ),
+      (
+        label: _t('ظرفیت مارجین', 'Spendable margin'),
+        value: _money(margin.spendable),
+      ),
+      (
+        label: _t('پوزیشن باز', 'Open positions'),
+        value: snapshot.openPositionCount.toString(),
+      ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -177,19 +210,23 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                   constraints: const BoxConstraints(minHeight: 82),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.label, style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                        item.label,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         item.value,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
@@ -232,17 +269,23 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
     runSpacing: 8,
     children: [
       FilledButton.tonalIcon(
-        onPressed: _controller.loading ? null : () => _controller.reserveExample(3),
+        onPressed: _controller.loading
+            ? null
+            : () => _controller.reserveExample(3),
         icon: const Icon(Icons.add_chart_rounded),
         label: Text(_t('رزرو ۳ USDT', 'Reserve 3 USDT')),
       ),
       FilledButton.tonalIcon(
-        onPressed: _controller.loading ? null : () => _controller.reserveExample(4),
+        onPressed: _controller.loading
+            ? null
+            : () => _controller.reserveExample(4),
         icon: const Icon(Icons.add_chart_rounded),
         label: Text(_t('رزرو ۴ USDT', 'Reserve 4 USDT')),
       ),
       OutlinedButton.icon(
-        onPressed: _controller.loading ? null : () => _controller.reserveExample(8),
+        onPressed: _controller.loading
+            ? null
+            : () => _controller.reserveExample(8),
         icon: const Icon(Icons.rule_rounded),
         label: Text(_t('آزمون Reject با ۸', 'Try rejected 8')),
       ),
@@ -316,11 +359,15 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             children: [
               Text(
                 position.symbol,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              Chip(
+                label: Text(
+                  position.side == PortfolioSide.long ? 'LONG' : 'SHORT',
                 ),
               ),
-              Chip(label: Text(position.side == PortfolioSide.long ? 'LONG' : 'SHORT')),
               Chip(label: Text(position.lifecycle.name)),
               Chip(label: Text(position.verification.name)),
             ],
@@ -330,7 +377,10 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             spacing: 16,
             runSpacing: 8,
             children: [
-              _fact(_t('ورود', 'Entry'), position.entryPrice.toStringAsFixed(4)),
+              _fact(
+                _t('ورود', 'Entry'),
+                position.entryPrice.toStringAsFixed(4),
+              ),
               _fact(
                 _t('استاپ تأییدشده', 'Confirmed stop'),
                 position.currentExchangeConfirmedStop.toStringAsFixed(4),
@@ -339,7 +389,10 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                 _t('تعداد', 'Quantity'),
                 position.plannedQuantity.toStringAsFixed(4),
               ),
-              _fact(_t('حداکثر زیان', 'Maximum loss'), _money(position.maximumLoss)),
+              _fact(
+                _t('حداکثر زیان', 'Maximum loss'),
+                _money(position.maximumLoss),
+              ),
               _fact(_t('مارجین', 'Margin'), _money(position.reservedMargin)),
               _fact(
                 _t('سهم از سقف', 'Daily limit share'),
@@ -399,8 +452,10 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
       'حداقل یک پوزیشن Protection تأییدشده ندارد.',
       'At least one position lacks verified protection.',
     ),
-    PortfolioEntryBlockReason.unsupportedMarginMode =>
-      _t('فقط Isolated Margin مجاز است.', 'Only isolated margin is allowed.'),
+    PortfolioEntryBlockReason.unsupportedMarginMode => _t(
+      'فقط Isolated Margin مجاز است.',
+      'Only isolated margin is allowed.',
+    ),
     PortfolioEntryBlockReason.duplicateCandidate => _t(
       'Candidate یا Trade تکراری است.',
       'The candidate or trade is duplicated.',
