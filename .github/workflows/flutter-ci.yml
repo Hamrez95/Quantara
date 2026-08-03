@@ -34,8 +34,8 @@ env:
   FLUTTER_VERSION: '3.44.8'
   ANDROID_PACKAGE: com.quantara.quantara_app.alpha
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  RC_VERSION: 1.2.0-rc.1
-  ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.1
+  RC_VERSION: 1.2.0-rc.2
+  ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.2
 
 jobs:
   flutter:
