@@ -17,22 +17,21 @@ final class PortfolioReservationOutcome {
 
 final class PortfolioRiskCoordinator {
   PortfolioRiskCoordinator({
-    required PortfolioRiskLedgerStore store,
-    PortfolioRiskPolicy policy = const PortfolioRiskPolicy(),
+    required this.store,
+    this.policy = const PortfolioRiskPolicy(),
     this.defaultDailyRiskLimit = 10,
     this.timezoneOffsetMinutes = 0,
-  }) : _store = store,
-       _policy = policy;
+  });
 
-  final PortfolioRiskLedgerStore _store;
-  final PortfolioRiskPolicy _policy;
+  final PortfolioRiskLedgerStore store;
+  final PortfolioRiskPolicy policy;
   final double defaultDailyRiskLimit;
   final int timezoneOffsetMinutes;
   static Future<void> _globalTail = Future<void>.value();
 
   Future<PortfolioRiskLedger> load({DateTime? now}) => _serialValue(() async {
     final timestamp = (now ?? DateTime.now()).toUtc();
-    final current = await _store.load();
+    final current = await store.load();
     if (current == null) {
       final initial = PortfolioRiskLedger.initial(
         tradingDay: TradingDayId.start(
@@ -41,14 +40,14 @@ final class PortfolioRiskCoordinator {
         ),
         dailyRiskLimit: defaultDailyRiskLimit,
       );
-      await _store.save(initial);
+      await store.save(initial);
       return initial;
     }
     final rolled = current.rollTradingDay(
       now: timestamp,
       nextDailyRiskLimit: defaultDailyRiskLimit,
     );
-    if (rolled.revision != current.revision) await _store.save(rolled);
+    if (rolled.revision != current.revision) await store.save(rolled);
     return rolled;
   });
 
@@ -60,7 +59,7 @@ final class PortfolioRiskCoordinator {
     final timestamp = (now ?? DateTime.now()).toUtc();
     var ledger = await _loadUnlocked(timestamp);
     final effectiveAccount = _withLedgerReservations(account, ledger);
-    final decision = _policy.evaluate(
+    final decision = policy.evaluate(
       ledger: ledger,
       candidate: candidate,
       account: effectiveAccount,
@@ -71,12 +70,12 @@ final class PortfolioRiskCoordinator {
         decision: decision,
         createdAt: timestamp,
       );
-      await _store.save(ledger);
+      await store.save(ledger);
     }
     return PortfolioReservationOutcome(
       decision: decision,
       ledger: ledger,
-      snapshot: ledger.snapshot(_withLedgerReservations(account, ledger)),
+      snapshot: ledger.snapshot(account),
     );
   });
 
@@ -151,14 +150,14 @@ final class PortfolioRiskCoordinator {
     DateTime? now,
   }) => _serialValue(() async {
     final ledger = await _loadUnlocked((now ?? DateTime.now()).toUtc());
-    return ledger.snapshot(_withLedgerReservations(account, ledger));
+    return ledger.snapshot(account);
   });
 
   Future<PortfolioRiskLedger> resetSimulation({
     required DateTime now,
     double? dailyRiskLimit,
   }) => _serialValue(() async {
-    final current = await _store.load();
+    final current = await store.load();
     final initial = PortfolioRiskLedger(
       schemaVersion: 1,
       revision: (current?.revision ?? 0) + 1,
@@ -173,7 +172,7 @@ final class PortfolioRiskCoordinator {
       reservations: const [],
       processedEventIds: const {},
     );
-    await _store.save(initial);
+    await store.save(initial);
     return initial;
   });
 
@@ -185,13 +184,13 @@ final class PortfolioRiskCoordinator {
     final next = mutation(current);
     if (next.revision != current.revision ||
         next.processedEventIds.length != current.processedEventIds.length) {
-      await _store.save(next);
+      await store.save(next);
     }
     return next;
   });
 
   Future<PortfolioRiskLedger> _loadUnlocked(DateTime now) async {
-    final current = await _store.load();
+    final current = await store.load();
     if (current == null) {
       final initial = PortfolioRiskLedger.initial(
         tradingDay: TradingDayId.start(
@@ -200,14 +199,14 @@ final class PortfolioRiskCoordinator {
         ),
         dailyRiskLimit: defaultDailyRiskLimit,
       );
-      await _store.save(initial);
+      await store.save(initial);
       return initial;
     }
     final rolled = current.rollTradingDay(
       now: now,
       nextDailyRiskLimit: defaultDailyRiskLimit,
     );
-    if (rolled.revision != current.revision) await _store.save(rolled);
+    if (rolled.revision != current.revision) await store.save(rolled);
     return rolled;
   }
 
