@@ -140,6 +140,5 @@ final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
   }
 }
 
-double? _number(Object? value) => value is num
-    ? value.toDouble()
-    : double.tryParse(value?.toString() ?? '');
+double? _number(Object? value) =>
+    value is num ? value.toDouble() : double.tryParse(value?.toString() ?? '');
