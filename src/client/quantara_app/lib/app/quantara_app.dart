@@ -10,6 +10,7 @@ import '../features/owner_alpha/data/background_opportunity_scanner.dart';
 import '../features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../features/owner_alpha/data/platform_owner_alpha_settings_store.dart';
 import '../features/owner_alpha/data/platform_opportunity_services.dart';
+import '../features/owner_alpha/data/realtime_production_runtime.dart';
 import '../features/owner_alpha/domain/owner_alpha_models.dart';
 import '../features/owner_alpha/presentation/owner_alpha_page.dart';
 
@@ -22,6 +23,7 @@ class QuantaraApp extends StatefulWidget {
     this.opportunityStateStore,
     this.notificationGateway,
     this.backgroundScanGateway,
+    this.realtimeMarketHost,
     this.initialThemeMode = ThemeMode.dark,
     this.initialLocale = const Locale('fa'),
   });
@@ -32,6 +34,7 @@ class QuantaraApp extends StatefulWidget {
   final OpportunityStateStore? opportunityStateStore;
   final SetupNotificationGateway? notificationGateway;
   final BackgroundScanGateway? backgroundScanGateway;
+  final RealtimeMarketHost? realtimeMarketHost;
   final ThemeMode initialThemeMode;
   final Locale initialLocale;
 
@@ -43,12 +46,15 @@ class _QuantaraAppState extends State<QuantaraApp> {
   late ThemeMode _themeMode = widget.initialThemeMode;
   late Locale _locale = widget.initialLocale;
   http.Client? _ownedClient;
+  RealtimeMarketHost? _realtimeMarketHost;
   int _preferencesRevision = 0;
   late final OwnerAlphaRepository _repository;
   late final OwnerAlphaSettingsStore _settingsStore =
       widget.settingsStore ?? const PlatformOwnerAlphaSettingsStore();
   late final AppPreferencesStore _preferencesStore =
       widget.preferencesStore ?? const PlatformAppPreferencesStore();
+  late final OpportunityStateStore _opportunityStateStore =
+      widget.opportunityStateStore ?? const PlatformOpportunityStateStore();
 
   @override
   void initState() {
@@ -62,12 +68,34 @@ class _QuantaraAppState extends State<QuantaraApp> {
       _repository = BitunixOwnerAlphaRepository(client: client);
     }
     unawaited(_loadPreferences());
+    final injectedHost = widget.realtimeMarketHost;
+    if (injectedHost != null) {
+      _realtimeMarketHost = injectedHost;
+      unawaited(injectedHost.initialize());
+    } else if (widget.repository == null) {
+      unawaited(_initializeRealtime());
+    }
   }
 
   @override
   void dispose() {
+    _realtimeMarketHost?.dispose();
     _ownedClient?.close();
     super.dispose();
+  }
+
+  Future<void> _initializeRealtime() async {
+    final host = await PlatformRealtimeMarketHostFactory.create(
+      settingsStore: _settingsStore,
+      opportunityStateStore: _opportunityStateStore,
+      languageCode: _locale.languageCode,
+    );
+    if (!mounted) {
+      host.dispose();
+      return;
+    }
+    setState(() => _realtimeMarketHost = host);
+    await host.initialize();
   }
 
   Future<void> _loadPreferences() async {
@@ -99,6 +127,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
     }
     _preferencesRevision++;
     setState(() => _locale = locale);
+    _realtimeMarketHost?.setLanguage(locale.languageCode);
     unawaited(_savePreferences());
   }
 
@@ -128,9 +157,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
       home: OwnerAlphaPage(
         repository: _repository,
         settingsStore: _settingsStore,
-        opportunityStateStore:
-            widget.opportunityStateStore ??
-            const PlatformOpportunityStateStore(),
+        opportunityStateStore: _opportunityStateStore,
         notificationGateway:
             widget.notificationGateway ??
             const PlatformSetupNotificationGateway(),
@@ -143,6 +170,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
         locale: _locale,
         onToggleTheme: _toggleTheme,
         onLocaleChanged: _setLocale,
+        realtimeMonitor: _realtimeMarketHost,
       ),
     );
   }

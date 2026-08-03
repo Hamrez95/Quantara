@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -28,9 +29,11 @@ import '../../strategy_lab/domain/strategy_lab_models.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
 import '../data/owner_alpha_settings_transfer.dart';
+import '../data/realtime_production_runtime.dart';
 import '../data/signal_timeframe_priority.dart';
 import '../domain/owner_alpha_models.dart';
 import '../domain/profit_protection_policy.dart';
+import '../domain/realtime_market_runtime_models.dart';
 
 part 'owner_alpha_dashboard.dart';
 part 'owner_alpha_watchlist.dart';
@@ -57,6 +60,7 @@ class OwnerAlphaPage extends StatefulWidget {
     required this.locale,
     required this.onToggleTheme,
     required this.onLocaleChanged,
+    this.realtimeMonitor,
     super.key,
   });
 
@@ -69,6 +73,7 @@ class OwnerAlphaPage extends StatefulWidget {
   final Locale locale;
   final VoidCallback onToggleTheme;
   final ValueChanged<Locale> onLocaleChanged;
+  final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
 
   @override
   State<OwnerAlphaPage> createState() => _OwnerAlphaPageState();
@@ -190,6 +195,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onAddSymbol: _showAddSymbolDialog,
             onOpenStrategyLab: () => setState(() => _destination = 4),
             showTopBar: desktop,
+            realtimeMonitor: widget.realtimeMonitor,
           ),
         );
         if (desktop) {
@@ -527,6 +533,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.onAddSymbol,
     required this.onOpenStrategyLab,
     required this.showTopBar,
+    required this.realtimeMonitor,
   });
 
   final OwnerAlphaController controller;
@@ -541,6 +548,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   final VoidCallback onAddSymbol;
   final VoidCallback onOpenStrategyLab;
   final bool showTopBar;
+  final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
 
   @override
   Widget build(BuildContext context) {
@@ -566,7 +574,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                   ],
-                  const _LiveBoundaryStrip(),
+                  _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
                   if (controller.error != null) ...[
                     const SizedBox(height: 12),
                     _AlphaErrorStrip(
@@ -717,35 +725,123 @@ class _AlphaTopBar extends StatelessWidget {
 }
 
 class _LiveBoundaryStrip extends StatelessWidget {
-  const _LiveBoundaryStrip();
+  const _LiveBoundaryStrip({required this.realtimeMonitor});
+
+  final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
 
   @override
   Widget build(BuildContext context) {
+    final monitor = realtimeMonitor;
+    if (monitor == null) {
+      return _buildContent(
+        context,
+        const RealtimeMarketMonitorSnapshot.initial(),
+      );
+    }
+    return ValueListenableBuilder<RealtimeMarketMonitorSnapshot>(
+      valueListenable: monitor,
+      builder: (context, snapshot, _) => _buildContent(context, snapshot),
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    RealtimeMarketMonitorSnapshot monitor,
+  ) {
     final strings = AppStrings.of(context);
     final scheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: QuantaraColors.cyan.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: QuantaraColors.cyan.withValues(alpha: 0.25)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.shield_outlined, color: QuantaraColors.cyan),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                strings.liveBoundary,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurface.withValues(alpha: 0.78),
-                  fontWeight: FontWeight.w700,
+    final health = monitor.health;
+    final healthy = monitor.healthy;
+    final status = health == null
+        ? strings.t('در حال آماده‌سازی', 'Preparing')
+        : switch (health.state) {
+            RealtimeMarketRuntimeState.live => strings.t(
+              'پایش زنده',
+              'Live monitoring',
+            ),
+            RealtimeMarketRuntimeState.paused => strings.t(
+              'پایش متوقف',
+              'Monitoring paused',
+            ),
+            RealtimeMarketRuntimeState.failed => strings.t(
+              'خطای پایش',
+              'Monitoring fault',
+            ),
+            RealtimeMarketRuntimeState.bootstrapping => strings.t(
+              'دریافت تاریخچه',
+              'Bootstrapping history',
+            ),
+            _ => strings.t('در حال اتصال', 'Connecting'),
+          };
+    final metrics = health == null
+        ? strings.t(
+            'داده عمومی Bitunix · بدون API Key · بدون سفارش واقعی',
+            'Public Bitunix data · no API key · no real orders',
+          )
+        : strings.t(
+            '${health.configuredStreams} جریان · ${health.liveShards}/${health.activeShards} اتصال · تأخیر p95 شبکه ${health.p95TransportLag.inMilliseconds}ms · پردازش ${health.p95PipelineLatency.inMilliseconds}ms',
+            '${health.configuredStreams} streams · ${health.liveShards}/${health.activeShards} shards · p95 transport ${health.p95TransportLag.inMilliseconds}ms · processing ${health.p95PipelineLatency.inMilliseconds}ms',
+          );
+    final limitation = strings.t(
+      'در این نسخه آزمایشی، پایش بلادرنگ فقط وقتی اپ یا تب باز است ادامه دارد.',
+      'In this release candidate, realtime monitoring continues only while the app or tab is open.',
+    );
+    final error = monitor.error;
+    return Semantics(
+      container: true,
+      label: '$status. $metrics. $limitation',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: (healthy ? QuantaraColors.success : QuantaraColors.cyan)
+              .withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: (healthy ? QuantaraColors.success : QuantaraColors.cyan)
+                .withValues(alpha: 0.25),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                healthy ? Icons.sensors_rounded : Icons.shield_outlined,
+                color: healthy ? QuantaraColors.success : QuantaraColors.cyan,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      status,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      metrics,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.78),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      error == null ? limitation : '$limitation $error',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: error == null
+                            ? scheme.onSurfaceVariant
+                            : scheme.error,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
