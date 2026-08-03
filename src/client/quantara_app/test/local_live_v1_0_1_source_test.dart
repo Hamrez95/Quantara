@@ -37,7 +37,10 @@ void main() {
       expect(service, contains('targetOrderIds: managed.targetOrderIds'));
       expect(service, contains('ProfitLockStopPolicy.afterTp1'));
       expect(service, contains('ProfitLockStopPolicy.afterTp2'));
-      expect(service, isNot(contains('position.quantity / managed.initialQuantity')));
+      expect(
+        service,
+        isNot(contains('position.quantity / managed.initialQuantity')),
+      );
       expect(stopPolicy, contains('fill.orderId.trim()'));
       expect(stopPolicy, contains('seenTradeIds.add(tradeId)'));
       expect(
