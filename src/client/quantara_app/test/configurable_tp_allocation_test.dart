@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/domain/local_live_trade_models.dart';
-import 'package:quantara_app/features/market_analysis/domain/market_regime_models.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 import 'package:quantara_app/features/owner_alpha/domain/profit_protection_policy.dart';
 
@@ -63,29 +62,32 @@ void main() {
     );
   });
 
-  test('allocation rounds down safely and assigns only exchange dust to TP1', () {
-    final plan = ProfitProtectionPlan(
-      profile: ProfitProtectionProfile.transitionBalance,
-      targetAllocation: ProfitProtectionTargetAllocation.checked(
-        tp1Fraction: 0.65,
-        tp2Fraction: 0.20,
-        tp3Fraction: 0.15,
-      ),
-    );
-    final allocation = ProfitProtectionAllocation.allocate(
-      totalQuantity: 21.4,
-      plan: plan,
-      roundDown: (value) => (value * 10).floor() / 10,
-    );
+  test(
+    'allocation rounds down safely and assigns only exchange dust to TP1',
+    () {
+      final plan = ProfitProtectionPlan(
+        profile: ProfitProtectionProfile.transitionBalance,
+        targetAllocation: ProfitProtectionTargetAllocation.checked(
+          tp1Fraction: 0.65,
+          tp2Fraction: 0.20,
+          tp3Fraction: 0.15,
+        ),
+      );
+      final allocation = ProfitProtectionAllocation.allocate(
+        totalQuantity: 21.4,
+        plan: plan,
+        roundDown: (value) => (value * 10).floor() / 10,
+      );
 
-    expect(allocation.quantities, const [14.0, 4.2, 3.2]);
-    expect(
-      allocation.quantities.fold<double>(0, (sum, value) => sum + value),
-      closeTo(21.4, 0.0000001),
-    );
-    expect(allocation.residualQuantity, closeTo(0, 0.0000001));
-    expect(allocation.quantities.every((value) => value > 0), isTrue);
-  });
+      expect(allocation.quantities, const [14.0, 4.2, 3.2]);
+      expect(
+        allocation.quantities.fold<double>(0, (sum, value) => sum + value),
+        closeTo(21.4, 0.0000001),
+      );
+      expect(allocation.residualQuantity, closeTo(0, 0.0000001));
+      expect(allocation.quantities.every((value) => value > 0), isTrue);
+    },
+  );
 
   test('selected fractions are snapshotted into a managed position', () {
     final managed = LocalLiveManagedPosition(
