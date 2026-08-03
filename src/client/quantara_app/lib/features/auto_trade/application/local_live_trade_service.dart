@@ -13,7 +13,9 @@ import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/profit_lock_stop_policy.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'profit_lock_promotion_executor.dart';
 
 const localLiveConfigurationKey = 'quantara.local-live.configuration.v1';
 const localLiveStatusKey = 'quantara.local-live.status.v1';
@@ -251,7 +253,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           value: _sessionStartEquity!,
         );
       }
-      await _reconcileManagedPositions(positions);
+      await _reconcileManagedPositions(positions, account.authoritativePnl);
       final lossPercent =
           _sessionStartEquity == null || _sessionStartEquity! <= 0
           ? 0
@@ -280,13 +282,19 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         await _scanAndMaybeEnter(account);
       }
       _consecutiveFailures = 0;
+      final profitLockWarning = _managed
+          .map((item) => item.profitLockProgress.warning)
+          .whereType<String>()
+          .where((item) => item.trim().isNotEmpty)
+          .firstOrNull;
       await _publish(
         _entriesEnabled
             ? LocalLiveTradeState.running
             : LocalLiveTradeState.managingOnly,
-        _entriesEnabled
-            ? 'Local live scan and exchange reconciliation completed.'
-            : 'Only exchange-protected positions are being reconciled.',
+        profitLockWarning ??
+            (_entriesEnabled
+                ? 'Local live scan and exchange reconciliation completed.'
+                : 'Only exchange-protected positions are being reconciled.'),
       );
     } on Object catch (error) {
       _consecutiveFailures++;
@@ -376,7 +384,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         return;
       }
-      final profitPlan = ProfitProtectionPolicy.forIdea(idea);
+      final profitPlan = ProfitProtectionPolicy.forIdea(
+        idea,
+        targetAllocation: configuration.targetAllocation,
+      );
       final markPrice = await exchange.fetchMarkPrice(idea.symbol);
       final lower = math.min(idea.entryLower!, idea.entryUpper!);
       final upper = math.max(idea.entryLower!, idea.entryUpper!);
@@ -579,14 +590,17 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           'Filled quantity could not be split into three valid exchange targets and was closed.',
         );
       }
+      final targetOrderIds = <String>[];
       try {
         for (var index = 0; index < 3; index++) {
-          await exchange.placePartialTakeProfit(
-            symbol: idea.symbol,
-            positionId: position.positionId,
-            triggerPrice: rules.roundPrice(idea.targets[index]),
-            quantity: targetQuantities[index],
-            credentials: credentials,
+          targetOrderIds.add(
+            await exchange.placePartialTakeProfit(
+              symbol: idea.symbol,
+              positionId: position.positionId,
+              triggerPrice: rules.roundPrice(idea.targets[index]),
+              quantity: targetQuantities[index],
+              credentials: credentials,
+            ),
           );
         }
         List<BitunixPendingProtection> confirmedProtection = const [];
@@ -600,26 +614,26 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           final fullStopConfirmed = confirmedProtection.any(
             (item) => item.stopLossPrice > 0,
           );
-          final targetCount = confirmedProtection
-              .where(
-                (item) =>
-                    item.takeProfitPrice > 0 &&
-                    item.takeProfitQuantity >= rules.minimumQuantity,
-              )
-              .length;
-          if (fullStopConfirmed && targetCount >= 3) break;
+          final ladderConfirmed = _targetLadderConfirmed(
+            protection: confirmedProtection,
+            targetOrderIds: targetOrderIds,
+            targetQuantities: targetQuantities,
+            quantityTolerance: math
+                .pow(10, -rules.quantityPrecision)
+                .toDouble(),
+          );
+          if (fullStopConfirmed && ladderConfirmed) break;
         }
         final fullStopConfirmed = confirmedProtection.any(
           (item) => item.stopLossPrice > 0,
         );
-        final targetCount = confirmedProtection
-            .where(
-              (item) =>
-                  item.takeProfitPrice > 0 &&
-                  item.takeProfitQuantity >= rules.minimumQuantity,
-            )
-            .length;
-        if (!fullStopConfirmed || targetCount < 3) {
+        final ladderConfirmed = _targetLadderConfirmed(
+          protection: confirmedProtection,
+          targetOrderIds: targetOrderIds,
+          targetQuantities: targetQuantities,
+          quantityTolerance: math.pow(10, -rules.quantityPrecision).toDouble(),
+        );
+        if (!fullStopConfirmed || !ladderConfirmed) {
           throw const LocalLiveTradeSafeException(
             'The complete SL/TP ladder was not confirmed.',
           );
@@ -653,7 +667,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           leverage: leverage,
           openedAt: DateTime.now().toUtc(),
           stopOrderId: stopOrderId,
-          targetFractions: allocation.actualFractions,
+          targetAllocation: configuration.targetAllocation,
+          targetQuantities: targetQuantities,
+          targetOrderIds: targetOrderIds,
+          costBufferRate: profitPlan.costBufferRate,
           marketRegime: idea.marketRegime,
         ),
       );
@@ -663,7 +680,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       await _persistState();
       _auditEvent(
         'position_protected',
-        'Entry fill, full stop and three regime-aware staged targets confirmed (${profitPlan.profile.name}).',
+        'Entry fill, full stop and three staged targets confirmed '
+            '(${(configuration.targetAllocation.tp1Fraction * 100).toStringAsFixed(0)}/'
+            '${(configuration.targetAllocation.tp2Fraction * 100).toStringAsFixed(0)}/'
+            '${(configuration.targetAllocation.tp3Fraction * 100).toStringAsFixed(0)}%; '
+            'qty ${targetQuantities.map((item) => item.toString()).join('/')}; '
+            '${profitPlan.profile.name}).',
         symbol: idea.symbol,
       );
     } finally {
@@ -673,6 +695,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
 
   Future<void> _reconcileManagedPositions(
     List<BitunixLivePosition> positions,
+    TradingPnlProjection pnlProjection,
   ) async {
     final exchange = _exchange!;
     final credentials = _credentials!;
@@ -701,23 +724,53 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         continue;
       }
-      final protection = await exchange.fetchPendingProtection(
+
+      final rules = await exchange.fetchInstrumentRules(managed.symbol);
+      final quantityTolerance = math
+          .pow(10, -rules.quantityPrecision)
+          .toDouble();
+      final priceTolerance = math.pow(10, -rules.pricePrecision).toDouble() / 2;
+      var protection = await exchange.fetchPendingProtection(
         credentials,
         symbol: managed.symbol,
         positionId: managed.positionId,
       );
-      if (!protection.any((item) => item.stopLossPrice > 0)) {
+      var currentStop = _confirmedStopPrice(
+        managed: managed,
+        protection: protection,
+        remainingQuantity: position.quantity,
+        quantityTolerance: quantityTolerance,
+      );
+      if (currentStop == null) {
+        final repairStop =
+            managed.profitLockProgress.pendingProposedStop ??
+            _stopForConfirmedStage(
+              managed,
+              pricePrecision: rules.pricePrecision,
+            );
         try {
           await exchange.placePositionStop(
             symbol: managed.symbol,
             positionId: managed.positionId,
-            stopLoss: managed.stage >= 2
-                ? managed.targets.first
-                : managed.stage >= 1
-                ? _breakEvenStop(managed)
-                : managed.originalStopLoss,
+            stopLoss: repairStop,
             credentials: credentials,
           );
+          protection = await exchange.fetchPendingProtection(
+            credentials,
+            symbol: managed.symbol,
+            positionId: managed.positionId,
+          );
+          currentStop = _confirmedStopPrice(
+            managed: managed,
+            protection: protection,
+            remainingQuantity: position.quantity,
+            quantityTolerance: quantityTolerance,
+          );
+          if (currentStop == null) {
+            throw const LocalLiveTradeSafeException(
+              'Repaired stop was not exchange-confirmed.',
+            );
+          }
         } on Object {
           await exchange.closePositionReduceOnly(
             position: position,
@@ -730,42 +783,333 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           );
         }
       }
-      final ratio = position.quantity / managed.initialQuantity;
-      var next = managed;
-      final tp1Trigger = (1 - managed.targetFractions.first + 0.02).clamp(0, 1);
-      final tp2Trigger = (managed.targetFractions.last + 0.02).clamp(0, 1);
-      if (managed.stage < 1 && ratio <= tp1Trigger) {
-        await exchange.modifyPositionStop(
-          symbol: managed.symbol,
-          positionId: managed.positionId,
-          stopLoss: _breakEvenStop(managed),
-          credentials: credentials,
+
+      final positionPnl = pnlProjection.forPositionId(managed.positionId);
+      if (positionPnl == null || !positionPnl.isVerified) {
+        _entriesEnabled = false;
+        final progress = managed.profitLockProgress.copyWith(
+          warning:
+              positionPnl?.warning ??
+              'Exchange fill history is unavailable for profit-lock confirmation.',
         );
-        next = managed.copyWith(stage: 1);
+        _replaceManaged(
+          managed,
+          managed.copyWith(profitLockProgress: progress),
+        );
         _auditEvent(
-          'risk_free',
-          'TP1 save-profit reduction observed; remaining position moved beyond break-even including costs.',
+          'profit_lock_unverified',
+          progress.warning!,
           symbol: managed.symbol,
+        );
+        continue;
+      }
+      if (managed.targetOrderIds.length != 3 ||
+          managed.targetQuantities.length != 3 ||
+          managed.targetOrderIds.any((item) => item.trim().isEmpty)) {
+        _entriesEnabled = false;
+        const warning =
+            'Target exchange identities are incomplete; automatic stop promotion is blocked.';
+        _replaceManaged(
+          managed,
+          managed.copyWith(
+            profitLockProgress: managed.profitLockProgress.copyWith(
+              warning: warning,
+            ),
+          ),
+        );
+        _auditEvent(
+          'profit_lock_identity_block',
+          warning,
+          symbol: managed.symbol,
+        );
+        continue;
+      }
+
+      final fillProgress = ConfirmedTargetFillProgress.reconcile(
+        targetOrderIds: managed.targetOrderIds,
+        targetQuantities: managed.targetQuantities,
+        exchangeExitFills: positionPnl.exitFills,
+        processedTradeIds: managed.profitLockProgress.processedTradeIds,
+        quantityTolerance: quantityTolerance,
+        observedRemainingQuantity: position.quantity,
+      );
+      var next = managed.copyWith(
+        profitLockProgress: managed.profitLockProgress.copyWith(
+          processedTradeIds: {
+            ...managed.profitLockProgress.processedTradeIds,
+            ...fillProgress.newTradeIds,
+          },
+        ),
+      );
+
+      if (next.profitLockProgress.hasPendingPromotion) {
+        final pendingStop = next.profitLockProgress.pendingProposedStop!;
+        final pendingStage = next.profitLockProgress.pendingStage!;
+        if (ProfitLockStopPolicy.isAtLeastAsSafe(
+          direction: next.direction,
+          confirmedStop: currentStop,
+          proposedStop: pendingStop,
+          tolerance: priceTolerance,
+        )) {
+          next = next.copyWith(
+            profitLockProgress: next.profitLockProgress.copyWith(
+              confirmedStage: math
+                  .max(next.profitLockProgress.confirmedStage, pendingStage)
+                  .toInt(),
+              clearPendingStage: true,
+              clearPendingStop: true,
+              clearWarning: true,
+            ),
+          );
+          _auditEvent(
+            pendingStage == 1 ? 'risk_free_confirmed' : 'runner_confirmed',
+            'Pending stop promotion was confirmed from exchange protection truth.',
+            symbol: next.symbol,
+          );
+        } else {
+          _entriesEnabled = false;
+          final warning =
+              'Stop promotion is pending exchange confirmation; no duplicate modification was sent.';
+          next = next.copyWith(
+            profitLockProgress: next.profitLockProgress.copyWith(
+              warning: warning,
+            ),
+          );
+          _auditEvent('profit_lock_pending', warning, symbol: next.symbol);
+          _replaceManaged(managed, next);
+          continue;
+        }
+      }
+
+      if (next.profitLockProgress.confirmedStage < 1 &&
+          fillProgress.tp1Confirmed) {
+        final decision = ProfitLockStopPolicy.afterTp1(
+          direction: next.direction,
+          entryPrice: next.entryPrice,
+          currentConfirmedStop: currentStop,
+          costBufferRate: next.costBufferRate,
+          pricePrecision: rules.pricePrecision,
+        );
+        next = await _promoteStopAfterConfirmedTarget(
+          original: managed,
+          current: next,
+          position: position,
+          stage: 1,
+          decision: decision,
+          priceTolerance: priceTolerance,
+          quantityTolerance: quantityTolerance,
+        );
+        protection = await exchange.fetchPendingProtection(
+          credentials,
+          symbol: next.symbol,
+          positionId: next.positionId,
+        );
+        currentStop =
+            _confirmedStopPrice(
+              managed: next,
+              protection: protection,
+              remainingQuantity: position.quantity,
+              quantityTolerance: quantityTolerance,
+            ) ??
+            currentStop;
+      }
+
+      if (next.profitLockProgress.confirmedStage >= 1 &&
+          next.profitLockProgress.confirmedStage < 2 &&
+          fillProgress.tp2Confirmed &&
+          !next.profitLockProgress.hasPendingPromotion) {
+        final decision = ProfitLockStopPolicy.afterTp2(
+          direction: next.direction,
+          tp1Price: next.targets.first,
+          currentConfirmedStop: currentStop,
+          pricePrecision: rules.pricePrecision,
+        );
+        next = await _promoteStopAfterConfirmedTarget(
+          original: managed,
+          current: next,
+          position: position,
+          stage: 2,
+          decision: decision,
+          priceTolerance: priceTolerance,
+          quantityTolerance: quantityTolerance,
         );
       }
-      if (next.stage < 2 && ratio <= tp2Trigger) {
-        await exchange.modifyPositionStop(
-          symbol: managed.symbol,
-          positionId: managed.positionId,
-          stopLoss: next.targets.first,
-          credentials: credentials,
-        );
-        next = next.copyWith(stage: 2);
-        _auditEvent(
-          'runner',
-          'TP2 reduction observed; runner stop moved to TP1.',
-          symbol: managed.symbol,
-        );
-      }
-      final index = _managed.indexOf(managed);
-      if (index >= 0) _managed[index] = next;
+      _replaceManaged(managed, next);
     }
     await _persistState();
+  }
+
+  Future<LocalLiveManagedPosition> _promoteStopAfterConfirmedTarget({
+    required LocalLiveManagedPosition original,
+    required LocalLiveManagedPosition current,
+    required BitunixLivePosition position,
+    required int stage,
+    required ProfitLockStopDecision decision,
+    required double priceTolerance,
+    required double quantityTolerance,
+  }) async {
+    if (!decision.requiresMutation) {
+      final finalized = current.copyWith(
+        profitLockProgress: current.profitLockProgress.copyWith(
+          confirmedStage: stage,
+          clearPendingStage: true,
+          clearPendingStop: true,
+          clearWarning: true,
+        ),
+      );
+      _auditEvent(
+        stage == 1 ? 'risk_free_confirmed' : 'runner_confirmed',
+        decision.reason,
+        symbol: current.symbol,
+      );
+      return finalized;
+    }
+
+    final pending = current.copyWith(
+      profitLockProgress: current.profitLockProgress.copyWith(
+        pendingStage: stage,
+        pendingProposedStop: decision.proposedStop,
+        warning: 'Awaiting exchange stop confirmation.',
+      ),
+    );
+    _replaceManaged(original, pending);
+    await _persistState();
+
+    final exchange = _exchange!;
+    final credentials = _credentials!;
+    final executor = ProfitLockPromotionExecutor();
+    final execution = await executor.execute(
+      direction: pending.direction,
+      decision: decision,
+      priceTolerance: priceTolerance,
+      requestMutation: (proposedStop) => exchange.modifyPositionStop(
+        symbol: pending.symbol,
+        positionId: pending.positionId,
+        stopLoss: proposedStop,
+        credentials: credentials,
+      ),
+      readConfirmedStop: () async {
+        final protection = await exchange.fetchPendingProtection(
+          credentials,
+          symbol: pending.symbol,
+          positionId: pending.positionId,
+        );
+        return _confirmedStopPrice(
+          managed: pending,
+          protection: protection,
+          remainingQuantity: position.quantity,
+          quantityTolerance: quantityTolerance,
+        );
+      },
+    );
+    if (execution.confirmed) {
+      final finalized = pending.copyWith(
+        stopOrderId: execution.orderId ?? pending.stopOrderId,
+        profitLockProgress: pending.profitLockProgress.copyWith(
+          confirmedStage: stage,
+          clearPendingStage: true,
+          clearPendingStop: true,
+          clearWarning: true,
+        ),
+      );
+      _auditEvent(
+        stage == 1 ? 'risk_free_confirmed' : 'runner_confirmed',
+        '${decision.reason} Exchange protection confirmation received.',
+        symbol: pending.symbol,
+      );
+      return finalized;
+    }
+
+    _entriesEnabled = false;
+    final unresolved = pending.copyWith(
+      profitLockProgress: pending.profitLockProgress.copyWith(
+        warning:
+            '${execution.warning ?? 'Stop promotion was not confirmed.'} Existing protection is preserved and new entries are blocked.',
+      ),
+    );
+    _auditEvent(
+      'profit_lock_unconfirmed',
+      unresolved.profitLockProgress.warning!,
+      symbol: pending.symbol,
+    );
+    return unresolved;
+  }
+
+  bool _targetLadderConfirmed({
+    required List<BitunixPendingProtection> protection,
+    required List<String> targetOrderIds,
+    required List<double> targetQuantities,
+    required double quantityTolerance,
+  }) {
+    if (targetOrderIds.length != 3 || targetQuantities.length != 3) {
+      return false;
+    }
+    for (var index = 0; index < 3; index++) {
+      final id = targetOrderIds[index].trim();
+      if (id.isEmpty) return false;
+      final matching = protection.where(
+        (item) =>
+            item.orderId.trim() == id &&
+            item.takeProfitPrice > 0 &&
+            item.takeProfitQuantity + quantityTolerance >=
+                targetQuantities[index],
+      );
+      if (matching.isEmpty) return false;
+    }
+    return true;
+  }
+
+  double? _confirmedStopPrice({
+    required LocalLiveManagedPosition managed,
+    required List<BitunixPendingProtection> protection,
+    required double remainingQuantity,
+    required double quantityTolerance,
+  }) {
+    final prices = protection
+        .where(
+          (item) =>
+              item.positionId == managed.positionId &&
+              item.stopLossPrice > 0 &&
+              (item.stopLossQuantity <= 0 ||
+                  item.stopLossQuantity + quantityTolerance >=
+                      remainingQuantity),
+        )
+        .map((item) => item.stopLossPrice)
+        .where((item) => item.isFinite && item > 0)
+        .toList(growable: false);
+    if (prices.isEmpty) return null;
+    return managed.direction == TradeDirection.long
+        ? prices.reduce(math.max)
+        : prices.reduce(math.min);
+  }
+
+  double _stopForConfirmedStage(
+    LocalLiveManagedPosition managed, {
+    required int pricePrecision,
+  }) {
+    if (managed.profitLockProgress.confirmedStage >= 2) {
+      return managed.targets.first;
+    }
+    if (managed.profitLockProgress.confirmedStage >= 1) {
+      return ProfitLockStopPolicy.afterTp1(
+        direction: managed.direction,
+        entryPrice: managed.entryPrice,
+        currentConfirmedStop: managed.originalStopLoss,
+        costBufferRate: managed.costBufferRate,
+        pricePrecision: pricePrecision,
+      ).proposedStop;
+    }
+    return managed.originalStopLoss;
+  }
+
+  void _replaceManaged(
+    LocalLiveManagedPosition original,
+    LocalLiveManagedPosition replacement,
+  ) {
+    final index = _managed.indexWhere(
+      (item) => item.positionId == original.positionId,
+    );
+    if (index >= 0) _managed[index] = replacement;
   }
 
   Future<void> _emergencyCloseManagedPositions() async {
@@ -824,13 +1168,6 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           right.confidencePercent.compareTo(left.confidencePercent),
     );
     return candidates.firstOrNull;
-  }
-
-  double _breakEvenStop(LocalLiveManagedPosition position) {
-    const costBuffer = 0.0017;
-    return position.direction == TradeDirection.long
-        ? position.entryPrice * (1 + costBuffer)
-        : position.entryPrice * (1 - costBuffer);
   }
 
   String _clientId(TradeIdea idea) {

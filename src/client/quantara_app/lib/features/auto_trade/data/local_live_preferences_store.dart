@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../owner_alpha/domain/profit_protection_policy.dart';
+
 @immutable
 class LocalLivePreferences {
   const LocalLivePreferences({
@@ -9,6 +11,7 @@ class LocalLivePreferences {
     required this.leverage,
     required this.riskPercent,
     required this.dailyLossLimitPercent,
+    this.targetAllocation = ProfitProtectionTargetAllocation.standard,
   });
 
   static const supportedTimeframes = {'5m', '15m', '1h', '4h'};
@@ -24,6 +27,7 @@ class LocalLivePreferences {
   final int leverage;
   final double riskPercent;
   final double dailyLossLimitPercent;
+  final ProfitProtectionTargetAllocation targetAllocation;
 
   factory LocalLivePreferences.defaults(List<String> availableSymbols) =>
       LocalLivePreferences(
@@ -60,6 +64,9 @@ class LocalLivePreferences {
       dailyLossLimitPercent: dailyLossLimitPercent
           .clamp(minimumDailyLossPercent, maximumDailyLossPercent)
           .toDouble(),
+      targetAllocation: ProfitProtectionTargetAllocation.fromFractions(
+        targetAllocation.fractions,
+      ),
     );
   }
 }
@@ -79,6 +86,9 @@ final class SharedPreferencesLocalLivePreferencesStore
   static const _leverageKey = 'quantara.local-live.ui.leverage.v2';
   static const _riskKey = 'quantara.local-live.ui.risk.v2';
   static const _dailyLossKey = 'quantara.local-live.ui.daily-loss.v2';
+  static const _tp1Key = 'quantara.local-live.ui.tp1-fraction.v3';
+  static const _tp2Key = 'quantara.local-live.ui.tp2-fraction.v3';
+  static const _tp3Key = 'quantara.local-live.ui.tp3-fraction.v3';
 
   @override
   Future<LocalLivePreferences> load({
@@ -86,6 +96,11 @@ final class SharedPreferencesLocalLivePreferencesStore
   }) async {
     final defaults = LocalLivePreferences.defaults(availableSymbols);
     final preferences = await SharedPreferences.getInstance();
+    final targetAllocation = ProfitProtectionTargetAllocation.fromFractions([
+      preferences.getDouble(_tp1Key) ?? defaults.targetAllocation.tp1Fraction,
+      preferences.getDouble(_tp2Key) ?? defaults.targetAllocation.tp2Fraction,
+      preferences.getDouble(_tp3Key) ?? defaults.targetAllocation.tp3Fraction,
+    ]);
     return LocalLivePreferences(
       symbols: preferences.getStringList(_symbolsKey) ?? defaults.symbols,
       timeframes:
@@ -97,6 +112,7 @@ final class SharedPreferencesLocalLivePreferencesStore
       dailyLossLimitPercent:
           preferences.getDouble(_dailyLossKey) ??
           defaults.dailyLossLimitPercent,
+      targetAllocation: targetAllocation,
     ).normalized(availableSymbols);
   }
 
@@ -112,6 +128,9 @@ final class SharedPreferencesLocalLivePreferencesStore
       preferences.setInt(_leverageKey, value.leverage),
       preferences.setDouble(_riskKey, value.riskPercent),
       preferences.setDouble(_dailyLossKey, value.dailyLossLimitPercent),
+      preferences.setDouble(_tp1Key, value.targetAllocation.tp1Fraction),
+      preferences.setDouble(_tp2Key, value.targetAllocation.tp2Fraction),
+      preferences.setDouble(_tp3Key, value.targetAllocation.tp3Fraction),
     ]);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/data/local_live_preferences_store.dart';
+import 'package:quantara_app/features/owner_alpha/domain/profit_protection_policy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -11,12 +12,17 @@ void main() {
     'persists every Local Live user control across reconstruction',
     () async {
       const store = SharedPreferencesLocalLivePreferencesStore();
-      const value = LocalLivePreferences(
+      final value = LocalLivePreferences(
         symbols: ['BTCUSDT', 'ETHUSDT', 'XRPUSDT'],
         timeframes: {'5m', '15m'},
         leverage: 37,
         riskPercent: 1.25,
         dailyLossLimitPercent: 6,
+        targetAllocation: ProfitProtectionTargetAllocation.checked(
+          tp1Fraction: 0.70,
+          tp2Fraction: 0.20,
+          tp3Fraction: 0.10,
+        ),
       );
 
       await store.save(value);
@@ -29,6 +35,7 @@ void main() {
       expect(restored.leverage, 37);
       expect(restored.riskPercent, 1.25);
       expect(restored.dailyLossLimitPercent, 6);
+      expect(restored.targetAllocation.fractions, const [0.70, 0.20, 0.10]);
     },
   );
 

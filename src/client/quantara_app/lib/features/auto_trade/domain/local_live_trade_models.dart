@@ -1,5 +1,7 @@
 import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
+import '../../owner_alpha/domain/profit_protection_policy.dart';
+import 'profit_lock_stop_policy.dart';
 import 'trading_pnl_projection.dart';
 
 enum LocalLiveTradeState {
@@ -24,6 +26,7 @@ final class LocalLiveTradeConfiguration {
     required this.strategy,
     required this.cadence,
     required this.languageCode,
+    this.targetAllocation = ProfitProtectionTargetAllocation.standard,
     this.scanIntervalSeconds = 60,
   });
 
@@ -36,6 +39,7 @@ final class LocalLiveTradeConfiguration {
   final AnalysisStrategy strategy;
   final SignalCadence cadence;
   final String languageCode;
+  final ProfitProtectionTargetAllocation targetAllocation;
   final int scanIntervalSeconds;
 
   void validate() {
@@ -71,6 +75,11 @@ final class LocalLiveTradeConfiguration {
     if (scanIntervalSeconds < 30 || scanIntervalSeconds > 300) {
       throw const FormatException('Scan interval must be 30–300 seconds.');
     }
+    ProfitProtectionTargetAllocation.checked(
+      tp1Fraction: targetAllocation.tp1Fraction,
+      tp2Fraction: targetAllocation.tp2Fraction,
+      tp3Fraction: targetAllocation.tp3Fraction,
+    );
   }
 
   Map<String, Object?> toJson() => {
@@ -83,10 +92,15 @@ final class LocalLiveTradeConfiguration {
     'strategy': strategy.name,
     'cadence': cadence.name,
     'languageCode': languageCode == 'en' ? 'en' : 'fa',
+    'targetAllocation': targetAllocation.toJson(),
+    'targetFractions': targetAllocation.fractions,
     'scanIntervalSeconds': scanIntervalSeconds,
   };
 
   factory LocalLiveTradeConfiguration.fromJson(Map<String, Object?> json) {
+    final allocation = json.containsKey('targetAllocation')
+        ? ProfitProtectionTargetAllocation.fromJson(json['targetAllocation'])
+        : ProfitProtectionTargetAllocation.fromJson(json['targetFractions']);
     final result = LocalLiveTradeConfiguration(
       symbols: (json['symbols'] as List<Object?>? ?? const [])
           .whereType<String>()
@@ -113,6 +127,7 @@ final class LocalLiveTradeConfiguration {
         orElse: () => SignalCadence.balanced,
       ),
       languageCode: json['languageCode'] == 'en' ? 'en' : 'fa',
+      targetAllocation: allocation,
       scanIntervalSeconds: (json['scanIntervalSeconds'] as num?)?.toInt() ?? 60,
     );
     result.validate();
@@ -136,8 +151,11 @@ final class LocalLiveManagedPosition {
     required this.leverage,
     required this.openedAt,
     this.stopOrderId,
-    this.stage = 0,
-    this.targetFractions = const [0.40, 0.30, 0.30],
+    this.targetAllocation = ProfitProtectionTargetAllocation.standard,
+    this.targetQuantities = const [],
+    this.targetOrderIds = const [],
+    this.profitLockProgress = const ProfitLockProgress(),
+    this.costBufferRate = 0.0017,
     this.marketRegime = MarketRegime.transition,
   });
 
@@ -155,30 +173,45 @@ final class LocalLiveManagedPosition {
   final int leverage;
   final DateTime openedAt;
   final String? stopOrderId;
-  final int stage;
-  final List<double> targetFractions;
+  final ProfitProtectionTargetAllocation targetAllocation;
+  final List<double> targetQuantities;
+  final List<String> targetOrderIds;
+  final ProfitLockProgress profitLockProgress;
+  final double costBufferRate;
   final MarketRegime marketRegime;
 
-  LocalLiveManagedPosition copyWith({String? stopOrderId, int? stage}) =>
-      LocalLiveManagedPosition(
-        setupId: setupId,
-        symbol: symbol,
-        timeframe: timeframe,
-        direction: direction,
-        positionId: positionId,
-        entryOrderId: entryOrderId,
-        clientId: clientId,
-        initialQuantity: initialQuantity,
-        entryPrice: entryPrice,
-        originalStopLoss: originalStopLoss,
-        targets: targets,
-        leverage: leverage,
-        openedAt: openedAt,
-        stopOrderId: stopOrderId ?? this.stopOrderId,
-        stage: stage ?? this.stage,
-        targetFractions: targetFractions,
-        marketRegime: marketRegime,
-      );
+  int get stage => profitLockProgress.confirmedStage;
+  List<double> get targetFractions => targetAllocation.fractions;
+
+  LocalLiveManagedPosition copyWith({
+    String? stopOrderId,
+    ProfitLockProgress? profitLockProgress,
+    List<String>? targetOrderIds,
+    List<double>? targetQuantities,
+  }) => LocalLiveManagedPosition(
+    setupId: setupId,
+    symbol: symbol,
+    timeframe: timeframe,
+    direction: direction,
+    positionId: positionId,
+    entryOrderId: entryOrderId,
+    clientId: clientId,
+    initialQuantity: initialQuantity,
+    entryPrice: entryPrice,
+    originalStopLoss: originalStopLoss,
+    targets: targets,
+    leverage: leverage,
+    openedAt: openedAt,
+    stopOrderId: stopOrderId ?? this.stopOrderId,
+    targetAllocation: targetAllocation,
+    targetQuantities: List.unmodifiable(
+      targetQuantities ?? this.targetQuantities,
+    ),
+    targetOrderIds: List.unmodifiable(targetOrderIds ?? this.targetOrderIds),
+    profitLockProgress: profitLockProgress ?? this.profitLockProgress,
+    costBufferRate: costBufferRate,
+    marketRegime: marketRegime,
+  );
 
   Map<String, Object?> toJson() => {
     'setupId': setupId,
@@ -196,54 +229,60 @@ final class LocalLiveManagedPosition {
     'openedAt': openedAt.toUtc().toIso8601String(),
     'stopOrderId': stopOrderId,
     'stage': stage,
-    'targetFractions': targetFractions,
+    'targetAllocation': targetAllocation.toJson(),
+    'targetFractions': targetAllocation.fractions,
+    'targetQuantities': targetQuantities,
+    'targetOrderIds': targetOrderIds,
+    'profitLockProgress': profitLockProgress.toJson(),
+    'costBufferRate': costBufferRate,
     'marketRegime': marketRegime.name,
   };
 
-  factory LocalLiveManagedPosition.fromJson(Map<String, Object?> json) =>
-      LocalLiveManagedPosition(
-        setupId: json['setupId']?.toString() ?? '',
-        symbol: json['symbol']?.toString() ?? '',
-        timeframe: json['timeframe']?.toString() ?? '',
-        direction: TradeDirection.values.firstWhere(
-          (item) => item.name == json['direction'],
-          orElse: () => TradeDirection.wait,
-        ),
-        positionId: json['positionId']?.toString() ?? '',
-        entryOrderId: json['entryOrderId']?.toString() ?? '',
-        clientId: json['clientId']?.toString() ?? '',
-        initialQuantity: (json['initialQuantity'] as num?)?.toDouble() ?? 0,
-        entryPrice: (json['entryPrice'] as num?)?.toDouble() ?? 0,
-        originalStopLoss: (json['originalStopLoss'] as num?)?.toDouble() ?? 0,
-        targets: (json['targets'] as List<Object?>? ?? const [])
-            .whereType<num>()
-            .map((item) => item.toDouble())
-            .toList(growable: false),
-        leverage: (json['leverage'] as num?)?.toInt() ?? 1,
-        openedAt:
-            DateTime.tryParse(json['openedAt']?.toString() ?? '')?.toUtc() ??
-            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-        stopOrderId: json['stopOrderId']?.toString(),
-        stage: (json['stage'] as num?)?.toInt() ?? 0,
-        targetFractions: _targetFractionsFromJson(json['targetFractions']),
-        marketRegime: MarketRegime.values.firstWhere(
-          (item) => item.name == json['marketRegime'],
-          orElse: () => MarketRegime.transition,
-        ),
-      );
-
-  static List<double> _targetFractionsFromJson(Object? value) {
-    final parsed = (value as List<Object?>? ?? const [])
-        .whereType<num>()
-        .map((item) => item.toDouble())
-        .toList(growable: false);
-    final total = parsed.fold<double>(0, (sum, item) => sum + item);
-    if (parsed.length != 3 ||
-        parsed.any((item) => !item.isFinite || item <= 0) ||
-        (total - 1).abs() > 0.0001) {
-      return const [0.40, 0.30, 0.30];
-    }
-    return List.unmodifiable(parsed);
+  factory LocalLiveManagedPosition.fromJson(Map<String, Object?> json) {
+    final legacyStage = (json['stage'] as num?)?.toInt() ?? 0;
+    final parsedProgress = json.containsKey('profitLockProgress')
+        ? ProfitLockProgress.fromJson(json['profitLockProgress'])
+        : ProfitLockProgress(confirmedStage: legacyStage);
+    return LocalLiveManagedPosition(
+      setupId: json['setupId']?.toString() ?? '',
+      symbol: json['symbol']?.toString() ?? '',
+      timeframe: json['timeframe']?.toString() ?? '',
+      direction: TradeDirection.values.firstWhere(
+        (item) => item.name == json['direction'],
+        orElse: () => TradeDirection.wait,
+      ),
+      positionId: json['positionId']?.toString() ?? '',
+      entryOrderId: json['entryOrderId']?.toString() ?? '',
+      clientId: json['clientId']?.toString() ?? '',
+      initialQuantity: (json['initialQuantity'] as num?)?.toDouble() ?? 0,
+      entryPrice: (json['entryPrice'] as num?)?.toDouble() ?? 0,
+      originalStopLoss: (json['originalStopLoss'] as num?)?.toDouble() ?? 0,
+      targets: (json['targets'] as List<Object?>? ?? const [])
+          .whereType<num>()
+          .map((item) => item.toDouble())
+          .toList(growable: false),
+      leverage: (json['leverage'] as num?)?.toInt() ?? 1,
+      openedAt:
+          DateTime.tryParse(json['openedAt']?.toString() ?? '')?.toUtc() ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      stopOrderId: json['stopOrderId']?.toString(),
+      targetAllocation: json.containsKey('targetAllocation')
+          ? ProfitProtectionTargetAllocation.fromJson(json['targetAllocation'])
+          : ProfitProtectionTargetAllocation.fromJson(json['targetFractions']),
+      targetQuantities: (json['targetQuantities'] as List<Object?>? ?? const [])
+          .whereType<num>()
+          .map((item) => item.toDouble())
+          .toList(growable: false),
+      targetOrderIds: (json['targetOrderIds'] as List<Object?>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      profitLockProgress: parsedProgress,
+      costBufferRate: (json['costBufferRate'] as num?)?.toDouble() ?? 0.0017,
+      marketRegime: MarketRegime.values.firstWhere(
+        (item) => item.name == json['marketRegime'],
+        orElse: () => MarketRegime.transition,
+      ),
+    );
   }
 }
 

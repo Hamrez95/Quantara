@@ -252,7 +252,6 @@ final class BitunixLocalLiveApiClient {
       if (parsed.warning != null) warnings.add(parsed.warning!);
     } on LocalLiveTradeSafeException catch (error) {
       settlementsAvailable = false;
-      sourceVerified = false;
       warnings.add(error.message);
     }
     try {

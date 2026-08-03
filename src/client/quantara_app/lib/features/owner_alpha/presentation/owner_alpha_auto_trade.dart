@@ -382,6 +382,9 @@ class _LocalLiveTradeControlCardState
   int _leverage = 10;
   double _riskPercent = 0.10;
   double _dailyLossLimit = 1;
+  int _tp1Percent = 65;
+  int _tp2Percent = 20;
+  int _tp3Percent = 15;
   bool _preferencesLoaded = false;
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
@@ -410,6 +413,9 @@ class _LocalLiveTradeControlCardState
       _leverage = value.leverage;
       _riskPercent = value.riskPercent;
       _dailyLossLimit = value.dailyLossLimitPercent;
+      _tp1Percent = (value.targetAllocation.tp1Fraction * 100).round();
+      _tp2Percent = (value.targetAllocation.tp2Fraction * 100).round();
+      _tp3Percent = 100 - _tp1Percent - _tp2Percent;
       _preferencesLoaded = true;
     });
   }
@@ -420,7 +426,15 @@ class _LocalLiveTradeControlCardState
     leverage: _leverage,
     riskPercent: _riskPercent,
     dailyLossLimitPercent: _dailyLossLimit,
+    targetAllocation: _targetAllocation,
   ).normalized(widget.analysisController.symbols);
+
+  ProfitProtectionTargetAllocation get _targetAllocation =>
+      ProfitProtectionTargetAllocation.checked(
+        tp1Fraction: _tp1Percent / 100,
+        tp2Fraction: _tp2Percent / 100,
+        tp3Fraction: _tp3Percent / 100,
+      );
 
   void _mutateAndSave(VoidCallback mutation) {
     setState(mutation);
@@ -723,6 +737,23 @@ class _LocalLiveTradeControlCardState
                       _dailyLossLimit = math.min(10, _dailyLossLimit + step);
                     }),
                   ),
+                  TpAllocationEditor(
+                    allocation: _targetAllocation,
+                    persian: _fa,
+                    onChanged: (allocation) => _mutateAndSave(() {
+                      _tp1Percent = (allocation.tp1Fraction * 100).round();
+                      _tp2Percent = (allocation.tp2Fraction * 100).round();
+                      _tp3Percent = 100 - _tp1Percent - _tp2Percent;
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                  _BoundaryNotice(
+                    text: _t(
+                      'جمع سه هدف همیشه ۱۰۰٪ است. پس از تأیید کامل Fill هدف اول توسط Bitunix، استاپ باقی‌مانده فقط رو به سود و با احتساب هزینه‌ها منتقل می‌شود؛ کاهش صرف Quantity هیچ‌وقت محرک این تغییر نیست.',
+                      'The three targets always total 100%. Only a complete Bitunix-confirmed TP1 fill may promote the remaining stop toward cost-aware profit; quantity reduction alone never triggers it.',
+                    ),
+                    color: QuantaraColors.cyan,
+                  ),
                   if (_riskPercent > 0.50 ||
                       _dailyLossLimit > 3 ||
                       _leverage > 25) ...[
@@ -935,6 +966,10 @@ class _LocalLiveTradeControlCardState
               Text(
                 '${_t('حد ضرر روزانه', 'Daily loss cap')}: ${_dailyLossLimit.toStringAsFixed(2)}%',
               ),
+              Text(
+                '${_t('تقسیم اهداف', 'Target allocation')}: TP1 $_tp1Percent% · TP2 $_tp2Percent% · TP3 $_tp3Percent%',
+                textDirection: TextDirection.ltr,
+              ),
               const SizedBox(height: 12),
               Text(
                 _t(
@@ -972,6 +1007,7 @@ class _LocalLiveTradeControlCardState
         strategy: widget.analysisController.strategy,
         cadence: widget.analysisController.cadence,
         languageCode: widget.analysisController.languageCode,
+        targetAllocation: _targetAllocation,
       ),
     );
     if (!started && mounted) {
