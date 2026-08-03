@@ -18,6 +18,8 @@
 
 The regression fixture represents one `XRPUSDT` isolated short position, 10x leverage, quantity `21.4`, entry `1.0665`, margin `2.30 USDT`, and unrealized PnL `0.0021 USDT`. Tests cover stale-state fail-closed behavior, Local Live/account divergence, failed-refresh last-known-state preservation, page warning UI, and source-level observer-only safety.
 
+The first strict-analyzer run identified only three constructor-style infos. They were corrected with a public factory and a private initializing-formal constructor; no lint suppression was added.
+
 ## External physical gate
 
 After all CI gates pass, execute the Samsung reconciliation checklist recorded on Issue #134 and Epic #140. No physical test may create a new entry or alter the user's current SL/TP protections.
