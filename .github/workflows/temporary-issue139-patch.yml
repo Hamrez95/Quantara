@@ -27,7 +27,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verify and apply complete implementation patch
+      - name: Verify and apply implementation patches
         shell: bash
         run: |
           set -euo pipefail
@@ -49,178 +49,12 @@ jobs:
           git apply --check /tmp/issue139.patch
           git apply /tmp/issue139.patch
 
-          python - <<'PY'
-          from pathlib import Path
-
-          api = Path(
-              'src/client/quantara_app/lib/features/auto_trade/data/'
-              'bitunix_private_api_client.dart'
-          )
-          source = api.read_text()
-          old = '''    } on AutoTradeSafeException catch (error) {
-              settlementsAvailable = false;
-              sourceVerified = false;
-              pnlWarnings.add(error.message);
-            }
-          '''
-          new = '''    } on AutoTradeSafeException catch (error) {
-              settlementsAvailable = false;
-              pnlWarnings.add(error.message);
-            }
-          '''
-          if old not in source:
-              raise SystemExit('Settlement availability source block not found')
-          api.write_text(source.replace(old, new, 1))
-
-          projection = Path(
-              'src/client/quantara_app/lib/features/auto_trade/domain/'
-              'trading_pnl_projection.dart'
-          )
-          source = projection.read_text()
-          old = '''    final verified = conflicts.isEmpty &&
-              sourceVerified &&
-              positions.every((item) => item.isVerified);
-            final projectionWarning = conflicts.isEmpty
-          '''
-          new = '''    final componentsVerified =
-              conflicts.isEmpty &&
-              sourceVerified &&
-              positions.every((item) => item.isVerified);
-            final projectionVerified =
-                componentsVerified && fillsAvailable && settlementsAvailable;
-            final projectionWarning = conflicts.isEmpty
-          '''
-          if old not in source:
-              raise SystemExit('Projection verification block not found')
-          source = source.replace(old, new, 1)
-          source = source.replace(
-              '''      verified: verified,
-              stale: stale,
-              currency: currency,
-              source: TradingPnlSource.bitunixPendingPosition,
-          ''',
-              '''      verified: componentsVerified,
-              stale: stale,
-              currency: currency,
-              source: TradingPnlSource.bitunixPendingPosition,
-          ''',
-              1,
-          )
-          source = source.replace(
-              '''      verified: verified,
-              stale: stale,
-              warning: projectionWarning,
-            );
-            final accountFees''',
-              '''      verified: componentsVerified && fillsAvailable,
-              stale: stale,
-              warning: projectionWarning,
-            );
-            final accountFees''',
-              1,
-          )
-          source = source.replace(
-              '''      verified: verified,
-              stale: stale,
-              warning: projectionWarning,
-            );
-            final accountFunding''',
-              '''      verified: componentsVerified && fillsAvailable,
-              stale: stale,
-              warning: projectionWarning,
-            );
-            final accountFunding''',
-              1,
-          )
-          source = source.replace(
-              '''      verified: verified,
-              stale: stale,
-              warning: projectionWarning,
-            );
-            final accountNet''',
-              '''      verified: componentsVerified && settlementsAvailable,
-              stale: stale,
-              warning: projectionWarning,
-            );
-            final accountNet''',
-              1,
-          )
-          source = source.replace(
-              '''      verified: verified,
-              stale: stale,
-              warning: projectionWarning,
-            );
-
-            return TradingPnlProjection._''',
-              '''      verified: projectionVerified,
-              stale: stale,
-              warning: projectionWarning,
-            );
-
-            return TradingPnlProjection._''',
-              1,
-          )
-          source = source.replace(
-              '      isVerified: verified,\n      fillsAvailable:',
-              '      isVerified: projectionVerified,\n      fillsAvailable:',
-              1,
-          )
-          projection.write_text(source)
-
-          test = Path(
-              'src/client/quantara_app/test/'
-              'auto_trade_account_reconciliation_controller_test.dart'
-          )
-          source = test.read_text()
-          source = source.replace(
-              '''      var requestCount = 0;
-              final client = MockClient((request) async {
-                requestCount++;''',
-              '''      final requestedPaths = <String>[];
-              final client = MockClient((request) async {
-                requestedPaths.add(request.url.path);''',
-              1,
-          )
-          source = source.replace(
-              '      expect(requestCount, 4);',
-              '''      expect(requestedPaths, hasLength(6));
-              expect(
-                requestedPaths,
-                containsAll(<String>[
-                  '/api/v1/futures/account',
-                  '/api/v1/futures/position/get_pending_positions',
-                  '/api/v1/futures/trade/get_pending_orders',
-                  '/api/v1/futures/tpsl/get_pending_orders',
-                  '/api/v1/futures/position/get_history_positions',
-                  '/api/v1/futures/trade/get_history_trades',
-                ]),
-              );''',
-              1,
-          )
-          source = source.replace(
-              '      expect(requestCount, 8);',
-              '''      expect(requestedPaths, hasLength(12));
-              for (final path in requestedPaths.toSet()) {
-                expect(requestedPaths.where((item) => item == path), hasLength(2));
-              }''',
-              1,
-          )
-          old = '''    '/api/v1/futures/tpsl/get_pending_orders' => {'orderList': <Object>[]},
-              _ => throw StateError('Unexpected Bitunix path: $path'),
-          '''
-          new = '''    '/api/v1/futures/tpsl/get_pending_orders' => {'orderList': <Object>[]},
-              '/api/v1/futures/position/get_history_positions' => {
-                'positionList': <Object>[],
-              },
-              '/api/v1/futures/trade/get_history_trades' => {
-                'tradeList': <Object>[],
-              },
-              _ => throw StateError('Unexpected Bitunix path: $path'),
-          '''
-          if old not in source:
-              raise SystemExit('Controller fake API switch not found')
-          test.write_text(source.replace(old, new, 1))
-          PY
+          test "$(wc -c < .github/temporary/issue139.followup.patch.gz.b64)" -eq 2120
+          echo '58e30a82b0d56211b54c0f091d62e7bec9a1251c288f864296d170175b1de180  .github/temporary/issue139.followup.patch.gz.b64' | sha256sum --check
+          base64 --decode .github/temporary/issue139.followup.patch.gz.b64 | gzip --decompress > /tmp/issue139-followup.patch
+          echo '9870adbd4338e36a9328c4a8b4fdd7de0ce23e4a076eb2bbfa646d4c662b69e5  /tmp/issue139-followup.patch' | sha256sum --check
+          git apply --check /tmp/issue139-followup.patch
+          git apply /tmp/issue139-followup.patch
 
           rm .github/workflows/temporary-issue139-patch.yml
           rm .github/workflows/temporary-issue139-source-export.yml
