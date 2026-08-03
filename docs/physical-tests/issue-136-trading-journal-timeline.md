@@ -43,7 +43,8 @@ Review regressions additionally prove:
 - journal persistence failure does not escape into exchange management;
 - nested secret-like export fields are recursively redacted;
 - a recovered valid slot remains available after another interrupted write;
-- when a stop or manual exit is filled in multiple exchange trades, intermediate fills remain `positionPartiallyClosed` and only the final exit fill closes the journal position.
+- when a stop or manual exit is filled in multiple exchange trades, intermediate fills remain `positionPartiallyClosed` and only the final exit fill closes the journal position;
+- a position completed entirely through TP fills receives one stable synthetic closure event, remains fully idempotent, and projects the final TP close reason correctly even though entry history is also present.
 
 All temporary patch/export workflows and payloads were removed from the final diff before the full release gates.
 
