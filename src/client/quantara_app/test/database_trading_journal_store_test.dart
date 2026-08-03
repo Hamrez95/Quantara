@@ -125,12 +125,15 @@ void main() {
     expect(legacy.replaceCalls, greaterThanOrEqualTo(2));
   });
 
-  test('malformed durable journal fails closed instead of using legacy', () async {
+  test('unverified durable journal remains authoritative over legacy', () async {
     final database = SembastQuantaraDurableDatabase(
       factory: databaseFactoryMemory,
-      path: 'journal-corruption.db',
+      path: 'journal-unverified.db',
     );
     await database.initialize();
+    final unverified = TradingJournalLedger.empty().withIntegrityWarning(
+      'Durable journal requires review.',
+    );
     await database.put(
       QuantaraDurableRecord(
         category: QuantaraDurableCategory.journal,
@@ -138,7 +141,7 @@ void main() {
         schemaVersion: 1,
         revision: 1,
         updatedAt: DateTime.utc(2026, 8, 4),
-        payload: const {'schemaVersion': 1, 'generation': 'invalid'},
+        payload: unverified.toJson(),
       ),
     );
     final legacy = _MemoryTradingJournalStore(
@@ -149,7 +152,10 @@ void main() {
       legacyStore: legacy,
     );
 
-    await expectLater(store.load(), throwsA(anything));
+    final loaded = await store.load();
+    expect(loaded.integrity, TradingJournalIntegrity.unverified);
+    expect(loaded.warnings, contains('Durable journal requires review.'));
+    expect(loaded.plans, isEmpty);
     expect(legacy.loadCalls, 0);
   });
 }
