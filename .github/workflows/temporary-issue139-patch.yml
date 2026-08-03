@@ -27,14 +27,25 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Verify and apply implementation patch
+      - name: Verify and apply complete implementation patch
         shell: bash
         run: |
           set -euo pipefail
-          test "$(wc -c < .github/temporary/issue139.patch.gz.b64)" -eq 9872
-          echo '3839843bf9d1edf0b713c5716bd7d7f471f66b35bb11cff43aac7986a54595df  .github/temporary/issue139.patch.gz.b64' | sha256sum --check
-          base64 --decode .github/temporary/issue139.patch.gz.b64 | gzip --decompress > /tmp/issue139.patch
-          echo 'fb8cfd63e105ec9ee1f8dbbf124e3b0c0a24eddfa9e73b338c2737f5e826059e  /tmp/issue139.patch' | sha256sum --check
+          cat \
+            .github/temporary/issue139.patch.gz.b64 \
+            .github/temporary/issue139.patch.part01.b64 \
+            .github/temporary/issue139.patch.part02.b64 \
+            .github/temporary/issue139.patch.part03.b64 \
+            .github/temporary/issue139.patch.part04.b64 \
+            .github/temporary/issue139.patch.part05.b64 \
+            .github/temporary/issue139.patch.part06.b64 \
+            .github/temporary/issue139.patch.part07.b64 \
+            .github/temporary/issue139.patch.part08.b64 \
+            > /tmp/issue139.patch.gz.b64
+          test "$(wc -c < /tmp/issue139.patch.gz.b64)" -eq 19976
+          echo '766338acceb2483069772d13aa3cc2b20f63d94e01d89092f56dd8be11a0493f  /tmp/issue139.patch.gz.b64' | sha256sum --check
+          base64 --decode /tmp/issue139.patch.gz.b64 | gzip --decompress > /tmp/issue139.patch
+          echo '6325e5f9f627b9fa8dd3c730e337b2ce7569ec23f46a08f752396806b39119b6  /tmp/issue139.patch' | sha256sum --check
           git apply --check /tmp/issue139.patch
           git apply /tmp/issue139.patch
           rm .github/workflows/temporary-issue139-patch.yml
