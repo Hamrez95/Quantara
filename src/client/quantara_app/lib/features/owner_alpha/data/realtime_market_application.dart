@@ -21,6 +21,10 @@ abstract interface class RealtimeMarketAnalysisGateway {
   );
 }
 
+abstract interface class RealtimeMarketAnalysisSynchronizer {
+  Future<void> synchronize(RealtimeCandlePipelineUpdate update);
+}
+
 abstract interface class RealtimeAuditedCandidateProjection {
   Future<void> restore();
 
@@ -371,6 +375,20 @@ final class RealtimeMarketApplication {
     RealtimeCandlePipelineUpdate update,
   ) async {
     _metrics.recordPipelineUpdate(update);
+    final synchronizer = analysisGateway is RealtimeMarketAnalysisSynchronizer
+        ? analysisGateway as RealtimeMarketAnalysisSynchronizer
+        : null;
+    if (synchronizer != null) {
+      try {
+        await synchronizer.synchronize(update);
+      } on Object catch (error) {
+        _metrics.recordFault(
+          message: 'Realtime analysis synchronization failed: $error',
+          occurredAtUtc: _clock(),
+        );
+        rethrow;
+      }
+    }
     if (!update.allowsCandidatePreparation) return;
 
     late final RealtimeCandidateAnalysisBatch batch;
