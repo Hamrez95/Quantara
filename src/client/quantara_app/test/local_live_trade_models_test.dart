@@ -91,4 +91,30 @@ void main() {
     expect(status(LocalLiveTradeState.circuitBreaker).isRunning, isFalse);
     expect(status(LocalLiveTradeState.stopped).isRunning, isFalse);
   });
+
+  test('managing-only can resume entries only with no open position', () {
+    final resumable = LocalLiveTradeStatus(
+      state: LocalLiveTradeState.managingOnly,
+      updatedAt: DateTime.utc(2026, 8, 3),
+      message: 'entries stopped',
+      entriesEnabled: false,
+    );
+    final protectedPosition = LocalLiveTradeStatus(
+      state: LocalLiveTradeState.managingOnly,
+      updatedAt: DateTime.utc(2026, 8, 3),
+      message: 'managing position',
+      openPositionCount: 1,
+      entriesEnabled: false,
+    );
+    final active = LocalLiveTradeStatus(
+      state: LocalLiveTradeState.running,
+      updatedAt: DateTime.utc(2026, 8, 3),
+      message: 'running',
+      entriesEnabled: true,
+    );
+
+    expect(resumable.canResumeEntries, isTrue);
+    expect(protectedPosition.canResumeEntries, isFalse);
+    expect(active.canResumeEntries, isFalse);
+  });
 }

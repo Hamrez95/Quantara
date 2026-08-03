@@ -29,5 +29,7 @@ void main() {
     expect(production, contains('closedCandleLimit: 120'));
     expect(page, contains('health.quarantinedStreams'));
     expect(page, contains('Degraded live monitoring'));
+    expect(page, contains('canResumeEntries'));
+    expect(page, contains('Resume entries'));
   });
 }

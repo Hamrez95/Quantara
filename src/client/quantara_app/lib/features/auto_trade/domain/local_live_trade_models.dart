@@ -275,6 +275,11 @@ final class LocalLiveTradeStatus {
       state == LocalLiveTradeState.running ||
       state == LocalLiveTradeState.managingOnly;
 
+  bool get canResumeEntries =>
+      state == LocalLiveTradeState.managingOnly &&
+      !entriesEnabled &&
+      openPositionCount == 0;
+
   Map<String, Object?> toJson() => {
     'state': state.name,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
