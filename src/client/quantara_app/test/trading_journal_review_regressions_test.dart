@@ -208,97 +208,103 @@ void main() {
     expect(journal.netPnl, closeTo(0.031, 0.000001));
   });
 
-  test('profit-lock confirmation identity never conflicts with original stop', () async {
-    var initial = TradingJournalLedger.empty().appendPlan(plan());
-    initial = initial.appendEvent(
-      TradingJournalEvent(
-        eventId: 'original-stop',
-        journalTradeId: plan().journalTradeId,
-        type: TradingJournalEventType.stopConfirmed,
-        occurredAt: openedAt,
-        recordedAt: openedAt,
-        source: TradingJournalFactSource.exchange,
-        quality: TradingJournalFactQuality.confirmed,
-        scope: TradingJournalScope.position,
-        currency: 'USDT',
-        asOf: openedAt,
-        exchangeEventId: 'stop-order:stop-1',
-        positionId: 'position-1',
-        orderId: 'stop-1',
-        price: 1.0691,
-      ),
-    );
-    final store = _MemoryJournalStore(initial);
-    final observer = LocalLiveJournalObserver(store: store);
+  test(
+    'profit-lock confirmation identity never conflicts with original stop',
+    () async {
+      var initial = TradingJournalLedger.empty().appendPlan(plan());
+      initial = initial.appendEvent(
+        TradingJournalEvent(
+          eventId: 'original-stop',
+          journalTradeId: plan().journalTradeId,
+          type: TradingJournalEventType.stopConfirmed,
+          occurredAt: openedAt,
+          recordedAt: openedAt,
+          source: TradingJournalFactSource.exchange,
+          quality: TradingJournalFactQuality.confirmed,
+          scope: TradingJournalScope.position,
+          currency: 'USDT',
+          asOf: openedAt,
+          exchangeEventId: 'stop-order:stop-1',
+          positionId: 'position-1',
+          orderId: 'stop-1',
+          price: 1.0691,
+        ),
+      );
+      final store = _MemoryJournalStore(initial);
+      final observer = LocalLiveJournalObserver(store: store);
 
-    await observer.recordStopMove(
-      managed: managed(),
-      stage: 1,
-      previousStop: 1.0691,
-      proposedStop: 1.0646,
-      confirmed: true,
-      reason: 'TP1 profit lock',
-      orderId: 'stop-1',
-    );
-
-    expect(store.ledger.integrity, TradingJournalIntegrity.verified);
-    expect(store.ledger.events, hasLength(2));
-  });
-
-  test('journal plan persistence failure never escapes into trade management', () async {
-    final store = _MemoryJournalStore(
-      TradingJournalLedger.empty(),
-      failPlanWrites: true,
-    );
-    final observer = LocalLiveJournalObserver(store: store);
-    final idea = TradeIdea(
-      symbol: 'XRPUSDT',
-      timeframe: '15m',
-      direction: TradeDirection.short,
-      confidencePercent: 82,
-      entryLower: 1.066,
-      entryUpper: 1.067,
-      stopLoss: 1.0691,
-      targets: const [1.0603, 1.0567, 1.0531],
-      riskReward: 2.38,
-      maximumLoss: 0.5,
-      positionSize: 21.4,
-      notionalValue: 22.8231,
-      recommendedLeverage: 10,
-      maximumSafeLeverage: 10,
-      requiredMargin: 2.28231,
-      estimatedRoundTripCosts: 0.017,
-      setupId: 'setup-1',
-      candleClosedAt: openedAt,
-      summary: 'fixture',
-      invalidation: 'fixture',
-      reasons: const ['15m structure'],
-    );
-    final account = AutoTradeAccountSnapshot(
-      marginCoin: 'USDT',
-      available: 100,
-      frozen: 0,
-      positionMargin: 0,
-      crossUnrealizedPnl: 0,
-      isolatedUnrealizedPnl: 0,
-      positionMode: 'HEDGE',
-      positions: const [],
-      orders: const [],
-      syncedAt: openedAt,
-    );
-
-    await expectLater(
-      observer.recordProtectedPosition(
-        idea: idea,
+      await observer.recordStopMove(
         managed: managed(),
-        account: account,
-        riskPercent: 0.5,
-      ),
-      completes,
-    );
-    expect(store.ledger.plans, isEmpty);
-    expect(store.ledger.events, isEmpty);
-  });
+        stage: 1,
+        previousStop: 1.0691,
+        proposedStop: 1.0646,
+        confirmed: true,
+        reason: 'TP1 profit lock',
+        orderId: 'stop-1',
+      );
+
+      expect(store.ledger.integrity, TradingJournalIntegrity.verified);
+      expect(store.ledger.events, hasLength(2));
+    },
+  );
+
+  test(
+    'journal plan persistence failure never escapes into trade management',
+    () async {
+      final store = _MemoryJournalStore(
+        TradingJournalLedger.empty(),
+        failPlanWrites: true,
+      );
+      final observer = LocalLiveJournalObserver(store: store);
+      final idea = TradeIdea(
+        symbol: 'XRPUSDT',
+        timeframe: '15m',
+        direction: TradeDirection.short,
+        confidencePercent: 82,
+        entryLower: 1.066,
+        entryUpper: 1.067,
+        stopLoss: 1.0691,
+        targets: const [1.0603, 1.0567, 1.0531],
+        riskReward: 2.38,
+        maximumLoss: 0.5,
+        positionSize: 21.4,
+        notionalValue: 22.8231,
+        recommendedLeverage: 10,
+        maximumSafeLeverage: 10,
+        requiredMargin: 2.28231,
+        estimatedRoundTripCosts: 0.017,
+        setupId: 'setup-1',
+        candleClosedAt: openedAt,
+        summary: 'fixture',
+        invalidation: 'fixture',
+        reasons: const ['15m structure'],
+      );
+      final account = AutoTradeAccountSnapshot(
+        marginCoin: 'USDT',
+        available: 100,
+        frozen: 0,
+        positionMargin: 0,
+        crossUnrealizedPnl: 0,
+        isolatedUnrealizedPnl: 0,
+        positionMode: 'HEDGE',
+        positions: const [],
+        orders: const [],
+        syncedAt: openedAt,
+      );
+
+      await expectLater(
+        observer.recordProtectedPosition(
+          idea: idea,
+          managed: managed(),
+          account: account,
+          riskPercent: 0.5,
+        ),
+        completes,
+      );
+      expect(store.ledger.plans, isEmpty);
+      expect(store.ledger.events, isEmpty);
+    },
+  );
 
   test('recursive privacy export removes nested secret-like fields', () {
     var ledger = TradingJournalLedger.empty().appendPlan(plan());
@@ -333,42 +339,45 @@ void main() {
     expect(exported.toLowerCase(), isNot(contains('accesstoken')));
   });
 
-  test('a recovered valid slot remains available after the next crash', () async {
-    SharedPreferences.setMockInitialValues({});
-    final store = SharedPreferencesTradingJournalStore();
-    await store.replace(TradingJournalLedger.empty().appendPlan(plan()));
-    await store.appendEvent(
-      event(
-        id: 'first-event',
-        type: TradingJournalEventType.manualNote,
-        at: openedAt,
-      ),
-    );
+  test(
+    'a recovered valid slot remains available after the next crash',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final store = SharedPreferencesTradingJournalStore();
+      await store.replace(TradingJournalLedger.empty().appendPlan(plan()));
+      await store.appendEvent(
+        event(
+          id: 'first-event',
+          type: TradingJournalEventType.manualNote,
+          at: openedAt,
+        ),
+      );
 
-    final preferences = await SharedPreferences.getInstance();
-    var active = preferences.getString(tradingJournalActiveSlotKey)!;
-    await preferences.setString(
-      active == 'a' ? tradingJournalSlotAKey : tradingJournalSlotBKey,
-      '{corrupt-active',
-    );
+      final preferences = await SharedPreferences.getInstance();
+      var active = preferences.getString(tradingJournalActiveSlotKey)!;
+      await preferences.setString(
+        active == 'a' ? tradingJournalSlotAKey : tradingJournalSlotBKey,
+        '{corrupt-active',
+      );
 
-    await store.appendEvent(
-      event(
-        id: 'second-event',
-        type: TradingJournalEventType.manualNote,
-        at: openedAt.add(const Duration(minutes: 1)),
-      ),
-    );
-    active = preferences.getString(tradingJournalActiveSlotKey)!;
-    await preferences.setString(
-      active == 'a' ? tradingJournalSlotAKey : tradingJournalSlotBKey,
-      '{crash-during-next-write',
-    );
+      await store.appendEvent(
+        event(
+          id: 'second-event',
+          type: TradingJournalEventType.manualNote,
+          at: openedAt.add(const Duration(minutes: 1)),
+        ),
+      );
+      active = preferences.getString(tradingJournalActiveSlotKey)!;
+      await preferences.setString(
+        active == 'a' ? tradingJournalSlotAKey : tradingJournalSlotBKey,
+        '{crash-during-next-write',
+      );
 
-    final recovered = await SharedPreferencesTradingJournalStore().load();
-    expect(recovered.plans.single.journalTradeId, plan().journalTradeId);
-    expect(recovered.integrity, TradingJournalIntegrity.recovered);
-  });
+      final recovered = await SharedPreferencesTradingJournalStore().load();
+      expect(recovered.plans.single.journalTradeId, plan().journalTradeId);
+      expect(recovered.integrity, TradingJournalIntegrity.recovered);
+    },
+  );
 }
 
 final class _MemoryJournalStore implements TradingJournalStore {

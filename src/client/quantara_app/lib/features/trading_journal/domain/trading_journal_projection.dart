@@ -124,12 +124,17 @@ abstract final class TradingJournalProjector {
             .where((item) => item.journalTradeId == journalTradeId)
             .toList(growable: false)
           ..sort(_compareEvents);
-    final entryEvents = timeline.where(
-      (item) =>
-          item.type == TradingJournalEventType.entryFilled ||
-          item.type == TradingJournalEventType.entryPartiallyFilled,
+    final confirmedEntries = timeline.where(
+      (item) => item.type == TradingJournalEventType.entryFilled,
     );
-    final entry = entryEvents.isEmpty ? null : entryEvents.first;
+    final partialEntries = timeline.where(
+      (item) => item.type == TradingJournalEventType.entryPartiallyFilled,
+    );
+    final entry = confirmedEntries.isNotEmpty
+        ? confirmedEntries.first
+        : partialEntries.isEmpty
+        ? null
+        : partialEntries.first;
     final closed = timeline.where(
       (item) =>
           item.type == TradingJournalEventType.positionClosed ||
@@ -158,7 +163,9 @@ abstract final class TradingJournalProjector {
     final funding = fundingValues.isNotEmpty
         ? fundingValues.fold<double>(0, (a, b) => a + b)
         : null;
-    final net = gross == null ? null : gross - (fees ?? 0) + (funding ?? 0);
+    final net = gross == null || fees == null || funding == null
+        ? null
+        : gross - fees + funding;
 
     var highestTarget = 0;
     for (final event in timeline) {

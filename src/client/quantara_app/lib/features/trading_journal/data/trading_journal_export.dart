@@ -159,16 +159,27 @@ abstract final class TradingJournalExport {
     // Client IDs are correlation hints and can contain implementation details;
     // public exports intentionally omit them along with all credentials.
     result.remove('clientId');
-    return result;
+    return _privacySafeMap(result);
   }
 
   static Map<String, Object?> _privacySafeEvent(TradingJournalEvent event) {
     final result = Map<String, Object?>.from(event.toJson());
     result.remove('clientId');
-    final details = Map<String, Object?>.from(event.details)
-      ..removeWhere((key, _) => _secretLike(key));
-    result['details'] = details;
-    return result;
+    return _privacySafeMap(result);
+  }
+
+  static Map<String, Object?> _privacySafeMap(Map<Object?, Object?> value) => {
+    for (final entry in value.entries)
+      if (!_secretLike(entry.key.toString()))
+        entry.key.toString(): _privacySafeValue(entry.value),
+  };
+
+  static Object? _privacySafeValue(Object? value) {
+    if (value is Map<Object?, Object?>) return _privacySafeMap(value);
+    if (value is List<Object?>) {
+      return value.map(_privacySafeValue).toList(growable: false);
+    }
+    return value;
   }
 
   static bool _secretLike(String key) {

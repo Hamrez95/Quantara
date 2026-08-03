@@ -87,18 +87,20 @@ final class SharedPreferencesTradingJournalStore
            preferencesFactory ?? SharedPreferences.getInstance;
 
   final Future<SharedPreferences> Function() _preferencesFactory;
-  Future<void> _tail = Future<void>.value();
+  static Future<void> _globalTail = Future<void>.value();
 
   @override
   Future<TradingJournalLedger> load() async {
-    await _tail;
+    await _globalTail;
     final preferences = await _preferencesFactory();
+    await preferences.reload();
     return _loadFrom(preferences);
   }
 
   @override
   Future<void> replace(TradingJournalLedger ledger) => _serial(() async {
     final preferences = await _preferencesFactory();
+    await preferences.reload();
     final current = _loadFrom(preferences);
     final nextGeneration = current.generation >= ledger.generation
         ? current.generation + 1
@@ -126,6 +128,7 @@ final class SharedPreferencesTradingJournalStore
   @override
   Future<void> appendPlan(TradingJournalPlan plan) => _serial(() async {
     final preferences = await _preferencesFactory();
+    await preferences.reload();
     final current = _loadFrom(preferences);
     await _replaceWithPreferences(preferences, current.appendPlan(plan));
   });
@@ -133,6 +136,7 @@ final class SharedPreferencesTradingJournalStore
   @override
   Future<void> appendEvent(TradingJournalEvent event) => _serial(() async {
     final preferences = await _preferencesFactory();
+    await preferences.reload();
     final current = _loadFrom(preferences);
     await _replaceWithPreferences(preferences, current.appendEvent(event));
   });
@@ -176,7 +180,15 @@ final class SharedPreferencesTradingJournalStore
       }
       if (a != null) return a.withRecoveryWarning('Recovered journal slot A.');
       if (b != null) return b.withRecoveryWarning('Recovered journal slot B.');
-      return TradingJournalLedger.empty();
+      final hadStoredData = [
+        preferences.getString(tradingJournalSlotAKey),
+        preferences.getString(tradingJournalSlotBKey),
+      ].any((item) => item != null && item.trim().isNotEmpty);
+      return hadStoredData
+          ? TradingJournalLedger.empty().withIntegrityWarning(
+              'Both journal slots were unreadable; no values were fabricated.',
+            )
+          : TradingJournalLedger.empty();
     }
 
     final activeKey = pointer == 'a'
@@ -193,7 +205,15 @@ final class SharedPreferencesTradingJournalStore
         'Recovered journal from the previous verified slot.',
       );
     }
-    return TradingJournalLedger.empty();
+    final hadStoredData = [
+      preferences.getString(activeKey),
+      preferences.getString(fallbackKey),
+    ].any((item) => item != null && item.trim().isNotEmpty);
+    return hadStoredData
+        ? TradingJournalLedger.empty().withIntegrityWarning(
+            'Both journal slots were unreadable; no values were fabricated.',
+          )
+        : TradingJournalLedger.empty();
   }
 
   static TradingJournalLedger? _tryDecode(String? encoded) {
@@ -206,13 +226,34 @@ final class SharedPreferencesTradingJournalStore
   }
 
   static String _activeSlot(SharedPreferences preferences) {
-    final active = preferences.getString(tradingJournalActiveSlotKey);
-    return active == 'b' ? 'b' : 'a';
+    final pointer = preferences.getString(tradingJournalActiveSlotKey);
+    if (pointer == 'a' || pointer == 'b') {
+      final pointedKey = pointer == 'a'
+          ? tradingJournalSlotAKey
+          : tradingJournalSlotBKey;
+      if (_tryDecode(preferences.getString(pointedKey)) != null) {
+        return pointer!;
+      }
+      final fallback = pointer == 'a' ? 'b' : 'a';
+      final fallbackKey = fallback == 'a'
+          ? tradingJournalSlotAKey
+          : tradingJournalSlotBKey;
+      if (_tryDecode(preferences.getString(fallbackKey)) != null) {
+        return fallback;
+      }
+      return pointer!;
+    }
+    final a = _tryDecode(preferences.getString(tradingJournalSlotAKey));
+    final b = _tryDecode(preferences.getString(tradingJournalSlotBKey));
+    if (a != null && b != null) return a.generation >= b.generation ? 'a' : 'b';
+    if (a != null) return 'a';
+    if (b != null) return 'b';
+    return 'a';
   }
 
   Future<void> _serial(Future<void> Function() operation) {
-    final result = _tail.then((_) => operation());
-    _tail = result.catchError((Object _) {});
+    final result = _globalTail.then((_) => operation());
+    _globalTail = result.catchError((Object _) {});
     return result;
   }
 }

@@ -75,7 +75,7 @@ final class LocalLiveJournalObserver {
       entryOrderId: managed.entryOrderId,
       clientId: managed.clientId,
     );
-    await _store.appendPlan(plan);
+    if (!await _appendPlan(plan)) return;
 
     final now = DateTime.now().toUtc();
     await _append(
@@ -174,25 +174,27 @@ final class LocalLiveJournalObserver {
     required bool positionClosed,
   }) async {
     final id = journalTradeId(managed.positionId);
-    final fills = [...positionPnl.exitFills]
+    final fills = [...positionPnl.fills]
       ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
-    var cumulative = 0.0;
+    var cumulativeExitQuantity = 0.0;
     for (final fill in fills) {
-      cumulative += fill.quantity;
+      if (fill.reduceOnly) cumulativeExitQuantity += fill.quantity;
       final targetIndex = managed.targetOrderIds.indexOf(fill.orderId);
       final isTarget = targetIndex >= 0;
       final remaining = math
-          .max(0, managed.initialQuantity - cumulative)
+          .max(0, managed.initialQuantity - cumulativeExitQuantity)
           .toDouble();
       await _append(
         TradingJournalEvent(
           eventId: 'fill:${fill.tradeId}',
           journalTradeId: id,
-          type: isTarget
+          type: !fill.reduceOnly
+              ? TradingJournalEventType.entryPartiallyFilled
+              : isTarget
               ? TradingJournalEventType.takeProfitFilled
               : positionClosed
               ? TradingJournalEventType.positionClosed
-              : TradingJournalEventType.entryPartiallyFilled,
+              : TradingJournalEventType.positionPartiallyClosed,
           occurredAt: fill.occurredAt.toUtc(),
           recordedAt: DateTime.now().toUtc(),
           source: TradingJournalFactSource.exchange,
@@ -318,8 +320,8 @@ final class LocalLiveJournalObserver {
       currency: 'USDT',
       asOf: DateTime.now().toUtc(),
       exchangeEventId: confirmed && orderId != null
-          ? 'stop-order:$orderId'
-          : 'promotion:${managed.positionId}:$stage',
+          ? 'stop-promotion:${managed.positionId}:$stage:$orderId'
+          : 'promotion-request:${managed.positionId}:$stage',
       positionId: managed.positionId,
       orderId: orderId,
       price: proposedStop,
@@ -356,6 +358,17 @@ final class LocalLiveJournalObserver {
       details: {'message': message},
     ),
   );
+
+  Future<bool> _appendPlan(TradingJournalPlan plan) async {
+    try {
+      await _store.appendPlan(plan);
+      return true;
+    } on Object {
+      // The journal is observer-only. A persistence failure must never change
+      // exchange order management or trigger a compensating trade action.
+      return false;
+    }
+  }
 
   Future<void> _append(TradingJournalEvent event) async {
     try {

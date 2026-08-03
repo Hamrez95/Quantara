@@ -47,6 +47,7 @@ enum TradingJournalEventType {
   reconciliationRecovered,
   appRestarted,
   fundingApplied,
+  positionPartiallyClosed,
   positionClosed,
   liquidation,
   manualNote,
@@ -487,6 +488,11 @@ final class TradingJournalLedger {
     integrity: integrity == TradingJournalIntegrity.unverified
         ? integrity
         : TradingJournalIntegrity.recovered,
+    warnings: [...warnings, warning],
+  );
+
+  TradingJournalLedger withIntegrityWarning(String warning) => _copy(
+    integrity: TradingJournalIntegrity.unverified,
     warnings: [...warnings, warning],
   );
 
