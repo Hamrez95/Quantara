@@ -16,6 +16,9 @@ void main() {
     final observer = source(
       'lib/features/trading_journal/application/local_live_journal_observer.dart',
     );
+    final controller = source(
+      'lib/features/trading_journal/application/trading_journal_controller.dart',
+    );
 
     for (final forbidden in const [
       'placeMarketEntry(',
@@ -32,6 +35,10 @@ void main() {
     }
     expect(observer, contains('observer-only'));
     expect(observer, contains('must never change'));
+    expect(controller, contains('Timer.periodic'));
+    expect(controller, contains('refresh(silent: true)'));
+    expect(controller, contains('next.generation != _ledger.generation'));
+    expect(controller, contains('_localRefreshTimer?.cancel()'));
   });
 
   test('privacy export strips secret-like fields and client IDs', () {
