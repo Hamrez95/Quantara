@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/trading_journal_store.dart';
@@ -14,6 +16,7 @@ final class TradingJournalController extends ChangeNotifier {
   TradingJournalStatistics _statistics = TradingJournalStatistics.calculate(
     const [],
   );
+  Timer? _localRefreshTimer;
   bool _isLoading = false;
   String? _error;
 
@@ -23,21 +26,41 @@ final class TradingJournalController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> initialize() => refresh();
+  Future<void> initialize() async {
+    await refresh();
+    _localRefreshTimer ??= Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => unawaited(refresh(silent: true)),
+    );
+  }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool silent = false}) async {
     if (_isLoading) return;
     _isLoading = true;
-    _error = null;
-    notifyListeners();
+    var shouldNotify = !silent;
+    if (!silent) {
+      _error = null;
+      notifyListeners();
+    }
     try {
-      _ledger = await store.load();
-      _rebuild();
+      final next = await store.load();
+      final changed =
+          next.generation != _ledger.generation ||
+          next.integrity != _ledger.integrity ||
+          !listEquals(next.warnings, _ledger.warnings);
+      if (changed) {
+        _ledger = next;
+        _error = null;
+        _rebuild();
+        shouldNotify = true;
+      }
     } on Object {
-      _error = 'Journal integrity check failed.';
+      const nextError = 'Journal integrity check failed.';
+      shouldNotify = shouldNotify || _error != nextError;
+      _error = nextError;
     } finally {
       _isLoading = false;
-      notifyListeners();
+      if (shouldNotify) notifyListeners();
     }
   }
 
@@ -45,8 +68,8 @@ final class TradingJournalController extends ChangeNotifier {
     try {
       await store.appendPlan(plan);
       _ledger = await store.load();
-      _rebuild();
       _error = null;
+      _rebuild();
     } on Object {
       _error = 'Journal write failed safely.';
     }
@@ -57,8 +80,8 @@ final class TradingJournalController extends ChangeNotifier {
     try {
       await store.appendEvent(event);
       _ledger = await store.load();
-      _rebuild();
       _error = null;
+      _rebuild();
     } on Object {
       _error = 'Journal write failed safely.';
     }
@@ -73,5 +96,11 @@ final class TradingJournalController extends ChangeNotifier {
           ? 'Journal integrity check failed.'
           : _ledger.warnings.join(' ');
     }
+  }
+
+  @override
+  void dispose() {
+    _localRefreshTimer?.cancel();
+    super.dispose();
   }
 }
