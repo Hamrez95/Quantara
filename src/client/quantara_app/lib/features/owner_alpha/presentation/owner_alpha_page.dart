@@ -23,6 +23,7 @@ import '../../auto_trade/domain/auto_trade_models.dart';
 import '../../auto_trade/domain/private_account_reconciliation.dart';
 import '../../auto_trade/domain/unattended_auto_trade_models.dart';
 import '../../auto_trade/presentation/private_account_reconciliation_banner.dart';
+import '../../auto_trade/presentation/position_protection_summary.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../strategy_lab/data/strategy_lab_runner.dart';

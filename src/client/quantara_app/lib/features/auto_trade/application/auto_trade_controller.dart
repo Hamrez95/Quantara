@@ -58,7 +58,8 @@ final class AutoTradeController extends ChangeNotifier {
   bool get canStartNewEntry =>
       isConnected &&
       ExchangeTruthPhaseOneGate.realEntriesAllowed &&
-      !_reconciliation.blocksNewEntries;
+      !_reconciliation.blocksNewEntries &&
+      (_reconciliation.snapshot?.allOpenPositionsFullyProtected ?? false);
   bool get canManageExistingPosition =>
       isConnected && _reconciliation.allowsExistingPositionManagement;
   String? get maskedApiKey => _credentials?.maskedApiKey;

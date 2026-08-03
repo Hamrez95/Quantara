@@ -290,7 +290,10 @@ class _AutoTradeViewState extends State<_AutoTradeView>
                 symbols: widget.analysisController.symbols,
               ),
               const SizedBox(height: 16),
-              _OpenPositionsCard(snapshot: snapshot),
+              _OpenPositionsCard(
+                snapshot: snapshot,
+                reconciliation: widget.controller.reconciliation,
+              ),
               const SizedBox(height: 16),
               _OpenOrdersCard(snapshot: snapshot),
             ],

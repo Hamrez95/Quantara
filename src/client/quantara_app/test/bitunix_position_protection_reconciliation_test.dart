@@ -78,7 +78,10 @@ void main() {
         (request) =>
             request.url.path == '/api/v1/futures/tpsl/get_pending_orders',
       );
-      expect(protectionRequest.url.queryParameters['positionId'], 'xrp-position-1');
+      expect(
+        protectionRequest.url.queryParameters['positionId'],
+        'xrp-position-1',
+      );
       expect(protectionRequest.url.queryParameters['symbol'], 'XRPUSDT');
       expect(protectionRequest.url.queryParameters['positionMode'], 'HEDGE');
 
@@ -109,6 +112,65 @@ void main() {
         ),
         isFalse,
       );
+    },
+  );
+
+  test(
+    'keeps account truth but marks one failed TP/SL read as unverified',
+    () async {
+      final client = MockClient((request) async {
+        return switch (request.url.path) {
+          '/api/v1/futures/account' => _success({
+            'marginCoin': 'USDT',
+            'available': '27.85',
+            'frozen': '0',
+            'margin': '2.30',
+            'crossUnrealizedPNL': '0',
+            'isolationUnrealizedPNL': '0.0021',
+            'positionMode': 'HEDGE',
+          }),
+          '/api/v1/futures/position/get_pending_positions' => _success([
+            {
+              'positionId': 'xrp-position-1',
+              'symbol': 'XRPUSDT',
+              'qty': '21.4',
+              'side': 'SHORT',
+              'marginMode': 'ISOLATION',
+              'positionMode': 'HEDGE',
+              'leverage': '10',
+              'margin': '2.30',
+              'unrealizedPNL': '0.0021',
+              'liqPrice': '1.12',
+              'avgOpenPrice': '1.0665',
+            },
+          ]),
+          '/api/v1/futures/trade/get_pending_orders' => _success({
+            'orderList': <Object>[],
+          }),
+          '/api/v1/futures/tpsl/get_pending_orders' => http.Response(
+            jsonEncode({'code': 503, 'msg': 'temporary TP/SL failure'}),
+            503,
+          ),
+          _ => throw StateError('Unexpected path: ${request.url.path}'),
+        };
+      });
+      addTearDown(client.close);
+      final api = BitunixPrivateApiClient(
+        client: client,
+        utcNow: () => DateTime.utc(2026, 8, 3, 11, 27),
+        secureRandom: Random(136),
+      );
+
+      final snapshot = await api.fetchAccountSnapshot(credentials);
+      final protection = snapshot.protectionForPosition(
+        snapshot.positions.single,
+      );
+
+      expect(snapshot.available, 27.85);
+      expect(snapshot.positions, hasLength(1));
+      expect(snapshot.protectionOrders, isEmpty);
+      expect(protection.status, AutoTradeProtectionStatus.unverified);
+      expect(protection.reason, contains('temporary TP/SL failure'));
     },
   );
 
@@ -179,10 +241,8 @@ void main() {
   });
 }
 
-http.Response _success(Object data) => http.Response(
-  jsonEncode({'code': 0, 'msg': 'Success', 'data': data}),
-  200,
-);
+http.Response _success(Object data) =>
+    http.Response(jsonEncode({'code': 0, 'msg': 'Success', 'data': data}), 200);
 
 http.Response _protectionSuccess() => _success({
   'orderList': [
