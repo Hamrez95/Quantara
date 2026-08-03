@@ -375,10 +375,13 @@ final class RealtimeMarketApplication {
     RealtimeCandlePipelineUpdate update,
   ) async {
     _metrics.recordPipelineUpdate(update);
-    final gateway = analysisGateway;
-    if (gateway is RealtimeMarketAnalysisSynchronizer) {
+    final synchronizer =
+        analysisGateway is RealtimeMarketAnalysisSynchronizer
+        ? analysisGateway as RealtimeMarketAnalysisSynchronizer
+        : null;
+    if (synchronizer != null) {
       try {
-        await gateway.synchronize(update);
+        await synchronizer.synchronize(update);
       } on Object catch (error) {
         _metrics.recordFault(
           message: 'Realtime analysis synchronization failed: $error',
