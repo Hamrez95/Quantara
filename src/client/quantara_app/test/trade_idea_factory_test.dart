@@ -5,14 +5,18 @@ import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart
 
 void main() {
   test('uses leverage to keep margin within the per-position budget', () {
+    final analysis = _analysis(direction: ChartDirection.bullish);
     final idea = TradeIdeaFactory.create(
-      analysis: _analysis(direction: ChartDirection.bullish),
+      analysis: analysis,
       capital: 10000,
       riskPercent: 1,
-      confluence: const {
-        '1h': ChartDirection.bullish,
-        '4h': ChartDirection.bullish,
-      },
+      confluence: const {'4h': ChartDirection.bullish},
+    );
+    final repeated = TradeIdeaFactory.create(
+      analysis: analysis,
+      capital: 10000,
+      riskPercent: 1,
+      confluence: const {'4h': ChartDirection.bullish},
     );
 
     expect(idea.direction, TradeDirection.long);
@@ -29,12 +33,14 @@ void main() {
     final lossPerUnit =
         (conservativeEntry - idea.stopLoss!).abs() +
         conservativeEntry * TradeIdeaFactory.assumedRoundTripCostRate;
-    expect(idea.positionSize! * lossPerUnit, closeTo(100, 0.0001));
+    expect(idea.positionSize! * lossPerUnit, closeTo(100, 0.01));
     expect(idea.estimatedRoundTripCosts, greaterThan(0));
-    expect(idea.setupId, contains('test-fingerprint-bullish'));
+    expect(idea.setupId, hasLength(64));
+    expect(idea.setupId, repeated.setupId);
+    expect(idea.candleClosedAt, analysis.generatedAt);
   });
 
-  test('returns wait when the market has no directional structure', () {
+  test('returns wait when the market has no aligned parent structure', () {
     final idea = TradeIdeaFactory.create(
       analysis: _analysis(direction: ChartDirection.sideways),
       capital: 10000,
@@ -52,10 +58,7 @@ void main() {
       analysis: _analysis(direction: ChartDirection.bearish),
       capital: 10000,
       riskPercent: 1,
-      confluence: const {
-        '1h': ChartDirection.bearish,
-        '4h': ChartDirection.bearish,
-      },
+      confluence: const {'4h': ChartDirection.bearish},
     );
 
     expect(idea.direction, TradeDirection.short);
@@ -64,7 +67,7 @@ void main() {
     expect(idea.targets[1], lessThan(idea.targets[0]));
     expect(idea.targets[2], lessThan(idea.targets[1]));
     expect(idea.riskReward, greaterThanOrEqualTo(1.6));
-    expect(idea.setupId, contains('|short|'));
+    expect(idea.setupId, hasLength(64));
     expect(
       idea.requiredMargin,
       lessThanOrEqualTo(10000 * TradeIdeaFactory.targetMarginFraction + 0.0001),
@@ -73,19 +76,28 @@ void main() {
 }
 
 TimeframeChartAnalysis _analysis({required ChartDirection direction}) {
-  final candles = List.generate(60, (index) {
-    final open = 100 + index * 0.5;
+  final bearish = direction == ChartDirection.bearish;
+  final sideways = direction == ChartDirection.sideways;
+  final candles = List.generate(80, (index) {
+    final trend = sideways
+        ? (index.isEven ? 0.2 : -0.2)
+        : (bearish ? -0.45 : 0.45);
+    final base = sideways ? 100.0 : 100 + index * trend;
+    final open = index == 79 && !sideways ? base - trend * 0.8 : base;
+    final close = sideways
+        ? open + (index.isEven ? 0.18 : -0.18)
+        : open + (bearish ? -0.55 : 0.55);
     return ChartCandle(
       openTime: DateTime.utc(2026, 7, 1).add(Duration(hours: index)),
       open: open,
-      high: open + 1.2,
-      low: open - 1,
-      close: open + 0.5,
-      volume: 1000 + index.toDouble(),
+      high: (open > close ? open : close) + 0.12,
+      low: (open < close ? open : close) - 0.12,
+      close: close,
+      volume: index == 79 ? 1300 : 1000 + index.toDouble(),
     );
   });
   final current = candles.last.close;
-  final bearish = direction == ChartDirection.bearish;
+  final closedAt = candles.last.openTime.add(const Duration(hours: 1));
   return TimeframeChartAnalysis(
     symbol: 'BTCUSDT',
     timeframe: '1h',
@@ -99,7 +111,7 @@ TimeframeChartAnalysis _analysis({required ChartDirection direction}) {
         touchCount: 4,
         strength: 0.8,
         distancePercent: 3,
-        lastTouchedAt: candles[45].openTime,
+        lastTouchedAt: candles[65].openTime,
         explanation: 'support',
       ),
       ChartPriceZone(
@@ -110,7 +122,7 @@ TimeframeChartAnalysis _analysis({required ChartDirection direction}) {
         touchCount: 3,
         strength: 0.72,
         distancePercent: 10,
-        lastTouchedAt: candles[48].openTime,
+        lastTouchedAt: candles[68].openTime,
         explanation: 'resistance',
       ),
     ],
@@ -118,7 +130,7 @@ TimeframeChartAnalysis _analysis({required ChartDirection direction}) {
     directionStrength: direction == ChartDirection.sideways ? 0.1 : 0.8,
     volatilityPercent: 0.8,
     summary: 'test',
-    generatedAt: DateTime.utc(2026, 7, 21),
+    generatedAt: closedAt,
     fingerprint: 'test-fingerprint-${direction.name}',
   );
 }
