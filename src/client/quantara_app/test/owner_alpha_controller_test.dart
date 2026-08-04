@@ -206,10 +206,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       quote: result.quote,
       analysis: analysis,
       idea: idea,
-      analysesByTimeframe: {
-        '1h': analysis,
-        '4h': parentAnalysis,
-      },
+      analysesByTimeframe: {'1h': analysis, '4h': parentAnalysis},
       ideasByTimeframe: {'1h': idea},
     );
     return OwnerAlphaSnapshot(
