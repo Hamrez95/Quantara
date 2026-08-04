@@ -1,0 +1,241 @@
+name: Temporary fix issue 156 responsive navigation
+
+on:
+  push:
+    branches:
+      - feat/156-home-navigation-simplification
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/156-home-navigation-simplification
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Apply responsive dropdown and Home navigation fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              return text.replace(old, new, 1)
+
+          signals_path = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_signals.dart')
+          signals = signals_path.read_text()
+          signals = replace_exact(
+              signals,
+              """        DropdownButtonFormField<SignalInboxSort>(
+          initialValue: _sort,
+          decoration: InputDecoration(
+            labelText: _t('مرتب‌سازی پیشنهادها', 'Sort setups'),
+            prefixIcon: const Icon(Icons.sort_rounded),
+          ),
+          items: [
+            for (final sort in SignalInboxSort.values)
+              DropdownMenuItem(value: sort, child: Text(_sortLabel(sort))),
+          ],
+""",
+              """        DropdownButtonFormField<SignalInboxSort>(
+          initialValue: _sort,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: _t('مرتب‌سازی پیشنهادها', 'Sort setups'),
+            prefixIcon: const Icon(Icons.sort_rounded),
+          ),
+          selectedItemBuilder: (context) => [
+            for (final sort in SignalInboxSort.values)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  _sortLabel(sort),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          items: [
+            for (final sort in SignalInboxSort.values)
+              DropdownMenuItem(
+                value: sort,
+                child: Text(
+                  _sortLabel(sort),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+""",
+              'signal sort dropdown',
+          )
+          signals = replace_exact(
+              signals,
+              """          DropdownButtonFormField<AnalysisStrategy>(
+            initialValue: controller.strategy,
+            decoration: InputDecoration(
+              labelText: _t(context, 'استراتژی', 'Strategy'),
+              helperText: _t(
+                context,
+                'انتخابت روی اسکن بعدی و پیشنهادهای فعلی اعمال می‌شود.',
+                'Your choice applies to current ideas and the next scan.',
+              ),
+            ),
+            items: [
+              for (final strategy in AnalysisStrategy.values)
+                DropdownMenuItem(
+                  value: strategy,
+                  child: Text(_strategyLabel(context, strategy)),
+                ),
+            ],
+""",
+              """          DropdownButtonFormField<AnalysisStrategy>(
+            initialValue: controller.strategy,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: _t(context, 'استراتژی', 'Strategy'),
+              helperText: _t(
+                context,
+                'انتخابت روی اسکن بعدی و پیشنهادهای فعلی اعمال می‌شود.',
+                'Your choice applies to current ideas and the next scan.',
+              ),
+            ),
+            selectedItemBuilder: (context) => [
+              for (final strategy in AnalysisStrategy.values)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    _strategyLabel(context, strategy),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            items: [
+              for (final strategy in AnalysisStrategy.values)
+                DropdownMenuItem(
+                  value: strategy,
+                  child: Text(
+                    _strategyLabel(context, strategy),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+""",
+              'strategy dropdown',
+          )
+          signals_path.write_text(signals)
+
+          chart_path = Path('src/client/quantara_app/test/market_chart_test.dart')
+          chart = chart_path.read_text()
+          chart = replace_exact(
+              chart,
+              """Future<void> _openAnalysisFromHome(WidgetTester tester) async {
+  final target = find.text('تحلیل');
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+""",
+              """Future<void> _openAnalysisFromHome(WidgetTester tester) async {
+  final target = find.text('تحلیل');
+  expect(target, findsOneWidget);
+  final page = find.byType(ListView).first;
+  await tester.fling(page, const Offset(0, 1200), 2400);
+  await tester.pumpAndSettle();
+  for (var attempt = 0; attempt < 8 && target.hitTestable().evaluate().isEmpty; attempt++) {
+    await tester.drag(page, const Offset(0, -260));
+    await tester.pump();
+  }
+  expect(target.hitTestable(), findsOneWidget);
+  await tester.tap(target.hitTestable());
+  await tester.pumpAndSettle();
+}
+""",
+              'chart Home action helper',
+          )
+          chart_path.write_text(chart)
+
+          widget_path = Path('src/client/quantara_app/test/widget_test.dart')
+          widget = widget_path.read_text()
+          widget = replace_exact(
+              widget,
+              "    expect(find.text('پیشنهادها'), findsWidgets);\n",
+              "    expect(find.text('صندوق پیشنهادها'), findsOneWidget);\n",
+              'setup inbox assertion',
+          )
+          widget = replace_exact(
+              widget,
+              """  if (secondaryLabel != null) {
+    await _tapNavigationIcon(tester, Icons.home_outlined);
+    final target = find.text(secondaryLabel);
+    expect(target, findsOneWidget);
+    await tester.ensureVisible(target);
+    await tester.tap(target);
+    await tester.pumpAndSettle();
+    return;
+  }
+""",
+              """  if (secondaryLabel != null) {
+    await _tapNavigationIcon(tester, Icons.home_outlined);
+    await _tapHomeQuickAction(tester, secondaryLabel);
+    return;
+  }
+""",
+              'secondary Home navigation',
+          )
+          widget = replace_exact(
+              widget,
+              """Future<void> _tapNavigationIcon(WidgetTester tester, IconData icon) async {
+""",
+              """Future<void> _tapHomeQuickAction(
+  WidgetTester tester,
+  String label,
+) async {
+  final target = find.text(label);
+  expect(target, findsOneWidget);
+  final page = find.byType(ListView).first;
+  await tester.fling(page, const Offset(0, 1200), 2400);
+  await tester.pumpAndSettle();
+  for (var attempt = 0; attempt < 8 && target.hitTestable().evaluate().isEmpty; attempt++) {
+    await tester.drag(page, const Offset(0, -260));
+    await tester.pump();
+  }
+  expect(target.hitTestable(), findsOneWidget);
+  await tester.tap(target.hitTestable());
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapNavigationIcon(WidgetTester tester, IconData icon) async {
+""",
+              'Home quick action helper',
+          )
+          widget_path.write_text(widget)
+          PY
+      - name: Format changed Dart sources
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/owner_alpha/presentation/owner_alpha_signals.dart test/market_chart_test.dart test/widget_test.dart
+      - name: Commit responsive fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_signals.dart src/client/quantara_app/test/market_chart_test.dart src/client/quantara_app/test/widget_test.dart
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "fix: make Home tools and setup filters responsive"
+          git push origin HEAD:feat/156-home-navigation-simplification
