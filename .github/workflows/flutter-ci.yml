@@ -9,7 +9,7 @@ on:
       - dev
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   formatter:
@@ -35,6 +35,24 @@ jobs:
           lib/features/owner_alpha/presentation/owner_alpha_home.dart
           lib/features/owner_alpha/presentation/owner_alpha_signals.dart
           test/widget_test.dart
+
+      - name: Commit formatted sources
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet; then
+            echo "Sources already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/client/quantara_app/lib/core/theme/quantara_theme.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_exchange.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_home.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_signals.dart \
+            src/client/quantara_app/test/widget_test.dart
+          git commit -m "style: format issue 160 UI sources"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Upload formatted sources
         uses: actions/upload-artifact@v4
