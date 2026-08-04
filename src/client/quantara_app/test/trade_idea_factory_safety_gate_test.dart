@@ -2,19 +2,25 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/market_analysis/domain/market_chart_models.dart';
+import 'package:quantara_app/features/owner_alpha/data/professional_strategy_engine.dart';
 import 'package:quantara_app/features/owner_alpha/data/trade_idea_factory.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
 void main() {
   test('fails closed when required margin exceeds the position cap', () {
+    final analysis = _tightTrendAnalysis();
     final idea = TradeIdeaFactory.create(
-      analysis: _tightTrendAnalysis(),
+      analysis: analysis,
       capital: 10000,
       riskPercent: 2,
       confluence: const {'4h': ChartDirection.bullish},
       languageCode: 'en',
       strategy: AnalysisStrategy.trendPullback,
       cadence: SignalCadence.active,
+      professionalContext: ProfessionalStrategyContext(
+        evaluatedAt: analysis.generatedAt,
+        maximumLeverage: 1,
+      ),
     );
 
     expect(idea.direction, TradeDirection.wait);
@@ -45,55 +51,76 @@ TimeframeChartAnalysis _tightTrendAnalysis() {
   final candles = <ChartCandle>[];
   var price = 100.0;
   for (var index = 0; index < 80; index++) {
-    final open = price;
-    final last = index == 79;
-    final close = open + (last ? 0.08 : 0.025);
+    late final double open;
+    late final double close;
+    late final double high;
+    late final double low;
+    late final double volume;
+    if (index < 75) {
+      open = price;
+      close = open + 0.15;
+      high = close + 0.2;
+      low = open - 0.2;
+      volume = 1000;
+    } else if (index < 79) {
+      open = price;
+      close = open - 0.35;
+      high = open + 0.15;
+      low = close - 0.2;
+      volume = 950;
+    } else {
+      open = price;
+      close = open + 0.45;
+      high = close + 0.15;
+      low = open - 0.15;
+      volume = 1250;
+    }
     candles.add(
       ChartCandle(
         openTime: base.add(Duration(hours: index)),
         open: open,
-        high: close + (last ? 0.01 : 0.04),
-        low: open - (last ? 0.01 : 0.04),
+        high: high,
+        low: low,
         close: close,
-        volume: last ? 1400 : 1000,
+        volume: volume,
       ),
     );
     price = close;
   }
-  final closedAt = candles.last.openTime.add(const Duration(hours: 1));
   final current = candles.last.close;
+  final closedAt = candles.last.openTime.add(const Duration(hours: 1));
   return TimeframeChartAnalysis(
     symbol: 'BTCUSDT',
     timeframe: '1h',
     candles: candles,
     zones: [
       ChartPriceZone(
-        lower: current - 0.09,
-        upper: current - 0.05,
+        lower: current - 4.5,
+        upper: current - 3.5,
         role: ChartZoneRole.support,
         state: ChartZoneState.active,
-        touchCount: 3,
+        touchCount: 4,
         strength: 0.8,
-        distancePercent: 0.08,
-        lastTouchedAt: candles[candles.length - 2].openTime,
-        explanation: 'tight support',
+        distancePercent: 3,
+        lastTouchedAt: candles[65].openTime,
+        explanation: 'support',
       ),
       ChartPriceZone(
-        lower: current + 2,
-        upper: current + 2.2,
+        lower: current + 14,
+        upper: current + 16,
         role: ChartZoneRole.resistance,
         state: ChartZoneState.active,
         touchCount: 3,
-        strength: 0.7,
-        distancePercent: 2,
-        lastTouchedAt: candles[candles.length - 5].openTime,
+        strength: 0.72,
+        distancePercent: 10,
+        lastTouchedAt: candles[68].openTime,
         explanation: 'resistance',
       ),
     ],
     direction: ChartDirection.bullish,
-    directionStrength: 0.85,
-    volatilityPercent: 0.1,
-    summary: 'tight trend',
+    directionStrength: 0.8,
+    volatilityPercent: 0.8,
+    summary: 'valid pullback with constrained leverage',
     generatedAt: closedAt,
     fingerprint: 'tight-trend-margin-cap',
   );
