@@ -286,15 +286,11 @@ final class PortfolioRiskCoordinator {
   );
 
   Future<T> _serialValue<T>(Future<T> Function() operation) {
-    final completer = Completer<T>();
-    final next = _globalTail.then((_) async {
-      try {
-        completer.complete(await operation());
-      } on Object catch (error, stackTrace) {
-        completer.completeError(error, stackTrace);
-      }
-    });
-    _globalTail = next.catchError((Object _) {});
-    return completer.future;
+    final result = _globalTail.then<T>((_) => operation());
+    _globalTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
   }
 }
