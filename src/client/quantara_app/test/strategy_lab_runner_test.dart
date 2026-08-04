@@ -54,15 +54,7 @@ void main() {
     final original = StrategyLabRunner.run(config: config, candles: candles);
     final extended = StrategyLabRunner.run(
       config: config,
-      candles: [
-        ...candles,
-        ...List.generate(12, (index) {
-          final previous = index == 0
-              ? candles.last
-              : _futureCandle(candles.last, index - 1);
-          return _futureCandle(previous, index);
-        }),
-      ],
+      candles: [...candles, ..._futureCandles(candles.last, 12)],
     );
 
     expect(original.walkForwardFolds.every((fold) => fold.leakFree), isTrue);
@@ -119,6 +111,17 @@ List<ChartCandle> _dailyCandles() => List.generate(80, (index) {
     volume: 1000,
   );
 });
+
+List<ChartCandle> _futureCandles(ChartCandle seed, int count) {
+  final result = <ChartCandle>[];
+  var previous = seed;
+  for (var index = 0; index < count; index++) {
+    final next = _futureCandle(previous, index);
+    result.add(next);
+    previous = next;
+  }
+  return result;
+}
 
 ChartCandle _futureCandle(ChartCandle previous, int index) {
   final openTime = previous.openTime.add(const Duration(hours: 1));
