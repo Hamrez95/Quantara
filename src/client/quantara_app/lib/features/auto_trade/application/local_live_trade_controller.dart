@@ -478,10 +478,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
 
   void _sendPrivateStateBlock(String reason) {
     FlutterForegroundTask.sendDataToTask(
-      jsonEncode({
-        'type': 'block_entries_private_state',
-        'reason': reason,
-      }),
+      jsonEncode({'type': 'block_entries_private_state', 'reason': reason}),
     );
   }
 
