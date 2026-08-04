@@ -1,0 +1,87 @@
+name: Temporary journal layout patch
+
+on:
+  push:
+    branches:
+      - feat/156-home-navigation-simplification
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip journal patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/156-home-navigation-simplification
+          fetch-depth: 0
+
+      - name: Patch bounded journal layout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart')
+          source = path.read_text()
+          start_marker = "  @override\n  Widget build(BuildContext context) {\n"
+          end_marker = "\n\n  Widget _buildList(BuildContext context) {"
+          start = source.index(start_marker, source.index('final class _TradingJournalViewState'))
+          end = source.index(end_marker, start)
+          replacement = '''  @override
+          Widget build(BuildContext context) {
+            return Directionality(
+              textDirection: _persian ? TextDirection.rtl : TextDirection.ltr,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final content = AnimatedSwitcher(
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : QuantaraMotion.standard,
+                    child: _selected == null
+                        ? KeyedSubtree(
+                            key: const ValueKey('journal-list'),
+                            child: _buildList(context),
+                          )
+                        : KeyedSubtree(
+                            key: ValueKey(
+                              'journal-detail-${_selected!.journalTradeId}',
+                            ),
+                            child: _buildDetail(context),
+                          ),
+                  );
+                  if (!constraints.hasBoundedHeight) return content;
+                  return SingleChildScrollView(child: content);
+                },
+              ),
+            );
+          }'''
+          source = source[:start] + replacement + source[end:]
+          old_label = "TradingJournalTradeState.open => persian ? 'باز' : 'Open',"
+          new_label = "TradingJournalTradeState.open => persian ? 'باز' : 'Active',"
+          if source.count(old_label) != 1:
+              raise SystemExit(f'Expected one open state label, found {source.count(old_label)}')
+          source = source.replace(old_label, new_label)
+          path.write_text(source)
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+
+      - name: Format journal source
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/trading_journal/presentation/trading_journal_view.dart
+
+      - name: Commit journal correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart
+          git commit -m "fix(ui): keep professional journal scroll-safe [skip journal patch]"
+          git push origin HEAD:feat/156-home-navigation-simplification
