@@ -27,7 +27,7 @@ final class PortfolioRiskCoordinator {
   final PortfolioRiskPolicy policy;
   final double defaultDailyRiskLimit;
   final int timezoneOffsetMinutes;
-  static Future<void> _globalTail = Future<void>.value();
+  Future<void> _operationTail = Future<void>.value();
 
   Future<PortfolioRiskLedger> load({DateTime? now}) {
     final timestamp = (now ?? DateTime.now()).toUtc();
@@ -286,12 +286,11 @@ final class PortfolioRiskCoordinator {
   );
 
   Future<T> _serialValue<T>(Future<T> Function() operation) {
-    final result = _globalTail.then<T>((_) => operation());
-    final settled = result.then<void>(
+    final result = _operationTail.then<T>((_) => operation());
+    _operationTail = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
-    _globalTail = settled;
-    return settled.then<T>((_) => result);
+    return result;
   }
 }
