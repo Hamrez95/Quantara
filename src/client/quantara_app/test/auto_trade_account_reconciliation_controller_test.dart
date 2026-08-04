@@ -142,10 +142,8 @@ void main() {
   test('fresh empty account truth allows an explicit canary start', () async {
     final now = DateTime.utc(2026, 8, 4, 11, 30);
     final client = MockClient(
-      (request) async => _successResponse(
-        request.url.path,
-        includeOpenPosition: false,
-      ),
+      (request) async =>
+          _successResponse(request.url.path, includeOpenPosition: false),
     );
     final controller = AutoTradeController(
       apiClient: BitunixPrivateApiClient(client: client, utcNow: () => now),
@@ -173,10 +171,7 @@ const _credentials = BitunixApiCredentials(
   secretKey: 'test-secret-key-123',
 );
 
-http.Response _successResponse(
-  String path, {
-  bool includeOpenPosition = true,
-}) {
+http.Response _successResponse(String path, {bool includeOpenPosition = true}) {
   final Object data = switch (path) {
     '/api/v1/futures/account' => {
       'marginCoin': 'USDT',
@@ -187,23 +182,24 @@ http.Response _successResponse(
       'isolationUnrealizedPNL': includeOpenPosition ? '0.0021' : '0',
       'positionMode': 'HEDGE',
     },
-    '/api/v1/futures/position/get_pending_positions' => includeOpenPosition
-        ? [
-            {
-              'positionId': 'xrp-position-1',
-              'symbol': 'XRPUSDT',
-              'qty': '21.4',
-              'side': 'SHORT',
-              'marginMode': 'ISOLATION',
-              'positionMode': 'HEDGE',
-              'leverage': '10',
-              'margin': '2.30',
-              'unrealizedPNL': '0.0021',
-              'liqPrice': '1.12',
-              'avgOpenPrice': '1.0665',
-            },
-          ]
-        : <Object>[],
+    '/api/v1/futures/position/get_pending_positions' =>
+      includeOpenPosition
+          ? [
+              {
+                'positionId': 'xrp-position-1',
+                'symbol': 'XRPUSDT',
+                'qty': '21.4',
+                'side': 'SHORT',
+                'marginMode': 'ISOLATION',
+                'positionMode': 'HEDGE',
+                'leverage': '10',
+                'margin': '2.30',
+                'unrealizedPNL': '0.0021',
+                'liqPrice': '1.12',
+                'avgOpenPrice': '1.0665',
+              },
+            ]
+          : <Object>[],
     '/api/v1/futures/trade/get_pending_orders' => {'orderList': <Object>[]},
     '/api/v1/futures/tpsl/get_pending_orders' => {'orderList': <Object>[]},
     '/api/v1/futures/position/get_history_positions' => {

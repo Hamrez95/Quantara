@@ -15,7 +15,10 @@ void main() {
     ).readAsStringSync();
 
     expect(domain, contains('static const bool realEntriesAllowed = true'));
-    expect(domain, contains('static const bool explicitUserArmRequired = true'));
+    expect(
+      domain,
+      contains('static const bool explicitUserArmRequired = true'),
+    );
     expect(domain, contains('static const bool automaticArmAllowed = false'));
     expect(domain, isNot(contains('placeOrder')));
     expect(domain, isNot(contains('cancelOrder')));
