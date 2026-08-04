@@ -176,7 +176,8 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       languageCode: languageCode,
     );
     final result = base.radar.first;
-    final analysis = _actionableAnalysis(base.generatedAt);
+    final signalTime = DateTime.now().toUtc();
+    final analysis = _actionableAnalysis(signalTime);
     final idea = TradeIdea(
       symbol: result.quote.symbol,
       timeframe: '1h',
@@ -195,7 +196,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       requiredMargin: 500,
       estimatedRoundTripCosts: 2,
       setupId: 'BTCUSDT|1h|long|fixed-closed-candle',
-      candleClosedAt: base.generatedAt,
+      candleClosedAt: signalTime,
       summary: 'actionable',
       invalidation: 'stop',
       reasons: const ['test'],
@@ -214,7 +215,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       selectedAnalysis: analysis,
       selectedIdea: idea,
       timeframeDirections: {'1h': analysis.direction},
-      generatedAt: base.generatedAt,
+      generatedAt: signalTime,
     );
   }
 }

@@ -323,7 +323,7 @@ abstract final class StrategyLabRunner {
       parentDuration: parentDuration,
       evaluatedAt: evaluatedAt,
     );
-    if (aggregated.length < 24) return const {};
+    if (aggregated.length < 30) return const {};
     final latestParentClose = aggregated.last.openTime.add(parentDuration);
     if (latestParentClose.isAfter(evaluatedAt) ||
         evaluatedAt.difference(latestParentClose) > parentDuration * 2) {
