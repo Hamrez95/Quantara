@@ -11,12 +11,14 @@ void main() {
       capital: 10000,
       riskPercent: 1,
       confluence: const {'4h': ChartDirection.bullish},
+      strategy: AnalysisStrategy.trendPullback,
     );
     final repeated = TradeIdeaFactory.create(
       analysis: analysis,
       capital: 10000,
       riskPercent: 1,
       confluence: const {'4h': ChartDirection.bullish},
+      strategy: AnalysisStrategy.trendPullback,
     );
 
     expect(idea.direction, TradeDirection.long);
@@ -59,10 +61,11 @@ void main() {
       capital: 10000,
       riskPercent: 1,
       confluence: const {'4h': ChartDirection.bearish},
+      strategy: AnalysisStrategy.trendPullback,
     );
 
     expect(idea.direction, TradeDirection.short);
-    expect(idea.stopLoss, greaterThan(idea.entryLower!));
+    expect(idea.stopLoss, greaterThan(idea.entryUpper!));
     expect(idea.targets.first, lessThan(idea.entryLower!));
     expect(idea.targets[1], lessThan(idea.targets[0]));
     expect(idea.targets[2], lessThan(idea.targets[1]));
@@ -78,24 +81,52 @@ void main() {
 TimeframeChartAnalysis _analysis({required ChartDirection direction}) {
   final bearish = direction == ChartDirection.bearish;
   final sideways = direction == ChartDirection.sideways;
-  final candles = List.generate(80, (index) {
-    final trend = sideways
-        ? (index.isEven ? 0.2 : -0.2)
-        : (bearish ? -0.45 : 0.45);
-    final base = sideways ? 100.0 : 100 + index * trend;
-    final open = index == 79 && !sideways ? base - trend * 0.8 : base;
-    final close = sideways
-        ? open + (index.isEven ? 0.18 : -0.18)
-        : open + (bearish ? -0.55 : 0.55);
-    return ChartCandle(
-      openTime: DateTime.utc(2026, 7, 1).add(Duration(hours: index)),
-      open: open,
-      high: (open > close ? open : close) + 0.12,
-      low: (open < close ? open : close) - 0.12,
-      close: close,
-      volume: index == 79 ? 1300 : 1000 + index.toDouble(),
+  final sign = bearish ? -1.0 : 1.0;
+  var price = 100.0;
+  final candles = <ChartCandle>[];
+  for (var index = 0; index < 80; index++) {
+    late final double open;
+    late final double close;
+    late final double high;
+    late final double low;
+    late final double volume;
+    if (sideways) {
+      open = 100 + (index.isEven ? -0.1 : 0.1);
+      close = 100 + (index.isEven ? 0.1 : -0.1);
+      high = 100.5;
+      low = 99.5;
+      volume = 1000;
+    } else if (index < 75) {
+      open = price;
+      close = open + sign * 0.15;
+      high = (open > close ? open : close) + 0.2;
+      low = (open < close ? open : close) - 0.2;
+      volume = 1000;
+    } else if (index < 79) {
+      open = price;
+      close = open - sign * 0.35;
+      high = (open > close ? open : close) + 0.15;
+      low = (open < close ? open : close) - 0.2;
+      volume = 950;
+    } else {
+      open = price;
+      close = open + sign * 0.45;
+      high = (open > close ? open : close) + 0.15;
+      low = (open < close ? open : close) - 0.15;
+      volume = 1250;
+    }
+    candles.add(
+      ChartCandle(
+        openTime: DateTime.utc(2026, 7, 1).add(Duration(hours: index)),
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+        volume: volume,
+      ),
     );
-  });
+    price = close;
+  }
   final current = candles.last.close;
   final closedAt = candles.last.openTime.add(const Duration(hours: 1));
   return TimeframeChartAnalysis(
