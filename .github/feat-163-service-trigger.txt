@@ -1,1 +1,1 @@
-Trigger portfolio execution slot integration phase one; remove before merge.
+Trigger deterministic portfolio execution slot integration; remove before merge.
