@@ -51,6 +51,8 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
 
   Future<void> initialize() => _initialization ??= _initializeOnce();
 
+  Future<void> waitForIdle() => _operationTail;
+
   Future<void> _initializeOnce() async {
     _setLoading(true);
     _error = null;
