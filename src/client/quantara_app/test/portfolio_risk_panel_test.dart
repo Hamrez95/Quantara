@@ -93,8 +93,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('بودجه ریسک پرتفوی'), findsOneWidget);
-    expect(find.text('شبیه‌سازی'), findsOneWidget);
+    expect(find.text('کنترل ریسک معاملات'), findsOneWidget);
+    expect(find.text('نمایش بودجه'), findsOneWidget);
     expect(find.text('10.00 USDT'), findsAtLeastNWidgets(1));
 
     await tapVisibleAction(tester, 'رزرو ۳ USDT');
@@ -118,8 +118,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Portfolio risk budget'), findsOneWidget);
-    expect(find.text('Simulation'), findsOneWidget);
+    expect(find.text('Trading risk control'), findsOneWidget);
+    expect(find.text('Budget view'), findsOneWidget);
     expectEnabledAction(tester, 'Simulate stale data');
 
     await simulation.toggleFreshness();
@@ -168,7 +168,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Portfolio risk budget'), findsOneWidget);
+    expect(find.text('Trading risk control'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
