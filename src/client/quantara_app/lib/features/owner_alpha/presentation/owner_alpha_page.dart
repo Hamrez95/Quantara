@@ -591,7 +591,8 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                   ],
-                  _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
+                  if (destination != 5 && destination != 6 && destination != 7)
+                    _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
                   if (controller.error != null) ...[
                     const SizedBox(height: 12),
                     _AlphaErrorStrip(
@@ -779,7 +780,13 @@ class _LiveBoundaryStrip extends StatelessWidget {
     final strings = AppStrings.of(context);
     final scheme = Theme.of(context).colorScheme;
     final health = monitor.health;
-    final healthy = monitor.healthy;
+    final operational = monitor.operational;
+    final degraded = health?.degraded == true;
+    final statusColor = operational
+        ? degraded
+              ? QuantaraColors.warning
+              : QuantaraColors.success
+        : QuantaraColors.cyan;
     final status = health == null
         ? strings.t('در حال آماده‌سازی', 'Preparing')
         : switch (health.state) {
@@ -788,8 +795,8 @@ class _LiveBoundaryStrip extends StatelessWidget {
                   ? strings.t('پایش زنده محدود', 'Degraded live monitoring')
                   : strings.t('پایش زنده', 'Live monitoring'),
             RealtimeMarketRuntimeState.paused => strings.t(
-              'پایش متوقف',
-              'Monitoring paused',
+              'پایش پیشنهادها در پس‌زمینه متوقف است',
+              'Signal monitoring is paused in the background',
             ),
             RealtimeMarketRuntimeState.failed => strings.t(
               'خطای پایش',
@@ -827,13 +834,9 @@ class _LiveBoundaryStrip extends StatelessWidget {
       label: '$status. $metrics. $detail',
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: (healthy ? QuantaraColors.success : QuantaraColors.cyan)
-              .withValues(alpha: 0.09),
+          color: statusColor.withValues(alpha: 0.09),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: (healthy ? QuantaraColors.success : QuantaraColors.cyan)
-                .withValues(alpha: 0.25),
-          ),
+          border: Border.all(color: statusColor.withValues(alpha: 0.25)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -841,8 +844,8 @@ class _LiveBoundaryStrip extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                healthy ? Icons.sensors_rounded : Icons.shield_outlined,
-                color: healthy ? QuantaraColors.success : QuantaraColors.cyan,
+                operational ? Icons.sensors_rounded : Icons.shield_outlined,
+                color: statusColor,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -867,8 +870,10 @@ class _LiveBoundaryStrip extends StatelessWidget {
                     Text(
                       detail,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: error != null || degradedDetail != null
+                        color: error != null
                             ? scheme.error
+                            : degradedDetail != null
+                            ? QuantaraColors.warning
                             : scheme.onSurfaceVariant,
                       ),
                     ),

@@ -29,7 +29,8 @@ void main() {
     );
     expect(application, contains('for (final stream in _activeStreams)'));
     expect(production, contains('maximumMalformedRecentRows: 8'));
-    expect(production, contains('closedCandleLimit: 120'));
+    expect(production, contains('closedCandleLimit: 64'));
+    expect(production, isNot(contains('closedCandleLimit: 120')));
     expect(page, contains('health.quarantinedStreams'));
     expect(page, contains('Degraded live monitoring'));
     expect(autoTrade, contains('canResumeEntries'));

@@ -123,6 +123,7 @@ void main() {
         expect(application.health.quarantinedStreams, 1);
         expect(application.health.bootstrapFaults, 1);
         expect(application.health.degraded, isTrue);
+        expect(application.health.operational, isTrue);
         expect(application.health.discoveryHealthy, isFalse);
         expect(fleetFactory.subscriptions, hasLength(1));
         expect(fleetFactory.subscriptions.single.symbol, 'BTCUSDT');

@@ -37,6 +37,8 @@ final class RealtimeMarketMonitorSnapshot {
   final String? error;
   final bool foregroundOnly;
 
+  bool get operational => health?.operational == true && error == null;
+
   bool get healthy => health?.discoveryHealthy == true && error == null;
 }
 
@@ -82,9 +84,19 @@ final class RealtimeMarketHost
     this.onLanguageChanged,
     this.onDispose,
     this.pollInterval = const Duration(seconds: 1),
+    this.backgroundPauseGrace = const Duration(seconds: 3),
+    this.degradedRetryInterval = const Duration(minutes: 5),
   }) : super(const RealtimeMarketMonitorSnapshot.initial()) {
     if (pollInterval < const Duration(milliseconds: 250)) {
       throw ArgumentError.value(pollInterval, 'pollInterval');
+    }
+    if (backgroundPauseGrace < Duration.zero ||
+        backgroundPauseGrace > const Duration(seconds: 30)) {
+      throw ArgumentError.value(backgroundPauseGrace, 'backgroundPauseGrace');
+    }
+    if (degradedRetryInterval <= Duration.zero ||
+        degradedRetryInterval > const Duration(hours: 1)) {
+      throw ArgumentError.value(degradedRetryInterval, 'degradedRetryInterval');
     }
   }
 
@@ -92,8 +104,13 @@ final class RealtimeMarketHost
   final ValueChanged<String>? onLanguageChanged;
   final VoidCallback? onDispose;
   final Duration pollInterval;
+  final Duration backgroundPauseGrace;
+  final Duration degradedRetryInterval;
   Timer? _timer;
+  Timer? _backgroundPauseTimer;
   Future<void> _operationTail = Future.value();
+  DateTime? _degradedSinceUtc;
+  bool _degradedRecoveryScheduled = false;
   bool _initialized = false;
   bool _disposed = false;
 
@@ -119,13 +136,31 @@ final class RealtimeMarketHost
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
+        _backgroundPauseTimer?.cancel();
+        _backgroundPauseTimer = null;
         unawaited(_serialize(_resume));
+        return;
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
+        return;
       case AppLifecycleState.paused:
+        _scheduleBackgroundPause();
+        return;
       case AppLifecycleState.detached:
+        _backgroundPauseTimer?.cancel();
+        _backgroundPauseTimer = null;
         unawaited(_serialize(_pause));
+        return;
     }
+  }
+
+  void _scheduleBackgroundPause() {
+    if (_disposed || !_initialized) return;
+    _backgroundPauseTimer?.cancel();
+    _backgroundPauseTimer = Timer(backgroundPauseGrace, () {
+      _backgroundPauseTimer = null;
+      unawaited(_serialize(_pause));
+    });
   }
 
   Future<void> _resume() async {
@@ -152,6 +187,7 @@ final class RealtimeMarketHost
     }
     try {
       await runtime.pause();
+      _degradedSinceUtc = null;
       _publish();
     } on Object catch (error) {
       _publish(error: error.toString());
@@ -171,6 +207,50 @@ final class RealtimeMarketHost
       error: error,
       foregroundOnly: true,
     );
+    _maybeRecoverDegraded(health, error: error);
+  }
+
+  void _maybeRecoverDegraded(
+    RealtimeMarketHealthSnapshot? health, {
+    required String? error,
+  }) {
+    if (_disposed ||
+        error != null ||
+        health?.degraded != true ||
+        runtime.state != RealtimeMarketRuntimeState.live) {
+      _degradedSinceUtc = null;
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    final degradedSince = _degradedSinceUtc;
+    if (degradedSince == null) {
+      _degradedSinceUtc = now;
+      return;
+    }
+    if (_degradedRecoveryScheduled ||
+        now.difference(degradedSince) < degradedRetryInterval) {
+      return;
+    }
+
+    _degradedRecoveryScheduled = true;
+    _degradedSinceUtc = now;
+    unawaited(
+      _serialize(() async {
+        try {
+          if (!_disposed &&
+              runtime.state == RealtimeMarketRuntimeState.live &&
+              runtime.health.degraded) {
+            await runtime.pause();
+            await runtime.resume();
+          }
+          _publish();
+        } on Object catch (recoveryError) {
+          _publish(error: recoveryError.toString());
+        } finally {
+          _degradedRecoveryScheduled = false;
+        }
+      }),
+    );
   }
 
   Future<void> _serialize(Future<void> Function() operation) {
@@ -187,6 +267,7 @@ final class RealtimeMarketHost
     if (_disposed) return;
     _disposed = true;
     _timer?.cancel();
+    _backgroundPauseTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     unawaited(runtime.stop().catchError((Object _) {}));
     onDispose?.call();
@@ -491,7 +572,7 @@ abstract final class PlatformRealtimeMarketHostFactory {
       analysisGateway: analysisGateway,
       candidateCoordinator: coordinator,
       projection: projection,
-      closedCandleLimit: 120,
+      closedCandleLimit: 64,
       bootstrapSpacing: const Duration(milliseconds: 120),
       maximumPendingEventsPerStream: 64,
       maximumLatencySamples: 512,
