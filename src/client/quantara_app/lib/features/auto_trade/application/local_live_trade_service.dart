@@ -1012,6 +1012,19 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         continue;
       }
 
+      final portfolioGuard = _portfolioGuard;
+      if (portfolioGuard == null) {
+        _entriesEnabled = false;
+        const warning =
+            'Atomic portfolio ledger is unavailable for managed exposure.';
+        _auditEvent('portfolio_ledger_block', warning, symbol: managed.symbol);
+        continue;
+      }
+      await portfolioGuard.confirmStop(
+        positionId: managed.positionId,
+        confirmedStop: currentStop,
+        now: DateTime.now().toUtc(),
+      );
       await _journalObserver.reconcilePosition(
         managed: managed,
         positionPnl: positionPnl,
@@ -1024,6 +1037,15 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         processedTradeIds: managed.profitLockProgress.processedTradeIds,
         quantityTolerance: quantityTolerance,
         observedRemainingQuantity: position.quantity,
+      );
+      await portfolioGuard.confirmReduction(
+        positionId: managed.positionId,
+        remainingQuantity: position.quantity,
+        exchangeFillIds: positionPnl.exitFills
+            .map((item) => item.tradeId)
+            .where((item) => item.trim().isNotEmpty)
+            .toSet(),
+        now: DateTime.now().toUtc(),
       );
       var next = managed.copyWith(
         profitLockProgress: managed.profitLockProgress.copyWith(
@@ -1052,6 +1074,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               clearPendingStop: true,
               clearWarning: true,
             ),
+          );
+          await portfolioGuard.confirmStop(
+            positionId: next.positionId,
+            confirmedStop: currentStop,
+            now: DateTime.now().toUtc(),
           );
           _auditEvent(
             pendingStage == 1 ? 'risk_free_confirmed' : 'runner_confirmed',
@@ -1105,6 +1132,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               quantityTolerance: quantityTolerance,
             ) ??
             currentStop;
+        if (next.profitLockProgress.confirmedStage >= 1 &&
+            !next.profitLockProgress.hasPendingPromotion) {
+          await portfolioGuard.confirmStop(
+            positionId: next.positionId,
+            confirmedStop: currentStop,
+            now: DateTime.now().toUtc(),
+          );
+        }
       }
 
       if (next.profitLockProgress.confirmedStage >= 1 &&
@@ -1127,6 +1162,30 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           priceTolerance: priceTolerance,
           quantityTolerance: quantityTolerance,
         );
+        if (next.profitLockProgress.confirmedStage >= 2 &&
+            !next.profitLockProgress.hasPendingPromotion) {
+          final latestProtection = await exchange.fetchPendingProtection(
+            credentials,
+            symbol: next.symbol,
+            positionId: next.positionId,
+          );
+          final latestStop = _confirmedStopPrice(
+            managed: next,
+            protection: latestProtection,
+            remainingQuantity: position.quantity,
+            quantityTolerance: quantityTolerance,
+          );
+          if (latestStop == null) {
+            throw const LocalLiveTradeSafeException(
+              'Promoted runner stop was not exchange-confirmed.',
+            );
+          }
+          await portfolioGuard.confirmStop(
+            positionId: next.positionId,
+            confirmedStop: latestStop,
+            now: DateTime.now().toUtc(),
+          );
+        }
       }
       _replaceManaged(managed, next);
     }
