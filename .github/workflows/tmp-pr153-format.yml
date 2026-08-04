@@ -1,0 +1,36 @@
+name: Temporary PR153 formatter
+
+on:
+  push:
+    branches:
+      - feat/152-professional-strategy-pack
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/152-professional-strategy-pack
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Format Dart sources
+        working-directory: src/client/quantara_app
+        run: dart format lib test
+      - name: Commit formatting only
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib src/client/quantara_app/test
+          git commit -m "style: format professional strategy pack"
+          git push origin HEAD:feat/152-professional-strategy-pack
