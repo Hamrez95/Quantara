@@ -36,9 +36,7 @@ class _HomeDashboard extends StatelessWidget {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer,
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(Icons.home_rounded),
@@ -107,7 +105,10 @@ class _HomeQuickActions extends StatelessWidget {
       _HomeAction(
         icon: Icons.candlestick_chart_rounded,
         label: strings.analysis,
-        caption: strings.t('تحلیل روی تایم‌فریم درست', 'Analysis on the right timeframe'),
+        caption: strings.t(
+          'تحلیل روی تایم‌فریم درست',
+          'Analysis on the right timeframe',
+        ),
         destination: 2,
       ),
       _HomeAction(
@@ -193,9 +194,9 @@ class _HomeActionCard extends StatelessWidget {
                 action.caption,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -243,10 +244,7 @@ class _PortfolioRiskExplainerCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      strings.t(
-                        'کنترل ریسک معاملات',
-                        'Trading risk control',
-                      ),
+                      strings.t('کنترل ریسک معاملات', 'Trading risk control'),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
@@ -272,9 +270,7 @@ class _PortfolioRiskExplainerCard extends StatelessWidget {
             child: FilledButton.tonalIcon(
               onPressed: onOpen,
               icon: const Icon(Icons.account_balance_wallet_outlined),
-              label: Text(
-                strings.t('مشاهده بودجه ریسک', 'View risk budget'),
-              ),
+              label: Text(strings.t('مشاهده بودجه ریسک', 'View risk budget')),
             ),
           ),
         ],

@@ -53,8 +53,8 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
                 _notice(
                   icon: Icons.lock_outline_rounded,
                   text: _t(
-                    'ورود واقعی سخت‌افزاری غیرفعال است. این بخش فقط تصمیم، رزرو و بازیابی بودجه را شبیه‌سازی می‌کند.',
-                    'Real entry is hard-disabled. This panel only simulates decisions, reservations, and recovery.',
+                    'این صفحه بودجه ریسک را نمایش می‌دهد و خودش هیچ سفارشی ارسال نمی‌کند. شروع ترید واقعی فقط از صفحه ترید خودکار و پس از کنترل حساب انجام می‌شود.',
+                    'This page visualizes the risk budget and sends no orders itself. Real trading starts only from Auto Trade after account checks.',
                   ),
                   tone: Theme.of(context).colorScheme.primary,
                 ),
@@ -117,7 +117,7 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _t('بودجه ریسک پرتفوی', 'Portfolio risk budget'),
+              _t('کنترل ریسک معاملات', 'Trading risk control'),
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -125,16 +125,16 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
             const SizedBox(height: 4),
             Text(
               _t(
-                'ظرفیت هم‌زمان بر اساس ریسک روزانه و مارجین آزاد است، نه تعداد ثابت پوزیشن.',
-                'Concurrent capacity is based on daily risk and free margin, not a fixed position count.',
+                'قبل از ورود جدید، زیان احتمالی کل و مارجین رزروشده با سقف امن مقایسه می‌شود.',
+                'Before a new entry, aggregate potential loss and reserved margin are checked against the safety budget.',
               ),
             ),
           ],
         ),
       ),
       Chip(
-        avatar: const Icon(Icons.science_outlined, size: 18),
-        label: Text(_t('شبیه‌سازی', 'Simulation')),
+        avatar: const Icon(Icons.shield_outlined, size: 18),
+        label: Text(_t('نمایش بودجه', 'Budget view')),
       ),
     ],
   );
