@@ -55,8 +55,10 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
     _error = null;
     try {
       _snapshot = await _coordinator.snapshot(account: _account);
+      _publishState();
     } on Object catch (error) {
       _error = error;
+      _publishState();
     } finally {
       _setLoading(false);
     }
@@ -95,6 +97,7 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
     );
     _lastDecision = outcome.decision;
     _snapshot = outcome.snapshot;
+    _publishState();
   });
 
   Future<void> reset() => _enqueue(() async {
@@ -105,6 +108,7 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
     _sequence = 0;
     _lastDecision = null;
     _snapshot = await _coordinator.snapshot(account: _account);
+    _publishState();
   });
 
   Future<void> toggleFreshness() => _enqueue(() async {
@@ -121,6 +125,7 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
       feeReserve: _account.feeReserve,
     );
     _snapshot = await _coordinator.snapshot(account: _account);
+    _publishState();
   });
 
   Future<void> _enqueue(Future<void> Function() operation) {
@@ -134,6 +139,7 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
         completer.complete();
       } on Object catch (error, stackTrace) {
         _error = error;
+        _publishState();
         completer.completeError(error, stackTrace);
       } finally {
         _setLoading(false);
@@ -141,6 +147,10 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
     });
     _operationTail = next.catchError((Object _) {});
     return completer.future;
+  }
+
+  void _publishState() {
+    notifyListeners();
   }
 
   void _setLoading(bool value) {
