@@ -71,7 +71,11 @@ void main() {
     expect(chartFinder, findsOneWidget);
     final oneHour = tester.widget<QuantaraCandlestickChart>(chartFinder);
 
-    await tester.tap(find.byKey(const ValueKey('alpha-timeframe-4h')));
+    final fourHourControl = find.byKey(const ValueKey('alpha-timeframe-4h'));
+    await tester.ensureVisible(fourHourControl);
+    await tester.pumpAndSettle();
+    expect(fourHourControl.hitTestable(), findsOneWidget);
+    await tester.tap(fourHourControl.hitTestable());
     await tester.pumpAndSettle();
     final fourHours = tester.widget<QuantaraCandlestickChart>(chartFinder);
 
