@@ -66,10 +66,7 @@ void main() {
     test('Sara risk manager caps risk and concurrency at supported bounds', () {
       expect(() => configuration(risk: 2.01).validate(), throwsFormatException);
       for (final positions in [1, 2, 3]) {
-        expect(
-          configuration(positions: positions).validate,
-          returnsNormally,
-        );
+        expect(configuration(positions: positions).validate, returnsNormally);
       }
       expect(
         () => configuration(positions: 4).validate(),

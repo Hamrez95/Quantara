@@ -44,9 +44,7 @@ void main() {
   test('accepts one to three concurrent positions and rejects outside cap', () {
     for (final positions in [1, 2, 3]) {
       expect(
-        validConfiguration(
-          maximumConcurrentPositions: positions,
-        ).validate,
+        validConfiguration(maximumConcurrentPositions: positions).validate,
         returnsNormally,
       );
     }
