@@ -147,11 +147,12 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
         if (_pendingOperations == 0) _setLoading(false);
       }
     });
-    _operationTail = result.then<void>(
+    final settled = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
-    return result;
+    _operationTail = settled;
+    return settled.then<void>((_) => result);
   }
 
   void _publishState() {
