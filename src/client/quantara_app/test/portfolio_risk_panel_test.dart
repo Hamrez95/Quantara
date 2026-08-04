@@ -51,6 +51,15 @@ void main() {
     ),
   );
 
+  Future<void> tapVisible(WidgetTester tester, String label) async {
+    final action = find.text(label);
+    expect(action, findsOneWidget);
+    await tester.ensureVisible(action);
+    await tester.pumpAndSettle();
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('Persian RTL panel demonstrates 10, 3, 7 budgeting', (
     tester,
   ) async {
@@ -65,12 +74,10 @@ void main() {
     expect(find.text('شبیه‌سازی'), findsOneWidget);
     expect(find.text('10.00 USDT'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.text('رزرو ۳ USDT'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, 'رزرو ۳ USDT');
     expect(find.text('7.00 USDT'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.text('رزرو ۴ USDT'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, 'رزرو ۴ USDT');
     expect(find.text('3.00 USDT'), findsAtLeastNWidgets(1));
     expect(find.text('BTCUSDT'), findsOneWidget);
     expect(find.text('ETHUSDT'), findsOneWidget);
@@ -89,8 +96,7 @@ void main() {
 
     expect(find.text('Portfolio risk budget'), findsOneWidget);
     expect(find.text('Simulation'), findsOneWidget);
-    await tester.tap(find.text('Simulate stale data'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, 'Simulate stale data');
     expect(
       find.text('Private account truth is stale; new entry is blocked.'),
       findsOneWidget,
@@ -141,17 +147,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Reserve 3 USDT'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Try rejected 8'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, 'Reserve 3 USDT');
+    await tapVisible(tester, 'Try rejected 8');
     expect(
       find.text('The remaining risk budget is insufficient.'),
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Reset example'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, 'Reset example');
     expect(find.text('There are no active reservations yet.'), findsOneWidget);
     expect(find.text('10.00 USDT'), findsAtLeastNWidgets(1));
   });
