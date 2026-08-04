@@ -1,1 +1,0 @@
-Trigger confirmed TP and stop risk release integration with stable anchors; remove before merge.
