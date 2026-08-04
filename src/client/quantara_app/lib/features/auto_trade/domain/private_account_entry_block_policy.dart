@@ -9,23 +9,27 @@ enum PrivateAccountEntryBlockDecision {
 
 abstract final class PrivateAccountEntryBlockPolicy {
   static PrivateAccountEntryBlockDecision evaluate({
-    required bool connected,
-    required PrivateAccountReconciliationState reconciliation,
+    required bool explicitlyDisconnected,
+    required bool refreshing,
+    required PrivateAccountReconciliationHealth health,
   }) {
-    if (!connected) {
+    if (explicitlyDisconnected) {
       return PrivateAccountEntryBlockDecision.hardBlockDisconnected;
     }
-    if (reconciliation.refreshing) {
+    if (health == PrivateAccountReconciliationHealth.divergent) {
+      return PrivateAccountEntryBlockDecision.hardBlockDivergent;
+    }
+    if (refreshing) {
       return PrivateAccountEntryBlockDecision.none;
     }
-    return switch (reconciliation.health) {
+    return switch (health) {
       PrivateAccountReconciliationHealth.fresh =>
         PrivateAccountEntryBlockDecision.none,
-      PrivateAccountReconciliationHealth.divergent =>
-        PrivateAccountEntryBlockDecision.hardBlockDivergent,
       PrivateAccountReconciliationHealth.stale ||
       PrivateAccountReconciliationHealth.unavailable =>
         PrivateAccountEntryBlockDecision.transientProjectionWarning,
+      PrivateAccountReconciliationHealth.divergent =>
+        PrivateAccountEntryBlockDecision.hardBlockDivergent,
     };
   }
 }
