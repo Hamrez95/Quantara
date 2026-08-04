@@ -39,19 +39,27 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: _persian ? TextDirection.rtl : TextDirection.ltr,
-      child: AnimatedSwitcher(
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : QuantaraMotion.standard,
-        child: _selected == null
-            ? KeyedSubtree(
-                key: const ValueKey('journal-list'),
-                child: _buildList(context),
-              )
-            : KeyedSubtree(
-                key: ValueKey('journal-detail-${_selected!.journalTradeId}'),
-                child: _buildDetail(context),
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final content = AnimatedSwitcher(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : QuantaraMotion.standard,
+            child: _selected == null
+                ? KeyedSubtree(
+                    key: const ValueKey('journal-list'),
+                    child: _buildList(context),
+                  )
+                : KeyedSubtree(
+                    key: ValueKey(
+                      'journal-detail-${_selected!.journalTradeId}',
+                    ),
+                    child: _buildDetail(context),
+                  ),
+          );
+          if (!constraints.hasBoundedHeight) return content;
+          return SingleChildScrollView(child: content);
+        },
       ),
     );
   }
@@ -1260,7 +1268,7 @@ String _tradeStateLabel(
   TradingJournalTradeState state,
 ) => switch (state) {
   TradingJournalTradeState.planned => persian ? 'برنامه‌ریزی‌شده' : 'Planned',
-  TradingJournalTradeState.open => persian ? 'باز' : 'Open',
+  TradingJournalTradeState.open => persian ? 'باز' : 'Active',
   TradingJournalTradeState.closed => persian ? 'بسته‌شده' : 'Closed',
   TradingJournalTradeState.missed => persian ? 'از دست‌رفته' : 'Missed',
   TradingJournalTradeState.simulated => persian ? 'شبیه‌سازی' : 'Simulated',
