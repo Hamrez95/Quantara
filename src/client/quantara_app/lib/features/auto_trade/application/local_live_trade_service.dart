@@ -18,6 +18,7 @@ import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
+import '../domain/remaining_target_protection_policy.dart';
 import '../domain/trading_pnl_projection.dart';
 import 'local_live_portfolio_execution_guard.dart';
 import 'profit_lock_promotion_executor.dart';
@@ -1038,6 +1039,41 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         quantityTolerance: quantityTolerance,
         observedRemainingQuantity: position.quantity,
       );
+      final remainingTargetsProtected =
+          RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
+            targetOrderIds: managed.targetOrderIds,
+            targetQuantities: managed.targetQuantities,
+            filledQuantities: fillProgress.filledQuantities,
+            pendingProtection: protection
+                .where((item) => item.takeProfitPrice > 0)
+                .map(
+                  (item) => PendingTargetProtectionEvidence(
+                    orderId: item.orderId,
+                    triggerPrice: item.takeProfitPrice,
+                    quantity: item.takeProfitQuantity,
+                  ),
+                ),
+            quantityTolerance: quantityTolerance,
+          );
+      if (!remainingTargetsProtected) {
+        _entriesEnabled = false;
+        const warning =
+            'A remaining take-profit tranche is missing or undersized on the exchange; new entries are blocked.';
+        _replaceManaged(
+          managed,
+          managed.copyWith(
+            profitLockProgress: managed.profitLockProgress.copyWith(
+              warning: warning,
+            ),
+          ),
+        );
+        _auditEvent(
+          'target_ladder_incomplete',
+          warning,
+          symbol: managed.symbol,
+        );
+        continue;
+      }
       await portfolioGuard.confirmReduction(
         positionId: managed.positionId,
         remainingQuantity: position.quantity,

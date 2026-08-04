@@ -58,27 +58,30 @@ void main() {
     );
   });
 
-  test('blocks concurrency when a remaining target is missing or undersized', () {
-    expect(
-      RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
-        targetOrderIds: ids,
-        targetQuantities: quantities,
-        filledQuantities: const [0.75, 0, 0],
-        pendingProtection: const [
-          PendingTargetProtectionEvidence(
-            orderId: 'tp-2',
-            triggerPrice: 120,
-            quantity: 0.19,
-          ),
-          PendingTargetProtectionEvidence(
-            orderId: 'tp-3',
-            triggerPrice: 130,
-            quantity: 0.05,
-          ),
-        ],
-        quantityTolerance: 0.000001,
-      ),
-      isFalse,
-    );
-  });
+  test(
+    'blocks concurrency when a remaining target is missing or undersized',
+    () {
+      expect(
+        RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
+          targetOrderIds: ids,
+          targetQuantities: quantities,
+          filledQuantities: const [0.75, 0, 0],
+          pendingProtection: const [
+            PendingTargetProtectionEvidence(
+              orderId: 'tp-2',
+              triggerPrice: 120,
+              quantity: 0.19,
+            ),
+            PendingTargetProtectionEvidence(
+              orderId: 'tp-3',
+              triggerPrice: 130,
+              quantity: 0.05,
+            ),
+          ],
+          quantityTolerance: 0.000001,
+        ),
+        isFalse,
+      );
+    },
+  );
 }
