@@ -14,6 +14,7 @@ import '../../trading_journal/application/local_live_journal_observer.dart';
 import '../../trading_journal/domain/trading_journal_models.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
+import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/trading_pnl_projection.dart';
@@ -240,14 +241,47 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               startedAt: sessionStartedAt,
               ownedPositionIds: Set.unmodifiable(_sessionPositionIds),
             );
-      if (!account.authoritativePnl.isVerified ||
-          !account.authoritativePnl.fillsAvailable) {
-        _entriesEnabled = false;
-        _auditEvent(
-          'pnl_projection_block',
-          account.authoritativePnl.warning ??
-              'Exchange PnL history is unavailable or unverified.',
-        );
+      final managedPositionIds = _managed
+          .map((position) => position.positionId)
+          .where((positionId) => positionId.isNotEmpty)
+          .toSet();
+      final hasUnmanagedExchangeExposure = positions.any(
+        (position) =>
+            position.quantity > 0 &&
+            !managedPositionIds.contains(position.positionId),
+      );
+      final readiness = LocalLiveCycleReadinessPolicy.evaluate(
+        hasManagedExposure: _managed.isNotEmpty,
+        hasUnmanagedExchangeExposure: hasUnmanagedExchangeExposure,
+        pnlVerified: account.authoritativePnl.isVerified,
+        fillsAvailable: account.authoritativePnl.fillsAvailable,
+      );
+      String? cycleWarning;
+      switch (readiness) {
+        case LocalLiveCycleReadiness.ready:
+          break;
+        case LocalLiveCycleReadiness.emptyAccountHistoryPending:
+          _auditEvent(
+            'pnl_projection_pending_empty_account',
+            account.authoritativePnl.warning ??
+                'Historical fill data is pending for the empty account; entry readiness is unchanged.',
+          );
+          break;
+        case LocalLiveCycleReadiness.managedExposureHistoryBlocked:
+          _entriesEnabled = false;
+          cycleWarning =
+              'Managed exchange exposure requires verified fill history. New entries are blocked while existing protection is reconciled.';
+          _auditEvent(
+            'pnl_projection_block',
+            account.authoritativePnl.warning ?? cycleWarning,
+          );
+          break;
+        case LocalLiveCycleReadiness.unmanagedExposureBlocked:
+          _entriesEnabled = false;
+          cycleWarning =
+              'An unmanaged exchange position was detected. New entries are blocked and Quantara did not adopt the position.';
+          _auditEvent('unmanaged_exposure_block', cycleWarning);
+          break;
       }
       _sessionStartEquity ??= account.estimatedEquity;
       if (_sessionStartEquity != null) {
@@ -294,9 +328,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _entriesEnabled
             ? LocalLiveTradeState.running
             : LocalLiveTradeState.managingOnly,
-        profitLockWarning ??
+        cycleWarning ??
+            profitLockWarning ??
             (_entriesEnabled
                 ? 'Local live scan and exchange reconciliation completed.'
+                : _managed.isEmpty
+                ? 'New entries are paused; no Local Live position is open.'
                 : 'Only exchange-protected positions are being reconciled.'),
       );
     } on Object catch (error) {
@@ -1404,30 +1441,84 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     );
     FlutterForegroundTask.sendDataToMain(encoded);
     await FlutterForegroundTask.updateService(
-      notificationTitle: state == LocalLiveTradeState.circuitBreaker
-          ? 'Quantara · Circuit breaker'
-          : state == LocalLiveTradeState.managingOnly
-          ? 'Quantara · Managing protected positions'
-          : 'Quantara · Local live canary',
-      notificationText: _notificationPnlText(),
+      notificationTitle: _notificationTitle(state),
+      notificationText: _notificationPnlText(state),
     );
   }
 
-  String _notificationPnlText() {
+  String _notificationTitle(LocalLiveTradeState state) {
+    if (state == LocalLiveTradeState.circuitBreaker) {
+      return _notificationCopy(
+        'Quantara · توقف ایمنی',
+        'Quantara · Circuit breaker',
+      );
+    }
+    if (state == LocalLiveTradeState.starting) {
+      return _notificationCopy(
+        'Quantara · شروع ترید محلی',
+        'Quantara · Starting local live',
+      );
+    }
+    if (state == LocalLiveTradeState.managingOnly) {
+      return _managed.isEmpty
+          ? _notificationCopy(
+              'Quantara · ورودهای جدید متوقف',
+              'Quantara · Entries paused',
+            )
+          : _notificationCopy(
+              'Quantara · مدیریت پوزیشن محافظت‌شده',
+              'Quantara · Managing protected positions',
+            );
+    }
+    return _notificationCopy(
+      'Quantara · ترید واقعی محلی',
+      'Quantara · Local live canary',
+    );
+  }
+
+  String _notificationPnlText(LocalLiveTradeState state) {
+    if (_managed.isEmpty) {
+      if (state == LocalLiveTradeState.starting || _lastExchangeSync == null) {
+        return _notificationCopy(
+          'در حال همگام‌سازی حساب Bitunix',
+          'Syncing Bitunix account',
+        );
+      }
+      return _entriesEnabled
+          ? _notificationCopy(
+              'بدون پوزیشن باز · در حال اسکن نمادهای منتخب',
+              '0 open · scanning selected symbols',
+            )
+          : _notificationCopy(
+              'بدون پوزیشن باز · ورود جدید متوقف است',
+              '0 open · new entries paused',
+            );
+    }
+
     final projection = _sessionPnlProjection;
     if (projection == null) {
-      return '${_managed.length} open · session PnL unavailable';
+      return _notificationCopy(
+        '${_managed.length} پوزیشن باز · در حال همگام‌سازی سود و زیان',
+        '${_managed.length} open · syncing exchange PnL',
+      );
     }
     final net = projection.accountNetRealized;
     final unrealized = projection.accountUnrealized;
+    final pending = _notificationCopy('در انتظار', 'pending');
     final netText = net.isAvailable
         ? '${net.value! >= 0 ? '+' : ''}${net.value!.toStringAsFixed(2)} ${net.currency}'
-        : 'unavailable';
+        : pending;
     final openText = unrealized.isAvailable
         ? '${unrealized.value! >= 0 ? '+' : ''}${unrealized.value!.toStringAsFixed(2)} ${unrealized.currency}'
-        : 'unavailable';
-    return '${_managed.length} open · session net $netText · open $openText';
+        : pending;
+    return _notificationCopy(
+      '${_managed.length} باز · خالص جلسه $netText · باز $openText',
+      '${_managed.length} open · session net $netText · open $openText',
+    );
   }
+
+  String _notificationCopy(String fa, String en) =>
+      _configuration?.languageCode == 'en' ? en : fa;
 
   String _safeError(Object error) {
     final text = error is LocalLiveTradeSafeException

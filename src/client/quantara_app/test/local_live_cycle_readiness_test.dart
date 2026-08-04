@@ -22,10 +22,7 @@ void main() {
       fillsAvailable: false,
     );
 
-    expect(
-      readiness,
-      LocalLiveCycleReadiness.managedExposureHistoryBlocked,
-    );
+    expect(readiness, LocalLiveCycleReadiness.managedExposureHistoryBlocked);
     expect(LocalLiveCycleReadinessPolicy.blocksNewEntries(readiness), isTrue);
   });
 

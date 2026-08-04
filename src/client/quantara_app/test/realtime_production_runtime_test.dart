@@ -24,30 +24,98 @@ void main() {
     );
   });
 
-  test('foreground host starts, pauses, resumes and stops safely', () async {
-    final runtime = _FakeRuntime();
+  test(
+    'transient inactive and hidden states do not pause monitoring',
+    () async {
+      final runtime = _FakeRuntime();
+      final host = RealtimeMarketHost(
+        runtime: runtime,
+        pollInterval: const Duration(milliseconds: 250),
+        backgroundPauseGrace: const Duration(milliseconds: 40),
+      );
+
+      await host.initialize();
+      host.didChangeAppLifecycleState(AppLifecycleState.inactive);
+      host.didChangeAppLifecycleState(AppLifecycleState.hidden);
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      expect(runtime.starts, 1);
+      expect(runtime.pauses, 0);
+      expect(runtime.state, RealtimeMarketRuntimeState.live);
+
+      host.dispose();
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.stops, 1);
+    },
+  );
+
+  test(
+    'brief background transition is cancelled when the app resumes',
+    () async {
+      final runtime = _FakeRuntime();
+      final host = RealtimeMarketHost(
+        runtime: runtime,
+        pollInterval: const Duration(milliseconds: 250),
+        backgroundPauseGrace: const Duration(milliseconds: 60),
+      );
+
+      await host.initialize();
+      host.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      host.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(runtime.pauses, 0);
+      expect(runtime.resumes, 0);
+      expect(runtime.state, RealtimeMarketRuntimeState.live);
+
+      host.dispose();
+    },
+  );
+
+  test(
+    'sustained backgrounding pauses after grace and resumes safely',
+    () async {
+      final runtime = _FakeRuntime();
+      final host = RealtimeMarketHost(
+        runtime: runtime,
+        pollInterval: const Duration(milliseconds: 250),
+        backgroundPauseGrace: const Duration(milliseconds: 20),
+      );
+
+      await host.initialize();
+      host.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(runtime.pauses, 1);
+      expect(runtime.state, RealtimeMarketRuntimeState.paused);
+
+      host.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.resumes, 1);
+      expect(runtime.state, RealtimeMarketRuntimeState.live);
+
+      host.dispose();
+    },
+  );
+
+  test('degraded monitoring receives one bounded recovery restart', () async {
+    final runtime = _FakeRuntime(degraded: true);
     final host = RealtimeMarketHost(
       runtime: runtime,
       pollInterval: const Duration(milliseconds: 250),
+      degradedRetryInterval: const Duration(milliseconds: 150),
     );
 
     await host.initialize();
-    expect(runtime.starts, 1);
-    expect(host.value.health?.state, RealtimeMarketRuntimeState.live);
+    await Future<void>.delayed(const Duration(milliseconds: 340));
 
-    host.didChangeAppLifecycleState(AppLifecycleState.paused);
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
     expect(runtime.pauses, 1);
-
-    host.didChangeAppLifecycleState(AppLifecycleState.resumed);
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
     expect(runtime.resumes, 1);
+    expect(host.value.operational, isTrue);
+    expect(host.value.healthy, isFalse);
 
     host.dispose();
-    await Future<void>.delayed(Duration.zero);
-    expect(runtime.stops, 1);
   });
 
   test('invalid or oversized settings fail closed', () {
@@ -61,6 +129,9 @@ void main() {
 }
 
 final class _FakeRuntime implements RealtimeMarketRuntimeLifecycle {
+  _FakeRuntime({this.degraded = false});
+
+  final bool degraded;
   var starts = 0;
   var pauses = 0;
   var resumes = 0;
@@ -74,6 +145,8 @@ final class _FakeRuntime implements RealtimeMarketRuntimeLifecycle {
   RealtimeMarketHealthSnapshot get health => RealtimeMarketHealthSnapshot(
     state: _state,
     configuredStreams: 8,
+    activeStreams: degraded ? 7 : 8,
+    quarantinedStreams: degraded ? 1 : 0,
     activeShards: 1,
     liveShards: _state == RealtimeMarketRuntimeState.live ? 1 : 0,
     eventsReceived: 0,

@@ -27,12 +27,11 @@ abstract final class LocalLiveCycleReadinessPolicy {
     return LocalLiveCycleReadiness.ready;
   }
 
-  static bool blocksNewEntries(LocalLiveCycleReadiness readiness) => switch (
-    readiness
-  ) {
-    LocalLiveCycleReadiness.managedExposureHistoryBlocked ||
-    LocalLiveCycleReadiness.unmanagedExposureBlocked => true,
-    LocalLiveCycleReadiness.ready ||
-    LocalLiveCycleReadiness.emptyAccountHistoryPending => false,
-  };
+  static bool blocksNewEntries(LocalLiveCycleReadiness readiness) =>
+      switch (readiness) {
+        LocalLiveCycleReadiness.managedExposureHistoryBlocked ||
+        LocalLiveCycleReadiness.unmanagedExposureBlocked => true,
+        LocalLiveCycleReadiness.ready ||
+        LocalLiveCycleReadiness.emptyAccountHistoryPending => false,
+      };
 }

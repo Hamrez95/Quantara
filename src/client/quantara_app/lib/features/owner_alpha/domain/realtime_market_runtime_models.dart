@@ -125,13 +125,13 @@ final class RealtimeMarketHealthSnapshot {
   final DateTime? lastFaultAtUtc;
   final String? lastFaultMessage;
 
-  bool get discoveryHealthy =>
+  bool get operational =>
       state == RealtimeMarketRuntimeState.live &&
       activeStreams > 0 &&
-      quarantinedStreams == 0 &&
       activeShards > 0 &&
       liveShards == activeShards;
 
-  bool get degraded =>
-      state == RealtimeMarketRuntimeState.live && quarantinedStreams > 0;
+  bool get discoveryHealthy => operational && quarantinedStreams == 0;
+
+  bool get degraded => operational && quarantinedStreams > 0;
 }
