@@ -415,45 +415,48 @@ class _HomeActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Ink(
-          height: 122,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: action.color.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: action.color.withValues(alpha: 0.2)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: action.color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 122),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: action.color.withValues(alpha: 0.13),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SizedBox.square(
+                    dimension: 36,
+                    child: Icon(action.icon, size: 20, color: action.color),
+                  ),
                 ),
-                child: SizedBox.square(
-                  dimension: 36,
-                  child: Icon(action.icon, size: 20, color: action.color),
+                const SizedBox(height: 12),
+                Text(
+                  action.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                action.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                action.caption,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  action.caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -556,7 +559,7 @@ class _PortfolioRiskExplainerCard extends StatelessWidget {
                     const SizedBox(height: 5),
                     Text(
                       strings.t(
-                        'زیان احتمالی و مارجین رزروشده پیش از ورود جدید با سقف امن کنترل می‌شود؛ این صفحه سفارشی ارسال نمی‌کند.',
+                        'زیان احتمالی و مارجین رزروشده پیش از ورود جدید با سقف امن کنترل می‌شود؛ این صفحه خودش هیچ سفارشی ارسال نمی‌کند.',
                         'Potential loss and reserved margin are checked before a new entry; this page sends no orders.',
                       ),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -646,7 +649,10 @@ class _HomeRadarSummary extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      strings.opportunitiesRadar,
+                      strings.t(
+                        'خلاصه فرصت‌های بازار',
+                        'Market opportunity summary',
+                      ),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
