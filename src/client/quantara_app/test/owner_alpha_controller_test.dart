@@ -157,6 +157,7 @@ void main() {
 
 final class _ActionableRepository implements OwnerAlphaRepository {
   final _delegate = const FakeOwnerAlphaRepository();
+  final DateTime _signalTime = DateTime.now().toUtc();
 
   @override
   Future<OwnerAlphaSnapshot> scan({
@@ -176,7 +177,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       languageCode: languageCode,
     );
     final result = base.radar.first;
-    final signalTime = DateTime.now().toUtc();
+    final signalTime = _signalTime;
     final analysis = _actionableAnalysis(signalTime);
     final parentAnalysis = _actionableAnalysis(signalTime, timeframe: '4h');
     final idea = TradeIdea(
