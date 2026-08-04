@@ -174,7 +174,7 @@ final class LocalLivePortfolioRiskRuntime {
     if (store is! AtomicPortfolioRiskLedgerStore) {
       throw StateError('Local Live portfolio risk requires atomic storage.');
     }
-    return store;
+    return store as AtomicPortfolioRiskLedgerStore;
   }
 
   PortfolioRiskLedger _normalize(PortfolioRiskLedger? current, DateTime now) {
