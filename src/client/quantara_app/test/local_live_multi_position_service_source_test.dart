@@ -24,6 +24,7 @@ void main() {
     expect(submit, greaterThan(reserve));
     expect(source, contains('portfolioGuard.recordFill('));
     expect(source, contains('portfolioGuard.confirmStop('));
+    expect(source, contains('portfolioGuard.confirmReduction('));
     expect(source, contains('portfolioGuard.markAmbiguous('));
     expect(source, contains('portfolioGuard.releaseNoExposure('));
   });
@@ -35,9 +36,7 @@ void main() {
 
     expect(
       source,
-      isNot(contains(
-        '_managed.isEmpty &&\n          positions.isEmpty',
-      )),
+      isNot(contains('_managed.isEmpty &&\n          positions.isEmpty')),
     );
     expect(source, contains('LocalLivePortfolioAdmission.hasExecutionSlot'));
     expect(source, contains('occupiedSymbols'));
