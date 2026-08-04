@@ -28,9 +28,6 @@ import '../../auto_trade/presentation/position_protection_summary.dart';
 import '../../auto_trade/presentation/tp_allocation_editor.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
-import '../../strategy_lab/data/strategy_lab_runner.dart';
-import '../../strategy_lab/data/platform_strategy_lab_session_store.dart';
-import '../../strategy_lab/domain/strategy_lab_models.dart';
 import '../../trading_journal/application/trading_journal_controller.dart';
 import '../../trading_journal/data/database_trading_journal_store.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
@@ -44,6 +41,7 @@ import '../domain/profit_protection_policy.dart';
 import '../domain/realtime_market_runtime_models.dart';
 
 part 'owner_alpha_dashboard.dart';
+part 'owner_alpha_home.dart';
 part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
@@ -52,10 +50,11 @@ part 'owner_alpha_auto_trade_support.dart';
 part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
-part 'owner_alpha_strategy_lab.dart';
 
 typedef _OpenAnalysis =
     void Function(String symbol, [String? timeframe, String? setupId]);
+
+void _noopOpenPortfolioRisk() {}
 
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
@@ -68,6 +67,7 @@ class OwnerAlphaPage extends StatefulWidget {
     required this.locale,
     required this.onToggleTheme,
     required this.onLocaleChanged,
+    this.onOpenPortfolioRisk = _noopOpenPortfolioRisk,
     this.realtimeMonitor,
     super.key,
   });
@@ -81,6 +81,7 @@ class OwnerAlphaPage extends StatefulWidget {
   final Locale locale;
   final VoidCallback onToggleTheme;
   final ValueChanged<Locale> onLocaleChanged;
+  final VoidCallback onOpenPortfolioRisk;
   final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
 
   @override
@@ -206,7 +207,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onLocaleChanged: widget.onLocaleChanged,
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
-            onOpenStrategyLab: () => setState(() => _destination = 4),
+            onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
+            onNavigate: (value) => setState(() => _destination = value),
             showTopBar: desktop,
             realtimeMonitor: widget.realtimeMonitor,
           ),
@@ -219,20 +221,27 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
                   NavigationRail(
                     extended: constraints.maxWidth >= 1320,
                     minExtendedWidth: 220,
-                    selectedIndex: _destination,
+                    selectedIndex:
+                        _desktopDestinationIndexes.contains(_destination)
+                        ? _desktopDestinationIndexes.indexOf(_destination)
+                        : 0,
                     onDestinationSelected: (value) {
-                      setState(() => _destination = value);
+                      setState(
+                        () => _destination = _desktopDestinationIndexes[value],
+                      );
                     },
                     leading: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 18),
                       child: _AlphaLogo(size: 44),
                     ),
-                    destinations: _destinations.indexed
+                    destinations: _desktopDestinationIndexes
                         .map(
-                          (item) => NavigationRailDestination(
-                            icon: Icon(item.$2.icon),
-                            selectedIcon: Icon(item.$2.selectedIcon),
-                            label: Text(_destinationLabel(strings, item.$1)),
+                          (index) => NavigationRailDestination(
+                            icon: Icon(_destinations[index].icon),
+                            selectedIcon: Icon(
+                              _destinations[index].selectedIcon,
+                            ),
+                            label: Text(_destinationLabel(strings, index)),
                           ),
                         )
                         .toList(growable: false),
@@ -269,7 +278,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             child: NavigationBar(
               selectedIndex: _mobileDestinationIndexes.contains(_destination)
                   ? _mobileDestinationIndexes.indexOf(_destination)
-                  : 2,
+                  : 0,
               labelBehavior: constraints.maxWidth < 440
                   ? NavigationDestinationLabelBehavior.onlyShowSelected
                   : NavigationDestinationLabelBehavior.alwaysShow,
@@ -502,29 +511,29 @@ class _AddSymbolDialogState extends State<_AddSymbolDialog> {
 }
 
 const _destinations = [
-  _Destination(Icons.radar_outlined, Icons.radar_rounded),
+  _Destination(Icons.home_outlined, Icons.home_rounded),
   _Destination(Icons.inbox_outlined, Icons.inbox_rounded),
   _Destination(
     Icons.candlestick_chart_outlined,
     Icons.candlestick_chart_rounded,
   ),
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
-  _Destination(Icons.science_outlined, Icons.science_rounded),
+  _Destination(Icons.home_outlined, Icons.home_rounded),
   _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
   _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _mobileDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];
+const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];
+const _mobileDestinationIndexes = [0, 1, 5, 7];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
   2 => strings.analysis,
   3 => strings.watchlist,
-  4 => strings.strategyLab,
   5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',
   6 => strings.isPersian ? 'ژورنال' : 'Journal',
   7 => strings.profile,
-  _ => strings.radar,
+  _ => strings.t('خانه', 'Home'),
 };
 
 final class _Destination {
@@ -547,7 +556,8 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.onLocaleChanged,
     required this.onOpenAnalysis,
     required this.onAddSymbol,
-    required this.onOpenStrategyLab,
+    required this.onOpenPortfolioRisk,
+    required this.onNavigate,
     required this.showTopBar,
     required this.realtimeMonitor,
   });
@@ -563,7 +573,8 @@ class _OwnerAlphaBody extends StatelessWidget {
   final ValueChanged<Locale> onLocaleChanged;
   final _OpenAnalysis onOpenAnalysis;
   final VoidCallback onAddSymbol;
-  final VoidCallback onOpenStrategyLab;
+  final VoidCallback onOpenPortfolioRisk;
+  final ValueChanged<int> onNavigate;
   final bool showTopBar;
   final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
 
@@ -635,20 +646,9 @@ class _OwnerAlphaBody extends StatelessWidget {
                         controller: controller,
                         onOpenAnalysis: onOpenAnalysis,
                       ),
-                      2 => Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: onOpenStrategyLab,
-                            icon: const Icon(Icons.science_outlined),
-                            label: Text(AppStrings.of(context).openStrategyLab),
-                          ),
-                          const SizedBox(height: 14),
-                          _AlphaAnalysisView(
-                            controller: controller,
-                            snapshot: controller.snapshot!,
-                          ),
-                        ],
+                      2 => _AlphaAnalysisView(
+                        controller: controller,
+                        snapshot: controller.snapshot!,
                       ),
                       3 => _WatchlistView(
                         controller: controller,
@@ -656,14 +656,12 @@ class _OwnerAlphaBody extends StatelessWidget {
                         onOpenAnalysis: onOpenAnalysis,
                         onAddSymbol: onAddSymbol,
                       ),
-                      4 => _StrategyLabView(
-                        controller: controller,
-                        snapshot: controller.snapshot!,
-                      ),
-                      _ => _RadarDashboard(
+                      _ => _HomeDashboard(
                         controller: controller,
                         snapshot: controller.snapshot!,
                         onOpenAnalysis: onOpenAnalysis,
+                        onNavigate: onNavigate,
+                        onOpenPortfolioRisk: onOpenPortfolioRisk,
                       ),
                     },
                 ],

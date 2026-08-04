@@ -399,25 +399,30 @@ class _LocalLiveTradeControlCardState
   }
 
   Future<void> _restorePreferences() async {
-    final value = await _preferencesStore.load(
-      availableSymbols: widget.analysisController.symbols,
-    );
-    if (!mounted) return;
-    setState(() {
-      _enabledSymbols
-        ..clear()
-        ..addAll(value.symbols);
-      _enabledTimeframes
-        ..clear()
-        ..addAll(value.timeframes);
-      _leverage = value.leverage;
-      _riskPercent = value.riskPercent;
-      _dailyLossLimit = value.dailyLossLimitPercent;
-      _tp1Percent = (value.targetAllocation.tp1Fraction * 100).round();
-      _tp2Percent = (value.targetAllocation.tp2Fraction * 100).round();
-      _tp3Percent = 100 - _tp1Percent - _tp2Percent;
-      _preferencesLoaded = true;
-    });
+    try {
+      final value = await _preferencesStore
+          .load(availableSymbols: widget.analysisController.symbols)
+          .timeout(const Duration(seconds: 2));
+      if (!mounted) return;
+      setState(() {
+        _enabledSymbols
+          ..clear()
+          ..addAll(value.symbols);
+        _enabledTimeframes
+          ..clear()
+          ..addAll(value.timeframes);
+        _leverage = value.leverage;
+        _riskPercent = value.riskPercent;
+        _dailyLossLimit = value.dailyLossLimitPercent;
+        _tp1Percent = (value.targetAllocation.tp1Fraction * 100).round();
+        _tp2Percent = (value.targetAllocation.tp2Fraction * 100).round();
+        _tp3Percent = 100 - _tp1Percent - _tp2Percent;
+        _preferencesLoaded = true;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() => _preferencesLoaded = true);
+    }
   }
 
   LocalLivePreferences get _currentPreferences => LocalLivePreferences(

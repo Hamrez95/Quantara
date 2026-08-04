@@ -66,13 +66,16 @@ void main() {
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.candlestick_chart_outlined));
-    await tester.pumpAndSettle();
+    await _openAnalysisFromHome(tester);
     final chartFinder = find.byType(QuantaraCandlestickChart);
     expect(chartFinder, findsOneWidget);
     final oneHour = tester.widget<QuantaraCandlestickChart>(chartFinder);
 
-    await tester.tap(find.byKey(const ValueKey('alpha-timeframe-4h')));
+    final fourHourControl = find.byKey(const ValueKey('alpha-timeframe-4h'));
+    await tester.ensureVisible(fourHourControl);
+    await tester.pumpAndSettle();
+    expect(fourHourControl.hitTestable(), findsOneWidget);
+    await tester.tap(fourHourControl.hitTestable());
     await tester.pumpAndSettle();
     final fourHours = tester.widget<QuantaraCandlestickChart>(chartFinder);
 
@@ -92,8 +95,7 @@ void main() {
 
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.candlestick_chart_outlined));
-    await tester.pumpAndSettle();
+    await _openAnalysisFromHome(tester);
 
     for (var attempt = 0; attempt < 4; attempt++) {
       final tooltip = attempt.isEven ? 'حالت روشن' : 'حالت تیره';
@@ -107,6 +109,25 @@ void main() {
     expect(find.byType(QuantaraCandlestickChart), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _openAnalysisFromHome(WidgetTester tester) async {
+  final target = find.text('تحلیل');
+  expect(target, findsOneWidget);
+  final page = find.byType(ListView).first;
+  await tester.fling(page, const Offset(0, 1200), 2400);
+  await tester.pumpAndSettle();
+  for (
+    var attempt = 0;
+    attempt < 8 && target.hitTestable().evaluate().isEmpty;
+    attempt++
+  ) {
+    await tester.drag(page, const Offset(0, -260));
+    await tester.pump();
+  }
+  expect(target.hitTestable(), findsOneWidget);
+  await tester.tap(target.hitTestable());
+  await tester.pumpAndSettle();
 }
 
 Widget _testApp() {
