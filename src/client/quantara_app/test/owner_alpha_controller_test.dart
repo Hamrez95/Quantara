@@ -178,6 +178,10 @@ final class _ActionableRepository implements OwnerAlphaRepository {
     final result = base.radar.first;
     final signalTime = DateTime.now().toUtc();
     final analysis = _actionableAnalysis(signalTime);
+    final parentAnalysis = _actionableAnalysis(
+      signalTime,
+      timeframe: '4h',
+    );
     final idea = TradeIdea(
       symbol: result.quote.symbol,
       timeframe: '1h',
@@ -205,7 +209,10 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       quote: result.quote,
       analysis: analysis,
       idea: idea,
-      analysesByTimeframe: {'1h': analysis},
+      analysesByTimeframe: {
+        '1h': analysis,
+        '4h': parentAnalysis,
+      },
       ideasByTimeframe: {'1h': idea},
     );
     return OwnerAlphaSnapshot(
@@ -214,28 +221,39 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       selectedTimeframe: '1h',
       selectedAnalysis: analysis,
       selectedIdea: idea,
-      timeframeDirections: {'1h': analysis.direction},
+      timeframeDirections: {
+        '1h': analysis.direction,
+        '4h': parentAnalysis.direction,
+      },
       generatedAt: signalTime,
     );
   }
 }
 
-TimeframeChartAnalysis _actionableAnalysis(DateTime generatedAt) {
+TimeframeChartAnalysis _actionableAnalysis(
+  DateTime generatedAt, {
+  String timeframe = '1h',
+}) {
+  final interval = timeframe == '4h'
+      ? const Duration(hours: 4)
+      : const Duration(hours: 1);
   final candles = List.generate(60, (index) {
-    final open = 100 + index * 0.5;
+    final open = 100 + index * 0.1;
+    final last = index == 59;
+    final close = open + (last ? 0.35 : 0.15);
     return ChartCandle(
-      openTime: generatedAt.subtract(Duration(hours: 60 - index)),
+      openTime: generatedAt.subtract(interval * (60 - index)),
       open: open,
-      high: open + 1.2,
-      low: open - 1,
-      close: open + 0.5,
-      volume: 1000 + index.toDouble(),
+      high: close + (last ? 0.1 : 0.7),
+      low: open - (last ? 0.1 : 0.7),
+      close: close,
+      volume: last ? 1400 : 1000 + index.toDouble(),
     );
   });
   final current = candles.last.close;
   return TimeframeChartAnalysis(
     symbol: 'BTCUSDT',
-    timeframe: '1h',
+    timeframe: timeframe,
     candles: candles,
     zones: [
       ChartPriceZone(
@@ -266,7 +284,7 @@ TimeframeChartAnalysis _actionableAnalysis(DateTime generatedAt) {
     volatilityPercent: 0.8,
     summary: 'actionable fixture',
     generatedAt: generatedAt,
-    fingerprint: 'controller-actionable-fixture',
+    fingerprint: 'controller-actionable-fixture-$timeframe',
   );
 }
 
