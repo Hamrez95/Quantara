@@ -1,1 +1,1 @@
-Trigger concurrent position UI patch. Remove after bot commit.
+Trigger concurrent position UI diagnostics. Remove after bot commit.
