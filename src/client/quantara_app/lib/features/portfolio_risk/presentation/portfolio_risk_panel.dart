@@ -270,22 +270,22 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
       runSpacing: 8,
       children: [
         FilledButton.tonalIcon(
-          onPressed: () => _controller.reserveExample(3),
+          onPressed: () => _run(() => _controller.reserveExample(3)),
           icon: const Icon(Icons.add_chart_rounded),
           label: Text(_t('رزرو ۳ USDT', 'Reserve 3 USDT')),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => _controller.reserveExample(4),
+          onPressed: () => _run(() => _controller.reserveExample(4)),
           icon: const Icon(Icons.add_chart_rounded),
           label: Text(_t('رزرو ۴ USDT', 'Reserve 4 USDT')),
         ),
         OutlinedButton.icon(
-          onPressed: () => _controller.reserveExample(8),
+          onPressed: () => _run(() => _controller.reserveExample(8)),
           icon: const Icon(Icons.rule_rounded),
           label: Text(_t('آزمون Reject با ۸', 'Try rejected 8')),
         ),
         OutlinedButton.icon(
-          onPressed: _controller.toggleFreshness,
+          onPressed: () => _run(_controller.toggleFreshness),
           icon: Icon(
             _controller.accountFresh
                 ? Icons.cloud_off_outlined
@@ -298,12 +298,17 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
           ),
         ),
         TextButton.icon(
-          onPressed: _controller.reset,
+          onPressed: () => _run(_controller.reset),
           icon: const Icon(Icons.restart_alt_rounded),
           label: Text(_t('بازنشانی مثال', 'Reset example')),
         ),
       ],
     );
+  }
+
+  Future<void> _run(Future<void> Function() operation) async {
+    await operation();
+    if (mounted) setState(() {});
   }
 
   Widget _positions(PortfolioRiskSnapshot snapshot) {
