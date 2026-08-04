@@ -5,16 +5,30 @@ import '../../portfolio_risk/domain/portfolio_risk_transitions.dart';
 import '../domain/local_live_portfolio_admission.dart';
 
 final class LocalLivePortfolioRiskRuntime {
-  LocalLivePortfolioRiskRuntime({
-    required this._dailyRiskLimit,
+  factory LocalLivePortfolioRiskRuntime({
+    required double dailyRiskLimit,
     PortfolioRiskLedgerStore? store,
-    this._timezoneOffsetMinutes = 0,
-    this.maximumAssetGroupRiskFraction = 0.60,
-  }) : _store =
-           store ??
-           DatabasePortfolioRiskLedgerStore(
-             recordKey: 'local-live-portfolio-risk-ledger-v1',
-           );
+    int timezoneOffsetMinutes = 0,
+    double maximumAssetGroupRiskFraction = 0.60,
+  }) => LocalLivePortfolioRiskRuntime._(
+    store:
+        store ??
+        DatabasePortfolioRiskLedgerStore(
+          recordKey: 'local-live-portfolio-risk-ledger-v1',
+        ),
+    dailyRiskLimit: dailyRiskLimit,
+    timezoneOffsetMinutes: timezoneOffsetMinutes,
+    maximumAssetGroupRiskFraction: maximumAssetGroupRiskFraction,
+  );
+
+  const LocalLivePortfolioRiskRuntime._({
+    required PortfolioRiskLedgerStore store,
+    required double dailyRiskLimit,
+    required int timezoneOffsetMinutes,
+    required this.maximumAssetGroupRiskFraction,
+  }) : _store = store,
+       _dailyRiskLimit = dailyRiskLimit,
+       _timezoneOffsetMinutes = timezoneOffsetMinutes;
 
   final PortfolioRiskLedgerStore _store;
   final double _dailyRiskLimit;
