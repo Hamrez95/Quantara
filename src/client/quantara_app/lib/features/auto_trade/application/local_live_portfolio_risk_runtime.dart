@@ -2,12 +2,14 @@ import '../../portfolio_risk/application/portfolio_risk_coordinator.dart';
 import '../../portfolio_risk/data/portfolio_risk_ledger_store.dart';
 import '../../portfolio_risk/domain/portfolio_risk_models.dart';
 import '../../portfolio_risk/domain/portfolio_risk_transitions.dart';
+import '../domain/local_live_portfolio_admission.dart';
 
 final class LocalLivePortfolioRiskRuntime {
   LocalLivePortfolioRiskRuntime({
     required double dailyRiskLimit,
     PortfolioRiskLedgerStore? store,
     int timezoneOffsetMinutes = 0,
+    this.maximumAssetGroupRiskFraction = 0.60,
   }) : _store =
            store ??
            DatabasePortfolioRiskLedgerStore(
@@ -19,9 +21,14 @@ final class LocalLivePortfolioRiskRuntime {
   final PortfolioRiskLedgerStore _store;
   final double _dailyRiskLimit;
   final int _timezoneOffsetMinutes;
+  final double maximumAssetGroupRiskFraction;
 
   PortfolioRiskCoordinator get _coordinator => PortfolioRiskCoordinator(
     store: _store,
+    policy: const PortfolioRiskPolicy(
+      emergencyTechnicalCeiling:
+          LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
+    ),
     defaultDailyRiskLimit: _dailyRiskLimit,
     timezoneOffsetMinutes: _timezoneOffsetMinutes,
   );
@@ -30,7 +37,54 @@ final class LocalLivePortfolioRiskRuntime {
     required PortfolioEntryCandidate candidate,
     required PortfolioAccountTruth account,
     required DateTime now,
-  }) => _coordinator.reserve(candidate: candidate, account: account, now: now);
+  }) async {
+    final store = _atomicStore;
+    return store.mutate<PortfolioReservationOutcome>((current) async {
+      var ledger = _normalize(current, now.toUtc());
+      final accountWithReservations = _withLedgerReservations(account, ledger);
+      var decision = const PortfolioRiskPolicy(
+        emergencyTechnicalCeiling:
+            LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
+      ).evaluate(
+        ledger: ledger,
+        candidate: candidate,
+        account: accountWithReservations,
+      );
+      if (decision.allowed) {
+        final sameAssetGroupRisk = ledger.activeReservations
+            .where((item) => item.assetGroup == candidate.assetGroup)
+            .fold<double>(0, (sum, item) => sum + item.maximumLoss);
+        if (sameAssetGroupRisk + decision.maximumLoss >
+            ledger.dailyRisk.limit * maximumAssetGroupRiskFraction + 1e-9) {
+          decision = PortfolioEntryDecision(
+            allowed: false,
+            liveExecutionAllowed: false,
+            reason: PortfolioEntryBlockReason.directionConcentration,
+            maximumLoss: decision.maximumLoss,
+            requiredMargin: decision.requiredMargin,
+            availableRiskBefore: ledger.dailyRisk.available,
+            availableRiskAfter: ledger.dailyRisk.available,
+            availableMarginAfter: accountWithReservations.marginBudget.spendable,
+          );
+        }
+      }
+      if (decision.allowed) {
+        ledger = ledger.reserve(
+          candidate: candidate,
+          decision: decision,
+          createdAt: now.toUtc(),
+        );
+      }
+      return PortfolioRiskLedgerMutation(
+        value: PortfolioReservationOutcome(
+          decision: decision,
+          ledger: ledger,
+          snapshot: ledger.snapshot(account),
+        ),
+        nextLedger: ledger,
+      );
+    });
+  }
 
   Future<PortfolioRiskLedger> release({
     required String reservationId,
@@ -85,29 +139,16 @@ final class LocalLivePortfolioRiskRuntime {
     required String eventId,
     required double remainingQuantity,
     required DateTime now,
-  }) async {
-    final store = _store;
-    if (store is! AtomicPortfolioRiskLedgerStore) {
-      throw StateError('Local Live portfolio reductions require atomic storage.');
-    }
-    return store.mutate<PortfolioRiskLedger>((current) async {
-      final base = current ??
-          PortfolioRiskLedger.initial(
-            tradingDay: TradingDayId.start(
-              now: now,
-              timezoneOffsetMinutes: _timezoneOffsetMinutes,
-            ),
-            dailyRiskLimit: _dailyRiskLimit,
-          );
-      final next = PortfolioRiskTransitions.applyExchangeConfirmedReduction(
-        ledger: base,
-        positionId: positionId,
-        eventId: eventId,
-        remainingQuantity: remainingQuantity,
-      );
-      return PortfolioRiskLedgerMutation(value: next, nextLedger: next);
-    });
-  }
+  }) => _atomicStore.mutate<PortfolioRiskLedger>((current) async {
+    final base = _normalize(current, now.toUtc());
+    final next = PortfolioRiskTransitions.applyExchangeConfirmedReduction(
+      ledger: base,
+      positionId: positionId,
+      eventId: eventId,
+      remainingQuantity: remainingQuantity,
+    );
+    return PortfolioRiskLedgerMutation(value: next, nextLedger: next);
+  });
 
   Future<PortfolioRiskLedger> close({
     required String positionId,
@@ -125,4 +166,61 @@ final class LocalLivePortfolioRiskRuntime {
     required PortfolioAccountTruth account,
     required DateTime now,
   }) => _coordinator.snapshot(account: account, now: now);
+
+  AtomicPortfolioRiskLedgerStore get _atomicStore {
+    final store = _store;
+    if (store is! AtomicPortfolioRiskLedgerStore) {
+      throw StateError('Local Live portfolio risk requires atomic storage.');
+    }
+    return store;
+  }
+
+  PortfolioRiskLedger _normalize(PortfolioRiskLedger? current, DateTime now) {
+    if (current == null) {
+      return PortfolioRiskLedger.initial(
+        tradingDay: TradingDayId.start(
+          now: now,
+          timezoneOffsetMinutes: _timezoneOffsetMinutes,
+        ),
+        dailyRiskLimit: _dailyRiskLimit,
+      );
+    }
+    final rolled = current.rollTradingDay(
+      now: now,
+      nextDailyRiskLimit: _dailyRiskLimit,
+    );
+    if (rolled.activeReservations.isNotEmpty ||
+        rolled.realizedLoss > 0 ||
+        rolled.realizedProfit > 0 ||
+        (rolled.dailyRiskLimit - _dailyRiskLimit).abs() <= 1e-9) {
+      return rolled;
+    }
+    return PortfolioRiskLedger(
+      schemaVersion: rolled.schemaVersion,
+      revision: rolled.revision + 1,
+      tradingDay: rolled.tradingDay,
+      dailyRiskLimit: _dailyRiskLimit,
+      realizedLoss: rolled.realizedLoss,
+      realizedProfit: rolled.realizedProfit,
+      reservations: rolled.reservations,
+      processedEventIds: rolled.processedEventIds,
+    );
+  }
+
+  PortfolioAccountTruth _withLedgerReservations(
+    PortfolioAccountTruth account,
+    PortfolioRiskLedger ledger,
+  ) => PortfolioAccountTruth(
+    asOf: account.asOf,
+    fresh: account.fresh,
+    allOpenPositionsProtected: account.allOpenPositionsProtected,
+    marginMode: account.marginMode,
+    freeMargin: account.freeMargin,
+    usedMargin: account.usedMargin,
+    maintenanceMargin: account.maintenanceMargin,
+    pendingMarginReservations:
+        account.pendingMarginReservations + ledger.reservedMargin,
+    safetyBuffer: account.safetyBuffer,
+    feeReserve: account.feeReserve,
+  );
 }
