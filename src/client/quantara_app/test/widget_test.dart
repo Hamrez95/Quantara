@@ -221,10 +221,10 @@ Future<void> _tapHomeQuickAction(WidgetTester tester, String label) async {
   final target = find.text(label);
   expect(target, findsOneWidget);
   await tester.ensureVisible(target);
-  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 350));
   expect(target.hitTestable(), findsOneWidget);
   await tester.tap(target.hitTestable());
-  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 650));
 }
 
 Future<void> _tapNavigationIcon(WidgetTester tester, IconData icon) async {
