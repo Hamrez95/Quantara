@@ -10,6 +10,7 @@ import '../data/secure_auto_trade_credentials_store.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_entry_preflight.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/private_account_entry_block_policy.dart';
 import '../domain/private_account_reconciliation.dart';
 import 'auto_trade_controller.dart';
 import 'local_live_trade_service.dart';
@@ -455,12 +456,29 @@ final class LocalLiveTradeController extends ChangeNotifier {
 
   void _onAccountProjectionChanged() {
     if (_disposed || !_status.isRunning || !_status.entriesEnabled) return;
-    if (!_accountController.reconciliation.blocksNewEntries) return;
+    final reconciliation = _accountController.reconciliation;
+    final decision = PrivateAccountEntryBlockPolicy.evaluate(
+      explicitlyDisconnected:
+          _accountController.state == AutoTradeConnectionState.disconnected,
+      refreshing: reconciliation.refreshing,
+      health: reconciliation.health,
+    );
+    switch (decision) {
+      case PrivateAccountEntryBlockDecision.none:
+      case PrivateAccountEntryBlockDecision.transientProjectionWarning:
+        return;
+      case PrivateAccountEntryBlockDecision.hardBlockDisconnected:
+        _sendPrivateStateBlock('disconnected');
+        return;
+      case PrivateAccountEntryBlockDecision.hardBlockDivergent:
+        _sendPrivateStateBlock(reconciliation.health.name);
+        return;
+    }
+  }
+
+  void _sendPrivateStateBlock(String reason) {
     FlutterForegroundTask.sendDataToTask(
-      jsonEncode({
-        'type': 'block_entries_private_state',
-        'reason': _accountController.reconciliation.health.name,
-      }),
+      jsonEncode({'type': 'block_entries_private_state', 'reason': reason}),
     );
   }
 
