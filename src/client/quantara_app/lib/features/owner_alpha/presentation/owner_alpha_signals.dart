@@ -516,6 +516,15 @@ class _SignalJournalCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Text(
+            _t(
+              context,
+              'سرمایه مبنای محاسبه و بودجه ریسک با هر تغییر اهرم دوباره محاسبه می‌شوند.',
+              'Calculation capital and risk budget are recalculated after every leverage change.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 14),
           _LeverageControl(
             key: ValueKey('leverage-${entry.setupId}'),
