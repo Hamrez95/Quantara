@@ -46,14 +46,14 @@ final class LocalLivePortfolioExecutionGuard {
     return _runtime.reserve(candidate: candidate, account: truth, now: now);
   }
 
-  Future<void> releaseBeforeOrder({
+  Future<void> releaseNoExposure({
     required String reservationId,
-    required String setupId,
+    required String evidence,
     required DateTime now,
   }) async {
     await _runtime.release(
       reservationId: reservationId,
-      eventId: 'release-before-order:$setupId',
+      eventId: 'release:$reservationId:$evidence',
       now: now,
     );
   }
