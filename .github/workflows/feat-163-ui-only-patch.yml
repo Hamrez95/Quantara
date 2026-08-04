@@ -1,4 +1,4 @@
-name: Temporary feature 163 UI only patch
+name: Temporary feature 163 UI diagnostics
 
 on:
   push:
@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  patch:
-    if: ${{ !contains(github.event.head_commit.message, '[feat163-ui]') }}
+  diagnose:
+    if: ${{ !contains(github.event.head_commit.message, '[feat163-ui-diagnostic]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,105 +18,42 @@ jobs:
           ref: feat/163-portfolio-budgeted-local-live
           fetch-depth: 0
 
-      - name: Patch model and UI
+      - name: Inspect patch anchors
         run: |
-          python3 - <<'PY'
+          python3 - <<'PY' > .github/feat-163-ui-diagnostic.log
           from pathlib import Path
 
-          def one(text, old, new, label):
-              if text.count(old) != 1:
-                  raise SystemExit(f'{label}: {text.count(old)} anchors')
-              return text.replace(old, new)
-
-          model_path = Path('src/client/quantara_app/lib/features/auto_trade/domain/local_live_trade_models.dart')
-          model = model_path.read_text()
-          model = one(
-              model,
-              "import 'profit_lock_stop_policy.dart';\nimport 'trading_pnl_projection.dart';",
-              "import 'local_live_portfolio_admission.dart';\nimport 'profit_lock_stop_policy.dart';\nimport 'trading_pnl_projection.dart';",
-              'model import',
-          )
-          model = one(
-              model,
-              """    if (maximumConcurrentPositions != 1) {
+          model = Path('src/client/quantara_app/lib/features/auto_trade/domain/local_live_trade_models.dart').read_text()
+          ui = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart').read_text()
+          anchors = {
+              'model_import': (model, "import 'profit_lock_stop_policy.dart';\nimport 'trading_pnl_projection.dart';"),
+              'model_validation': (model, """    if (maximumConcurrentPositions != 1) {
               throw const FormatException(
                 'The first local live canary is limited to one concurrent position.',
               );
-            }""",
-              """    if (maximumConcurrentPositions < 1 ||
-                maximumConcurrentPositions >
-                    LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions) {
-              throw const FormatException(
-                'Local Live supports between one and three concurrent positions.',
-              );
-            }""",
-              'model validation',
-          )
-          model_path.write_text(model)
-
-          ui_path = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart')
-          ui = ui_path.read_text()
-          ui = one(ui, '  double _dailyLossLimit = 1;\n  int _tp1Percent = 65;', '  double _dailyLossLimit = 1;\n  int _maximumConcurrentPositions = 2;\n  int _tp1Percent = 65;', 'state')
-          ui = one(ui, '        _dailyLossLimit = value.dailyLossLimitPercent;\n        _tp1Percent', '        _dailyLossLimit = value.dailyLossLimitPercent;\n        _maximumConcurrentPositions = value.maximumConcurrentPositions;\n        _tp1Percent', 'restore')
-          ui = one(ui, '    dailyLossLimitPercent: _dailyLossLimit,\n    targetAllocation:', '    dailyLossLimitPercent: _dailyLossLimit,\n    maximumConcurrentPositions: _maximumConcurrentPositions,\n    targetAllocation:', 'current prefs')
-          control_anchor = """                  TpAllocationEditor(
-                    allocation: _targetAllocation,"""
-          control = """                  _numberRow(
-                    label: _t(
-                      'حداکثر پوزیشن هم‌زمان',
-                      'Maximum concurrent positions',
-                    ),
-                    value: _maximumConcurrentPositions.toString(),
-                    onMinus: () => _mutateAndSave(
-                      () => _maximumConcurrentPositions = math.max(
-                        1,
-                        _maximumConcurrentPositions - 1,
-                      ),
-                    ),
-                    onPlus: () => _mutateAndSave(
-                      () => _maximumConcurrentPositions = math.min(
-                        3,
-                        _maximumConcurrentPositions + 1,
-                      ),
-                    ),
-                  ),
-                  TpAllocationEditor(
-                    allocation: _targetAllocation,"""
-          ui = one(ui, control_anchor, control, 'control')
-          ui = one(ui, 'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. فقط یک پوزیشن هم‌زمان و Isolated مجاز است؛ ریسک قابل تنظیم تا ۲٪ و سقف ضرر روزانه تا ۱۰٪ باز شده، اما هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.', 'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. تا سه پوزیشن Isolated فقط در محدوده بودجه اتمیک ریسک و مارجین پرتفوی مجاز است؛ هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.', 'fa boundary')
-          ui = one(ui, 'This mode can submit real futures orders. It remains isolated and limited to one concurrent position; risk is adjustable up to 2% and the daily cap up to 10%, while every entry still requires a full exchange-confirmed stop and three targets.', 'This mode can submit real futures orders. Up to three isolated positions are allowed only inside the atomic portfolio risk and margin budget; every entry still requires a full exchange-confirmed stop and three targets.', 'en boundary')
-          ui = one(ui, 'Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و همچنان فقط یک پوزیشن Isolated باز می‌کند. ادامه می‌دهی؟', 'Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و فقط در سقف پوزیشن و بودجه اتمیک پرتفوی ورود می‌کند. ادامه می‌دهی؟', 'fa dialog')
-          ui = one(ui, 'Quantara will not widen stops, increase risk after losses, or open more than one isolated position. Continue?', 'Quantara will not widen stops or increase risk after losses, and every concurrent entry remains constrained by the atomic portfolio budget. Continue?', 'en dialog')
-          ui = one(ui, """              Text(
-                '${_t('تقسیم اهداف', 'Target allocation')}: TP1 $_tp1Percent% · TP2 $_tp2Percent% · TP3 $_tp3Percent%',""", """              Text(
-                '${_t('حداکثر پوزیشن هم‌زمان', 'Maximum concurrent positions')}: $_maximumConcurrentPositions',
-              ),
-              Text(
-                '${_t('تقسیم اهداف', 'Target allocation')}: TP1 $_tp1Percent% · TP2 $_tp2Percent% · TP3 $_tp3Percent%',""", 'confirmation')
-          ui = one(ui, '        maximumConcurrentPositions: 1,', '        maximumConcurrentPositions: _maximumConcurrentPositions,', 'config')
-          ui = one(ui, "'${status.openPositionCount} پوزیشن باز',\n                  '${status.openPositionCount} open',", "'${status.openPositionCount}/$_maximumConcurrentPositions پوزیشن باز',\n                  '${status.openPositionCount}/$_maximumConcurrentPositions open',", 'status pill')
-          ui_path.write_text(ui)
+            }"""),
+              'state': (ui, '  double _dailyLossLimit = 1;\n  int _tp1Percent = 65;'),
+              'restore': (ui, '        _dailyLossLimit = value.dailyLossLimitPercent;\n        _tp1Percent'),
+              'current_prefs': (ui, '    dailyLossLimitPercent: _dailyLossLimit,\n    targetAllocation:'),
+              'control': (ui, """                  TpAllocationEditor(
+                    allocation: _targetAllocation,"""),
+              'fa_boundary': (ui, 'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. فقط یک پوزیشن هم‌زمان و Isolated مجاز است؛ ریسک قابل تنظیم تا ۲٪ و سقف ضرر روزانه تا ۱۰٪ باز شده، اما هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.'),
+              'en_boundary': (ui, 'This mode can submit real futures orders. It remains isolated and limited to one concurrent position; risk is adjustable up to 2% and the daily cap up to 10%, while every entry still requires a full exchange-confirmed stop and three targets.'),
+              'fa_dialog': (ui, 'Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و همچنان فقط یک پوزیشن Isolated باز می‌کند. ادامه می‌دهی؟'),
+              'en_dialog': (ui, 'Quantara will not widen stops, increase risk after losses, or open more than one isolated position. Continue?'),
+              'confirmation': (ui, """              Text(
+                '${_t('تقسیم اهداف', 'Target allocation')}: TP1 $_tp1Percent% · TP2 $_tp2Percent% · TP3 $_tp3Percent%',"""),
+              'config': (ui, '        maximumConcurrentPositions: 1,'),
+              'status': (ui, "'${status.openPositionCount} پوزیشن باز',\n                  '${status.openPositionCount} open',"),
+          }
+          for name, (text, anchor) in anchors.items():
+              print(f'{name}={text.count(anchor)}')
           PY
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.44.8'
-          channel: stable
-          cache: true
-
-      - name: Format files
-        working-directory: src/client/quantara_app
-        run: >-
-          dart format
-          lib/features/auto_trade/domain/local_live_trade_models.dart
-          lib/features/auto_trade/data/local_live_preferences_store.dart
-          lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart
-          lib/features/auto_trade/application/local_live_portfolio_risk_runtime.dart
-
-      - name: Commit patch
+      - name: Commit diagnostics
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/client/quantara_app
-          git commit -m "feat(local-live): configure concurrent position slots [feat163-ui]"
+          git add .github/feat-163-ui-diagnostic.log
+          git commit -m "chore: record feature 163 UI patch diagnostics [feat163-ui-diagnostic]"
           git push origin HEAD:feat/163-portfolio-budgeted-local-live
