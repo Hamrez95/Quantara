@@ -63,7 +63,7 @@ void main() {
     await _openDestination(tester, Icons.inbox_outlined);
 
     expect(find.text('آزمایشگاه'), findsNothing);
-    expect(find.text('پیشنهادها'), findsWidgets);
+    expect(find.text('صندوق پیشنهادها'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -211,14 +211,32 @@ Future<void> _openDestination(WidgetTester tester, IconData icon) async {
   };
   if (secondaryLabel != null) {
     await _tapNavigationIcon(tester, Icons.home_outlined);
-    final target = find.text(secondaryLabel);
-    expect(target, findsOneWidget);
-    await tester.ensureVisible(target);
-    await tester.tap(target);
-    await tester.pumpAndSettle();
+    await _tapHomeQuickAction(tester, secondaryLabel);
     return;
   }
   await _tapNavigationIcon(tester, icon);
+}
+
+Future<void> _tapHomeQuickAction(
+  WidgetTester tester,
+  String label,
+) async {
+  final target = find.text(label);
+  expect(target, findsOneWidget);
+  final page = find.byType(ListView).first;
+  await tester.fling(page, const Offset(0, 1200), 2400);
+  await tester.pumpAndSettle();
+  for (
+    var attempt = 0;
+    attempt < 8 && target.hitTestable().evaluate().isEmpty;
+    attempt++
+  ) {
+    await tester.drag(page, const Offset(0, -260));
+    await tester.pump();
+  }
+  expect(target.hitTestable(), findsOneWidget);
+  await tester.tap(target.hitTestable());
+  await tester.pumpAndSettle();
 }
 
 Future<void> _tapNavigationIcon(WidgetTester tester, IconData icon) async {
