@@ -168,7 +168,7 @@ class _HomeActionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        child: Ink(
+        child: Container(
           constraints: const BoxConstraints(minHeight: 118),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
