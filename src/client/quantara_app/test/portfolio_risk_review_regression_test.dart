@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/core/persistence/quantara_durable_database.dart';
 import 'package:quantara_app/features/portfolio_risk/application/portfolio_risk_coordinator.dart';
@@ -96,6 +98,30 @@ void main() {
       await database.close();
     },
   );
+
+  test('fallback queues are isolated between coordinator instances', () async {
+    final blockedStore = _BlockingPortfolioRiskStore();
+    final blockedCoordinator = PortfolioRiskCoordinator(
+      store: blockedStore,
+      defaultDailyRiskLimit: 10,
+    );
+    final independentCoordinator = PortfolioRiskCoordinator(
+      store: _MemoryPortfolioRiskStore(),
+      defaultDailyRiskLimit: 10,
+    );
+
+    final blockedLoad = blockedCoordinator.load(now: now);
+    await blockedStore.started.future;
+
+    final independent = await independentCoordinator
+        .load(now: now)
+        .timeout(const Duration(seconds: 1));
+    expect(independent.dailyRisk.limit, 10);
+
+    blockedStore.release.complete();
+    final released = await blockedLoad.timeout(const Duration(seconds: 1));
+    expect(released.dailyRisk.limit, 10);
+  });
 }
 
 PortfolioAccountTruth _account(
@@ -113,3 +139,33 @@ PortfolioAccountTruth _account(
   safetyBuffer: 0,
   feeReserve: 0,
 );
+
+final class _BlockingPortfolioRiskStore implements PortfolioRiskLedgerStore {
+  final Completer<void> started = Completer<void>();
+  final Completer<void> release = Completer<void>();
+  PortfolioRiskLedger? _ledger;
+
+  @override
+  Future<PortfolioRiskLedger?> load() async {
+    if (!started.isCompleted) started.complete();
+    await release.future;
+    return _ledger;
+  }
+
+  @override
+  Future<void> save(PortfolioRiskLedger ledger) async {
+    _ledger = PortfolioRiskLedger.fromJson(ledger.toJson());
+  }
+}
+
+final class _MemoryPortfolioRiskStore implements PortfolioRiskLedgerStore {
+  PortfolioRiskLedger? _ledger;
+
+  @override
+  Future<PortfolioRiskLedger?> load() async => _ledger;
+
+  @override
+  Future<void> save(PortfolioRiskLedger ledger) async {
+    _ledger = PortfolioRiskLedger.fromJson(ledger.toJson());
+  }
+}
