@@ -6,7 +6,8 @@ enum LocalLiveCycleReadiness {
 }
 
 /// Separates entry readiness from historical PnL availability. Missing history
-/// is informational only when both the exchange and Local Live are flat.
+/// is informational only when both the exchange and Local Live are flat, while
+/// any known exchange exposure keeps the guarded entry path fail-closed.
 abstract final class LocalLiveCycleReadinessPolicy {
   static LocalLiveCycleReadiness evaluate({
     required bool hasManagedExposure,
