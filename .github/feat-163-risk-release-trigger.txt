@@ -1,1 +1,1 @@
-Trigger confirmed TP and stop risk release integration; remove before merge.
+Trigger confirmed TP and stop risk release integration now; remove before merge.
