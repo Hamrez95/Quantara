@@ -28,6 +28,13 @@ void main() {
         ),
       );
 
+  void configureView(WidgetTester tester, Size size) {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  }
+
   Widget harness({
     required TextDirection direction,
     required PortfolioRiskSimulationController controller,
@@ -68,6 +75,7 @@ void main() {
   testWidgets('Persian RTL panel demonstrates 10, 3, 7 budgeting', (
     tester,
   ) async {
+    configureView(tester, const Size(430, 900));
     final simulation = controller();
     addTearDown(simulation.dispose);
     await tester.pumpWidget(
@@ -92,6 +100,7 @@ void main() {
   testWidgets('English LTR panel shows stale and blocked states', (
     tester,
   ) async {
+    configureView(tester, const Size(430, 900));
     final simulation = controller();
     addTearDown(simulation.dispose);
     await tester.pumpWidget(
@@ -118,6 +127,7 @@ void main() {
   testWidgets('large text mobile and wide desktop layouts do not overflow', (
     tester,
   ) async {
+    configureView(tester, const Size(360, 1000));
     final mobile = controller();
     addTearDown(mobile.dispose);
     await tester.pumpWidget(
@@ -132,6 +142,7 @@ void main() {
     expect(find.byType(PortfolioRiskPanel), findsOneWidget);
     expect(tester.takeException(), isNull);
 
+    tester.view.physicalSize = const Size(1200, 900);
     final desktop = controller();
     addTearDown(desktop.dispose);
     await tester.pumpWidget(
@@ -150,6 +161,7 @@ void main() {
   testWidgets('risk rejection and reset remain visible and deterministic', (
     tester,
   ) async {
+    configureView(tester, const Size(430, 900));
     final simulation = controller();
     addTearDown(simulation.dispose);
     await tester.pumpWidget(
