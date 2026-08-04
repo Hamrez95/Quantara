@@ -178,10 +178,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
     final result = base.radar.first;
     final signalTime = DateTime.now().toUtc();
     final analysis = _actionableAnalysis(signalTime);
-    final parentAnalysis = _actionableAnalysis(
-      signalTime,
-      timeframe: '4h',
-    );
+    final parentAnalysis = _actionableAnalysis(signalTime, timeframe: '4h');
     final idea = TradeIdea(
       symbol: result.quote.symbol,
       timeframe: '1h',
