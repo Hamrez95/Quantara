@@ -17,86 +17,14 @@ jobs:
         with:
           ref: feat/163-portfolio-budgeted-local-live
           fetch-depth: 0
-      - name: Patch scan and slot lifecycle
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
-          text = path.read_text()
-          def one(old, new, label):
-              global text
-              if text.count(old) != 1:
-                  raise SystemExit(f'{label}={text.count(old)}')
-              text = text.replace(old, new)
-          one("import '../domain/local_live_cycle_readiness.dart';\nimport '../domain/local_live_trade_models.dart';", "import '../domain/local_live_cycle_readiness.dart';\nimport '../domain/local_live_portfolio_admission.dart';\nimport '../domain/local_live_trade_models.dart';", 'admission import')
-          one("import 'profit_lock_promotion_executor.dart';", "import 'local_live_portfolio_execution_guard.dart';\nimport 'profit_lock_promotion_executor.dart';", 'guard import')
-          one('  final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();', '  final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();\n  LocalLivePortfolioExecutionGuard? _portfolioGuard;', 'guard field')
-          one('          _sessionStartEquity = null;\n          _sessionPnlProjection = null;', '          _sessionStartEquity = null;\n          _sessionPnlProjection = null;\n          _portfolioGuard = null;', 'session reset')
-          one('''      await _reconcileManagedPositions(positions, account.authoritativePnl);
-      final lossPercent =''', '''      await _reconcileManagedPositions(positions, account.authoritativePnl);
-      if (_sessionStartEquity != null && _sessionStartEquity! > 0) {
-        _portfolioGuard ??= LocalLivePortfolioExecutionGuard(
-          dailyRiskLimit:
-              _sessionStartEquity! * configuration.dailyLossLimitPercent / 100,
-        );
-        try {
-          await _portfolioGuard!.reconcileRestartAndClosedPositions(
-            managed: _managed,
-            exchangePositions: positions,
-            pnlProjection: account.authoritativePnl,
-            now: DateTime.now().toUtc(),
-          );
-        } on LocalLiveTradeSafeException catch (error) {
-          _entriesEnabled = false;
-          cycleWarning = error.message;
-          _auditEvent('portfolio_ledger_block', error.message);
-        }
-      }
-      final lossPercent =''', 'ledger reconcile')
-          one('''      if (_entriesEnabled &&
-          _managed.isEmpty &&
-          positions.isEmpty &&
-          account.estimatedEquity > 0) {
-        await _scanAndMaybeEnter(account);
-      }''', '''      final exchangePositionCount = positions
-          .where((item) => item.quantity > 0)
-          .length;
-      final hasExecutionSlot = LocalLivePortfolioAdmission.hasExecutionSlot(
-        configuredMaximum: configuration.maximumConcurrentPositions,
-        managedPositionCount: _managed.length,
-        exchangePositionCount: exchangePositionCount,
-      );
-      if (_entriesEnabled && hasExecutionSlot && account.estimatedEquity > 0) {
-        await _scanAndMaybeEnter(account, positions);
-      } else if (_entriesEnabled && _managed.length != exchangePositionCount) {
-        _auditEvent(
-          'portfolio_position_count_block',
-          'Managed and exchange position counts differ; no new entry was evaluated.',
-        );
-      }''', 'scan condition')
-          one('  Future<void> _scanAndMaybeEnter(AutoTradeAccountSnapshot account) async {', '''  Future<void> _scanAndMaybeEnter(
-    AutoTradeAccountSnapshot account,
-    List<BitunixLivePosition> exchangePositions,
-  ) async {''', 'signature')
-          one('      _lastScanAt = DateTime.now().toUtc();\n      final ideas = <TradeIdea>[', '''      _lastScanAt = DateTime.now().toUtc();
-      final occupiedSymbols = exchangePositions
-          .where((item) => item.quantity > 0)
-          .map((item) => item.symbol.trim().toUpperCase())
-          .toSet();
-      final ideas = <TradeIdea>[''', 'occupied symbols')
-          one('].where((idea) => idea.isActionable).toList(growable: false);', '''].where(
-        (idea) =>
-            idea.isActionable &&
-            !occupiedSymbols.contains(idea.symbol.trim().toUpperCase()),
-      ).toList(growable: false);''', 'filter')
-          path.write_text(text)
-          PY
+      - name: Apply deterministic service slot patch
+        run: python3 .github/scripts/feat163_service_phase1.py
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Format phase one
+      - name: Format service
         working-directory: src/client/quantara_app
         run: dart format lib/features/auto_trade/application/local_live_trade_service.dart
       - name: Commit phase one
