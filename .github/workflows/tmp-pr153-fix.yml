@@ -1,4 +1,4 @@
-name: Temporary PR153 analyzed fixes
+name: Temporary PR153 analyzed fix
 
 on:
   push:
@@ -21,37 +21,12 @@ jobs:
           flutter-version: 3.44.8
           channel: stable
           cache: true
-      - name: Apply narrow analyzed fixes
+      - name: Fix analyzed call sites
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          runner = Path('src/client/quantara_app/lib/features/strategy_lab/data/strategy_lab_runner.dart')
-          text = runner.read_text()
-          text = text.replace('_totalCostRate(config)', 'StrategyLabRunner._totalCostRate(config)')
-          runner.write_text(text)
-
-          strings = Path('src/client/quantara_app/lib/core/localization/app_strings.dart')
-          text = strings.read_text()
-          old = """  String strategyName(String name) => switch (name) {
-    'trendCandle' => t('کندل‌ستاپ ادامه‌روند', 'Trend candle continuation'),
-    'dowContinuation' => t('ادامه سوئینگ داو', 'Dow swing continuation'),
-    'kbsmResearch' => t('KBSM شدو هفتگی', 'KBSM weekly shadow'),
-    _ => t('زون ساختاری', 'Structure zones'),
-  };"""
-          new = """  String strategyName(String name) => switch (name) {
-    'trendCandle' => t('ستاپ کندلی ارشیا', 'Arshia Candle Setup'),
-    'dowContinuation' => t('پولبک روند', 'Trend Pullback'),
-    'kbsmResearch' => t('شکست و Retest', 'Breakout + Retest'),
-    _ => t('برگشت از رنج', 'Range Reversal'),
-  };"""
-          if old not in text:
-              raise SystemExit('strategy label block not found')
-          strings.write_text(text.replace(old, new))
-          PY
+          sed -i 's/_totalCostRate(config)/StrategyLabRunner._totalCostRate(config)/g' src/client/quantara_app/lib/features/strategy_lab/data/strategy_lab_runner.dart
           cd src/client/quantara_app
           dart format lib test
-      - name: Commit fixes
+      - name: Commit fix
         run: |
           if git diff --quiet; then
             exit 0
