@@ -92,56 +92,59 @@ void main() {
     await database.close();
   });
 
-  test('correlated asset group is capped even when total risk remains', () async {
-    final database = SembastQuantaraDurableDatabase(
-      factory: databaseFactoryMemory,
-      path: 'local-live-correlation-runtime.db',
-    );
-    await database.initialize();
-    final runtime = LocalLivePortfolioRiskRuntime(
-      dailyRiskLimit: 10,
-      store: DatabasePortfolioRiskLedgerStore(
-        databaseFactory: () async => database,
-        recordKey: 'local-live-correlation-ledger',
-      ),
-    );
-    final now = DateTime.utc(2026, 8, 5);
-    final account = _account(now);
+  test(
+    'correlated asset group is capped even when total risk remains',
+    () async {
+      final database = SembastQuantaraDurableDatabase(
+        factory: databaseFactoryMemory,
+        path: 'local-live-correlation-runtime.db',
+      );
+      await database.initialize();
+      final runtime = LocalLivePortfolioRiskRuntime(
+        dailyRiskLimit: 10,
+        store: DatabasePortfolioRiskLedgerStore(
+          databaseFactory: () async => database,
+          recordKey: 'local-live-correlation-ledger',
+        ),
+      );
+      final now = DateTime.utc(2026, 8, 5);
+      final account = _account(now);
 
-    expect(
-      (await runtime.reserve(
+      expect(
+        (await runtime.reserve(
+          candidate: _candidate(
+            id: 'btc',
+            symbol: 'BTCUSDT',
+            side: PortfolioSide.long,
+            riskDistance: 4,
+            requiredMargin: 20,
+          ),
+          account: account,
+          now: now,
+        )).decision.allowed,
+        isTrue,
+      );
+
+      final correlated = await runtime.reserve(
         candidate: _candidate(
-          id: 'btc',
-          symbol: 'BTCUSDT',
-          side: PortfolioSide.long,
-          riskDistance: 4,
-          requiredMargin: 20,
+          id: 'eth',
+          symbol: 'ETHUSDT',
+          side: PortfolioSide.short,
+          riskDistance: 3,
+          requiredMargin: 15,
         ),
         account: account,
         now: now,
-      )).decision.allowed,
-      isTrue,
-    );
+      );
+      expect(correlated.decision.allowed, isFalse);
+      expect(
+        correlated.decision.reason,
+        PortfolioEntryBlockReason.directionConcentration,
+      );
 
-    final correlated = await runtime.reserve(
-      candidate: _candidate(
-        id: 'eth',
-        symbol: 'ETHUSDT',
-        side: PortfolioSide.short,
-        riskDistance: 3,
-        requiredMargin: 15,
-      ),
-      account: account,
-      now: now,
-    );
-    expect(correlated.decision.allowed, isFalse);
-    expect(
-      correlated.decision.reason,
-      PortfolioEntryBlockReason.directionConcentration,
-    );
-
-    await database.close();
-  });
+      await database.close();
+    },
+  );
 
   test('runtime ledger is isolated from the simulation ledger', () async {
     final database = SembastQuantaraDurableDatabase(

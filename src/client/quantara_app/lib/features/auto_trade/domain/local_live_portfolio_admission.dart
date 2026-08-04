@@ -30,7 +30,8 @@ abstract final class LocalLivePortfolioAdmission {
     double pendingMarginReservations = 0,
   }) {
     final now = observedAt.toUtc();
-    final fresh = !account.syncedAt.toUtc().isAfter(now) &&
+    final fresh =
+        !account.syncedAt.toUtc().isAfter(now) &&
         now.difference(account.syncedAt.toUtc()) <= accountFreshnessWindow;
     final isolated = account.positions.every(
       (position) => position.marginMode.toLowerCase() == 'isolated',

@@ -76,45 +76,48 @@ void main() {
     expect(truth.feeReserve, closeTo(0.102, 1e-9));
   });
 
-  test('candidate maps setup identity, direction and asset group deterministically', () {
-    final idea = TradeIdea(
-      symbol: 'ETHUSDT',
-      timeframe: '1h',
-      direction: TradeDirection.short,
-      confidencePercent: 72,
-      entryLower: 3000,
-      entryUpper: 3010,
-      stopLoss: 3050,
-      targets: const [2900, 2850, 2800],
-      riskReward: 1.8,
-      maximumLoss: 2,
-      positionSize: 0.02,
-      notionalValue: 60,
-      recommendedLeverage: 3,
-      maximumSafeLeverage: 5,
-      requiredMargin: 20,
-      estimatedRoundTripCosts: 0.1,
-      setupId: 'eth-1h-short-1',
-      candleClosedAt: DateTime.utc(2026, 8, 5),
-      summary: 'test',
-      invalidation: 'test',
-      reasons: const ['test'],
-    );
+  test(
+    'candidate maps setup identity, direction and asset group deterministically',
+    () {
+      final idea = TradeIdea(
+        symbol: 'ETHUSDT',
+        timeframe: '1h',
+        direction: TradeDirection.short,
+        confidencePercent: 72,
+        entryLower: 3000,
+        entryUpper: 3010,
+        stopLoss: 3050,
+        targets: const [2900, 2850, 2800],
+        riskReward: 1.8,
+        maximumLoss: 2,
+        positionSize: 0.02,
+        notionalValue: 60,
+        recommendedLeverage: 3,
+        maximumSafeLeverage: 5,
+        requiredMargin: 20,
+        estimatedRoundTripCosts: 0.1,
+        setupId: 'eth-1h-short-1',
+        candleClosedAt: DateTime.utc(2026, 8, 5),
+        summary: 'test',
+        invalidation: 'test',
+        reasons: const ['test'],
+      );
 
-    final candidate = LocalLivePortfolioAdmission.candidate(
-      idea: idea,
-      plannedQuantity: 0.02,
-      entryPrice: 3000,
-      stopPrice: 3050,
-      requiredMargin: 20,
-      leverage: 3,
-      minimumQuantity: 0.001,
-      minimumNotional: 5,
-    );
+      final candidate = LocalLivePortfolioAdmission.candidate(
+        idea: idea,
+        plannedQuantity: 0.02,
+        entryPrice: 3000,
+        stopPrice: 3050,
+        requiredMargin: 20,
+        leverage: 3,
+        minimumQuantity: 0.001,
+        minimumNotional: 5,
+      );
 
-    expect(candidate.reservationId, 'local-live:eth-1h-short-1');
-    expect(candidate.candidateId, 'eth-1h-short-1');
-    expect(candidate.side.name, 'short');
-    expect(candidate.assetGroup, 'crypto-major');
-  });
+      expect(candidate.reservationId, 'local-live:eth-1h-short-1');
+      expect(candidate.candidateId, 'eth-1h-short-1');
+      expect(candidate.side.name, 'short');
+      expect(candidate.assetGroup, 'crypto-major');
+    },
+  );
 }

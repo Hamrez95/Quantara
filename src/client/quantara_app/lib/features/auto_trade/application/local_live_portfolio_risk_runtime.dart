@@ -42,14 +42,15 @@ final class LocalLivePortfolioRiskRuntime {
     return store.mutate<PortfolioReservationOutcome>((current) async {
       var ledger = _normalize(current, now.toUtc());
       final accountWithReservations = _withLedgerReservations(account, ledger);
-      var decision = const PortfolioRiskPolicy(
-        emergencyTechnicalCeiling:
-            LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
-      ).evaluate(
-        ledger: ledger,
-        candidate: candidate,
-        account: accountWithReservations,
-      );
+      var decision =
+          const PortfolioRiskPolicy(
+            emergencyTechnicalCeiling:
+                LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
+          ).evaluate(
+            ledger: ledger,
+            candidate: candidate,
+            account: accountWithReservations,
+          );
       if (decision.allowed) {
         final sameAssetGroupRisk = ledger.activeReservations
             .where((item) => item.assetGroup == candidate.assetGroup)
@@ -64,7 +65,8 @@ final class LocalLivePortfolioRiskRuntime {
             requiredMargin: decision.requiredMargin,
             availableRiskBefore: ledger.dailyRisk.available,
             availableRiskAfter: ledger.dailyRisk.available,
-            availableMarginAfter: accountWithReservations.marginBudget.spendable,
+            availableMarginAfter:
+                accountWithReservations.marginBudget.spendable,
           );
         }
       }
