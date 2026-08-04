@@ -44,9 +44,9 @@ jobs:
           )
           page = replace_exact(
               page,
-              "    required this.onOpenPortfolioRisk,\n",
-              "    this.onOpenPortfolioRisk = _noopOpenPortfolioRisk,\n",
-              'optional portfolio callback',
+              "    required this.onLocaleChanged,\n    required this.onOpenPortfolioRisk,\n    this.realtimeMonitor,\n",
+              "    required this.onLocaleChanged,\n    this.onOpenPortfolioRisk = _noopOpenPortfolioRisk,\n    this.realtimeMonitor,\n",
+              'optional public portfolio callback',
           )
           page = replace_exact(
               page,
