@@ -43,6 +43,9 @@ final class LocalLivePortfolioRiskRuntime {
     timezoneOffsetMinutes: _timezoneOffsetMinutes,
   );
 
+  Future<PortfolioRiskLedger> load({required DateTime now}) =>
+      _coordinator.load(now: now);
+
   Future<PortfolioReservationOutcome> reserve({
     required PortfolioEntryCandidate candidate,
     required PortfolioAccountTruth account,
@@ -51,10 +54,15 @@ final class LocalLivePortfolioRiskRuntime {
     final store = _atomicStore;
     return store.mutate<PortfolioReservationOutcome>((current) async {
       var ledger = _normalize(current, now.toUtc());
+      final accountWithReservations = _withLedgerReservations(account, ledger);
       var decision = const PortfolioRiskPolicy(
         emergencyTechnicalCeiling:
             LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
-      ).evaluate(ledger: ledger, candidate: candidate, account: account);
+      ).evaluate(
+        ledger: ledger,
+        candidate: candidate,
+        account: accountWithReservations,
+      );
       if (decision.allowed) {
         final sameAssetGroupRisk = ledger.activeReservations
             .where((item) => item.assetGroup == candidate.assetGroup)
@@ -69,7 +77,8 @@ final class LocalLivePortfolioRiskRuntime {
             requiredMargin: decision.requiredMargin,
             availableRiskBefore: ledger.dailyRisk.available,
             availableRiskAfter: ledger.dailyRisk.available,
-            availableMarginAfter: account.marginBudget.spendable,
+            availableMarginAfter:
+                accountWithReservations.marginBudget.spendable,
           );
         }
       }
@@ -211,4 +220,21 @@ final class LocalLivePortfolioRiskRuntime {
       processedEventIds: rolled.processedEventIds,
     );
   }
+
+  PortfolioAccountTruth _withLedgerReservations(
+    PortfolioAccountTruth account,
+    PortfolioRiskLedger ledger,
+  ) => PortfolioAccountTruth(
+    asOf: account.asOf,
+    fresh: account.fresh,
+    allOpenPositionsProtected: account.allOpenPositionsProtected,
+    marginMode: account.marginMode,
+    freeMargin: account.freeMargin,
+    usedMargin: account.usedMargin,
+    maintenanceMargin: account.maintenanceMargin,
+    pendingMarginReservations:
+        account.pendingMarginReservations + ledger.reservedMargin,
+    safetyBuffer: account.safetyBuffer,
+    feeReserve: account.feeReserve,
+  );
 }
