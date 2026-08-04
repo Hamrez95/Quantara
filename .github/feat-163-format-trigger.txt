@@ -1,1 +1,0 @@
-Trigger feature formatter. Remove after the formatter commit lands.
