@@ -15,9 +15,8 @@ final class PortfolioRiskPanel extends StatefulWidget {
 }
 
 final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
-  late final PortfolioRiskSimulationController _controller =
-      widget.controller ?? PortfolioRiskSimulationController();
-  late final bool _ownsController = widget.controller == null;
+  late final PortfolioRiskSimulationController _controller;
+  late final bool _ownsController;
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
   String _t(String fa, String en) => _fa ? fa : en;
@@ -25,6 +24,8 @@ final class _PortfolioRiskPanelState extends State<PortfolioRiskPanel> {
   @override
   void initState() {
     super.initState();
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ?? PortfolioRiskSimulationController();
     unawaited(_controller.initialize());
   }
 
