@@ -58,7 +58,10 @@ class _HomeHero extends StatelessWidget {
         ? QuantaraColors.success
         : QuantaraColors.warning;
     final statusLabel = healthy
-        ? strings.t('بازار متصل و آماده پایش', 'Market connected and monitoring')
+        ? strings.t(
+            'بازار متصل و آماده پایش',
+            'Market connected and monitoring',
+          )
         : strings.t('داده بازار نیازمند بررسی', 'Market data needs attention');
 
     return Semantics(
@@ -132,9 +135,7 @@ class _HomeHero extends StatelessWidget {
                           children: [
                             Text(
                               strings.t('خانه Quantara', 'Quantara Home'),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
+                              style: Theme.of(context).textTheme.headlineSmall
                                   ?.copyWith(fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 4),
@@ -143,9 +144,7 @@ class _HomeHero extends StatelessWidget {
                                 'رادار فرصت‌ها، کنترل ریسک و ابزارهای معامله در یک نمای شفاف و حرفه‌ای.',
                                 'Opportunity radar, risk control and trading tools in one clear professional view.',
                               ),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
+                              style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(color: scheme.onSurfaceVariant),
                             ),
                           ],
@@ -240,14 +239,16 @@ class _HomeHeroMetrics extends StatelessWidget {
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 720 ? 3 : 1;
         const gap = 10.0;
-        final width =
-            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
         return Wrap(
           spacing: gap,
           runSpacing: gap,
           children: [
             for (final item in items)
-              SizedBox(width: width, child: _HomeMetric(data: item)),
+              SizedBox(
+                width: width,
+                child: _HomeMetric(data: item),
+              ),
           ],
         );
       },
@@ -439,18 +440,18 @@ class _HomeActionCard extends StatelessWidget {
                 action.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 2),
               Text(
                 action.caption,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -487,9 +488,7 @@ class _HomeOverviewGrid extends StatelessWidget {
           onOpen: () => onNavigate(1),
         );
         if (!twoColumns) {
-          return Column(
-            children: [risk, const SizedBox(height: 16), radar],
-          );
+          return Column(children: [risk, const SizedBox(height: 16), radar]);
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,10 +584,7 @@ class _PortfolioRiskExplainerCard extends StatelessWidget {
               ),
               FinanceMetricPanel(
                 label: strings.t('حد زیان هر پیشنهاد', 'Loss cap per setup'),
-                value: QuantaraNumberFormat.marketValue(
-                  maxLoss,
-                  unit: 'USDT',
-                ),
+                value: QuantaraNumberFormat.marketValue(maxLoss, unit: 'USDT'),
                 icon: Icons.health_and_safety_outlined,
                 color: QuantaraColors.success,
               ),
@@ -600,9 +596,7 @@ class _PortfolioRiskExplainerCard extends StatelessWidget {
             child: FilledButton.tonalIcon(
               onPressed: onOpen,
               icon: const Icon(Icons.account_balance_wallet_outlined),
-              label: Text(
-                strings.t('مشاهده بودجه ریسک', 'View risk budget'),
-              ),
+              label: Text(strings.t('مشاهده بودجه ریسک', 'View risk budget')),
             ),
           ),
         ],

@@ -177,8 +177,7 @@ class _ProfileViewState extends State<_ProfileView> {
         _ProfileConnectionsCard(
           controller: controller,
           locale: widget.locale,
-          onNotificationsChanged: (value) =>
-              _setNotifications(context, value),
+          onNotificationsChanged: (value) => _setNotifications(context, value),
         ),
         const SizedBox(height: 16),
         const _StrategyCard(),
@@ -348,25 +347,19 @@ class _ProfileHero extends StatelessWidget {
                           children: [
                             Text(
                               title,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
+                              style: Theme.of(context).textTheme.headlineSmall
                                   ?.copyWith(fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 3),
                             Text(
                               subtitle,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
+                              style: Theme.of(context).textTheme.titleSmall
                                   ?.copyWith(color: QuantaraColors.cyan),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               caption,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: scheme.onSurfaceVariant),
                             ),
                           ],
@@ -574,10 +567,9 @@ class _ProfilePreferencesCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             strings.language,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 4),
           Text(
@@ -843,9 +835,9 @@ class _ProfileConnectionCard extends StatelessWidget {
               const SizedBox(height: 5),
               Text(
                 detail!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ],
@@ -958,9 +950,7 @@ class _ProfileRiskCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  strings.riskPerSetup(
-                    strings.decimal(risk, decimals: 1),
-                  ),
+                  strings.riskPerSetup(strings.decimal(risk, decimals: 1)),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
                   ),
@@ -987,10 +977,7 @@ class _ProfileRiskCard extends StatelessWidget {
           ),
           Text(
             strings.maximumCalculatedLoss(
-              QuantaraNumberFormat.marketValue(
-                maximumLoss,
-                unit: 'USDT',
-              ),
+              QuantaraNumberFormat.marketValue(maximumLoss, unit: 'USDT'),
             ),
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -1088,10 +1075,9 @@ class _ProfileAboutCard extends StatelessWidget {
           const Divider(height: 28),
           Text(
             strings.about,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
           Text(strings.version, textDirection: TextDirection.ltr),
@@ -1141,16 +1127,16 @@ class _ProfileSectionHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),

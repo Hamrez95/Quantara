@@ -57,9 +57,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer,
+                      color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Icon(Icons.inbox_rounded),
@@ -295,11 +293,7 @@ class _SignalPolicyCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _t(
-                        context,
-                        'روش پیدا کردن پیشنهاد',
-                        'Setup preferences',
-                      ),
+                      _t(context, 'روش پیدا کردن پیشنهاد', 'Setup preferences'),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
@@ -376,16 +370,8 @@ class _SignalPolicyCard extends StatelessWidget {
 
   String _strategyLabel(BuildContext context, AnalysisStrategy value) =>
       switch (value) {
-        AnalysisStrategy.structureZones => _t(
-          context,
-          'ساختار',
-          'Structure',
-        ),
-        AnalysisStrategy.trendPullback => _t(
-          context,
-          'پولبک',
-          'Pullback',
-        ),
+        AnalysisStrategy.structureZones => _t(context, 'ساختار', 'Structure'),
+        AnalysisStrategy.trendPullback => _t(context, 'پولبک', 'Pullback'),
         AnalysisStrategy.momentumContinuation => _t(
           context,
           'مومنتوم',
@@ -631,11 +617,7 @@ class _SignalJournalCard extends StatelessWidget {
   String _strategy(BuildContext context) => switch (entry.strategy) {
     AnalysisStrategy.structureZones => _t(context, 'ساختار', 'Structure'),
     AnalysisStrategy.trendPullback => _t(context, 'پولبک', 'Pullback'),
-    AnalysisStrategy.momentumContinuation => _t(
-      context,
-      'مومنتوم',
-      'Momentum',
-    ),
+    AnalysisStrategy.momentumContinuation => _t(context, 'مومنتوم', 'Momentum'),
   };
 
   String _outcomeLabel(BuildContext context) => switch (entry.outcome) {
@@ -646,9 +628,8 @@ class _SignalJournalCard extends StatelessWidget {
       'فعال نشد',
       'Not triggered',
     ),
-    SignalOutcome.stopped => entry.highestTargetHit > 0
-        ? 'TP${entry.highestTargetHit} → SL'
-        : 'SL',
+    SignalOutcome.stopped =>
+      entry.highestTargetHit > 0 ? 'TP${entry.highestTargetHit} → SL' : 'SL',
     SignalOutcome.tp1 => 'TP1',
     SignalOutcome.tp2 => 'TP2',
     SignalOutcome.tp3 => 'TP3',
@@ -833,16 +814,14 @@ class _LeverageControlState extends State<_LeverageControl> {
               Expanded(
                 child: Text(
                   _persian ? 'اهرم انتخابی' : 'Selected leverage',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               StatusPill(
                 label: '${selected}x',
-                color: aboveSafe
-                    ? QuantaraColors.warning
-                    : QuantaraColors.cyan,
+                color: aboveSafe ? QuantaraColors.warning : QuantaraColors.cyan,
               ),
             ],
           ),

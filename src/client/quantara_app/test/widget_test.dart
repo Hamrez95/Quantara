@@ -217,10 +217,7 @@ Future<void> _openDestination(WidgetTester tester, IconData icon) async {
   await _tapNavigationIcon(tester, icon);
 }
 
-Future<void> _tapHomeQuickAction(
-  WidgetTester tester,
-  String label,
-) async {
+Future<void> _tapHomeQuickAction(WidgetTester tester, String label) async {
   final target = find.text(label);
   expect(target, findsOneWidget);
   final page = find.byType(ListView).first;

@@ -227,9 +227,7 @@ abstract final class QuantaraTheme {
         backgroundColor: scheme.surfaceContainerHighest,
         selectedColor: scheme.primary.withValues(alpha: 0.14),
         side: BorderSide(color: scheme.outline.withValues(alpha: 0.72)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         labelStyle: baseText.labelMedium,
       ),
