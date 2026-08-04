@@ -60,7 +60,8 @@ void main() {
     expect(engine, contains('_closedCandleGate'));
     expect(engine, contains('sha256.convert'));
     expect(engine, contains('candleClosedAt'));
-    expect(engine, contains('ExternalContextState.stale'));
+    expect(engine, contains('ExternalContextState.fresh'));
+    expect(engine, contains('requireExternalContext'));
     expect(engine, isNot(contains('DateTime.now()')));
     expect(runner, isNot(contains('DateTime.now()')));
     expect(adapter, contains("'strategy-reservation-"));

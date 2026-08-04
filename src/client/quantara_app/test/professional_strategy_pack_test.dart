@@ -268,21 +268,21 @@ TimeframeChartAnalysis _trendAnalysis() {
     late final double high;
     late final double low;
     late final double volume;
-    if (index < 74) {
+    if (index < 75) {
       open = price;
-      close = open + 0.3;
+      close = open + 0.15;
       high = close + 0.2;
       low = open - 0.2;
       volume = 1000;
     } else if (index < 79) {
       open = price;
-      close = open - 0.5;
+      close = open - 0.35;
       high = open + 0.15;
       low = close - 0.2;
       volume = 950;
     } else {
       open = price;
-      close = open + 0.8;
+      close = open + 0.45;
       high = close + 0.15;
       low = open - 0.15;
       volume = 1250;

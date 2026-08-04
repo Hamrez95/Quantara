@@ -176,7 +176,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       languageCode: languageCode,
     );
     final result = base.radar.first;
-    final analysis = _actionableAnalysis();
+    final analysis = _actionableAnalysis(base.generatedAt);
     final idea = TradeIdea(
       symbol: result.quote.symbol,
       timeframe: '1h',
@@ -195,7 +195,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       requiredMargin: 500,
       estimatedRoundTripCosts: 2,
       setupId: 'BTCUSDT|1h|long|fixed-closed-candle',
-      candleClosedAt: DateTime.utc(2026, 7, 26, 9),
+      candleClosedAt: base.generatedAt,
       summary: 'actionable',
       invalidation: 'stop',
       reasons: const ['test'],
@@ -219,11 +219,11 @@ final class _ActionableRepository implements OwnerAlphaRepository {
   }
 }
 
-TimeframeChartAnalysis _actionableAnalysis() {
+TimeframeChartAnalysis _actionableAnalysis(DateTime generatedAt) {
   final candles = List.generate(60, (index) {
     final open = 100 + index * 0.5;
     return ChartCandle(
-      openTime: DateTime.utc(2026, 7, 26).add(Duration(hours: index)),
+      openTime: generatedAt.subtract(Duration(hours: 60 - index)),
       open: open,
       high: open + 1.2,
       low: open - 1,
@@ -264,7 +264,7 @@ TimeframeChartAnalysis _actionableAnalysis() {
     directionStrength: 0.8,
     volatilityPercent: 0.8,
     summary: 'actionable fixture',
-    generatedAt: DateTime.utc(2026, 7, 29),
+    generatedAt: generatedAt,
     fingerprint: 'controller-actionable-fixture',
   );
 }
