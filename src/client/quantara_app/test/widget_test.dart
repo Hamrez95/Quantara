@@ -137,7 +137,10 @@ void main() {
     await tester.pump();
     await _openDestination(tester, Icons.candlestick_chart_outlined);
     for (var attempt = 0; attempt < 6; attempt++) {
-      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.drag(
+        find.byKey(const ValueKey('owner-alpha-2')),
+        const Offset(0, -500),
+      );
       await tester.pump();
       expect(tester.takeException(), isNull);
     }
