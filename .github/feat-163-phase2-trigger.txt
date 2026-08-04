@@ -1,0 +1,1 @@
+Trigger atomic entry lifecycle integration; remove before merge.
