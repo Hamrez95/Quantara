@@ -11,24 +11,22 @@ final class LocalLivePortfolioRiskRuntime {
     int timezoneOffsetMinutes = 0,
     double maximumAssetGroupRiskFraction = 0.60,
   }) => LocalLivePortfolioRiskRuntime._(
-    store:
+    _store:
         store ??
         DatabasePortfolioRiskLedgerStore(
           recordKey: 'local-live-portfolio-risk-ledger-v1',
         ),
-    dailyRiskLimit: dailyRiskLimit,
-    timezoneOffsetMinutes: timezoneOffsetMinutes,
+    _dailyRiskLimit: dailyRiskLimit,
+    _timezoneOffsetMinutes: timezoneOffsetMinutes,
     maximumAssetGroupRiskFraction: maximumAssetGroupRiskFraction,
   );
 
   const LocalLivePortfolioRiskRuntime._({
-    required PortfolioRiskLedgerStore store,
-    required double dailyRiskLimit,
-    required int timezoneOffsetMinutes,
+    required this._store,
+    required this._dailyRiskLimit,
+    required this._timezoneOffsetMinutes,
     required this.maximumAssetGroupRiskFraction,
-  }) : _store = store,
-       _dailyRiskLimit = dailyRiskLimit,
-       _timezoneOffsetMinutes = timezoneOffsetMinutes;
+  });
 
   final PortfolioRiskLedgerStore _store;
   final double _dailyRiskLimit;
@@ -53,16 +51,11 @@ final class LocalLivePortfolioRiskRuntime {
     final store = _atomicStore;
     return store.mutate<PortfolioReservationOutcome>((current) async {
       var ledger = _normalize(current, now.toUtc());
-      final accountWithReservations = _withLedgerReservations(account, ledger);
       var decision =
           const PortfolioRiskPolicy(
             emergencyTechnicalCeiling:
                 LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
-          ).evaluate(
-            ledger: ledger,
-            candidate: candidate,
-            account: accountWithReservations,
-          );
+          ).evaluate(ledger: ledger, candidate: candidate, account: account);
       if (decision.allowed) {
         final sameAssetGroupRisk = ledger.activeReservations
             .where((item) => item.assetGroup == candidate.assetGroup)
@@ -77,8 +70,7 @@ final class LocalLivePortfolioRiskRuntime {
             requiredMargin: decision.requiredMargin,
             availableRiskBefore: ledger.dailyRisk.available,
             availableRiskAfter: ledger.dailyRisk.available,
-            availableMarginAfter:
-                accountWithReservations.marginBudget.spendable,
+            availableMarginAfter: account.marginBudget.spendable,
           );
         }
       }
@@ -220,21 +212,4 @@ final class LocalLivePortfolioRiskRuntime {
       processedEventIds: rolled.processedEventIds,
     );
   }
-
-  PortfolioAccountTruth _withLedgerReservations(
-    PortfolioAccountTruth account,
-    PortfolioRiskLedger ledger,
-  ) => PortfolioAccountTruth(
-    asOf: account.asOf,
-    fresh: account.fresh,
-    allOpenPositionsProtected: account.allOpenPositionsProtected,
-    marginMode: account.marginMode,
-    freeMargin: account.freeMargin,
-    usedMargin: account.usedMargin,
-    maintenanceMargin: account.maintenanceMargin,
-    pendingMarginReservations:
-        account.pendingMarginReservations + ledger.reservedMargin,
-    safetyBuffer: account.safetyBuffer,
-    feeReserve: account.feeReserve,
-  );
 }
