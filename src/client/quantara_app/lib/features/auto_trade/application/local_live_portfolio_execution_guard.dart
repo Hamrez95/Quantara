@@ -10,9 +10,7 @@ import 'local_live_portfolio_risk_runtime.dart';
 
 final class LocalLivePortfolioExecutionGuard {
   LocalLivePortfolioExecutionGuard({required double dailyRiskLimit})
-    : _runtime = LocalLivePortfolioRiskRuntime(
-        dailyRiskLimit: dailyRiskLimit,
-      );
+    : _runtime = LocalLivePortfolioRiskRuntime(dailyRiskLimit: dailyRiskLimit);
 
   final LocalLivePortfolioRiskRuntime _runtime;
 
