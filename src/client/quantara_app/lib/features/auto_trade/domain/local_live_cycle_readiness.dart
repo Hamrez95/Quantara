@@ -5,6 +5,8 @@ enum LocalLiveCycleReadiness {
   unmanagedExposureBlocked,
 }
 
+/// Separates entry readiness from historical PnL availability. Missing history
+/// is informational only when both the exchange and Local Live are flat.
 abstract final class LocalLiveCycleReadinessPolicy {
   static LocalLiveCycleReadiness evaluate({
     required bool hasManagedExposure,
