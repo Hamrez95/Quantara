@@ -51,11 +51,10 @@ final class LocalLivePortfolioRiskRuntime {
     final store = _atomicStore;
     return store.mutate<PortfolioReservationOutcome>((current) async {
       var ledger = _normalize(current, now.toUtc());
-      var decision =
-          const PortfolioRiskPolicy(
-            emergencyTechnicalCeiling:
-                LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
-          ).evaluate(ledger: ledger, candidate: candidate, account: account);
+      var decision = const PortfolioRiskPolicy(
+        emergencyTechnicalCeiling:
+            LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
+      ).evaluate(ledger: ledger, candidate: candidate, account: account);
       if (decision.allowed) {
         final sameAssetGroupRisk = ledger.activeReservations
             .where((item) => item.assetGroup == candidate.assetGroup)
