@@ -1,0 +1,111 @@
+name: Temporary PR153 controller and labels fix
+
+on:
+  push:
+    branches:
+      - feat/152-professional-strategy-pack
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/152-professional-strategy-pack
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Apply fixture and labels
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          controller = Path('src/client/quantara_app/test/owner_alpha_controller_test.dart')
+          text = controller.read_text()
+          text = text.replace(
+              'final analysis = _actionableAnalysis(signalTime);',
+              "final analysis = _actionableAnalysis(signalTime);\n    final parentAnalysis = _actionableAnalysis(\n      signalTime,\n      timeframe: '4h',\n    );",
+          )
+          text = text.replace(
+              "analysesByTimeframe: {'1h': analysis},",
+              "analysesByTimeframe: {\n        '1h': analysis,\n        '4h': parentAnalysis,\n      },",
+          )
+          text = text.replace(
+              "timeframeDirections: {'1h': analysis.direction},",
+              "timeframeDirections: {\n        '1h': analysis.direction,\n        '4h': parentAnalysis.direction,\n      },",
+          )
+          text = text.replace(
+              'TimeframeChartAnalysis _actionableAnalysis(DateTime generatedAt) {',
+              "TimeframeChartAnalysis _actionableAnalysis(\n  DateTime generatedAt, {\n  String timeframe = '1h',\n}) {\n  final interval = timeframe == '4h'\n      ? const Duration(hours: 4)\n      : const Duration(hours: 1);",
+          )
+          old_candles = """  final candles = List.generate(60, (index) {
+    final open = 100 + index * 0.5;
+    return ChartCandle(
+      openTime: generatedAt.subtract(Duration(hours: 60 - index)),
+      open: open,
+      high: open + 1.2,
+      low: open - 1,
+      close: open + 0.5,
+      volume: 1000 + index.toDouble(),
+    );
+  });"""
+          new_candles = """  final candles = List.generate(60, (index) {
+    final open = 100 + index * 0.2;
+    final last = index == 59;
+    final close = open + (last ? 0.8 : 0.35);
+    return ChartCandle(
+      openTime: generatedAt.subtract(interval * (60 - index)),
+      open: open,
+      high: close + (last ? 0.1 : 0.45),
+      low: open - (last ? 0.1 : 0.45),
+      close: close,
+      volume: last ? 1400 : 1000 + index.toDouble(),
+    );
+  });"""
+          if old_candles not in text:
+              raise SystemExit('controller candle fixture block not found')
+          text = text.replace(old_candles, new_candles)
+          text = text.replace("timeframe: '1h',\n    candles: candles,", "timeframe: timeframe,\n    candles: candles,", 1)
+          text = text.replace(
+              "fingerprint: 'controller-actionable-fixture',",
+              "fingerprint: 'controller-actionable-fixture-$timeframe',",
+          )
+          controller.write_text(text)
+
+          strings = Path('src/client/quantara_app/lib/core/localization/app_strings.dart')
+          text = strings.read_text()
+          pattern = re.compile(
+              r"  String strategyName\(String name\) => switch \(name\) \{\n"
+              r"(?:.*\n){4}"
+              r"  \};"
+          )
+          replacement = """  String strategyName(String name) => switch (name) {
+    'trendCandle' => t('ستاپ کندلی ارشیا', 'Arshia Candle Setup'),
+    'dowContinuation' => t('پولبک روند', 'Trend Pullback'),
+    'kbsmResearch' => t('شکست و Retest', 'Breakout + Retest'),
+    _ => t('برگشت از رنج', 'Range Reversal'),
+  };"""
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'strategy label replacement count={count}')
+          strings.write_text(text)
+          PY
+          cd src/client/quantara_app
+          dart format lib test
+      - name: Commit fixes
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib src/client/quantara_app/test
+          git commit -m "fix: align actionable fixture and strategy labels"
+          git push origin HEAD:feat/152-professional-strategy-pack
