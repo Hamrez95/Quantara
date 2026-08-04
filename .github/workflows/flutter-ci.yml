@@ -30,14 +30,20 @@ jobs:
         working-directory: src/client/quantara_app
         run: >-
           dart format
+          lib/core/theme/quantara_theme.dart
+          lib/features/owner_alpha/presentation/owner_alpha_exchange.dart
+          lib/features/owner_alpha/presentation/owner_alpha_home.dart
           lib/features/owner_alpha/presentation/owner_alpha_signals.dart
           test/widget_test.dart
 
       - name: Upload formatted sources
         uses: actions/upload-artifact@v4
         with:
-          name: formatted-issue-156
+          name: formatted-issue-160
           path: |
+            src/client/quantara_app/lib/core/theme/quantara_theme.dart
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_exchange.dart
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_home.dart
             src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_signals.dart
             src/client/quantara_app/test/widget_test.dart
           if-no-files-found: error
