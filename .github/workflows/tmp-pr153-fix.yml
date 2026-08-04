@@ -1,0 +1,63 @@
+name: Temporary PR153 analyzed fixes
+
+on:
+  push:
+    branches:
+      - feat/152-professional-strategy-pack
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/152-professional-strategy-pack
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Apply narrow analyzed fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          runner = Path('src/client/quantara_app/lib/features/strategy_lab/data/strategy_lab_runner.dart')
+          text = runner.read_text()
+          text = text.replace('_totalCostRate(config)', 'StrategyLabRunner._totalCostRate(config)')
+          runner.write_text(text)
+
+          strings = Path('src/client/quantara_app/lib/core/localization/app_strings.dart')
+          text = strings.read_text()
+          old = """  String strategyName(String name) => switch (name) {
+    'trendCandle' => t('کندل‌ستاپ ادامه‌روند', 'Trend candle continuation'),
+    'dowContinuation' => t('ادامه سوئینگ داو', 'Dow swing continuation'),
+    'kbsmResearch' => t('KBSM شدو هفتگی', 'KBSM weekly shadow'),
+    _ => t('زون ساختاری', 'Structure zones'),
+  };"""
+          new = """  String strategyName(String name) => switch (name) {
+    'trendCandle' => t('ستاپ کندلی ارشیا', 'Arshia Candle Setup'),
+    'dowContinuation' => t('پولبک روند', 'Trend Pullback'),
+    'kbsmResearch' => t('شکست و Retest', 'Breakout + Retest'),
+    _ => t('برگشت از رنج', 'Range Reversal'),
+  };"""
+          if old not in text:
+              raise SystemExit('strategy label block not found')
+          strings.write_text(text.replace(old, new))
+          PY
+          cd src/client/quantara_app
+          dart format lib test
+      - name: Commit fixes
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib src/client/quantara_app/test
+          git commit -m "fix: resolve strategy lab analyze errors"
+          git push origin HEAD:feat/152-professional-strategy-pack
