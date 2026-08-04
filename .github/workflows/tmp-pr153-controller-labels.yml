@@ -1,4 +1,4 @@
-name: Temporary PR153 controller and labels fix
+name: Temporary PR153 controller fixture fix
 
 on:
   push:
@@ -21,30 +21,35 @@ jobs:
           flutter-version: 3.44.8
           channel: stable
           cache: true
-      - name: Apply fixture and labels
+      - name: Apply actionable parent fixture and production freshness
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          controller = Path('src/client/quantara_app/test/owner_alpha_controller_test.dart')
-          text = controller.read_text()
-          text = text.replace(
+          controller_test = Path('src/client/quantara_app/test/owner_alpha_controller_test.dart')
+          text = controller_test.read_text()
+          replacements = [
+            (
               'final analysis = _actionableAnalysis(signalTime);',
               "final analysis = _actionableAnalysis(signalTime);\n    final parentAnalysis = _actionableAnalysis(\n      signalTime,\n      timeframe: '4h',\n    );",
-          )
-          text = text.replace(
+            ),
+            (
               "analysesByTimeframe: {'1h': analysis},",
               "analysesByTimeframe: {\n        '1h': analysis,\n        '4h': parentAnalysis,\n      },",
-          )
-          text = text.replace(
+            ),
+            (
               "timeframeDirections: {'1h': analysis.direction},",
               "timeframeDirections: {\n        '1h': analysis.direction,\n        '4h': parentAnalysis.direction,\n      },",
-          )
-          text = text.replace(
+            ),
+            (
               'TimeframeChartAnalysis _actionableAnalysis(DateTime generatedAt) {',
               "TimeframeChartAnalysis _actionableAnalysis(\n  DateTime generatedAt, {\n  String timeframe = '1h',\n}) {\n  final interval = timeframe == '4h'\n      ? const Duration(hours: 4)\n      : const Duration(hours: 1);",
-          )
+            ),
+          ]
+          for old, new in replacements:
+            if old not in text:
+              raise SystemExit(f'missing controller marker: {old}')
+            text = text.replace(old, new, 1)
           old_candles = """  final candles = List.generate(60, (index) {
     final open = 100 + index * 0.5;
     return ChartCandle(
@@ -70,32 +75,36 @@ jobs:
     );
   });"""
           if old_candles not in text:
-              raise SystemExit('controller candle fixture block not found')
-          text = text.replace(old_candles, new_candles)
-          text = text.replace("timeframe: '1h',\n    candles: candles,", "timeframe: timeframe,\n    candles: candles,", 1)
+            raise SystemExit('missing candle fixture block')
+          text = text.replace(old_candles, new_candles, 1)
+          if "timeframe: '1h',\n    candles: candles," not in text:
+            raise SystemExit('missing fixture timeframe marker')
           text = text.replace(
-              "fingerprint: 'controller-actionable-fixture',",
-              "fingerprint: 'controller-actionable-fixture-$timeframe',",
+            "timeframe: '1h',\n    candles: candles,",
+            "timeframe: timeframe,\n    candles: candles,",
+            1,
           )
-          controller.write_text(text)
+          text = text.replace(
+            "fingerprint: 'controller-actionable-fixture',",
+            "fingerprint: 'controller-actionable-fixture-$timeframe',",
+            1,
+          )
+          controller_test.write_text(text)
 
-          strings = Path('src/client/quantara_app/lib/core/localization/app_strings.dart')
-          text = strings.read_text()
-          pattern = re.compile(
-              r"  String strategyName\(String name\) => switch \(name\) \{\n"
-              r"(?:.*\n){4}"
-              r"  \};"
-          )
-          replacement = """  String strategyName(String name) => switch (name) {
-    'trendCandle' => t('ستاپ کندلی ارشیا', 'Arshia Candle Setup'),
-    'dowContinuation' => t('پولبک روند', 'Trend Pullback'),
-    'kbsmResearch' => t('شکست و Retest', 'Breakout + Retest'),
-    _ => t('برگشت از رنج', 'Range Reversal'),
-  };"""
-          text, count = pattern.subn(replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'strategy label replacement count={count}')
-          strings.write_text(text)
+          controller = Path('src/client/quantara_app/lib/features/owner_alpha/application/owner_alpha_controller.dart')
+          text = controller.read_text()
+          import_marker = "import '../data/bitunix_owner_alpha_repository.dart';\n"
+          freshness_import = "import '../data/professional_strategy_engine.dart';\n"
+          if freshness_import not in text:
+            if import_marker not in text:
+              raise SystemExit('missing controller import marker')
+            text = text.replace(import_marker, import_marker + freshness_import, 1)
+          cadence_marker = "      cadence: _cadence,\n    );\n  }"
+          cadence_replacement = "      cadence: _cadence,\n      professionalContext: ProfessionalStrategyContext(\n        evaluatedAt: DateTime.now().toUtc(),\n      ),\n    );\n  }"
+          if cadence_marker not in text:
+            raise SystemExit('missing rebuild cadence marker')
+          text = text.replace(cadence_marker, cadence_replacement, 1)
+          controller.write_text(text)
           PY
           cd src/client/quantara_app
           dart format lib test
@@ -107,5 +116,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/client/quantara_app/lib src/client/quantara_app/test
-          git commit -m "fix: align actionable fixture and strategy labels"
+          git commit -m "fix: enforce fresh parent-aligned controller rebuilds"
           git push origin HEAD:feat/152-professional-strategy-pack
