@@ -7,6 +7,9 @@ class _StrategyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final persian = Directionality.of(context) == TextDirection.rtl;
+    final priorityPolicy = SignalTimeframePriorityKind.values
+        .map((value) => value.name)
+        .join(' / ');
     final strategies = [
       (
         'Trend Pullback',
@@ -91,7 +94,7 @@ class _StrategyCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              StatusPill(
+              const StatusPill(
                 label: 'Professional Pack 1.0',
                 color: QuantaraColors.violet,
                 icon: Icons.verified_outlined,
@@ -100,6 +103,13 @@ class _StrategyCard extends StatelessWidget {
                 label: persian ? 'Paper / تحلیل فقط' : 'Paper / analysis only',
                 color: QuantaraColors.warning,
                 icon: Icons.lock_outline_rounded,
+              ),
+              StatusPill(
+                label: persian
+                    ? 'اولویت تایم‌فریم: $priorityPolicy'
+                    : 'Timeframe priority: $priorityPolicy',
+                color: QuantaraColors.cyan,
+                icon: Icons.account_tree_outlined,
               ),
             ],
           ),
