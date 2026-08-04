@@ -4,7 +4,7 @@ import '../domain/market_chart_models.dart';
 
 abstract final class ChartStructureAnalyzer {
   static ChartStructureSnapshot analyze(List<ChartCandle> candles) {
-    if (candles.length < 24 || candles.any((item) => !item.isValid)) {
+    if (candles.length < 30 || candles.any((item) => !item.isValid)) {
       throw ArgumentError('A valid ordered candle window is required.');
     }
 
