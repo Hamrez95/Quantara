@@ -13,6 +13,7 @@ class LocalLivePreferences {
     required this.leverage,
     required this.riskPercent,
     required this.dailyLossLimitPercent,
+    this.maximumConcurrentPositions = 2,
     this.targetAllocation = ProfitProtectionTargetAllocation.standard,
   });
 
@@ -23,12 +24,15 @@ class LocalLivePreferences {
   static const maximumRiskPercent = 2.0;
   static const minimumDailyLossPercent = 0.25;
   static const maximumDailyLossPercent = 10.0;
+  static const minimumConcurrentPositions = 1;
+  static const maximumConcurrentPositions = 3;
 
   final List<String> symbols;
   final Set<String> timeframes;
   final int leverage;
   final double riskPercent;
   final double dailyLossLimitPercent;
+  final int maximumConcurrentPositions;
   final ProfitProtectionTargetAllocation targetAllocation;
 
   factory LocalLivePreferences.defaults(List<String> availableSymbols) =>
@@ -38,6 +42,7 @@ class LocalLivePreferences {
         leverage: 10,
         riskPercent: 0.10,
         dailyLossLimitPercent: 1,
+        maximumConcurrentPositions: 2,
       );
 
   LocalLivePreferences normalized(List<String> availableSymbols) {
@@ -66,6 +71,10 @@ class LocalLivePreferences {
       dailyLossLimitPercent: dailyLossLimitPercent
           .clamp(minimumDailyLossPercent, maximumDailyLossPercent)
           .toDouble(),
+      maximumConcurrentPositions: maximumConcurrentPositions.clamp(
+        minimumConcurrentPositions,
+        maximumConcurrentPositions,
+      ),
       targetAllocation: ProfitProtectionTargetAllocation.fromFractions(
         targetAllocation.fractions,
       ),
@@ -89,6 +98,8 @@ final class SharedPreferencesLocalLivePreferencesStore
   static const _leverageKey = 'quantara.local-live.ui.leverage.v2';
   static const _riskKey = 'quantara.local-live.ui.risk.v2';
   static const _dailyLossKey = 'quantara.local-live.ui.daily-loss.v2';
+  static const _maximumPositionsKey =
+      'quantara.local-live.ui.maximum-positions.v4';
   static const _tp1Key = 'quantara.local-live.ui.tp1-fraction.v3';
   static const _tp2Key = 'quantara.local-live.ui.tp2-fraction.v3';
   static const _tp3Key = 'quantara.local-live.ui.tp3-fraction.v3';
@@ -149,6 +160,10 @@ final class SharedPreferencesLocalLivePreferencesStore
         payload['dailyLossLimitPercent'],
         fallback: defaults.dailyLossLimitPercent,
       ),
+      maximumConcurrentPositions: _integer(
+        payload['maximumConcurrentPositions'],
+        fallback: defaults.maximumConcurrentPositions,
+      ),
       targetAllocation: ProfitProtectionTargetAllocation.fromFractions(
         allocation is List<Object?>
             ? allocation
@@ -179,6 +194,9 @@ final class SharedPreferencesLocalLivePreferencesStore
       dailyLossLimitPercent:
           preferences.getDouble(_dailyLossKey) ??
           defaults.dailyLossLimitPercent,
+      maximumConcurrentPositions:
+          preferences.getInt(_maximumPositionsKey) ??
+          defaults.maximumConcurrentPositions,
       targetAllocation: targetAllocation,
     );
   }
@@ -204,6 +222,7 @@ final class SharedPreferencesLocalLivePreferencesStore
           'leverage': value.leverage,
           'riskPercent': value.riskPercent,
           'dailyLossLimitPercent': value.dailyLossLimitPercent,
+          'maximumConcurrentPositions': value.maximumConcurrentPositions,
           'targetAllocation': value.targetAllocation.fractions,
         },
       ),
@@ -221,6 +240,10 @@ final class SharedPreferencesLocalLivePreferencesStore
       preferences.setInt(_leverageKey, value.leverage),
       preferences.setDouble(_riskKey, value.riskPercent),
       preferences.setDouble(_dailyLossKey, value.dailyLossLimitPercent),
+      preferences.setInt(
+        _maximumPositionsKey,
+        value.maximumConcurrentPositions,
+      ),
       preferences.setDouble(_tp1Key, value.targetAllocation.tp1Fraction),
       preferences.setDouble(_tp2Key, value.targetAllocation.tp2Fraction),
       preferences.setDouble(_tp3Key, value.targetAllocation.tp3Fraction),
