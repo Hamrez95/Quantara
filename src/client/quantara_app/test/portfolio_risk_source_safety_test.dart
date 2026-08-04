@@ -66,7 +66,10 @@ void main() {
     ).readAsStringSync();
 
     expect(source, contains('static const bool realEntriesAllowed = true;'));
-    expect(source, contains('static const bool explicitUserArmRequired = true;'));
+    expect(
+      source,
+      contains('static const bool explicitUserArmRequired = true;'),
+    );
     expect(source, contains('static const bool automaticArmAllowed = false;'));
   });
 
