@@ -51,12 +51,17 @@ void main() {
     ),
   );
 
-  Future<void> tapVisible(WidgetTester tester, String label) async {
-    final action = find.text(label);
-    expect(action, findsOneWidget);
-    await tester.ensureVisible(action);
+  Future<void> tapAction(WidgetTester tester, String label) async {
+    final text = find.text(label);
+    expect(text, findsOneWidget);
+    final button = find.ancestor(
+      of: text,
+      matching: find.byWidgetPredicate((widget) => widget is ButtonStyleButton),
+    );
+    expect(button, findsOneWidget);
+    await tester.ensureVisible(button);
     await tester.pumpAndSettle();
-    await tester.tap(action);
+    await tester.tap(button);
     await tester.pumpAndSettle();
   }
 
@@ -74,10 +79,10 @@ void main() {
     expect(find.text('شبیه‌سازی'), findsOneWidget);
     expect(find.text('10.00 USDT'), findsAtLeastNWidgets(1));
 
-    await tapVisible(tester, 'رزرو ۳ USDT');
+    await tapAction(tester, 'رزرو ۳ USDT');
     expect(find.text('7.00 USDT'), findsAtLeastNWidgets(1));
 
-    await tapVisible(tester, 'رزرو ۴ USDT');
+    await tapAction(tester, 'رزرو ۴ USDT');
     expect(find.text('3.00 USDT'), findsAtLeastNWidgets(1));
     expect(find.text('BTCUSDT'), findsOneWidget);
     expect(find.text('ETHUSDT'), findsOneWidget);
@@ -96,7 +101,12 @@ void main() {
 
     expect(find.text('Portfolio risk budget'), findsOneWidget);
     expect(find.text('Simulation'), findsOneWidget);
-    await tapVisible(tester, 'Simulate stale data');
+    await tapAction(tester, 'Simulate stale data');
+    expect(simulation.accountFresh, isFalse);
+    expect(
+      simulation.snapshot?.blockReason,
+      PortfolioEntryBlockReason.staleAccount,
+    );
     expect(
       find.text('Private account truth is stale; new entry is blocked.'),
       findsOneWidget,
@@ -147,14 +157,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapVisible(tester, 'Reserve 3 USDT');
-    await tapVisible(tester, 'Try rejected 8');
+    await tapAction(tester, 'Reserve 3 USDT');
+    await tapAction(tester, 'Try rejected 8');
+    expect(simulation.lastDecision?.allowed, isFalse);
+    expect(
+      simulation.lastDecision?.reason,
+      PortfolioEntryBlockReason.riskBudgetInsufficient,
+    );
     expect(
       find.text('The remaining risk budget is insufficient.'),
       findsOneWidget,
     );
 
-    await tapVisible(tester, 'Reset example');
+    await tapAction(tester, 'Reset example');
     expect(find.text('There are no active reservations yet.'), findsOneWidget);
     expect(find.text('10.00 USDT'), findsAtLeastNWidgets(1));
   });
