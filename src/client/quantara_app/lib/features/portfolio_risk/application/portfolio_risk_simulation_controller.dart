@@ -130,27 +130,28 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
   });
 
   Future<void> _enqueue(Future<void> Function() operation) {
-    final completer = Completer<void>();
     _pendingOperations += 1;
     _setLoading(true);
 
-    final next = _operationTail.then((_) async {
+    final result = _operationTail.then<void>((_) async {
       await initialize();
       _error = null;
       try {
         await operation();
-        completer.complete();
       } on Object catch (error, stackTrace) {
         _error = error;
         _publishState();
-        completer.completeError(error, stackTrace);
+        Error.throwWithStackTrace(error, stackTrace);
       } finally {
         _pendingOperations -= 1;
         if (_pendingOperations == 0) _setLoading(false);
       }
     });
-    _operationTail = next.catchError((Object _) {});
-    return completer.future;
+    _operationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
   }
 
   void _publishState() {
