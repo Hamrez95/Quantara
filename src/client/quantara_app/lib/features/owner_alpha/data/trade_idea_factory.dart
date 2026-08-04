@@ -17,16 +17,46 @@ abstract final class TradeIdeaFactory {
     AnalysisStrategy strategy = AnalysisStrategy.structureZones,
     SignalCadence cadence = SignalCadence.balanced,
     ProfessionalStrategyContext? professionalContext,
-  }) => ProfessionalStrategyEngine.create(
-    analysis: analysis,
-    capital: capital,
-    riskPercent: riskPercent,
-    confluence: confluence,
-    languageCode: languageCode,
-    strategy: strategy,
-    cadence: cadence,
-    context: professionalContext,
-  );
+  }) {
+    final idea = ProfessionalStrategyEngine.create(
+      analysis: analysis,
+      capital: capital,
+      riskPercent: riskPercent,
+      confluence: confluence,
+      languageCode: languageCode,
+      strategy: strategy,
+      cadence: cadence,
+      context: professionalContext,
+    );
+    if (!idea.isActionable) return idea;
+
+    final requiredMargin = idea.requiredMargin;
+    final marginCap = capital * targetMarginFraction;
+    if (requiredMargin == null ||
+        !requiredMargin.isFinite ||
+        requiredMargin <= 0 ||
+        requiredMargin > marginCap) {
+      return _blockedIdea(
+        idea: idea,
+        maximumLoss: capital * riskPercent / 100,
+        languageCode: languageCode,
+        fa: 'مارجین موردنیاز از سقف محافظه‌کارانه هر پوزیشن بیشتر است.',
+        en: 'Required margin exceeds the conservative per-position cap.',
+      );
+    }
+
+    if (idea.strategyVersion == 'rangeReversal/1.0' &&
+        !_hasCorrectSideRangeBoundary(analysis: analysis, idea: idea)) {
+      return _blockedIdea(
+        idea: idea,
+        maximumLoss: capital * riskPercent / 100,
+        languageCode: languageCode,
+        fa: 'مرز ساختاری رنج در سمت صحیح قیمت قرار ندارد.',
+        en: 'The structural range boundary is not on the correct price side.',
+      );
+    }
+    return idea;
+  }
 
   static bool protectiveAlignment(
     TimeframeChartAnalysis analysis,
@@ -59,4 +89,65 @@ abstract final class TradeIdeaFactory {
     if (combined < 0.75) return 5;
     return 8;
   }
+
+  static bool _hasCorrectSideRangeBoundary({
+    required TimeframeChartAnalysis analysis,
+    required TradeIdea idea,
+  }) {
+    final entry = idea.direction == TradeDirection.long
+        ? idea.entryUpper
+        : idea.entryLower;
+    if (entry == null || !entry.isFinite || entry <= 0) return false;
+    return switch (idea.direction) {
+      TradeDirection.long => analysis.zones.any(
+        (zone) =>
+            zone.role == ChartZoneRole.support &&
+            zone.upper.isFinite &&
+            zone.upper < entry,
+      ),
+      TradeDirection.short => analysis.zones.any(
+        (zone) =>
+            zone.role == ChartZoneRole.resistance &&
+            zone.lower.isFinite &&
+            zone.lower > entry,
+      ),
+      TradeDirection.wait => false,
+    };
+  }
+
+  static TradeIdea _blockedIdea({
+    required TradeIdea idea,
+    required double maximumLoss,
+    required String languageCode,
+    required String fa,
+    required String en,
+  }) => TradeIdea(
+    symbol: idea.symbol,
+    timeframe: idea.timeframe,
+    direction: TradeDirection.wait,
+    confidencePercent: 35,
+    entryLower: null,
+    entryUpper: null,
+    stopLoss: null,
+    targets: const [],
+    riskReward: null,
+    maximumLoss: maximumLoss,
+    positionSize: null,
+    notionalValue: null,
+    recommendedLeverage: null,
+    maximumSafeLeverage: null,
+    requiredMargin: null,
+    estimatedRoundTripCosts: 0,
+    setupId: '${idea.setupId}|blocked',
+    candleClosedAt: idea.candleClosedAt,
+    summary: languageCode == 'en' ? en : fa,
+    invalidation: languageCode == 'en'
+        ? 'Re-evaluate after a new closed candle and valid portfolio inputs.'
+        : 'پس از کندل بسته جدید و ورودی معتبر پرتفوی دوباره ارزیابی شود.',
+    reasons: [languageCode == 'en' ? en : fa],
+    rejectionReason: SetupRejectionReason.insufficientRiskReward,
+    strategy: idea.strategy,
+    strategyVersion: idea.strategyVersion,
+    marketRegime: idea.marketRegime,
+  );
 }
