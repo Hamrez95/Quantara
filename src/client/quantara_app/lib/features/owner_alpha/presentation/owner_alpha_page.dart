@@ -54,6 +54,8 @@ part 'owner_alpha_strategy.dart';
 typedef _OpenAnalysis =
     void Function(String symbol, [String? timeframe, String? setupId]);
 
+void _noopOpenPortfolioRisk() {}
+
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
     required this.repository,
@@ -65,7 +67,7 @@ class OwnerAlphaPage extends StatefulWidget {
     required this.locale,
     required this.onToggleTheme,
     required this.onLocaleChanged,
-    required this.onOpenPortfolioRisk,
+    this.onOpenPortfolioRisk = _noopOpenPortfolioRisk,
     this.realtimeMonitor,
     super.key,
   });
@@ -516,7 +518,7 @@ const _destinations = [
     Icons.candlestick_chart_rounded,
   ),
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
-  _Destination(Icons.science_outlined, Icons.science_rounded),
+  _Destination(Icons.home_outlined, Icons.home_rounded),
   _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
   _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
@@ -528,7 +530,6 @@ String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
   2 => strings.analysis,
   3 => strings.watchlist,
-  4 => strings.strategyLab,
   5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',
   6 => strings.isPersian ? 'ژورنال' : 'Journal',
   7 => strings.profile,

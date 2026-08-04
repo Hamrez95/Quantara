@@ -171,24 +171,26 @@ class _QuantaraAppState extends State<QuantaraApp> {
       themeMode: _themeMode,
       themeAnimationDuration: const Duration(milliseconds: 220),
       themeAnimationCurve: Curves.easeOutCubic,
-      home: OwnerAlphaPage(
-        repository: _repository,
-        settingsStore: _settingsStore,
-        opportunityStateStore: _opportunityStateStore,
-        notificationGateway:
-            widget.notificationGateway ??
-            const PlatformSetupNotificationGateway(),
-        backgroundScanGateway:
-            widget.backgroundScanGateway ??
-            (widget.repository == null
-                ? const WorkmanagerBackgroundScanGateway()
-                : const NoopBackgroundScanGateway()),
-        themeMode: _themeMode,
-        locale: _locale,
-        onToggleTheme: _toggleTheme,
-        onLocaleChanged: _setLocale,
-        onOpenPortfolioRisk: () => _showPortfolioRisk(context),
-        realtimeMonitor: _realtimeMarketHost,
+      home: Builder(
+        builder: (homeContext) => OwnerAlphaPage(
+          repository: _repository,
+          settingsStore: _settingsStore,
+          opportunityStateStore: _opportunityStateStore,
+          notificationGateway:
+              widget.notificationGateway ??
+              const PlatformSetupNotificationGateway(),
+          backgroundScanGateway:
+              widget.backgroundScanGateway ??
+              (widget.repository == null
+                  ? const WorkmanagerBackgroundScanGateway()
+                  : const NoopBackgroundScanGateway()),
+          themeMode: _themeMode,
+          locale: _locale,
+          onToggleTheme: _toggleTheme,
+          onLocaleChanged: _setLocale,
+          onOpenPortfolioRisk: () => _showPortfolioRisk(homeContext),
+          realtimeMonitor: _realtimeMarketHost,
+        ),
       ),
     );
   }

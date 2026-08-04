@@ -180,7 +180,7 @@ class _HomeActionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(action.icon, color: scheme.primary),
-              const Spacer(),
+              const SizedBox(height: 14),
               Text(
                 action.label,
                 maxLines: 1,
