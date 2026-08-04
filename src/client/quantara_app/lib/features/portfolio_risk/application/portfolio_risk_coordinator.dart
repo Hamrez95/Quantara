@@ -287,10 +287,11 @@ final class PortfolioRiskCoordinator {
 
   Future<T> _serialValue<T>(Future<T> Function() operation) {
     final result = _globalTail.then<T>((_) => operation());
-    _globalTail = result.then<void>(
+    final settled = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
-    return result;
+    _globalTail = settled;
+    return settled.then<T>((_) => result);
   }
 }
