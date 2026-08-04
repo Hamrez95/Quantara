@@ -1,0 +1,58 @@
+name: Temporary feature 163 remaining target gate
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - '.github/workflows/feat-163-remaining-targets.yml'
+      - '.github/scripts/feat163_remaining_targets.py'
+      - 'src/client/quantara_app/lib/features/auto_trade/domain/remaining_target_protection_policy.dart'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+      - name: Apply remaining-target protection gate
+        run: |
+          if grep -q "target_ladder_incomplete" \
+            src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart; then
+            echo "Remaining-target protection gate is already applied."
+            exit 0
+          fi
+          python3 .github/scripts/feat163_remaining_targets.py
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format changed files
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/auto_trade/application/local_live_trade_service.dart
+          lib/features/auto_trade/domain/remaining_target_protection_policy.dart
+          test/remaining_target_protection_policy_test.dart
+          test/local_live_trade_models_test.dart
+          test/local_live_trader_agents_test.dart
+      - name: Commit gate and formatting
+        run: |
+          if git diff --quiet; then
+            echo "No gate or formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app
+          git commit -m "feat(local-live): block concurrency when a remaining TP is unprotected [feat163-target-gate]"
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
