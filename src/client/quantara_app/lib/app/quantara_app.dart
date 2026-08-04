@@ -13,6 +13,7 @@ import '../features/owner_alpha/data/platform_opportunity_services.dart';
 import '../features/owner_alpha/data/realtime_production_runtime.dart';
 import '../features/owner_alpha/domain/owner_alpha_models.dart';
 import '../features/owner_alpha/presentation/owner_alpha_page.dart';
+import '../features/portfolio_risk/presentation/portfolio_risk_panel.dart';
 
 class QuantaraApp extends StatefulWidget {
   const QuantaraApp({
@@ -154,23 +155,80 @@ class _QuantaraAppState extends State<QuantaraApp> {
       themeMode: _themeMode,
       themeAnimationDuration: const Duration(milliseconds: 220),
       themeAnimationCurve: Curves.easeOutCubic,
-      home: OwnerAlphaPage(
-        repository: _repository,
-        settingsStore: _settingsStore,
-        opportunityStateStore: _opportunityStateStore,
-        notificationGateway:
-            widget.notificationGateway ??
-            const PlatformSetupNotificationGateway(),
-        backgroundScanGateway:
-            widget.backgroundScanGateway ??
-            (widget.repository == null
-                ? const WorkmanagerBackgroundScanGateway()
-                : const NoopBackgroundScanGateway()),
-        themeMode: _themeMode,
+      home: _QuantaraHome(
         locale: _locale,
-        onToggleTheme: _toggleTheme,
-        onLocaleChanged: _setLocale,
-        realtimeMonitor: _realtimeMarketHost,
+        child: OwnerAlphaPage(
+          repository: _repository,
+          settingsStore: _settingsStore,
+          opportunityStateStore: _opportunityStateStore,
+          notificationGateway:
+              widget.notificationGateway ??
+              const PlatformSetupNotificationGateway(),
+          backgroundScanGateway:
+              widget.backgroundScanGateway ??
+              (widget.repository == null
+                  ? const WorkmanagerBackgroundScanGateway()
+                  : const NoopBackgroundScanGateway()),
+          themeMode: _themeMode,
+          locale: _locale,
+          onToggleTheme: _toggleTheme,
+          onLocaleChanged: _setLocale,
+          realtimeMonitor: _realtimeMarketHost,
+        ),
+      ),
+    );
+  }
+}
+
+final class _QuantaraHome extends StatelessWidget {
+  const _QuantaraHome({required this.locale, required this.child});
+
+  final Locale locale;
+  final Widget child;
+
+  bool get _persian => locale.languageCode != 'en';
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Material(
+          color: Theme.of(context).colorScheme.surfaceContainer,
+          child: SafeArea(
+            bottom: false,
+            child: SizedBox(
+              height: 44,
+              child: Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: TextButton.icon(
+                  onPressed: () => _showPortfolioRisk(context),
+                  icon: const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    size: 20,
+                  ),
+                  label: Text(_persian ? 'ریسک پرتفوی' : 'Portfolio risk'),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  Future<void> _showPortfolioRisk(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.94,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+          child: const PortfolioRiskPanel(),
+        ),
       ),
     );
   }
