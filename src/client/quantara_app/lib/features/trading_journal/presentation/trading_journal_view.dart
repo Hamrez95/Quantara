@@ -80,16 +80,13 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _JournalHero(
-            persian: _persian,
-            records: 0,
-            open: 0,
-            verified: true,
-          ),
+          _JournalHero(persian: _persian, records: 0, open: 0, verified: true),
           const SizedBox(height: 16),
           _StateCard(
             icon: Icons.menu_book_outlined,
-            title: _persian ? 'هنوز رکوردی ثبت نشده' : 'No journal records yet.',
+            title: _persian
+                ? 'هنوز رکوردی ثبت نشده'
+                : 'No journal records yet.',
             message: _persian
                 ? 'سیگنال‌ها، ورودها و نتیجه پوزیشن‌ها پس از ثبت در این بخش نمایش داده می‌شوند.'
                 : 'Signals, executions and position outcomes will appear here.',
@@ -117,10 +114,7 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
         ),
         if (widget.statistics != null) ...[
           const SizedBox(height: 16),
-          _StatisticsPanel(
-            statistics: widget.statistics!,
-            persian: _persian,
-          ),
+          _StatisticsPanel(statistics: widget.statistics!, persian: _persian),
         ],
         const SizedBox(height: 16),
         SectionCard(
@@ -203,9 +197,7 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
           child: TextButton.icon(
             onPressed: () => setState(() => _selected = null),
             icon: Icon(
-              _persian
-                  ? Icons.arrow_forward_rounded
-                  : Icons.arrow_back_rounded,
+              _persian ? Icons.arrow_forward_rounded : Icons.arrow_back_rounded,
             ),
             label: Text(_persian ? 'بازگشت به ژورنال' : 'Back to journal'),
           ),
@@ -409,9 +401,7 @@ final class _JournalHero extends StatelessWidget {
                             ? (persian
                                   ? 'یکپارچگی تأییدشده'
                                   : 'Integrity verified')
-                            : (persian
-                                  ? 'نیازمند بررسی'
-                                  : 'Review required'),
+                            : (persian ? 'نیازمند بررسی' : 'Review required'),
                         color: statusColor,
                         icon: verified
                             ? Icons.verified_user_outlined
@@ -680,18 +670,16 @@ final class _JournalTradeCard extends StatelessWidget {
                           textDirection: TextDirection.ltr,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                         Text(
                           '${projection.strategy} · ${projection.timeframe}',
                           textDirection: TextDirection.ltr,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -724,11 +712,7 @@ final class _JournalTradeCard extends StatelessWidget {
               if (compact) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    identity,
-                    const SizedBox(height: 12),
-                    result,
-                  ],
+                  children: [identity, const SizedBox(height: 12), result],
                 );
               }
               return Row(
@@ -769,7 +753,8 @@ final class _JournalTradeCard extends StatelessWidget {
                     : projection.integrity == TradingJournalIntegrity.recovered
                     ? (persian ? 'بازیابی‌شده' : 'Recovered')
                     : (persian ? 'تأییدنشده' : 'Unverified'),
-                color: projection.integrity == TradingJournalIntegrity.unverified
+                color:
+                    projection.integrity == TradingJournalIntegrity.unverified
                     ? QuantaraColors.warning
                     : QuantaraColors.cyan,
                 icon: Icons.verified_user_outlined,
@@ -789,7 +774,9 @@ final class _JournalTradeCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  persian ? 'مشاهده جزئیات و تایم‌لاین' : 'View details and timeline',
+                  persian
+                      ? 'مشاهده جزئیات و تایم‌لاین'
+                      : 'View details and timeline',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -839,9 +826,8 @@ final class _JournalDetailHero extends StatelessWidget {
                     Text(
                       projection.symbol,
                       textDirection: TextDirection.ltr,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -944,10 +930,7 @@ final class _ProjectionSummary extends StatelessWidget {
         persian ? 'کارمزد' : 'Fees',
         projection.fees == null
             ? (persian ? 'ناموجود' : 'Unavailable')
-            : QuantaraNumberFormat.marketValue(
-                projection.fees!,
-                unit: 'USDT',
-              ),
+            : QuantaraNumberFormat.marketValue(projection.fees!, unit: 'USDT'),
         Icons.receipt_long_outlined,
         QuantaraColors.warning,
       ),
@@ -1150,9 +1133,7 @@ final class _TimelineEventTile extends StatelessWidget {
                             children: [
                               Text(
                                 title,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
+                                style: Theme.of(context).textTheme.titleSmall
                                     ?.copyWith(fontWeight: FontWeight.w900),
                               ),
                               const SizedBox(height: 3),
@@ -1262,28 +1243,29 @@ final class _StateCard extends StatelessWidget {
   }
 }
 
-Color _tradeStateColor(
-  BuildContext context,
+Color _tradeStateColor(BuildContext context, TradingJournalTradeState state) =>
+    switch (state) {
+      TradingJournalTradeState.planned => QuantaraColors.violet,
+      TradingJournalTradeState.open => QuantaraColors.cyan,
+      TradingJournalTradeState.closed => QuantaraColors.success,
+      TradingJournalTradeState.missed => QuantaraColors.warning,
+      TradingJournalTradeState.simulated => QuantaraColors.electricBlue,
+      TradingJournalTradeState.unverified => Theme.of(
+        context,
+      ).colorScheme.error,
+    };
+
+String _tradeStateLabel(
+  bool persian,
   TradingJournalTradeState state,
 ) => switch (state) {
-  TradingJournalTradeState.planned => QuantaraColors.violet,
-  TradingJournalTradeState.open => QuantaraColors.cyan,
-  TradingJournalTradeState.closed => QuantaraColors.success,
-  TradingJournalTradeState.missed => QuantaraColors.warning,
-  TradingJournalTradeState.simulated => QuantaraColors.electricBlue,
-  TradingJournalTradeState.unverified => Theme.of(context).colorScheme.error,
+  TradingJournalTradeState.planned => persian ? 'برنامه‌ریزی‌شده' : 'Planned',
+  TradingJournalTradeState.open => persian ? 'باز' : 'Open',
+  TradingJournalTradeState.closed => persian ? 'بسته‌شده' : 'Closed',
+  TradingJournalTradeState.missed => persian ? 'از دست‌رفته' : 'Missed',
+  TradingJournalTradeState.simulated => persian ? 'شبیه‌سازی' : 'Simulated',
+  TradingJournalTradeState.unverified => persian ? 'تأییدنشده' : 'Unverified',
 };
-
-String _tradeStateLabel(bool persian, TradingJournalTradeState state) =>
-    switch (state) {
-      TradingJournalTradeState.planned => persian ? 'برنامه‌ریزی‌شده' : 'Planned',
-      TradingJournalTradeState.open => persian ? 'باز' : 'Open',
-      TradingJournalTradeState.closed => persian ? 'بسته‌شده' : 'Closed',
-      TradingJournalTradeState.missed => persian ? 'از دست‌رفته' : 'Missed',
-      TradingJournalTradeState.simulated => persian ? 'شبیه‌سازی' : 'Simulated',
-      TradingJournalTradeState.unverified =>
-        persian ? 'تأییدنشده' : 'Unverified',
-    };
 
 IconData _tradeStateIcon(TradingJournalTradeState state) => switch (state) {
   TradingJournalTradeState.planned => Icons.event_note_outlined,
@@ -1327,71 +1309,73 @@ String _closeReasonLabel(bool persian, TradingJournalCloseReason? reason) {
     TradingJournalCloseReason.emergency => persian ? 'اضطراری' : 'Emergency',
     TradingJournalCloseReason.manual => persian ? 'دستی' : 'Manual',
     TradingJournalCloseReason.exchange => persian ? 'صرافی' : 'Exchange',
-    TradingJournalCloseReason.liquidation => persian ? 'لیکویید' : 'Liquidation',
+    TradingJournalCloseReason.liquidation =>
+      persian ? 'لیکویید' : 'Liquidation',
     TradingJournalCloseReason.expired => persian ? 'منقضی' : 'Expired',
     TradingJournalCloseReason.notTaken => persian ? 'گرفته‌نشده' : 'Not taken',
     TradingJournalCloseReason.unknown => persian ? 'نامشخص' : 'Unknown',
   };
 }
 
-String _eventTitle(TradingJournalEventType type, bool persian) => switch (type) {
-  TradingJournalEventType.signalCreated =>
-    persian ? 'Signal · ایجاد سیگنال' : 'Signal · Created',
-  TradingJournalEventType.signalUpdated =>
-    persian ? 'Signal · به‌روزرسانی' : 'Signal · Updated',
-  TradingJournalEventType.signalExpired =>
-    persian ? 'Signal · انقضا' : 'Signal · Expired',
-  TradingJournalEventType.entrySubmitted =>
-    persian ? 'Entry · ارسال ورود' : 'Entry · Submitted',
-  TradingJournalEventType.entryPartiallyFilled =>
-    persian ? 'Entry · پرشدن جزئی' : 'Entry · Partially filled',
-  TradingJournalEventType.entryFilled =>
-    persian ? 'Entry · ورود انجام شد' : 'Entry · Filled',
-  TradingJournalEventType.entryCancelled =>
-    persian ? 'Entry · لغو ورود' : 'Entry · Cancelled',
-  TradingJournalEventType.entryRejected =>
-    persian ? 'Entry · رد ورود' : 'Entry · Rejected',
-  TradingJournalEventType.stopSubmitted =>
-    persian ? 'Stop · ارسال حفاظت' : 'Stop · Submitted',
-  TradingJournalEventType.stopConfirmed =>
-    persian ? 'Stop · تأیید حفاظت' : 'Stop · Confirmed',
-  TradingJournalEventType.stopRejected =>
-    persian ? 'Stop · رد حفاظت' : 'Stop · Rejected',
-  TradingJournalEventType.takeProfitSubmitted =>
-    persian ? 'TP · ارسال تارگت' : 'TP · Submitted',
-  TradingJournalEventType.takeProfitConfirmed =>
-    persian ? 'TP · تأیید تارگت' : 'TP · Confirmed',
-  TradingJournalEventType.takeProfitFilled =>
-    persian ? 'TP · تارگت انجام شد' : 'TP · Filled',
-  TradingJournalEventType.stopMoveRequested =>
-    persian ? 'Stop · درخواست جابه‌جایی' : 'Stop · Move requested',
-  TradingJournalEventType.stopMoveConfirmed =>
-    persian ? 'Stop · جابه‌جایی تأیید شد' : 'Stop · Move confirmed',
-  TradingJournalEventType.stopMoveRejected =>
-    persian ? 'Stop · جابه‌جایی رد شد' : 'Stop · Move rejected',
-  TradingJournalEventType.serviceStopped =>
-    persian ? 'System · سرویس متوقف شد' : 'System · Service stopped',
-  TradingJournalEventType.staleDetected =>
-    persian ? 'Safety · داده قدیمی' : 'Safety · Stale data',
-  TradingJournalEventType.reconciliationStarted =>
-    persian ? 'Sync · شروع تطبیق' : 'Sync · Reconciliation started',
-  TradingJournalEventType.reconciliationRecovered =>
-    persian ? 'Sync · تطبیق بازیابی شد' : 'Sync · Recovered',
-  TradingJournalEventType.appRestarted =>
-    persian ? 'System · اجرای دوباره اپ' : 'System · App restarted',
-  TradingJournalEventType.fundingApplied =>
-    persian ? 'Cost · فاندینگ اعمال شد' : 'Cost · Funding applied',
-  TradingJournalEventType.positionPartiallyClosed =>
-    persian ? 'Close · خروج جزئی' : 'Close · Partial',
-  TradingJournalEventType.positionClosed =>
-    persian ? 'Close · پوزیشن بسته شد' : 'Close · Position closed',
-  TradingJournalEventType.liquidation =>
-    persian ? 'Close · لیکویید' : 'Close · Liquidation',
-  TradingJournalEventType.manualNote =>
-    persian ? 'Note · یادداشت دستی' : 'Note · Manual',
-  TradingJournalEventType.counterfactualResolved =>
-    persian ? 'Outcome · نتیجه فرضی' : 'Outcome · Counterfactual resolved',
-};
+String _eventTitle(TradingJournalEventType type, bool persian) =>
+    switch (type) {
+      TradingJournalEventType.signalCreated =>
+        persian ? 'Signal · ایجاد سیگنال' : 'Signal · Created',
+      TradingJournalEventType.signalUpdated =>
+        persian ? 'Signal · به‌روزرسانی' : 'Signal · Updated',
+      TradingJournalEventType.signalExpired =>
+        persian ? 'Signal · انقضا' : 'Signal · Expired',
+      TradingJournalEventType.entrySubmitted =>
+        persian ? 'Entry · ارسال ورود' : 'Entry · Submitted',
+      TradingJournalEventType.entryPartiallyFilled =>
+        persian ? 'Entry · پرشدن جزئی' : 'Entry · Partially filled',
+      TradingJournalEventType.entryFilled =>
+        persian ? 'Entry · ورود انجام شد' : 'Entry · Filled',
+      TradingJournalEventType.entryCancelled =>
+        persian ? 'Entry · لغو ورود' : 'Entry · Cancelled',
+      TradingJournalEventType.entryRejected =>
+        persian ? 'Entry · رد ورود' : 'Entry · Rejected',
+      TradingJournalEventType.stopSubmitted =>
+        persian ? 'Stop · ارسال حفاظت' : 'Stop · Submitted',
+      TradingJournalEventType.stopConfirmed =>
+        persian ? 'Stop · تأیید حفاظت' : 'Stop · Confirmed',
+      TradingJournalEventType.stopRejected =>
+        persian ? 'Stop · رد حفاظت' : 'Stop · Rejected',
+      TradingJournalEventType.takeProfitSubmitted =>
+        persian ? 'TP · ارسال تارگت' : 'TP · Submitted',
+      TradingJournalEventType.takeProfitConfirmed =>
+        persian ? 'TP · تأیید تارگت' : 'TP · Confirmed',
+      TradingJournalEventType.takeProfitFilled =>
+        persian ? 'TP · تارگت انجام شد' : 'TP · Filled',
+      TradingJournalEventType.stopMoveRequested =>
+        persian ? 'Stop · درخواست جابه‌جایی' : 'Stop · Move requested',
+      TradingJournalEventType.stopMoveConfirmed =>
+        persian ? 'Stop · جابه‌جایی تأیید شد' : 'Stop · Move confirmed',
+      TradingJournalEventType.stopMoveRejected =>
+        persian ? 'Stop · جابه‌جایی رد شد' : 'Stop · Move rejected',
+      TradingJournalEventType.serviceStopped =>
+        persian ? 'System · سرویس متوقف شد' : 'System · Service stopped',
+      TradingJournalEventType.staleDetected =>
+        persian ? 'Safety · داده قدیمی' : 'Safety · Stale data',
+      TradingJournalEventType.reconciliationStarted =>
+        persian ? 'Sync · شروع تطبیق' : 'Sync · Reconciliation started',
+      TradingJournalEventType.reconciliationRecovered =>
+        persian ? 'Sync · تطبیق بازیابی شد' : 'Sync · Recovered',
+      TradingJournalEventType.appRestarted =>
+        persian ? 'System · اجرای دوباره اپ' : 'System · App restarted',
+      TradingJournalEventType.fundingApplied =>
+        persian ? 'Cost · فاندینگ اعمال شد' : 'Cost · Funding applied',
+      TradingJournalEventType.positionPartiallyClosed =>
+        persian ? 'Close · خروج جزئی' : 'Close · Partial',
+      TradingJournalEventType.positionClosed =>
+        persian ? 'Close · پوزیشن بسته شد' : 'Close · Position closed',
+      TradingJournalEventType.liquidation =>
+        persian ? 'Close · لیکویید' : 'Close · Liquidation',
+      TradingJournalEventType.manualNote =>
+        persian ? 'Note · یادداشت دستی' : 'Note · Manual',
+      TradingJournalEventType.counterfactualResolved =>
+        persian ? 'Outcome · نتیجه فرضی' : 'Outcome · Counterfactual resolved',
+    };
 
 IconData _eventIcon(TradingJournalEventType type) => switch (type) {
   TradingJournalEventType.signalCreated ||

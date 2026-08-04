@@ -50,7 +50,8 @@ class _WatchlistView extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    for (final timeframe in OwnerAlphaController.timeframes) ...[
+                    for (final timeframe
+                        in OwnerAlphaController.timeframes) ...[
                       ChoiceChip(
                         selected: controller.selectedTimeframe == timeframe,
                         showCheckmark: false,
@@ -371,19 +372,19 @@ class _WatchlistMarketCard extends StatelessWidget {
                           textDirection: TextDirection.ltr,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                         Text(
                           '${quote.displayName} · ${analysis.timeframe}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ),
@@ -416,11 +417,7 @@ class _WatchlistMarketCard extends StatelessWidget {
               if (compact) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    identity,
-                    const SizedBox(height: 12),
-                    quoteBlock,
-                  ],
+                  children: [identity, const SizedBox(height: 12), quoteBlock],
                 );
               }
               return Row(
@@ -482,9 +479,7 @@ class _WatchlistMarketCard extends StatelessWidget {
                 child: TextButton.icon(
                   onPressed: onOpen,
                   icon: const Icon(Icons.candlestick_chart_rounded),
-                  label: Text(
-                    strings.t('مشاهده تحلیل', 'View analysis'),
-                  ),
+                  label: Text(strings.t('مشاهده تحلیل', 'View analysis')),
                 ),
               ),
               if (canRemove)

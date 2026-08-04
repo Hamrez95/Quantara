@@ -136,9 +136,10 @@ class SectionCard extends StatelessWidget {
                       start: 0,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          borderRadius: const BorderRadiusDirectional.horizontal(
-                            end: Radius.circular(999),
-                          ),
+                          borderRadius:
+                              const BorderRadiusDirectional.horizontal(
+                                end: Radius.circular(999),
+                              ),
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,

@@ -51,9 +51,7 @@ class _AnalysisHero extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(QuantaraRadius.large),
-          border: Border.all(
-            color: directionColor.withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: directionColor.withValues(alpha: 0.3)),
           gradient: LinearGradient(
             begin: AlignmentDirectional.topStart,
             end: AlignmentDirectional.bottomEnd,
@@ -156,10 +154,7 @@ class _AnalysisHero extends StatelessWidget {
                             : WrapAlignment.end,
                         children: [
                           StatusPill(
-                            label: _directionLabel(
-                              context,
-                              analysis.direction,
-                            ),
+                            label: _directionLabel(context, analysis.direction),
                             color: directionColor,
                             icon: analysis.direction == ChartDirection.bullish
                                 ? Icons.north_east_rounded
@@ -811,9 +806,9 @@ class _TradePlanCard extends StatelessWidget {
                   persian
                       ? 'در اهرم ${selectedLeverage}x حدود ${QuantaraNumberFormat.marketValue(selectedMargin ?? idea.requiredMargin!, unit: 'USDT')} مارجین درگیر می‌شود؛ ارزش پوزیشن و سقف زیان برنامه‌ریزی‌شده تغییر نمی‌کند.'
                       : 'At ${selectedLeverage}x about ${QuantaraNumberFormat.marketValue(selectedMargin ?? idea.requiredMargin!, unit: 'USDT')} margin is used; position notional and planned loss cap do not change.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
             ),
@@ -1005,9 +1000,8 @@ class _AlphaZoneRow extends StatelessWidget {
                       Text(
                         '${QuantaraNumberFormat.marketValue(zone.lower)} – ${QuantaraNumberFormat.marketValue(zone.upper)}',
                         textDirection: TextDirection.ltr,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                     ],
                   ),
