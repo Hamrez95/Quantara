@@ -1,1 +1,1 @@
-Trigger atomic multi-position service anchor diagnostics; remove before merge.
+Trigger raw atomic multi-position service integration; remove before merge.
