@@ -1,0 +1,341 @@
+name: Temporary feature 163 service integration
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: ${{ !contains(github.event.head_commit.message, '[feat163-service]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+
+      - name: Integrate atomic portfolio ledger with Local Live service
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
+          text = path.read_text()
+
+          def one(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 anchor, found {count}')
+              text = text.replace(old, new)
+
+          one(
+              "import '../domain/local_live_cycle_readiness.dart';\nimport '../domain/local_live_trade_models.dart';",
+              "import '../domain/local_live_cycle_readiness.dart';\nimport '../domain/local_live_portfolio_admission.dart';\nimport '../domain/local_live_trade_models.dart';",
+              'admission import',
+          )
+          one(
+              "import 'profit_lock_promotion_executor.dart';",
+              "import 'local_live_portfolio_execution_guard.dart';\nimport 'profit_lock_promotion_executor.dart';",
+              'guard import',
+          )
+          one(
+              '  final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();',
+              '''  final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();
+  LocalLivePortfolioExecutionGuard? _portfolioGuard;''',
+              'guard field',
+          )
+          one(
+              '''          _sessionStartEquity = null;
+          _sessionPnlProjection = null;''',
+              '''          _sessionStartEquity = null;
+          _sessionPnlProjection = null;
+          _portfolioGuard = null;''',
+              'session reset',
+          )
+          one(
+              '''      await _reconcileManagedPositions(positions, account.authoritativePnl);
+      final lossPercent =''',
+              '''      await _reconcileManagedPositions(positions, account.authoritativePnl);
+      if (_sessionStartEquity != null && _sessionStartEquity! > 0) {
+        _portfolioGuard ??= LocalLivePortfolioExecutionGuard(
+          dailyRiskLimit:
+              _sessionStartEquity! * configuration.dailyLossLimitPercent / 100,
+        );
+        try {
+          await _portfolioGuard!.reconcileRestartAndClosedPositions(
+            managed: _managed,
+            exchangePositions: positions,
+            pnlProjection: account.authoritativePnl,
+            now: DateTime.now().toUtc(),
+          );
+        } on LocalLiveTradeSafeException catch (error) {
+          _entriesEnabled = false;
+          cycleWarning = error.message;
+          _auditEvent('portfolio_ledger_block', error.message);
+        }
+      }
+      final lossPercent =''',
+              'runtime reconciliation',
+          )
+          one(
+              '''      if (_entriesEnabled &&
+          _managed.isEmpty &&
+          positions.isEmpty &&
+          account.estimatedEquity > 0) {
+        await _scanAndMaybeEnter(account);
+      }''',
+              '''      final hasExecutionSlot = LocalLivePortfolioAdmission.hasExecutionSlot(
+        configuredMaximum: configuration.maximumConcurrentPositions,
+        managedPositionCount: _managed.length,
+        exchangePositionCount: positions.where((item) => item.quantity > 0).length,
+      );
+      if (_entriesEnabled && hasExecutionSlot && account.estimatedEquity > 0) {
+        await _scanAndMaybeEnter(account, positions);
+      } else if (_entriesEnabled &&
+          _managed.length != positions.where((item) => item.quantity > 0).length) {
+        _auditEvent(
+          'portfolio_position_count_block',
+          'Managed and exchange position counts differ; no new entry was evaluated.',
+        );
+      }''',
+              'scan slot condition',
+          )
+          one(
+              '  Future<void> _scanAndMaybeEnter(AutoTradeAccountSnapshot account) async {',
+              '''  Future<void> _scanAndMaybeEnter(
+    AutoTradeAccountSnapshot account,
+    List<BitunixLivePosition> exchangePositions,
+  ) async {''',
+              'scan signature',
+          )
+          one(
+              '''      _lastScanAt = DateTime.now().toUtc();
+      final ideas = <TradeIdea>[''',
+              '''      _lastScanAt = DateTime.now().toUtc();
+      final occupiedSymbols = exchangePositions
+          .where((item) => item.quantity > 0)
+          .map((item) => item.symbol.trim().toUpperCase())
+          .toSet();
+      final ideas = <TradeIdea>[''',
+              'occupied symbols',
+          )
+          one(
+              '''].where((idea) => idea.isActionable).toList(growable: false);''',
+              '''].where(
+        (idea) =>
+            idea.isActionable &&
+            !occupiedSymbols.contains(idea.symbol.trim().toUpperCase()),
+      ).toList(growable: false);''',
+              'same symbol filter',
+          )
+          one(
+              '''      await exchange.ensureIsolatedMargin(
+        symbol: idea.symbol,
+        credentials: credentials,
+      );''',
+              '''      final portfolioGuard = _portfolioGuard;
+      if (portfolioGuard == null) {
+        _auditEvent(
+          'portfolio_ledger_block',
+          'Atomic portfolio risk runtime is not initialized.',
+          symbol: idea.symbol,
+        );
+        return;
+      }
+      final reservation = await portfolioGuard.reserve(
+        idea: idea,
+        plannedQuantity: quantity,
+        entryPrice: entryPrice,
+        stopPrice: stopLoss,
+        requiredMargin: requiredMargin,
+        leverage: leverage,
+        minimumQuantity: rules.minimumQuantity,
+        minimumNotional: rules.minimumQuantity * entryPrice,
+        account: account,
+        allOpenPositionsProtected: true,
+        now: DateTime.now().toUtc(),
+      );
+      if (!reservation.decision.allowed) {
+        _auditEvent(
+          'portfolio_reservation_block',
+          'Portfolio reservation rejected: ${reservation.decision.reason.name}.',
+          symbol: idea.symbol,
+        );
+        return;
+      }
+      String? activeReservationId = 'local-live:${idea.setupId}';
+      var orderSubmitted = false;
+      try {
+        await exchange.ensureIsolatedMargin(
+          symbol: idea.symbol,
+          credentials: credentials,
+        );''',
+              'reservation before order',
+          )
+          one(
+              '''      final placed = await exchange.placeMarketEntry(
+        symbol: idea.symbol,
+        quantity: quantity,
+        long: idea.direction == TradeDirection.long,
+        clientId: clientId,
+        stopLoss: stopLoss,
+        credentials: credentials,
+      );
+      _auditEvent(''',
+              '''      final placed = await exchange.placeMarketEntry(
+        symbol: idea.symbol,
+        quantity: quantity,
+        long: idea.direction == TradeDirection.long,
+        clientId: clientId,
+        stopLoss: stopLoss,
+        credentials: credentials,
+      );
+      orderSubmitted = true;
+      _auditEvent(''',
+              'order submitted flag',
+          )
+          one(
+              '''          _executedSetupIds.add(idea.setupId);
+          await _persistState();
+          throw const LocalLiveTradeSafeException(''',
+              '''          if (position == null && detail?.status == 'CANCELED') {
+            await portfolioGuard.releaseNoExposure(
+              reservationId: activeReservationId!,
+              evidence: 'entry-canceled-without-position',
+              now: DateTime.now().toUtc(),
+            );
+            activeReservationId = null;
+          } else if (position != null && position.quantity > 0) {
+            await portfolioGuard.recordFill(
+              reservationId: activeReservationId!,
+              orderId: placed.orderId,
+              positionId: position.positionId,
+              fillQuantity: position.quantity,
+              now: DateTime.now().toUtc(),
+            );
+          }
+          _executedSetupIds.add(idea.setupId);
+          await _persistState();
+          throw const LocalLiveTradeSafeException(''',
+              'cleanup reservation',
+          )
+          one(
+              '''      quantity = rules.roundQuantityDown(
+        math.min(detail.filledQuantity, position.quantity),
+      );''',
+              '''      await portfolioGuard.recordFill(
+        reservationId: activeReservationId!,
+        orderId: placed.orderId,
+        positionId: position.positionId,
+        fillQuantity: math.min(detail.filledQuantity, position.quantity),
+        now: DateTime.now().toUtc(),
+      );
+      quantity = rules.roundQuantityDown(
+        math.min(detail.filledQuantity, position.quantity),
+      );''',
+              'record full fill',
+          )
+          one(
+              '''      if (!protections.any((item) => item.stopLossPrice > 0)) {
+        await exchange.closePositionReduceOnly(
+          position: position,
+          clientId: '$clientId-unprotected-close',
+          credentials: credentials,
+        );
+        throw const LocalLiveTradeSafeException(
+          'Protective stop was not confirmed; the position was closed reduce-only.',
+        );
+      }
+      final allocation =''',
+              '''      if (!protections.any((item) => item.stopLossPrice > 0)) {
+        await exchange.closePositionReduceOnly(
+          position: position,
+          clientId: '$clientId-unprotected-close',
+          credentials: credentials,
+        );
+        throw const LocalLiveTradeSafeException(
+          'Protective stop was not confirmed; the position was closed reduce-only.',
+        );
+      }
+      await portfolioGuard.confirmStop(
+        positionId: position.positionId,
+        confirmedStop: stopLoss,
+        now: DateTime.now().toUtc(),
+      );
+      final allocation =''',
+              'confirm initial stop',
+          )
+          one(
+              '''      _auditEvent(
+        'position_protected',
+        'Entry fill, full stop and three staged targets confirmed '
+            '(${(configuration.targetAllocation.tp1Fraction * 100).toStringAsFixed(0)}/'
+            '${(configuration.targetAllocation.tp2Fraction * 100).toStringAsFixed(0)}/'
+            '${(configuration.targetAllocation.tp3Fraction * 100).toStringAsFixed(0)}%; '
+            'qty ${targetQuantities.map((item) => item.toString()).join('/')}; '
+            '${profitPlan.profile.name}).',
+        symbol: idea.symbol,
+      );
+    } finally {''',
+              '''      _auditEvent(
+        'position_protected',
+        'Entry fill, full stop and three staged targets confirmed '
+            '(${(configuration.targetAllocation.tp1Fraction * 100).toStringAsFixed(0)}/'
+            '${(configuration.targetAllocation.tp2Fraction * 100).toStringAsFixed(0)}/'
+            '${(configuration.targetAllocation.tp3Fraction * 100).toStringAsFixed(0)}%; '
+            'qty ${targetQuantities.map((item) => item.toString()).join('/')}; '
+            '${profitPlan.profile.name}).',
+        symbol: idea.symbol,
+      );
+      } on Object catch (error) {
+        final reservationId = activeReservationId;
+        if (reservationId != null) {
+          if (orderSubmitted) {
+            await portfolioGuard.markAmbiguous(
+              reservationId: reservationId,
+              evidence: 'entry-lifecycle:${error.runtimeType}',
+              now: DateTime.now().toUtc(),
+            );
+          } else {
+            await portfolioGuard.releaseNoExposure(
+              reservationId: reservationId,
+              evidence: 'pre-order:${error.runtimeType}',
+              now: DateTime.now().toUtc(),
+            );
+          }
+        }
+        rethrow;
+      }
+    } finally {''',
+              'reservation catch',
+          )
+
+          path.write_text(text)
+          PY
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Format integrated files
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/auto_trade/application/local_live_trade_service.dart
+          lib/features/auto_trade/application/local_live_portfolio_execution_guard.dart
+          lib/features/auto_trade/application/local_live_portfolio_risk_runtime.dart
+
+      - name: Commit service integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app
+          git commit -m "feat(local-live): reserve portfolio risk before concurrent entries [feat163-service]"
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
