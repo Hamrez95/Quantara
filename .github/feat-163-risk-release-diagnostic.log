@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/home/runner/work/Quantara/Quantara/.github/scripts/feat163_managed_risk_release.py", line 90, in <module>
+    replace_once(
+  File "/home/runner/work/Quantara/Quantara/.github/scripts/feat163_managed_risk_release.py", line 14, in replace_once
+    raise RuntimeError(f"{label}: expected 1 anchor, found {count}")
+RuntimeError: confirm TP1 stop risk: expected 1 anchor, found 0
