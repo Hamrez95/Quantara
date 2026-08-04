@@ -66,7 +66,11 @@ void main() {
       matching: find.byWidgetPredicate((widget) => widget is ButtonStyleButton),
     );
     expect(button, findsOneWidget);
-    await tester.ensureVisible(button);
+    await Scrollable.ensureVisible(
+      tester.element(button),
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 1),
+    );
     await tester.pumpAndSettle();
     await tester.tap(button);
     await tester.pumpAndSettle();
