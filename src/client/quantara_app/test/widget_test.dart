@@ -136,11 +136,12 @@ void main() {
     await tester.tap(find.byTooltip('حالت روشن'));
     await tester.pump();
     await _openDestination(tester, Icons.candlestick_chart_outlined);
+    final analysisScroll = find.byKey(
+      const PageStorageKey<String>('owner-alpha-2'),
+    );
+    expect(analysisScroll, findsOneWidget);
     for (var attempt = 0; attempt < 6; attempt++) {
-      await tester.drag(
-        find.byKey(const ValueKey('owner-alpha-2')),
-        const Offset(0, -500),
-      );
+      await tester.drag(analysisScroll, const Offset(0, -500));
       await tester.pump();
       expect(tester.takeException(), isNull);
     }
