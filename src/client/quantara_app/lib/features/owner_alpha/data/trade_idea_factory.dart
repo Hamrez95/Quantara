@@ -39,10 +39,7 @@ abstract final class TradeIdeaFactory {
         : resistances;
     if (zones.isEmpty || current <= 0) return false;
     final distance = (current - zones.first.center).abs() / current;
-    return distance <= math.max(
-      0.008,
-      analysis.volatilityPercent / 100 * 1.4,
-    );
+    return distance <= math.max(0.008, analysis.volatilityPercent / 100 * 1.4);
   }
 
   static String strategyVersion(AnalysisStrategy strategy) =>

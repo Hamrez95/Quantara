@@ -189,7 +189,10 @@ class _StrategyPackRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(description, style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),

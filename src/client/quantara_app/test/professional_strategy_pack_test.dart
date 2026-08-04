@@ -91,9 +91,64 @@ void main() {
       expect(idea.marketRegime.name, 'range');
     });
 
-    test('open candle, missing parent and required stale context fail closed', () {
+    test(
+      'open candle, missing parent and required stale context fail closed',
+      () {
+        final analysis = _trendAnalysis();
+        final beforeClose = ProfessionalStrategyEngine.create(
+          analysis: analysis,
+          capital: 10000,
+          riskPercent: 0.5,
+          confluence: const {'4h': ChartDirection.bullish},
+          languageCode: 'en',
+          strategy: AnalysisStrategy.trendPullback,
+          cadence: SignalCadence.balanced,
+          context: ProfessionalStrategyContext(
+            evaluatedAt: analysis.generatedAt.subtract(
+              const Duration(seconds: 1),
+            ),
+          ),
+        );
+        final noParent = ProfessionalStrategyEngine.create(
+          analysis: analysis,
+          capital: 10000,
+          riskPercent: 0.5,
+          confluence: const {},
+          languageCode: 'en',
+          strategy: AnalysisStrategy.trendPullback,
+          cadence: SignalCadence.balanced,
+        );
+        final staleContext = ProfessionalStrategyEngine.create(
+          analysis: analysis,
+          capital: 10000,
+          riskPercent: 0.5,
+          confluence: const {'4h': ChartDirection.bullish},
+          languageCode: 'en',
+          strategy: AnalysisStrategy.trendPullback,
+          cadence: SignalCadence.balanced,
+          context: ProfessionalStrategyContext(
+            evaluatedAt: analysis.generatedAt,
+            requireExternalContext: true,
+            externalContextState: ExternalContextState.stale,
+          ),
+        );
+
+        expect(beforeClose.direction, TradeDirection.wait);
+        expect(noParent.direction, TradeDirection.wait);
+        expect(staleContext.direction, TradeDirection.wait);
+        expect(
+          beforeClose.rejectionReason,
+          SetupRejectionReason.dataUnavailable,
+        );
+      },
+    );
+  });
+
+  test(
+    'actionable idea converts once and reserves risk and margin atomically',
+    () async {
       final analysis = _trendAnalysis();
-      final beforeClose = ProfessionalStrategyEngine.create(
+      final idea = ProfessionalStrategyEngine.create(
         analysis: analysis,
         capital: 10000,
         riskPercent: 0.5,
@@ -101,111 +156,73 @@ void main() {
         languageCode: 'en',
         strategy: AnalysisStrategy.trendPullback,
         cadence: SignalCadence.balanced,
-        context: ProfessionalStrategyContext(
-          evaluatedAt: analysis.generatedAt.subtract(const Duration(seconds: 1)),
-        ),
       );
-      final noParent = ProfessionalStrategyEngine.create(
-        analysis: analysis,
-        capital: 10000,
-        riskPercent: 0.5,
-        confluence: const {},
-        languageCode: 'en',
-        strategy: AnalysisStrategy.trendPullback,
-        cadence: SignalCadence.balanced,
+      const rules = ProfessionalExchangeRules(
+        symbol: 'BTCUSDT',
+        minimumQuantity: 0.001,
+        minimumNotional: 5,
+        quantityPrecision: 6,
+        contractMultiplier: 1,
+        entryFeeRate: 0.0006,
+        exitFeeRate: 0.0006,
+        slippageRate: 0.0008,
+        fundingReserveRate: 0.0003,
+        maximumLeverage: 10,
       );
-      final staleContext = ProfessionalStrategyEngine.create(
-        analysis: analysis,
-        capital: 10000,
-        riskPercent: 0.5,
-        confluence: const {'4h': ChartDirection.bullish},
-        languageCode: 'en',
-        strategy: AnalysisStrategy.trendPullback,
-        cadence: SignalCadence.balanced,
-        context: ProfessionalStrategyContext(
-          evaluatedAt: analysis.generatedAt,
-          requireExternalContext: true,
-          externalContextState: ExternalContextState.stale,
-        ),
+      final candidate = ProfessionalPortfolioCandidateAdapter.fromIdea(
+        idea: idea,
+        rules: rules,
+      );
+      final repeated = ProfessionalPortfolioCandidateAdapter.fromIdea(
+        idea: idea,
+        rules: rules,
+      );
+      expect(candidate.candidateId, repeated.candidateId);
+      expect(candidate.reservationId, repeated.reservationId);
+      expect(
+        candidate.requiredMargin,
+        closeTo(candidate.notional / candidate.leverage, 1e-9),
       );
 
-      expect(beforeClose.direction, TradeDirection.wait);
-      expect(noParent.direction, TradeDirection.wait);
-      expect(staleContext.direction, TradeDirection.wait);
-      expect(beforeClose.rejectionReason, SetupRejectionReason.dataUnavailable);
-    });
-  });
+      final store = _AtomicMemoryStore();
+      final coordinator = PortfolioRiskCoordinator(
+        store: store,
+        defaultDailyRiskLimit: 100,
+        policy: const PortfolioRiskPolicy(maximumDirectionRiskFraction: 1),
+      );
+      final account = PortfolioAccountTruth(
+        asOf: analysis.generatedAt,
+        fresh: true,
+        allOpenPositionsProtected: true,
+        marginMode: 'isolated',
+        freeMargin: 10000,
+        usedMargin: 0,
+        maintenanceMargin: 0,
+        pendingMarginReservations: 0,
+        safetyBuffer: 100,
+        feeReserve: 10,
+      );
+      final admitted = await coordinator.reserve(
+        candidate: candidate,
+        account: account,
+        now: analysis.generatedAt,
+      );
+      final duplicate = await coordinator.reserve(
+        candidate: repeated,
+        account: account,
+        now: analysis.generatedAt,
+      );
 
-  test('actionable idea converts once and reserves risk and margin atomically', () async {
-    final analysis = _trendAnalysis();
-    final idea = ProfessionalStrategyEngine.create(
-      analysis: analysis,
-      capital: 10000,
-      riskPercent: 0.5,
-      confluence: const {'4h': ChartDirection.bullish},
-      languageCode: 'en',
-      strategy: AnalysisStrategy.trendPullback,
-      cadence: SignalCadence.balanced,
-    );
-    const rules = ProfessionalExchangeRules(
-      symbol: 'BTCUSDT',
-      minimumQuantity: 0.001,
-      minimumNotional: 5,
-      quantityPrecision: 6,
-      contractMultiplier: 1,
-      entryFeeRate: 0.0006,
-      exitFeeRate: 0.0006,
-      slippageRate: 0.0008,
-      fundingReserveRate: 0.0003,
-      maximumLeverage: 10,
-    );
-    final candidate = ProfessionalPortfolioCandidateAdapter.fromIdea(
-      idea: idea,
-      rules: rules,
-    );
-    final repeated = ProfessionalPortfolioCandidateAdapter.fromIdea(
-      idea: idea,
-      rules: rules,
-    );
-    expect(candidate.candidateId, repeated.candidateId);
-    expect(candidate.reservationId, repeated.reservationId);
-    expect(candidate.requiredMargin, closeTo(candidate.notional / candidate.leverage, 1e-9));
-
-    final store = _AtomicMemoryStore();
-    final coordinator = PortfolioRiskCoordinator(
-      store: store,
-      defaultDailyRiskLimit: 100,
-      policy: const PortfolioRiskPolicy(maximumDirectionRiskFraction: 1),
-    );
-    final account = PortfolioAccountTruth(
-      asOf: analysis.generatedAt,
-      fresh: true,
-      allOpenPositionsProtected: true,
-      marginMode: 'isolated',
-      freeMargin: 10000,
-      usedMargin: 0,
-      maintenanceMargin: 0,
-      pendingMarginReservations: 0,
-      safetyBuffer: 100,
-      feeReserve: 10,
-    );
-    final admitted = await coordinator.reserve(
-      candidate: candidate,
-      account: account,
-      now: analysis.generatedAt,
-    );
-    final duplicate = await coordinator.reserve(
-      candidate: repeated,
-      account: account,
-      now: analysis.generatedAt,
-    );
-
-    expect(admitted.decision.allowed, isTrue);
-    expect(admitted.decision.liveExecutionAllowed, isFalse);
-    expect(duplicate.decision.allowed, isFalse);
-    expect(duplicate.decision.reason, PortfolioEntryBlockReason.duplicateCandidate);
-    expect(store.mutations, 2);
-  });
+      expect(admitted.decision.allowed, isTrue);
+      expect(admitted.decision.liveExecutionAllowed, isFalse);
+      expect(duplicate.decision.allowed, isFalse);
+      expect(
+        duplicate.decision.reason,
+        PortfolioEntryBlockReason.duplicateCandidate,
+      );
+      expect(store.mutations, 2);
+    },
+  );
 
   test('adapter rejects rounded values below exchange minimums', () {
     final analysis = _trendAnalysis();
@@ -408,7 +425,8 @@ TimeframeChartAnalysis _analysis({
     volatilityPercent: 0.9,
     summary: 'professional test',
     generatedAt: closedAt,
-    fingerprint: 'professional-${direction.name}-${closedAt.millisecondsSinceEpoch}',
+    fingerprint:
+        'professional-${direction.name}-${closedAt.millisecondsSinceEpoch}',
   );
 }
 

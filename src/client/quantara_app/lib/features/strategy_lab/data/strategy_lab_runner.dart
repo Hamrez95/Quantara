@@ -29,7 +29,9 @@ abstract final class StrategyLabRunner {
       startIndex < 0 ? minimumHistory - 1 : startIndex,
     );
     if (startIndex >= candles.length - 1) {
-      throw ArgumentError('The closed-candle history is too short for testing.');
+      throw ArgumentError(
+        'The closed-candle history is too short for testing.',
+      );
     }
 
     final trades = <StrategyLabTrade>[];
@@ -217,7 +219,9 @@ abstract final class StrategyLabRunner {
     List<ChartCandle> candles,
   ) {
     if (candles.length < _minimumHistory(config.timeframe) + 1) {
-      throw ArgumentError('More closed candles are required for this timeframe.');
+      throw ArgumentError(
+        'More closed candles are required for this timeframe.',
+      );
     }
     if (!StrategyDefinition.forKind(
       config.strategy,
@@ -263,8 +267,8 @@ abstract final class StrategyLabRunner {
           '${config.symbol}|${config.timeframe}|${closedAt.millisecondsSinceEpoch}',
     );
     final requestedStrategy = switch (config.strategy) {
-      StrategyKind.structureZones || StrategyKind.trendCandle =>
-        AnalysisStrategy.structureZones,
+      StrategyKind.structureZones ||
+      StrategyKind.trendCandle => AnalysisStrategy.structureZones,
       StrategyKind.dowContinuation => AnalysisStrategy.trendPullback,
       StrategyKind.kbsmResearch => AnalysisStrategy.momentumContinuation,
     };
@@ -345,9 +349,8 @@ abstract final class StrategyLabRunner {
     final keys = buckets.keys.toList()..sort();
     final result = <ChartCandle>[];
     for (final key in keys) {
-      final values = buckets[key]!..sort(
-          (left, right) => left.openTime.compareTo(right.openTime),
-        );
+      final values = buckets[key]!
+        ..sort((left, right) => left.openTime.compareTo(right.openTime));
       if (values.length != factor) continue;
       var contiguous = true;
       for (var index = 1; index < values.length; index++) {
@@ -566,29 +569,27 @@ abstract final class StrategyLabRunner {
 }
 
 final class _LabPortfolioGate {
-  _LabPortfolioGate({
-    required this.config,
-    required DateTime startedAt,
-  }) : _dailyRiskLimit = math.max(
-         config.initialCapital * 0.005,
-         math.min(
-           config.initialCapital * 0.05,
-           config.initialCapital * config.riskPercent / 100 * 4,
-         ),
-       ),
-       _ledger = PortfolioRiskLedger.initial(
-         tradingDay: TradingDayId.start(
-           now: startedAt,
-           timezoneOffsetMinutes: 0,
-         ),
-         dailyRiskLimit: math.max(
-           config.initialCapital * 0.005,
-           math.min(
-             config.initialCapital * 0.05,
-             config.initialCapital * config.riskPercent / 100 * 4,
-           ),
-         ),
-       );
+  _LabPortfolioGate({required this.config, required DateTime startedAt})
+    : _dailyRiskLimit = math.max(
+        config.initialCapital * 0.005,
+        math.min(
+          config.initialCapital * 0.05,
+          config.initialCapital * config.riskPercent / 100 * 4,
+        ),
+      ),
+      _ledger = PortfolioRiskLedger.initial(
+        tradingDay: TradingDayId.start(
+          now: startedAt,
+          timezoneOffsetMinutes: 0,
+        ),
+        dailyRiskLimit: math.max(
+          config.initialCapital * 0.005,
+          math.min(
+            config.initialCapital * 0.05,
+            config.initialCapital * config.riskPercent / 100 * 4,
+          ),
+        ),
+      );
 
   final StrategyLabConfig config;
   final double _dailyRiskLimit;

@@ -116,7 +116,8 @@ abstract final class ProfessionalStrategyEngine {
         kind: _kindFor(strategy, analysis, null),
         maximumLoss: capital * riskPercent / 100,
         fa: fa,
-        summaryFa: 'کانتکست اختیاری بازار در دسترس یا تازه نیست؛ حالت فقط مشاهده فعال است.',
+        summaryFa:
+            'کانتکست اختیاری بازار در دسترس یا تازه نیست؛ حالت فقط مشاهده فعال است.',
         summaryEn:
             'Optional market context is unavailable or stale; observe-only mode is active.',
         reason: SetupRejectionReason.dataUnavailable,
@@ -267,8 +268,7 @@ abstract final class ProfessionalStrategyEngine {
           ? const _ParentGate.allowed()
           : const _ParentGate.blocked(
               fa: 'رنج کوتاه‌مدت با روند تایم‌فریم بالاتر هم‌خوان نیست.',
-              en:
-                  'The short-term range conflicts with the higher-timeframe trend.',
+              en: 'The short-term range conflicts with the higher-timeframe trend.',
             );
     }
     if (analysis.direction == ChartDirection.sideways ||
@@ -340,7 +340,8 @@ abstract final class ProfessionalStrategyEngine {
     final priorHigh = window.map((item) => item.high).reduce(math.max);
     final priorLow = window.map((item) => item.low).reduce(math.min);
     final averageVolume =
-        window.fold<double>(0, (sum, item) => sum + item.volume) / window.length;
+        window.fold<double>(0, (sum, item) => sum + item.volume) /
+        window.length;
     final breakoutRvol = averageVolume <= 0
         ? 0.0
         : breakout.volume / averageVolume;
@@ -399,8 +400,10 @@ abstract final class ProfessionalStrategyEngine {
     final long = analysis.direction == ChartDirection.bullish;
     final emaAligned = long
         ? indicators.ema20 > indicators.ema50 && latest.close > indicators.ema20
-        : indicators.ema20 < indicators.ema50 && latest.close < indicators.ema20;
-    final nearSma = (latest.close - sma7).abs() <= indicators.atr14 * 0.7 ||
+        : indicators.ema20 < indicators.ema50 &&
+              latest.close < indicators.ema20;
+    final nearSma =
+        (latest.close - sma7).abs() <= indicators.atr14 * 0.7 ||
         (long
             ? latest.low <= sma7 + indicators.atr14 * 0.18
             : latest.high >= sma7 - indicators.atr14 * 0.18);
@@ -455,23 +458,30 @@ abstract final class ProfessionalStrategyEngine {
       return null;
     }
     final latest = analysis.latestCandle;
-    final supports = analysis.zones
-        .where((zone) => zone.role == ChartZoneRole.support)
-        .toList()
-      ..sort((a, b) => (latest.close - a.center).abs().compareTo(
-            (latest.close - b.center).abs(),
-          ));
-    final resistances = analysis.zones
-        .where((zone) => zone.role == ChartZoneRole.resistance)
-        .toList()
-      ..sort((a, b) => (latest.close - a.center).abs().compareTo(
-            (latest.close - b.center).abs(),
-          ));
+    final supports =
+        analysis.zones
+            .where((zone) => zone.role == ChartZoneRole.support)
+            .toList()
+          ..sort(
+            (a, b) => (latest.close - a.center).abs().compareTo(
+              (latest.close - b.center).abs(),
+            ),
+          );
+    final resistances =
+        analysis.zones
+            .where((zone) => zone.role == ChartZoneRole.resistance)
+            .toList()
+          ..sort(
+            (a, b) => (latest.close - a.center).abs().compareTo(
+              (latest.close - b.center).abs(),
+            ),
+          );
     if (supports.isEmpty || resistances.isEmpty) return null;
     final support = supports.first;
     final resistance = resistances.first;
     final nearSupport = latest.low <= support.upper + indicators.atr14 * 0.25;
-    final nearResistance = latest.high >= resistance.lower - indicators.atr14 * 0.25;
+    final nearResistance =
+        latest.high >= resistance.lower - indicators.atr14 * 0.25;
     final long = nearSupport && _rejectionWick(latest, true);
     final short = nearResistance && _rejectionWick(latest, false);
     if (long == short) return null;
@@ -518,7 +528,8 @@ abstract final class ProfessionalStrategyEngine {
     final entryUpper = setup.entry + entryBand;
     final conservativeEntry = setup.long ? entryUpper : entryLower;
     final stopDistance = (conservativeEntry - setup.stop).abs();
-    final costRate = context.entryFeeRate +
+    final costRate =
+        context.entryFeeRate +
         context.exitFeeRate +
         context.slippageRate +
         context.fundingReserveRate;
@@ -538,7 +549,8 @@ abstract final class ProfessionalStrategyEngine {
     var quantity = maximumLoss / riskPerUnit;
     quantity = _roundDown(quantity, 6);
     final notional = quantity * conservativeEntry;
-    if (quantity < context.minimumQuantity || notional < context.minimumNotional) {
+    if (quantity < context.minimumQuantity ||
+        notional < context.minimumNotional) {
       return _wait(
         analysis: analysis,
         kind: kind,
@@ -573,12 +585,13 @@ abstract final class ProfessionalStrategyEngine {
       entry: conservativeEntry,
       stop: setup.stop,
     );
-    final confidence = (setup.confidenceBase +
-            math.min(10, analysis.directionStrength * 10) +
-            (externalContextAvailable ? 3 : 0))
-        .round()
-        .clamp(0, 90)
-        .toInt();
+    final confidence =
+        (setup.confidenceBase +
+                math.min(10, analysis.directionStrength * 10) +
+                (externalContextAvailable ? 3 : 0))
+            .round()
+            .clamp(0, 90)
+            .toInt();
     final labelFa = _labelFa(kind);
     final labelEn = _labelEn(kind);
     final contextReasonFa = externalContextAvailable
@@ -613,11 +626,11 @@ abstract final class ProfessionalStrategyEngine {
           : '$labelEn is confirmed with a closed candle, structural stop and conservative costs. It is not a trade instruction or profit guarantee.',
       invalidation: fa
           ? (setup.long
-              ? 'بسته‌شدن معتبر زیر Stop ساختاری، سناریو را باطل می‌کند.'
-              : 'بسته‌شدن معتبر بالای Stop ساختاری، سناریو را باطل می‌کند.')
+                ? 'بسته‌شدن معتبر زیر Stop ساختاری، سناریو را باطل می‌کند.'
+                : 'بسته‌شدن معتبر بالای Stop ساختاری، سناریو را باطل می‌کند.')
           : (setup.long
-              ? 'A confirmed close below the structural stop invalidates the setup.'
-              : 'A confirmed close above the structural stop invalidates the setup.'),
+                ? 'A confirmed close below the structural stop invalidates the setup.'
+                : 'A confirmed close above the structural stop invalidates the setup.'),
       reasons: List.unmodifiable([
         ...(fa ? setup.reasonsFa : setup.reasonsEn),
         fa ? contextReasonFa : contextReasonEn,
@@ -704,16 +717,21 @@ abstract final class ProfessionalStrategyEngine {
     bool long,
     ChartCandle latest,
   ) {
-    final protective = analysis.zones
-        .where(
-          (zone) => long
-              ? zone.role == ChartZoneRole.support && zone.lower < latest.close
-              : zone.role == ChartZoneRole.resistance &&
-                  zone.upper > latest.close,
-        )
-        .toList()
-      ..sort((a, b) =>
-          (latest.close - a.center).abs().compareTo((latest.close - b.center).abs()));
+    final protective =
+        analysis.zones
+            .where(
+              (zone) => long
+                  ? zone.role == ChartZoneRole.support &&
+                        zone.lower < latest.close
+                  : zone.role == ChartZoneRole.resistance &&
+                        zone.upper > latest.close,
+            )
+            .toList()
+          ..sort(
+            (a, b) => (latest.close - a.center).abs().compareTo(
+              (latest.close - b.center).abs(),
+            ),
+          );
     final zoneStop = protective.isEmpty
         ? (long ? indicators.recentSwingLow : indicators.recentSwingHigh)
         : (long ? protective.first.lower : protective.first.upper);
@@ -730,7 +748,9 @@ abstract final class ProfessionalStrategyEngine {
     final range = candle.high - candle.low;
     if (range <= 0) return false;
     final body = (candle.close - candle.open).abs();
-    final direction = long ? candle.close > candle.open : candle.close < candle.open;
+    final direction = long
+        ? candle.close > candle.open
+        : candle.close < candle.open;
     return direction && body / range >= minimum;
   }
 
@@ -846,13 +866,10 @@ final class _RawSetup {
 }
 
 final class _ParentGate {
-  const _ParentGate.allowed()
-      : allowed = true,
-        fa = '',
-        en = '';
+  const _ParentGate.allowed() : allowed = true, fa = '', en = '';
 
   const _ParentGate.blocked({required this.fa, required this.en})
-      : allowed = false;
+    : allowed = false;
 
   final bool allowed;
   final String fa;
