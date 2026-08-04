@@ -15,9 +15,11 @@ import '../../trading_journal/domain/trading_journal_models.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_cycle_readiness.dart';
+import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'local_live_portfolio_execution_guard.dart';
 import 'profit_lock_promotion_executor.dart';
 
 const localLiveConfigurationKey = 'quantara.local-live.configuration.v1';
@@ -60,6 +62,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   String? _lastAuditFingerprint;
   DateTime? _lastAuditAt;
   final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();
+  LocalLivePortfolioExecutionGuard? _portfolioGuard;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -168,6 +171,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               'local-${startedAt.microsecondsSinceEpoch.toRadixString(36)}';
           _sessionStartEquity = null;
           _sessionPnlProjection = null;
+          _portfolioGuard = null;
           _sessionPositionIds.clear();
           await _persistSessionMetadata();
         }
@@ -291,6 +295,24 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
       }
       await _reconcileManagedPositions(positions, account.authoritativePnl);
+      if (_sessionStartEquity != null && _sessionStartEquity! > 0) {
+        _portfolioGuard ??= LocalLivePortfolioExecutionGuard(
+          dailyRiskLimit:
+              _sessionStartEquity! * configuration.dailyLossLimitPercent / 100,
+        );
+        try {
+          await _portfolioGuard!.reconcileRestartAndClosedPositions(
+            managed: _managed,
+            exchangePositions: positions,
+            pnlProjection: account.authoritativePnl,
+            now: DateTime.now().toUtc(),
+          );
+        } on LocalLiveTradeSafeException catch (error) {
+          _entriesEnabled = false;
+          cycleWarning = error.message;
+          _auditEvent('portfolio_ledger_block', error.message);
+        }
+      }
       final lossPercent =
           _sessionStartEquity == null || _sessionStartEquity! <= 0
           ? 0
@@ -312,11 +334,21 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         return;
       }
-      if (_entriesEnabled &&
-          _managed.isEmpty &&
-          positions.isEmpty &&
-          account.estimatedEquity > 0) {
-        await _scanAndMaybeEnter(account);
+      final exchangePositionCount = positions
+          .where((item) => item.quantity > 0)
+          .length;
+      final hasExecutionSlot = LocalLivePortfolioAdmission.hasExecutionSlot(
+        configuredMaximum: configuration.maximumConcurrentPositions,
+        managedPositionCount: _managed.length,
+        exchangePositionCount: exchangePositionCount,
+      );
+      if (_entriesEnabled && hasExecutionSlot && account.estimatedEquity > 0) {
+        await _scanAndMaybeEnter(account, positions);
+      } else if (_entriesEnabled && _managed.length != exchangePositionCount) {
+        _auditEvent(
+          'portfolio_position_count_block',
+          'Managed and exchange position counts differ; no new entry was evaluated.',
+        );
       }
       _consecutiveFailures = 0;
       final profitLockWarning = _managed
@@ -356,7 +388,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     }
   }
 
-  Future<void> _scanAndMaybeEnter(AutoTradeAccountSnapshot account) async {
+  Future<void> _scanAndMaybeEnter(
+    AutoTradeAccountSnapshot account,
+    List<BitunixLivePosition> exchangePositions,
+  ) async {
     final configuration = _configuration!;
     final credentials = _credentials!;
     final exchange = _exchange!;
@@ -372,23 +407,35 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         languageCode: configuration.languageCode,
       );
       _lastScanAt = DateTime.now().toUtc();
-      final ideas = <TradeIdea>[
-        for (final result in snapshot.radar)
-          for (final entry in result.analysesByTimeframe.entries)
-            if (configuration.timeframes.contains(entry.key))
-              TradeIdeaFactory.create(
-                analysis: entry.value,
-                capital: account.estimatedEquity,
-                riskPercent: configuration.riskPercent,
-                languageCode: configuration.languageCode,
-                strategy: configuration.strategy,
-                cadence: configuration.cadence,
-                confluence: {
-                  for (final direction in result.analysesByTimeframe.entries)
-                    direction.key: direction.value.direction,
-                },
-              ),
-      ].where((idea) => idea.isActionable).toList(growable: false);
+      final occupiedSymbols = exchangePositions
+          .where((item) => item.quantity > 0)
+          .map((item) => item.symbol.trim().toUpperCase())
+          .toSet();
+      final ideas =
+          <TradeIdea>[
+                for (final result in snapshot.radar)
+                  for (final entry in result.analysesByTimeframe.entries)
+                    if (configuration.timeframes.contains(entry.key))
+                      TradeIdeaFactory.create(
+                        analysis: entry.value,
+                        capital: account.estimatedEquity,
+                        riskPercent: configuration.riskPercent,
+                        languageCode: configuration.languageCode,
+                        strategy: configuration.strategy,
+                        cadence: configuration.cadence,
+                        confluence: {
+                          for (final direction
+                              in result.analysesByTimeframe.entries)
+                            direction.key: direction.value.direction,
+                        },
+                      ),
+              ]
+              .where(
+                (idea) =>
+                    idea.isActionable &&
+                    !occupiedSymbols.contains(idea.symbol.trim().toUpperCase()),
+              )
+              .toList(growable: false);
       if (ideas.isEmpty) {
         _auditEvent(
           'scan_skip',
