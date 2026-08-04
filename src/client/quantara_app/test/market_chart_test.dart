@@ -110,8 +110,19 @@ void main() {
 Future<void> _openAnalysisFromHome(WidgetTester tester) async {
   final target = find.text('تحلیل');
   expect(target, findsOneWidget);
-  await tester.ensureVisible(target);
-  await tester.tap(target);
+  final page = find.byType(ListView).first;
+  await tester.fling(page, const Offset(0, 1200), 2400);
+  await tester.pumpAndSettle();
+  for (
+    var attempt = 0;
+    attempt < 8 && target.hitTestable().evaluate().isEmpty;
+    attempt++
+  ) {
+    await tester.drag(page, const Offset(0, -260));
+    await tester.pump();
+  }
+  expect(target.hitTestable(), findsOneWidget);
+  await tester.tap(target.hitTestable());
   await tester.pumpAndSettle();
 }
 
