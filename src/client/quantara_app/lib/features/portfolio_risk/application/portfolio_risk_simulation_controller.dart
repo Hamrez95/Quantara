@@ -149,7 +149,7 @@ final class PortfolioRiskSimulationController extends ChangeNotifier {
     });
     _operationTail = result.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return result;
   }
