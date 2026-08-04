@@ -25,7 +25,9 @@ abstract final class TradeIdeaFactory {
     languageCode: languageCode,
     strategy: strategy,
     cadence: cadence,
-    context: professionalContext,
+    context:
+        professionalContext ??
+        ProfessionalStrategyContext(evaluatedAt: DateTime.now().toUtc()),
   );
 
   static bool protectiveAlignment(
