@@ -1,0 +1,251 @@
+name: Temporary fix 161 private projection patch
+
+on:
+  push:
+    branches:
+      - fix/161-local-live-armed-intent-resilience
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[fix161-patched]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/161-local-live-armed-intent-resilience
+          fetch-depth: 0
+
+      - name: Preserve armed intent through transient private projection failures
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          controller_path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_controller.dart')
+          controller = controller_path.read_text()
+
+          old_import = "import '../domain/private_account_reconciliation.dart';"
+          new_import = "import '../domain/private_account_entry_block_policy.dart';\nimport '../domain/private_account_reconciliation.dart';"
+          if controller.count(old_import) != 1:
+              raise SystemExit(f'Expected one reconciliation import, found {controller.count(old_import)}')
+          controller = controller.replace(old_import, new_import)
+
+          old_field = "  Timer? _accountPollTimer;"
+          new_field = "  Timer? _accountPollTimer;\n  PrivateAccountEntryBlockDecision? _lastPrivateProjectionDecision;"
+          if controller.count(old_field) != 1:
+              raise SystemExit(f'Expected one account poll timer field, found {controller.count(old_field)}')
+          controller = controller.replace(old_field, new_field)
+
+          old_method = '''  void _onAccountProjectionChanged() {
+            if (_disposed || !_status.isRunning || !_status.entriesEnabled) return;
+            if (!_accountController.reconciliation.blocksNewEntries) return;
+            FlutterForegroundTask.sendDataToTask(
+              jsonEncode({
+                'type': 'block_entries_private_state',
+                'reason': _accountController.reconciliation.health.name,
+              }),
+            );
+          }'''
+          new_method = '''  void _onAccountProjectionChanged() {
+            if (_disposed || !_status.isRunning || !_status.entriesEnabled) return;
+            final reconciliation = _accountController.reconciliation;
+            final decision = PrivateAccountEntryBlockPolicy.evaluate(
+              explicitlyDisconnected:
+                  _accountController.state == AutoTradeConnectionState.disconnected,
+              refreshing: reconciliation.refreshing,
+              health: reconciliation.health,
+            );
+            final previousDecision = _lastPrivateProjectionDecision;
+            if (decision == previousDecision) return;
+            _lastPrivateProjectionDecision = decision;
+            switch (decision) {
+              case PrivateAccountEntryBlockDecision.none:
+                if (previousDecision ==
+                    PrivateAccountEntryBlockDecision.transientProjectionWarning) {
+                  _sendPrivateProjectionMessage(
+                    type: 'private_state_projection_recovered',
+                    reason: reconciliation.health.name,
+                  );
+                }
+                return;
+              case PrivateAccountEntryBlockDecision.transientProjectionWarning:
+                _sendPrivateProjectionMessage(
+                  type: 'private_state_projection_warning',
+                  reason: reconciliation.health.name,
+                );
+                return;
+              case PrivateAccountEntryBlockDecision.hardBlockDisconnected:
+                _sendPrivateProjectionMessage(
+                  type: 'block_entries_private_state',
+                  reason: 'disconnected',
+                );
+                return;
+              case PrivateAccountEntryBlockDecision.hardBlockDivergent:
+                _sendPrivateProjectionMessage(
+                  type: 'block_entries_private_state',
+                  reason: reconciliation.health.name,
+                );
+                return;
+            }
+          }
+
+          void _sendPrivateProjectionMessage({
+            required String type,
+            required String reason,
+          }) {
+            FlutterForegroundTask.sendDataToTask(
+              jsonEncode({'type': type, 'reason': reason}),
+            );
+          }'''
+          if controller.count(old_method) != 1:
+              raise SystemExit(f'Expected one private projection listener, found {controller.count(old_method)}')
+          controller = controller.replace(old_method, new_method)
+          controller_path.write_text(controller)
+
+          service_path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
+          service = service_path.read_text()
+          block_case = """      case 'block_entries_private_state':
+        _entriesEnabled = false;"""
+          warning_cases = """      case 'private_state_projection_warning':
+        final reason = message['reason']?.toString() ?? 'temporarily unavailable';
+        _auditEvent(
+          'private_state_projection_warning',
+          'The app private-account projection is $reason. Explicit armed intent is preserved while the foreground service continues its independent exchange reconciliation.',
+        );
+      case 'private_state_projection_recovered':
+        _auditEvent(
+          'private_state_projection_recovered',
+          'The app private-account projection recovered without re-arming because entry intent was never disabled.',
+        );
+      case 'block_entries_private_state':
+        _entriesEnabled = false;"""
+          if service.count(block_case) != 1:
+              raise SystemExit(f'Expected one private-state block case, found {service.count(block_case)}')
+          service = service.replace(block_case, warning_cases)
+          service_path.write_text(service)
+
+          test_path = Path('src/client/quantara_app/test/private_account_entry_block_policy_test.dart')
+          test_path.write_text("""import 'package:flutter_test/flutter_test.dart';
+          import 'package:quantara_app/features/auto_trade/domain/private_account_entry_block_policy.dart';
+          import 'package:quantara_app/features/auto_trade/domain/private_account_reconciliation.dart';
+
+          void main() {
+            test('refreshing and transient stale projections preserve armed intent', () {
+              expect(
+                PrivateAccountEntryBlockPolicy.evaluate(
+                  explicitlyDisconnected: false,
+                  refreshing: true,
+                  health: PrivateAccountReconciliationHealth.unavailable,
+                ),
+                PrivateAccountEntryBlockDecision.none,
+              );
+              expect(
+                PrivateAccountEntryBlockPolicy.evaluate(
+                  explicitlyDisconnected: false,
+                  refreshing: false,
+                  health: PrivateAccountReconciliationHealth.stale,
+                ),
+                PrivateAccountEntryBlockDecision.transientProjectionWarning,
+              );
+              expect(
+                PrivateAccountEntryBlockPolicy.evaluate(
+                  explicitlyDisconnected: false,
+                  refreshing: false,
+                  health: PrivateAccountReconciliationHealth.unavailable,
+                ),
+                PrivateAccountEntryBlockDecision.transientProjectionWarning,
+              );
+            });
+
+            test('disconnect and divergent exchange truth remain hard blocks', () {
+              expect(
+                PrivateAccountEntryBlockPolicy.evaluate(
+                  explicitlyDisconnected: true,
+                  refreshing: false,
+                  health: PrivateAccountReconciliationHealth.unavailable,
+                ),
+                PrivateAccountEntryBlockDecision.hardBlockDisconnected,
+              );
+              expect(
+                PrivateAccountEntryBlockPolicy.evaluate(
+                  explicitlyDisconnected: false,
+                  refreshing: true,
+                  health: PrivateAccountReconciliationHealth.divergent,
+                ),
+                PrivateAccountEntryBlockDecision.hardBlockDivergent,
+              );
+            });
+
+            test('fresh coherent projection requires no controller intervention', () {
+              expect(
+                PrivateAccountEntryBlockPolicy.evaluate(
+                  explicitlyDisconnected: false,
+                  refreshing: false,
+                  health: PrivateAccountReconciliationHealth.fresh,
+                ),
+                PrivateAccountEntryBlockDecision.none,
+              );
+            });
+          }
+          """)
+
+          source_test_path = Path('src/client/quantara_app/test/local_live_private_projection_resilience_source_test.dart')
+          source_test_path.write_text("""import 'dart:io';
+
+          import 'package:flutter_test/flutter_test.dart';
+
+          void main() {
+            test('transient UI projection failures do not permanently stop entries', () {
+              final controller = File(
+                'lib/features/auto_trade/application/local_live_trade_controller.dart',
+              ).readAsStringSync();
+              final service = File(
+                'lib/features/auto_trade/application/local_live_trade_service.dart',
+              ).readAsStringSync();
+
+              expect(controller, contains('PrivateAccountEntryBlockPolicy.evaluate'));
+              expect(controller, contains("type: 'private_state_projection_warning'"));
+              expect(
+                controller,
+                isNot(contains(
+                  'if (!_accountController.reconciliation.blocksNewEntries) return;',
+                )),
+              );
+              expect(service, contains("case 'private_state_projection_warning':"));
+              expect(service, contains("case 'block_entries_private_state':"));
+              expect(
+                service,
+                contains('Three consecutive local execution failures. New entries blocked.'),
+              );
+            });
+          }
+          """)
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Format changed Dart files
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/auto_trade/application/local_live_trade_controller.dart
+          lib/features/auto_trade/application/local_live_trade_service.dart
+          lib/features/auto_trade/domain/private_account_entry_block_policy.dart
+          test/private_account_entry_block_policy_test.dart
+          test/local_live_private_projection_resilience_source_test.dart
+
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app
+          git commit -m "fix(local-live): retain explicit armed intent across transient account refresh [fix161-patched]"
+          git push origin HEAD:fix/161-local-live-armed-intent-resilience
