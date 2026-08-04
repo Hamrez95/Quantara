@@ -15,14 +15,22 @@ abstract final class QuantaraColors {
   static const danger = Color(0xFFFF5C70);
   static const muted = Color(0xFF91A0B6);
   static const softBorder = Color(0xFF23344C);
+  static const glassBorder = Color(0xFF2A4360);
   static const lightCanvas = Color(0xFFF2F5FA);
   static const lightSurface = Color(0xFFFFFFFF);
   static const lightBorder = Color(0xFFD9E1EC);
+  static const lightRaised = Color(0xFFF7F9FC);
 
   static const brandGradient = LinearGradient(
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
     colors: [cyan, electricBlue, violet],
+  );
+
+  static const premiumGradient = LinearGradient(
+    begin: AlignmentDirectional.topStart,
+    end: AlignmentDirectional.bottomEnd,
+    colors: [Color(0xFF16D9D0), Color(0xFF657BFF), Color(0xFFA767FF)],
   );
 }
 
@@ -55,6 +63,8 @@ abstract final class QuantaraTheme {
       onPrimary: QuantaraColors.ink,
       secondary: QuantaraColors.violet,
       onSecondary: Colors.white,
+      tertiary: QuantaraColors.electricBlue,
+      onTertiary: Colors.white,
       surface: QuantaraColors.navy,
       onSurface: Color(0xFFF4F7FB),
       surfaceContainerHighest: QuantaraColors.elevatedNavy,
@@ -62,10 +72,12 @@ abstract final class QuantaraTheme {
       error: QuantaraColors.danger,
       onError: Colors.white,
       outline: QuantaraColors.softBorder,
+      outlineVariant: QuantaraColors.glassBorder,
     );
 
     return _base(scheme).copyWith(
       scaffoldBackgroundColor: QuantaraColors.ink,
+      canvasColor: QuantaraColors.deepNavy,
       dividerColor: QuantaraColors.softBorder,
       navigationRailTheme: const NavigationRailThemeData(
         backgroundColor: QuantaraColors.deepNavy,
@@ -97,6 +109,8 @@ abstract final class QuantaraTheme {
       onPrimary: Colors.white,
       secondary: Color(0xFF6955DD),
       onSecondary: Colors.white,
+      tertiary: Color(0xFF2F68D7),
+      onTertiary: Colors.white,
       surface: QuantaraColors.lightSurface,
       onSurface: Color(0xFF142033),
       surfaceContainerHighest: Color(0xFFEDF2F8),
@@ -104,16 +118,23 @@ abstract final class QuantaraTheme {
       error: Color(0xFFBA2D48),
       onError: Colors.white,
       outline: QuantaraColors.lightBorder,
+      outlineVariant: Color(0xFFC7D3E2),
     );
 
     return _base(scheme).copyWith(
       scaffoldBackgroundColor: QuantaraColors.lightCanvas,
+      canvasColor: QuantaraColors.lightSurface,
       dividerColor: QuantaraColors.lightBorder,
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: QuantaraColors.lightSurface,
         indicatorColor: scheme.primary.withValues(alpha: 0.12),
         selectedIconTheme: IconThemeData(color: scheme.primary),
         unselectedIconTheme: const IconThemeData(color: Color(0xFF64748B)),
+        selectedLabelTextStyle: TextStyle(
+          color: scheme.primary,
+          fontWeight: FontWeight.w800,
+        ),
+        unselectedLabelTextStyle: const TextStyle(color: Color(0xFF64748B)),
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 72,
@@ -136,6 +157,11 @@ abstract final class QuantaraTheme {
       fontFamilyFallback: const ['Roboto', 'Arial'],
     ).textTheme;
     const numericFeatures = [FontFeature.tabularFigures()];
+    final dark = scheme.brightness == Brightness.dark;
+
+    final controlShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(QuantaraRadius.control),
+    );
 
     return ThemeData(
       useMaterial3: true,
@@ -144,11 +170,14 @@ abstract final class QuantaraTheme {
       fontFamilyFallback: const ['Roboto', 'Arial'],
       visualDensity: VisualDensity.standard,
       splashFactory: InkSparkle.splashFactory,
+      hoverColor: scheme.primary.withValues(alpha: 0.045),
+      focusColor: scheme.primary.withValues(alpha: 0.09),
+      highlightColor: scheme.primary.withValues(alpha: 0.045),
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        backgroundColor: scheme.brightness == Brightness.dark
+        backgroundColor: dark
             ? QuantaraColors.deepNavy
             : QuantaraColors.lightSurface,
         foregroundColor: scheme.onSurface,
@@ -170,6 +199,37 @@ abstract final class QuantaraTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(QuantaraRadius.card),
           side: BorderSide(color: scheme.outline.withValues(alpha: 0.7)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: dark ? 18 : 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(QuantaraRadius.large),
+          side: BorderSide(color: scheme.outline.withValues(alpha: 0.76)),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surface,
+        modalBackgroundColor: scheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 18,
+        showDragHandle: true,
+        dragHandleColor: scheme.outlineVariant,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(QuantaraRadius.large),
+          ),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: scheme.surfaceContainerHighest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 12,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
+          side: BorderSide(color: scheme.outline.withValues(alpha: 0.72)),
         ),
       ),
       textTheme: baseText.copyWith(
@@ -210,8 +270,8 @@ abstract final class QuantaraTheme {
       cardTheme: CardThemeData(
         color: scheme.surface,
         surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.black.withValues(alpha: 0.24),
-        elevation: 0,
+        shadowColor: Colors.black.withValues(alpha: dark ? 0.36 : 0.15),
+        elevation: dark ? 0 : 1,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(QuantaraRadius.card),
@@ -223,13 +283,24 @@ abstract final class QuantaraTheme {
         thickness: 0.8,
         space: 1,
       ),
+      listTileTheme: ListTileThemeData(
+        dense: false,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        iconColor: scheme.onSurfaceVariant,
+        shape: controlShape,
+      ),
       chipTheme: ChipThemeData(
         backgroundColor: scheme.surfaceContainerHighest,
         selectedColor: scheme.primary.withValues(alpha: 0.14),
+        disabledColor: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
         side: BorderSide(color: scheme.outline.withValues(alpha: 0.72)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         labelStyle: baseText.labelMedium,
+        secondaryLabelStyle: baseText.labelMedium?.copyWith(
+          color: scheme.primary,
+          fontWeight: FontWeight.w900,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -250,13 +321,16 @@ abstract final class QuantaraTheme {
           borderRadius: BorderRadius.circular(QuantaraRadius.control),
           borderSide: BorderSide(color: scheme.primary, width: 1.4),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
+          borderSide: BorderSide(color: scheme.error),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size(48, 46),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(QuantaraRadius.control),
-          ),
+          elevation: 0,
+          shape: controlShape,
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
@@ -264,26 +338,64 @@ abstract final class QuantaraTheme {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(48, 46),
           side: BorderSide(color: scheme.outline),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(QuantaraRadius.control),
-          ),
+          shape: controlShape,
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(QuantaraRadius.control),
-          ),
-        ),
+        style: TextButton.styleFrom(shape: controlShape),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           minimumSize: const Size.square(44),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(QuantaraRadius.control),
-          ),
+          shape: controlShape,
         ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const WidgetStatePropertyAll(Size(48, 44)),
+          shape: WidgetStatePropertyAll(controlShape),
+          side: WidgetStatePropertyAll(
+            BorderSide(color: scheme.outline.withValues(alpha: 0.8)),
+          ),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontWeight: FontWeight.w800),
+          ),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return scheme.primary.withValues(alpha: 0.14);
+            }
+            return scheme.surfaceContainerHighest.withValues(alpha: 0.58);
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return scheme.primary;
+            return scheme.onSurfaceVariant;
+          }),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return scheme.primary.withValues(alpha: 0.46);
+          }
+          return scheme.outline.withValues(alpha: 0.45);
+        }),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return scheme.primary;
+          return scheme.onSurfaceVariant;
+        }),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: scheme.primary,
+        inactiveTrackColor: scheme.outline.withValues(alpha: 0.45),
+        thumbColor: scheme.primary,
+        overlayColor: scheme.primary.withValues(alpha: 0.12),
+        trackHeight: 5,
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: scheme.primary,
+        linearTrackColor: scheme.outline.withValues(alpha: 0.34),
+        circularTrackColor: scheme.outline.withValues(alpha: 0.28),
       ),
       tooltipTheme: TooltipThemeData(
         waitDuration: const Duration(milliseconds: 500),
@@ -291,8 +403,23 @@ abstract final class QuantaraTheme {
           color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(QuantaraRadius.control),
           border: Border.all(color: scheme.outline),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: dark ? 0.34 : 0.12),
+              blurRadius: 18,
+              spreadRadius: -8,
+            ),
+          ],
         ),
         textStyle: TextStyle(color: scheme.onSurface),
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: const WidgetStatePropertyAll(5),
+        radius: const Radius.circular(999),
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          final alpha = states.contains(WidgetState.dragged) ? 0.7 : 0.34;
+          return scheme.primary.withValues(alpha: alpha);
+        }),
       ),
       extensions: const <ThemeExtension<dynamic>>[
         QuantaraMarketTypography(numericFeatures: numericFeatures),
