@@ -88,22 +88,10 @@ replace_once(
     "confirm pending promotion risk",
 )
 replace_once(
-    "        currentStop =\n"
-    "            _confirmedStopPrice(\n"
-    "              managed: next,\n"
-    "              protection: protection,\n"
-    "              remainingQuantity: position.quantity,\n"
-    "              quantityTolerance: quantityTolerance,\n"
-    "            ) ??\n"
     "            currentStop;\n"
-    "      }",
-    "        currentStop =\n"
-    "            _confirmedStopPrice(\n"
-    "              managed: next,\n"
-    "              protection: protection,\n"
-    "              remainingQuantity: position.quantity,\n"
-    "              quantityTolerance: quantityTolerance,\n"
-    "            ) ??\n"
+    "      }\n\n"
+    "      if (next.profitLockProgress.confirmedStage >= 1 &&\n"
+    "          next.profitLockProgress.confirmedStage < 2 &&",
     "            currentStop;\n"
     "        if (next.profitLockProgress.confirmedStage >= 1 &&\n"
     "            !next.profitLockProgress.hasPendingPromotion) {\n"
@@ -113,7 +101,9 @@ replace_once(
     "            now: DateTime.now().toUtc(),\n"
     "          );\n"
     "        }\n"
-    "      }",
+    "      }\n\n"
+    "      if (next.profitLockProgress.confirmedStage >= 1 &&\n"
+    "          next.profitLockProgress.confirmedStage < 2 &&",
     "confirm TP1 stop risk",
 )
 replace_once(
