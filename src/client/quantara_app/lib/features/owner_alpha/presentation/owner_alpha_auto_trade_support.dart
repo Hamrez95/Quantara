@@ -248,10 +248,20 @@ class _SafetyChip extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: QuantaraColors.cyan),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 16, color: QuantaraColors.cyan),
+          ),
           const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Flexible(
+            child: Text(
+              label,
+              softWrap: true,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
         ],
       ),
     );
