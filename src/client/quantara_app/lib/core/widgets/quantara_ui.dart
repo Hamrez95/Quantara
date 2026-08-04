@@ -23,62 +23,142 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
     final radius = BorderRadius.circular(QuantaraRadius.card);
+    final accent = accentColor ?? scheme.primary;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+
     Widget card = TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
-      duration: QuantaraMotion.standard,
+      duration: reduceMotion ? Duration.zero : QuantaraMotion.standard,
       curve: QuantaraMotion.curve,
-      child: Material(
-        color: Colors.transparent,
-        elevation: dark ? 0 : 1,
-        shadowColor: Colors.black.withValues(alpha: 0.16),
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: radius,
-          side: BorderSide(color: scheme.outline.withValues(alpha: 0.7)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: dark ? 0.32 : 0.11),
+              blurRadius: dark ? 26 : 20,
+              spreadRadius: -16,
+              offset: const Offset(0, 10),
+            ),
+            if (accentColor != null)
+              BoxShadow(
+                color: accent.withValues(alpha: dark ? 0.09 : 0.055),
+                blurRadius: 28,
+                spreadRadius: -18,
+                offset: const Offset(0, 9),
+              ),
+          ],
         ),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                scheme.surface,
-                Color.alphaBlend(
-                  scheme.primary.withValues(alpha: dark ? 0.025 : 0.018),
-                  scheme.surface,
-                ),
-              ],
+        child: Material(
+          color: Colors.transparent,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(
+              color: Color.alphaBlend(
+                accent.withValues(alpha: accentColor == null ? 0.04 : 0.2),
+                scheme.outline.withValues(alpha: 0.72),
+              ),
             ),
           ),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: radius,
-            child: Stack(
-              children: [
-                Padding(padding: padding, child: child),
-                if (accentColor != null)
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: AlignmentDirectional.topStart,
+                end: AlignmentDirectional.bottomEnd,
+                colors: [
+                  Color.alphaBlend(
+                    accent.withValues(alpha: dark ? 0.035 : 0.026),
+                    scheme.surface,
+                  ),
+                  scheme.surface,
+                  Color.alphaBlend(
+                    scheme.secondary.withValues(alpha: dark ? 0.018 : 0.012),
+                    scheme.surface,
+                  ),
+                ],
+                stops: const [0, 0.58, 1],
+              ),
+            ),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: radius,
+              child: Stack(
+                children: [
                   PositionedDirectional(
-                    top: 0,
-                    bottom: 0,
-                    start: 0,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            accentColor!.withValues(alpha: 0.96),
-                            accentColor!.withValues(alpha: 0.45),
-                          ],
+                    top: -86,
+                    end: -72,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              accent.withValues(
+                                alpha: accentColor == null ? 0.035 : 0.09,
+                              ),
+                              Colors.transparent,
+                            ],
+                          ),
                         ),
+                        child: const SizedBox.square(dimension: 170),
                       ),
-                      child: const SizedBox(width: 3),
                     ),
                   ),
-              ],
+                  PositionedDirectional(
+                    top: 0,
+                    start: 22,
+                    end: 22,
+                    child: IgnorePointer(
+                      child: Container(
+                        height: 1,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              scheme.onSurface.withValues(alpha: 0.08),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(padding: padding, child: child),
+                  if (accentColor != null)
+                    PositionedDirectional(
+                      top: 14,
+                      bottom: 14,
+                      start: 0,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadiusDirectional.horizontal(
+                            end: Radius.circular(999),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              accent.withValues(alpha: 0.98),
+                              accent.withValues(alpha: 0.38),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.24),
+                              blurRadius: 9,
+                            ),
+                          ],
+                        ),
+                        child: const SizedBox(width: 3),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -86,7 +166,7 @@ class SectionCard extends StatelessWidget {
       builder: (context, value, child) => Opacity(
         opacity: value,
         child: Transform.translate(
-          offset: Offset(0, 8 * (1 - value)),
+          offset: Offset(0, 7 * (1 - value)),
           child: child,
         ),
       ),
@@ -117,21 +197,23 @@ class QuantaraBrandMark extends StatelessWidget {
       label: 'Quantara',
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [
-              QuantaraColors.cyan,
-              QuantaraColors.electricBlue,
-              QuantaraColors.violet,
-            ],
-          ),
+          gradient: QuantaraColors.premiumGradient,
           borderRadius: BorderRadius.circular(size * 0.31),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.14),
+            width: 0.8,
+          ),
           boxShadow: [
             BoxShadow(
-              color: QuantaraColors.cyan.withValues(alpha: 0.18),
-              blurRadius: size * 0.45,
-              spreadRadius: -size * 0.14,
+              color: QuantaraColors.cyan.withValues(alpha: 0.2),
+              blurRadius: size * 0.56,
+              spreadRadius: -size * 0.15,
+            ),
+            BoxShadow(
+              color: QuantaraColors.violet.withValues(alpha: 0.18),
+              blurRadius: size * 0.44,
+              spreadRadius: -size * 0.18,
+              offset: Offset(size * -0.08, size * 0.12),
             ),
           ],
         ),
@@ -140,6 +222,23 @@ class QuantaraBrandMark extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
+              Positioned(
+                top: size * 0.08,
+                left: size * 0.12,
+                right: size * 0.12,
+                child: Container(
+                  height: size * 0.22,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0.22),
+                        Colors.white.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
               Text(
                 'Q',
                 style: TextStyle(
@@ -246,20 +345,20 @@ class SymbolAvatar extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                color.withValues(alpha: 0.96),
-                Color.alphaBlend(Colors.black.withValues(alpha: 0.22), color),
+                color.withValues(alpha: 0.98),
+                Color.alphaBlend(Colors.black.withValues(alpha: 0.28), color),
               ],
             ),
             border: showBorder
                 ? Border.all(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.13),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.16),
                     width: 1,
                   )
                 : null,
             boxShadow: [
               BoxShadow(
-                color: color.withValues(alpha: 0.18),
-                blurRadius: 12,
+                color: color.withValues(alpha: 0.22),
+                blurRadius: 14,
                 spreadRadius: -5,
               ),
             ],
@@ -328,47 +427,82 @@ class FinanceMetricPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final accent = color ?? scheme.primary;
+    final marketType =
+        theme.extension<QuantaraMarketTypography>() ??
+        const QuantaraMarketTypography(numericFeatures: []);
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 128),
+      constraints: const BoxConstraints(minWidth: 128, minHeight: 78),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: accent.withValues(alpha: 0.075),
+          gradient: LinearGradient(
+            begin: AlignmentDirectional.topStart,
+            end: AlignmentDirectional.bottomEnd,
+            colors: [
+              accent.withValues(alpha: 0.12),
+              scheme.surfaceContainerHighest.withValues(alpha: 0.58),
+            ],
+          ),
           borderRadius: BorderRadius.circular(QuantaraRadius.control),
-          border: Border.all(color: accent.withValues(alpha: 0.2)),
+          border: Border.all(color: accent.withValues(alpha: 0.22)),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.08),
+              blurRadius: 18,
+              spreadRadius: -12,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon, size: 15, color: accent),
-                    const SizedBox(width: 5),
-                  ],
-                  Expanded(
-                    child: Text(
+              if (icon != null) ...[
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: accent.withValues(alpha: 0.2)),
+                  ),
+                  child: SizedBox.square(
+                    dimension: 36,
+                    child: Icon(icon, size: 19, color: accent),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       label,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      style: theme.textTheme.labelMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 5),
-              Text(
-                value,
-                textDirection: TextDirection.ltr,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: accent,
-                  fontWeight: FontWeight.w900,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+                    const SizedBox(height: 4),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.fade,
+                      softWrap: false,
+                      textDirection: TextDirection.ltr,
+                      style: marketType.numeric(
+                        theme.textTheme.titleMedium?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -403,9 +537,10 @@ class SectionHeading extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.28,
+                ),
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: QuantaraSpacing.xxs),
@@ -447,9 +582,21 @@ class StatusPill extends StatelessWidget {
       child: ExcludeSemantics(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.11),
+            gradient: LinearGradient(
+              colors: [
+                color.withValues(alpha: 0.15),
+                color.withValues(alpha: 0.075),
+              ],
+            ),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: color.withValues(alpha: 0.26)),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.07),
+                blurRadius: 12,
+                spreadRadius: -8,
+              ),
+            ],
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -466,7 +613,7 @@ class StatusPill extends StatelessWidget {
                     softWrap: true,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: color,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
@@ -524,8 +671,8 @@ class MetricTile extends StatelessWidget {
                 style: marketType.numeric(
                   theme.textTheme.titleMedium?.copyWith(
                     color: valueColor,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.15,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.2,
                   ),
                 ),
               ),
@@ -571,13 +718,14 @@ class MarketListRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final marketType =
         theme.extension<QuantaraMarketTypography>() ??
         const QuantaraMarketTypography(numericFeatures: []);
     final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.35;
     final identity = Row(
       children: [
-        SymbolAvatar(symbol: symbol, size: 40, fallbackLabel: leadingLabel),
+        SymbolAvatar(symbol: symbol, size: 42, fallbackLabel: leadingLabel),
         const SizedBox(width: QuantaraSpacing.sm),
         Expanded(
           child: Column(
@@ -589,7 +737,8 @@ class MarketListRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textDirection: TextDirection.ltr,
                 style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.18,
                 ),
               ),
               const SizedBox(height: 2),
@@ -598,7 +747,7 @@ class MarketListRow extends StatelessWidget {
                 maxLines: largeText ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -613,17 +762,27 @@ class MarketListRow extends StatelessWidget {
           price,
           textDirection: TextDirection.ltr,
           style: marketType.numeric(
-            theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          change,
-          textDirection: TextDirection.ltr,
-          style: marketType.numeric(
-            theme.textTheme.bodyMedium?.copyWith(
-              color: changeColor,
-              fontWeight: FontWeight.w700,
+        const SizedBox(height: 3),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: changeColor.withValues(alpha: 0.11),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: changeColor.withValues(alpha: 0.2)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            child: Text(
+              change,
+              textDirection: TextDirection.ltr,
+              style: marketType.numeric(
+                theme.textTheme.bodySmall?.copyWith(
+                  color: changeColor,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ),
         ),
@@ -634,43 +793,57 @@ class MarketListRow extends StatelessWidget {
       label: '$symbol، $price، $change',
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: QuantaraSpacing.sm,
-            vertical: QuantaraSpacing.sm,
+        borderRadius: BorderRadius.circular(QuantaraRadius.control),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(QuantaraRadius.control),
+            gradient: LinearGradient(
+              begin: AlignmentDirectional.topStart,
+              end: AlignmentDirectional.bottomEnd,
+              colors: [
+                changeColor.withValues(alpha: 0.035),
+                scheme.surface.withValues(alpha: 0),
+              ],
+            ),
           ),
-          child: largeText
-              ? Column(
-                  children: [
-                    identity,
-                    const SizedBox(height: QuantaraSpacing.xs),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: AlignmentDirectional.centerEnd,
-                            child: quote,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: QuantaraSpacing.sm,
+              vertical: QuantaraSpacing.sm,
+            ),
+            child: largeText
+                ? Column(
+                    children: [
+                      identity,
+                      const SizedBox(height: QuantaraSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: quote,
+                            ),
                           ),
-                        ),
-                        if (trailing != null) ...[
-                          const SizedBox(width: QuantaraSpacing.xs),
-                          trailing!,
+                          if (trailing != null) ...[
+                            const SizedBox(width: QuantaraSpacing.xs),
+                            trailing!,
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Expanded(child: identity),
-                    const SizedBox(width: QuantaraSpacing.sm),
-                    quote,
-                    if (trailing != null) ...[
-                      const SizedBox(width: QuantaraSpacing.xs),
-                      trailing!,
+                      ),
                     ],
-                  ],
-                ),
+                  )
+                : Row(
+                    children: [
+                      Expanded(child: identity),
+                      const SizedBox(width: QuantaraSpacing.sm),
+                      quote,
+                      if (trailing != null) ...[
+                        const SizedBox(width: QuantaraSpacing.xs),
+                        trailing!,
+                      ],
+                    ],
+                  ),
+          ),
         ),
       ),
     );
@@ -779,7 +952,7 @@ class _SparklinePainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0)],
+          colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0)],
         ).createShader(Offset.zero & size)
         ..style = PaintingStyle.fill,
     );
