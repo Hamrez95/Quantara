@@ -112,7 +112,7 @@ void main() {
   );
 
   test(
-    'Phase 1 gate never arms a new real entry from fresh account truth',
+    'enabled canary still blocks entry for an unprotected existing position',
     () async {
       final now = DateTime.utc(2026, 8, 3, 11, 27);
       final client = MockClient(
@@ -130,12 +130,42 @@ void main() {
 
       await controller.initialize();
 
-      expect(ExchangeTruthPhaseOneGate.realEntriesAllowed, isFalse);
+      expect(ExchangeTruthPhaseOneGate.realEntriesAllowed, isTrue);
+      expect(ExchangeTruthPhaseOneGate.explicitUserArmRequired, isTrue);
+      expect(ExchangeTruthPhaseOneGate.automaticArmAllowed, isFalse);
       expect(controller.reconciliation.blocksNewEntries, isFalse);
       expect(controller.canStartNewEntry, isFalse);
       expect(controller.canManageExistingPosition, isTrue);
     },
   );
+
+  test('fresh empty account truth allows an explicit canary start', () async {
+    final now = DateTime.utc(2026, 8, 4, 11, 30);
+    final client = MockClient(
+      (request) async => _successResponse(
+        request.url.path,
+        includeOpenPosition: false,
+      ),
+    );
+    final controller = AutoTradeController(
+      apiClient: BitunixPrivateApiClient(client: client, utcNow: () => now),
+      credentialsStore: _MemoryCredentialsStore(_credentials),
+      utcNow: () => now,
+    );
+    addTearDown(() {
+      controller.dispose();
+      client.close();
+    });
+
+    await controller.initialize();
+
+    expect(controller.snapshot?.positions, isEmpty);
+    expect(controller.reconciliation.blocksNewEntries, isFalse);
+    expect(controller.snapshot?.authoritativePnl.isReadyForRiskGates, isTrue);
+    expect(controller.snapshot?.allOpenPositionsFullyProtected, isTrue);
+    expect(controller.canStartNewEntry, isTrue);
+    expect(controller.canManageExistingPosition, isFalse);
+  });
 }
 
 const _credentials = BitunixApiCredentials(
@@ -143,32 +173,37 @@ const _credentials = BitunixApiCredentials(
   secretKey: 'test-secret-key-123',
 );
 
-http.Response _successResponse(String path) {
+http.Response _successResponse(
+  String path, {
+  bool includeOpenPosition = true,
+}) {
   final Object data = switch (path) {
     '/api/v1/futures/account' => {
       'marginCoin': 'USDT',
       'available': '27.85',
       'frozen': '0',
-      'margin': '2.30',
+      'margin': includeOpenPosition ? '2.30' : '0',
       'crossUnrealizedPNL': '0',
-      'isolationUnrealizedPNL': '0.0021',
+      'isolationUnrealizedPNL': includeOpenPosition ? '0.0021' : '0',
       'positionMode': 'HEDGE',
     },
-    '/api/v1/futures/position/get_pending_positions' => [
-      {
-        'positionId': 'xrp-position-1',
-        'symbol': 'XRPUSDT',
-        'qty': '21.4',
-        'side': 'SHORT',
-        'marginMode': 'ISOLATION',
-        'positionMode': 'HEDGE',
-        'leverage': '10',
-        'margin': '2.30',
-        'unrealizedPNL': '0.0021',
-        'liqPrice': '1.12',
-        'avgOpenPrice': '1.0665',
-      },
-    ],
+    '/api/v1/futures/position/get_pending_positions' => includeOpenPosition
+        ? [
+            {
+              'positionId': 'xrp-position-1',
+              'symbol': 'XRPUSDT',
+              'qty': '21.4',
+              'side': 'SHORT',
+              'marginMode': 'ISOLATION',
+              'positionMode': 'HEDGE',
+              'leverage': '10',
+              'margin': '2.30',
+              'unrealizedPNL': '0.0021',
+              'liqPrice': '1.12',
+              'avgOpenPrice': '1.0665',
+            },
+          ]
+        : <Object>[],
     '/api/v1/futures/trade/get_pending_orders' => {'orderList': <Object>[]},
     '/api/v1/futures/tpsl/get_pending_orders' => {'orderList': <Object>[]},
     '/api/v1/futures/position/get_history_positions' => {
