@@ -1,0 +1,91 @@
+name: Temporary refine issue 156 navigation
+
+on:
+  push:
+    branches:
+      - feat/156-home-navigation-simplification
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/156-home-navigation-simplification
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Refine product navigation implementation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              return text.replace(old, new, 1)
+
+          page_path = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          page = page_path.read_text()
+          page = replace_exact(
+              page,
+              "typedef _OpenAnalysis =\n    void Function(String symbol, [String? timeframe, String? setupId]);\n\nclass OwnerAlphaPage extends StatefulWidget {\n",
+              "typedef _OpenAnalysis =\n    void Function(String symbol, [String? timeframe, String? setupId]);\n\nvoid _noopOpenPortfolioRisk() {}\n\nclass OwnerAlphaPage extends StatefulWidget {\n",
+              'noop portfolio callback',
+          )
+          page = replace_exact(
+              page,
+              "    required this.onOpenPortfolioRisk,\n",
+              "    this.onOpenPortfolioRisk = _noopOpenPortfolioRisk,\n",
+              'optional portfolio callback',
+          )
+          page = replace_exact(
+              page,
+              "  _Destination(Icons.science_outlined, Icons.science_rounded),\n",
+              "  _Destination(Icons.home_outlined, Icons.home_rounded),\n",
+              'remove dormant lab icon',
+          )
+          page = replace_exact(
+              page,
+              "  4 => strings.strategyLab,\n",
+              '',
+              'remove dormant lab label',
+          )
+          page_path.write_text(page)
+
+          home_path = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_home.dart')
+          home = home_path.read_text()
+          home = replace_exact(
+              home,
+              "              const Spacer(),\n",
+              "              const SizedBox(height: 14),\n",
+              'bounded quick action layout',
+          )
+          home_path.write_text(home)
+
+          app_path = Path('src/client/quantara_app/lib/app/quantara_app.dart')
+          app = app_path.read_text()
+          old = """      home: OwnerAlphaPage(\n        repository: _repository,\n        settingsStore: _settingsStore,\n        opportunityStateStore: _opportunityStateStore,\n        notificationGateway:\n            widget.notificationGateway ??\n            const PlatformSetupNotificationGateway(),\n        backgroundScanGateway:\n            widget.backgroundScanGateway ??\n            (widget.repository == null\n                ? const WorkmanagerBackgroundScanGateway()\n                : const NoopBackgroundScanGateway()),\n        themeMode: _themeMode,\n        locale: _locale,\n        onToggleTheme: _toggleTheme,\n        onLocaleChanged: _setLocale,\n        onOpenPortfolioRisk: () => _showPortfolioRisk(context),\n        realtimeMonitor: _realtimeMarketHost,\n      ),\n"""
+          new = """      home: Builder(\n        builder: (homeContext) => OwnerAlphaPage(\n          repository: _repository,\n          settingsStore: _settingsStore,\n          opportunityStateStore: _opportunityStateStore,\n          notificationGateway:\n              widget.notificationGateway ??\n              const PlatformSetupNotificationGateway(),\n          backgroundScanGateway:\n              widget.backgroundScanGateway ??\n              (widget.repository == null\n                  ? const WorkmanagerBackgroundScanGateway()\n                  : const NoopBackgroundScanGateway()),\n          themeMode: _themeMode,\n          locale: _locale,\n          onToggleTheme: _toggleTheme,\n          onLocaleChanged: _setLocale,\n          onOpenPortfolioRisk: () => _showPortfolioRisk(homeContext),\n          realtimeMonitor: _realtimeMarketHost,\n        ),\n      ),\n"""
+          app = replace_exact(app, old, new, 'MaterialApp child context')
+          app_path.write_text(app)
+          PY
+      - name: Format refined sources and tests
+        working-directory: src/client/quantara_app
+        run: dart format lib/app/quantara_app.dart lib/features/owner_alpha/presentation/owner_alpha_page.dart lib/features/owner_alpha/presentation/owner_alpha_home.dart lib/features/portfolio_risk/presentation/portfolio_risk_panel.dart test/product_navigation_information_architecture_test.dart
+      - name: Commit refinements
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/app/quantara_app.dart src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_home.dart src/client/quantara_app/lib/features/portfolio_risk/presentation/portfolio_risk_panel.dart src/client/quantara_app/test/product_navigation_information_architecture_test.dart
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "fix: refine Home navigation implementation"
+          git push origin HEAD:feat/156-home-navigation-simplification
