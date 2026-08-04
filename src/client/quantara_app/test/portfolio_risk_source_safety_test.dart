@@ -60,13 +60,17 @@ void main() {
     },
   );
 
-  test('global real-entry gate remains hard disabled', () {
+  test('global canary entry gate requires explicit arm and forbids auto arm', () {
     final source = File(
       '${Directory.current.path}/lib/features/auto_trade/domain/private_account_reconciliation.dart',
     ).readAsStringSync();
 
-    expect(source, contains('static const bool realEntriesAllowed = false;'));
-    expect(source, isNot(contains('realEntriesAllowed = true')));
+    expect(source, contains('static const bool realEntriesAllowed = true;'));
+    expect(
+      source,
+      contains('static const bool explicitUserArmRequired = true;'),
+    );
+    expect(source, contains('static const bool automaticArmAllowed = false;'));
   });
 
   test('portfolio durable payload defines no secret-like keys', () {

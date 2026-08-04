@@ -3,9 +3,11 @@ import 'auto_trade_models.dart';
 enum PrivateAccountReconciliationHealth { unavailable, fresh, stale, divergent }
 
 abstract final class ExchangeTruthPhaseOneGate {
-  static const bool realEntriesAllowed = false;
+  static const bool realEntriesAllowed = true;
+  static const bool explicitUserArmRequired = true;
+  static const bool automaticArmAllowed = false;
   static const String reason =
-      'Phase 1 exchange-truth quarantine is active. New real entries remain disabled.';
+      'Guarded Local Live entries require an explicit user start after fresh exchange reconciliation.';
 }
 
 enum PrivateAccountRefreshReason {
