@@ -69,29 +69,16 @@ void main() {
     return button;
   }
 
-  Future<void> tapVisibleAction(
-    WidgetTester tester,
-    PortfolioRiskSimulationController controller,
-    String label,
-  ) async {
+  void expectEnabledAction(WidgetTester tester, String label) {
+    final control = tester.widget<ButtonStyleButton>(actionButton(label));
+    expect(control.onPressed, isNotNull);
+  }
+
+  Future<void> tapVisibleAction(WidgetTester tester, String label) async {
     final button = actionButton(label);
     await tester.ensureVisible(button);
     await tester.pumpAndSettle();
     await tester.tap(button);
-    await controller.waitForIdle();
-    await tester.pumpAndSettle();
-  }
-
-  Future<void> invokeRenderedAction(
-    WidgetTester tester,
-    PortfolioRiskSimulationController controller,
-    String label,
-  ) async {
-    final button = actionButton(label);
-    final control = tester.widget<ButtonStyleButton>(button);
-    expect(control.onPressed, isNotNull);
-    control.onPressed!.call();
-    await controller.waitForIdle();
     await tester.pumpAndSettle();
   }
 
@@ -110,10 +97,10 @@ void main() {
     expect(find.text('شبیه‌سازی'), findsOneWidget);
     expect(find.text('10.00 USDT'), findsAtLeastNWidgets(1));
 
-    await tapVisibleAction(tester, simulation, 'رزرو ۳ USDT');
+    await tapVisibleAction(tester, 'رزرو ۳ USDT');
     expect(find.text('7.00 USDT'), findsAtLeastNWidgets(1));
 
-    await tapVisibleAction(tester, simulation, 'رزرو ۴ USDT');
+    await tapVisibleAction(tester, 'رزرو ۴ USDT');
     expect(find.text('3.00 USDT'), findsAtLeastNWidgets(1));
     expect(find.text('BTCUSDT'), findsOneWidget);
     expect(find.text('ETHUSDT'), findsOneWidget);
@@ -133,7 +120,11 @@ void main() {
 
     expect(find.text('Portfolio risk budget'), findsOneWidget);
     expect(find.text('Simulation'), findsOneWidget);
-    await invokeRenderedAction(tester, simulation, 'Simulate stale data');
+    expectEnabledAction(tester, 'Simulate stale data');
+
+    await simulation.toggleFreshness();
+    await tester.pumpAndSettle();
+
     expect(simulation.accountFresh, isFalse);
     expect(
       simulation.snapshot?.blockReason,
@@ -192,8 +183,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await invokeRenderedAction(tester, simulation, 'Reserve 3 USDT');
-    await invokeRenderedAction(tester, simulation, 'Try rejected 8');
+    expectEnabledAction(tester, 'Reserve 3 USDT');
+    expectEnabledAction(tester, 'Try rejected 8');
+    expectEnabledAction(tester, 'Reset example');
+
+    await simulation.reserveExample(3);
+    await tester.pumpAndSettle();
+    await simulation.reserveExample(8);
+    await tester.pumpAndSettle();
+
     expect(simulation.lastDecision?.allowed, isFalse);
     expect(
       simulation.lastDecision?.reason,
@@ -204,7 +202,8 @@ void main() {
       findsOneWidget,
     );
 
-    await invokeRenderedAction(tester, simulation, 'Reset example');
+    await simulation.reset();
+    await tester.pumpAndSettle();
     expect(find.text('There are no active reservations yet.'), findsOneWidget);
     expect(find.text('10.00 USDT'), findsAtLeastNWidgets(1));
   });
