@@ -1,0 +1,379 @@
+name: Temporary feature 163 config UI patch
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[feat163-config-ui]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+
+      - name: Patch configuration, persistence, and UI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one anchor, found {count}')
+              return text.replace(old, new)
+
+          runtime_path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_portfolio_risk_runtime.dart')
+          runtime = runtime_path.read_text()
+          runtime = replace_once(
+              runtime,
+              '''  }) => LocalLivePortfolioRiskRuntime._(
+            store:
+                store ??
+                DatabasePortfolioRiskLedgerStore(
+                  recordKey: 'local-live-portfolio-risk-ledger-v1',
+                ),
+            dailyRiskLimit: dailyRiskLimit,
+            timezoneOffsetMinutes: timezoneOffsetMinutes,
+            maximumAssetGroupRiskFraction: maximumAssetGroupRiskFraction,
+          );
+
+          const LocalLivePortfolioRiskRuntime._({
+            required PortfolioRiskLedgerStore store,
+            required double dailyRiskLimit,
+            required int timezoneOffsetMinutes,
+            required this.maximumAssetGroupRiskFraction,
+          }) : _store = store,
+               _dailyRiskLimit = dailyRiskLimit,
+               _timezoneOffsetMinutes = timezoneOffsetMinutes;''',
+              '''  }) => LocalLivePortfolioRiskRuntime._(
+            _store:
+                store ??
+                DatabasePortfolioRiskLedgerStore(
+                  recordKey: 'local-live-portfolio-risk-ledger-v1',
+                ),
+            _dailyRiskLimit: dailyRiskLimit,
+            _timezoneOffsetMinutes: timezoneOffsetMinutes,
+            maximumAssetGroupRiskFraction: maximumAssetGroupRiskFraction,
+          );
+
+          const LocalLivePortfolioRiskRuntime._({
+            required this._store,
+            required this._dailyRiskLimit,
+            required this._timezoneOffsetMinutes,
+            required this.maximumAssetGroupRiskFraction,
+          });''',
+              'runtime constructor',
+          )
+          runtime = replace_once(
+              runtime,
+              '''      final accountWithReservations = _withLedgerReservations(account, ledger);
+              var decision =''',
+              '''      var decision =''',
+              'remove double margin reservation',
+          )
+          runtime = runtime.replace('account: accountWithReservations,', 'account: account,')
+          runtime = runtime.replace(
+              'availableMarginAfter:\n                accountWithReservations.marginBudget.spendable,',
+              'availableMarginAfter: account.marginBudget.spendable,',
+          )
+          helper_start = runtime.find('  PortfolioAccountTruth _withLedgerReservations(')
+          if helper_start < 0:
+              raise SystemExit('runtime reservation helper anchor missing')
+          helper_end = runtime.rfind('\n}')
+          runtime = runtime[:helper_start] + runtime[helper_end:]
+          runtime_path.write_text(runtime)
+
+          models_path = Path('src/client/quantara_app/lib/features/auto_trade/domain/local_live_trade_models.dart')
+          models = models_path.read_text()
+          models = replace_once(
+              models,
+              "import 'profit_lock_stop_policy.dart';\nimport 'trading_pnl_projection.dart';",
+              "import 'local_live_portfolio_admission.dart';\nimport 'profit_lock_stop_policy.dart';\nimport 'trading_pnl_projection.dart';",
+              'model import',
+          )
+          models = replace_once(
+              models,
+              '''    if (maximumConcurrentPositions != 1) {
+                throw const FormatException(
+                  'The first local live canary is limited to one concurrent position.',
+                );
+              }''',
+              '''    if (maximumConcurrentPositions < 1 ||
+                maximumConcurrentPositions >
+                    LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions) {
+              throw const FormatException(
+                'Local Live supports between one and three concurrent positions.',
+              );
+            }''',
+              'model concurrency validation',
+          )
+          models_path.write_text(models)
+
+          preferences_path = Path('src/client/quantara_app/lib/features/auto_trade/data/local_live_preferences_store.dart')
+          preferences = preferences_path.read_text()
+          preferences = replace_once(
+              preferences,
+              '''    required this.dailyLossLimitPercent,
+                this.targetAllocation = ProfitProtectionTargetAllocation.standard,''',
+              '''    required this.dailyLossLimitPercent,
+                this.maximumConcurrentPositions = 2,
+                this.targetAllocation = ProfitProtectionTargetAllocation.standard,''',
+              'preferences constructor',
+          )
+          preferences = replace_once(
+              preferences,
+              '''  static const maximumDailyLossPercent = 10.0;
+
+            final List<String> symbols;''',
+              '''  static const maximumDailyLossPercent = 10.0;
+            static const minimumConcurrentPositions = 1;
+            static const maximumConcurrentPositions = 3;
+
+            final List<String> symbols;''',
+              'preferences constants',
+          )
+          preferences = replace_once(
+              preferences,
+              '''  final double dailyLossLimitPercent;
+            final ProfitProtectionTargetAllocation targetAllocation;''',
+              '''  final double dailyLossLimitPercent;
+            final int maximumConcurrentPositions;
+            final ProfitProtectionTargetAllocation targetAllocation;''',
+              'preferences field',
+          )
+          preferences = replace_once(
+              preferences,
+              '''        dailyLossLimitPercent: 1,
+              );''',
+              '''        dailyLossLimitPercent: 1,
+                maximumConcurrentPositions: 2,
+              );''',
+              'preferences defaults',
+          )
+          preferences = replace_once(
+              preferences,
+              '''      dailyLossLimitPercent: dailyLossLimitPercent
+                    .clamp(minimumDailyLossPercent, maximumDailyLossPercent)
+                    .toDouble(),
+                targetAllocation:''',
+              '''      dailyLossLimitPercent: dailyLossLimitPercent
+                    .clamp(minimumDailyLossPercent, maximumDailyLossPercent)
+                    .toDouble(),
+                maximumConcurrentPositions: maximumConcurrentPositions.clamp(
+                  minimumConcurrentPositions,
+                  maximumConcurrentPositions,
+                ),
+                targetAllocation:''',
+              'preferences normalize',
+          )
+          preferences = replace_once(
+              preferences,
+              '''  static const _dailyLossKey = 'quantara.local-live.ui.daily-loss.v2';
+            static const _tp1Key''',
+              '''  static const _dailyLossKey = 'quantara.local-live.ui.daily-loss.v2';
+            static const _maximumPositionsKey =
+                'quantara.local-live.ui.maximum-positions.v4';
+            static const _tp1Key''',
+              'preferences key',
+          )
+          preferences = replace_once(
+              preferences,
+              '''      dailyLossLimitPercent: _number(
+                  payload['dailyLossLimitPercent'],
+                  fallback: defaults.dailyLossLimitPercent,
+                ),
+                targetAllocation:''',
+              '''      dailyLossLimitPercent: _number(
+                  payload['dailyLossLimitPercent'],
+                  fallback: defaults.dailyLossLimitPercent,
+                ),
+                maximumConcurrentPositions: _integer(
+                  payload['maximumConcurrentPositions'],
+                  fallback: defaults.maximumConcurrentPositions,
+                ),
+                targetAllocation:''',
+              'preferences decode',
+          )
+          preferences = replace_once(
+              preferences,
+              '''      dailyLossLimitPercent:
+                    preferences.getDouble(_dailyLossKey) ??
+                    defaults.dailyLossLimitPercent,
+                targetAllocation: targetAllocation,''',
+              '''      dailyLossLimitPercent:
+                    preferences.getDouble(_dailyLossKey) ??
+                    defaults.dailyLossLimitPercent,
+                maximumConcurrentPositions:
+                    preferences.getInt(_maximumPositionsKey) ??
+                    defaults.maximumConcurrentPositions,
+                targetAllocation: targetAllocation,''',
+              'preferences legacy load',
+          )
+          preferences = replace_once(
+              preferences,
+              '''          'dailyLossLimitPercent': value.dailyLossLimitPercent,
+                      'targetAllocation': value.targetAllocation.fractions,''',
+              '''          'dailyLossLimitPercent': value.dailyLossLimitPercent,
+                      'maximumConcurrentPositions': value.maximumConcurrentPositions,
+                      'targetAllocation': value.targetAllocation.fractions,''',
+              'preferences database save',
+          )
+          preferences = replace_once(
+              preferences,
+              '''      preferences.setDouble(_dailyLossKey, value.dailyLossLimitPercent),
+                  preferences.setDouble(_tp1Key,''',
+              '''      preferences.setDouble(_dailyLossKey, value.dailyLossLimitPercent),
+                  preferences.setInt(
+                    _maximumPositionsKey,
+                    value.maximumConcurrentPositions,
+                  ),
+                  preferences.setDouble(_tp1Key,''',
+              'preferences legacy save',
+          )
+          preferences_path.write_text(preferences)
+
+          ui_path = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart')
+          ui = ui_path.read_text()
+          ui = replace_once(
+              ui,
+              '''  double _dailyLossLimit = 1;
+            int _tp1Percent = 65;''',
+              '''  double _dailyLossLimit = 1;
+            int _maximumConcurrentPositions = 2;
+            int _tp1Percent = 65;''',
+              'ui position state',
+          )
+          ui = replace_once(
+              ui,
+              '''        _dailyLossLimit = value.dailyLossLimitPercent;
+                _tp1Percent''',
+              '''        _dailyLossLimit = value.dailyLossLimitPercent;
+                _maximumConcurrentPositions = value.maximumConcurrentPositions;
+                _tp1Percent''',
+              'ui restore positions',
+          )
+          ui = replace_once(
+              ui,
+              '''    dailyLossLimitPercent: _dailyLossLimit,
+                targetAllocation: _targetAllocation,''',
+              '''    dailyLossLimitPercent: _dailyLossLimit,
+                maximumConcurrentPositions: _maximumConcurrentPositions,
+                targetAllocation: _targetAllocation,''',
+              'ui current preferences',
+          )
+          ui = replace_once(
+              ui,
+              '''                  TpAllocationEditor(
+                    allocation: _targetAllocation,''',
+              '''                  _numberRow(
+                    label: _t(
+                      'حداکثر پوزیشن هم‌زمان',
+                      'Maximum concurrent positions',
+                    ),
+                    value: _maximumConcurrentPositions.toString(),
+                    onMinus: () => _mutateAndSave(
+                      () => _maximumConcurrentPositions = math.max(
+                        1,
+                        _maximumConcurrentPositions - 1,
+                      ),
+                    ),
+                    onPlus: () => _mutateAndSave(
+                      () => _maximumConcurrentPositions = math.min(
+                        3,
+                        _maximumConcurrentPositions + 1,
+                      ),
+                    ),
+                  ),
+                  TpAllocationEditor(
+                    allocation: _targetAllocation,''',
+              'ui positions control',
+          )
+          ui = replace_once(
+              ui,
+              '''این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. فقط یک پوزیشن هم‌زمان و Isolated مجاز است؛ ریسک قابل تنظیم تا ۲٪ و سقف ضرر روزانه تا ۱۰٪ باز شده، اما هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.''',
+              '''این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. تا سه پوزیشن Isolated فقط در محدوده بودجه ریسک و مارجین پرتفوی مجاز است؛ هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.''',
+              'ui Persian boundary',
+          )
+          ui = replace_once(
+              ui,
+              '''This mode can submit real futures orders. It remains isolated and limited to one concurrent position; risk is adjustable up to 2% and the daily cap up to 10%, while every entry still requires a full exchange-confirmed stop and three targets.''',
+              '''This mode can submit real futures orders. Up to three isolated positions are allowed only inside the atomic portfolio risk and margin budget; every entry still requires a full exchange-confirmed stop and three targets.''',
+              'ui English boundary',
+          )
+          ui = replace_once(
+              ui,
+              '''Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و همچنان فقط یک پوزیشن Isolated باز می‌کند. ادامه می‌دهی؟''',
+              '''Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و فقط در سقف پوزیشن و بودجه اتمیک پرتفوی ورود می‌کند. ادامه می‌دهی؟''',
+              'ui Persian advanced dialog',
+          )
+          ui = replace_once(
+              ui,
+              '''Quantara will not widen stops, increase risk after losses, or open more than one isolated position. Continue?''',
+              '''Quantara will not widen stops or increase risk after losses, and every concurrent entry remains constrained by the atomic portfolio budget. Continue?''',
+              'ui English advanced dialog',
+          )
+          ui = replace_once(
+              ui,
+              '''              Text(
+                '${_t('حد ضرر روزانه', 'Daily loss cap')}: ${_dailyLossLimit.toStringAsFixed(2)}%',
+              ),
+              Text(
+                '${_t('تقسیم اهداف', 'Target allocation')}:''',
+              '''              Text(
+                '${_t('حد ضرر روزانه', 'Daily loss cap')}: ${_dailyLossLimit.toStringAsFixed(2)}%',
+              ),
+              Text(
+                '${_t('حداکثر پوزیشن هم‌زمان', 'Maximum concurrent positions')}: $_maximumConcurrentPositions',
+              ),
+              Text(
+                '${_t('تقسیم اهداف', 'Target allocation')}:''',
+              'ui confirmation count',
+          )
+          ui = replace_once(
+              ui,
+              '''        maximumConcurrentPositions: 1,
+                strategy:''',
+              '''        maximumConcurrentPositions: _maximumConcurrentPositions,
+                strategy:''',
+              'ui configuration count',
+          )
+          ui = replace_once(
+              ui,
+              '''                  '${status.openPositionCount} پوزیشن باز',
+                          '${status.openPositionCount} open',''',
+              '''                  '${status.openPositionCount}/$_maximumConcurrentPositions پوزیشن باز',
+                          '${status.openPositionCount}/$_maximumConcurrentPositions open',''',
+              'ui open slots pill',
+          )
+          ui_path.write_text(ui)
+          PY
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Format changed Dart files
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/auto_trade/application/local_live_portfolio_risk_runtime.dart
+          lib/features/auto_trade/domain/local_live_trade_models.dart
+          lib/features/auto_trade/data/local_live_preferences_store.dart
+          lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app
+          git commit -m "feat(local-live): expose two-to-three position portfolio controls [feat163-config-ui]"
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
