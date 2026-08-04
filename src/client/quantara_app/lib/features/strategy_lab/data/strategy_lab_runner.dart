@@ -511,7 +511,11 @@ abstract final class StrategyLabRunner {
     LabExitReason reason,
     StrategyLabConfig config,
   ) {
-    final entryCosts = trade.units * trade.entry * _totalCostRate(config) / 2;
+    final entryCosts =
+        trade.units *
+        trade.entry *
+        StrategyLabRunner._totalCostRate(config) /
+        2;
     final net = trade.realizedPnl - entryCosts;
     return StrategyLabTrade(
       direction: trade.idea.direction.name,
@@ -723,9 +727,10 @@ final class _OpenTrade {
     final unrealized = long
         ? (price - entry) * remainingUnits
         : (entry - price) * remainingUnits;
-    final entryCosts = units * entry * _totalCostRate(config) / 2;
+    final entryCosts =
+        units * entry * StrategyLabRunner._totalCostRate(config) / 2;
     final estimatedExitCosts =
-        remainingUnits * price * _totalCostRate(config) / 2;
+        remainingUnits * price * StrategyLabRunner._totalCostRate(config) / 2;
     return realizedPnl + unrealized - entryCosts - estimatedExitCosts;
   }
 
@@ -735,7 +740,8 @@ final class _OpenTrade {
     final gross = long
         ? (price - entry) * exitUnits
         : (entry - price) * exitUnits;
-    final exitCosts = exitUnits * price * _totalCostRate(config) / 2;
+    final exitCosts =
+        exitUnits * price * StrategyLabRunner._totalCostRate(config) / 2;
     realizedPnl += gross - exitCosts;
     remainingUnits = math.max(0, remainingUnits - exitUnits);
   }
