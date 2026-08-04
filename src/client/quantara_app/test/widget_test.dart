@@ -220,17 +220,8 @@ Future<void> _openDestination(WidgetTester tester, IconData icon) async {
 Future<void> _tapHomeQuickAction(WidgetTester tester, String label) async {
   final target = find.text(label);
   expect(target, findsOneWidget);
-  final page = find.byType(ListView).first;
-  await tester.fling(page, const Offset(0, 1200), 2400);
+  await tester.ensureVisible(target);
   await tester.pumpAndSettle();
-  for (
-    var attempt = 0;
-    attempt < 8 && target.hitTestable().evaluate().isEmpty;
-    attempt++
-  ) {
-    await tester.drag(page, const Offset(0, -260));
-    await tester.pump();
-  }
   expect(target.hitTestable(), findsOneWidget);
   await tester.tap(target.hitTestable());
   await tester.pumpAndSettle();
