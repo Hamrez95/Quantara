@@ -24,8 +24,8 @@ class LocalLivePreferences {
   static const maximumRiskPercent = 2.0;
   static const minimumDailyLossPercent = 0.25;
   static const maximumDailyLossPercent = 10.0;
-  static const minimumConcurrentPositions = 1;
-  static const maximumConcurrentPositions = 3;
+  static const minimumConcurrentPositionCount = 1;
+  static const maximumConcurrentPositionCount = 3;
 
   final List<String> symbols;
   final Set<String> timeframes;
@@ -72,8 +72,8 @@ class LocalLivePreferences {
           .clamp(minimumDailyLossPercent, maximumDailyLossPercent)
           .toDouble(),
       maximumConcurrentPositions: maximumConcurrentPositions.clamp(
-        minimumConcurrentPositions,
-        maximumConcurrentPositions,
+        minimumConcurrentPositionCount,
+        maximumConcurrentPositionCount,
       ),
       targetAllocation: ProfitProtectionTargetAllocation.fromFractions(
         targetAllocation.fractions,

@@ -638,7 +638,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           if (detail == null || !detail.fullyFilled || position == null) {
             if (position != null && position.quantity > 0) {
               await portfolioGuard.recordFill(
-                reservationId: activeReservationId!,
+                reservationId: activeReservationId,
                 orderId: placed.orderId,
                 positionId: position.positionId,
                 fillQuantity: position.quantity,
@@ -657,7 +657,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             }
             if (position == null && detail?.status == 'CANCELED') {
               await portfolioGuard.releaseNoExposure(
-                reservationId: activeReservationId!,
+                reservationId: activeReservationId,
                 evidence: 'entry-canceled-without-position',
                 now: DateTime.now().toUtc(),
               );
@@ -671,7 +671,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           }
         }
         await portfolioGuard.recordFill(
-          reservationId: activeReservationId!,
+          reservationId: activeReservationId,
           orderId: placed.orderId,
           positionId: position.positionId,
           fillQuantity: math.min(detail.filledQuantity, position.quantity),

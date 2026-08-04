@@ -1,6 +1,7 @@
 import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
+import 'local_live_portfolio_admission.dart';
 import 'profit_lock_stop_policy.dart';
 import 'trading_pnl_projection.dart';
 
@@ -67,9 +68,11 @@ final class LocalLiveTradeConfiguration {
         'Daily loss limit must be between 0.25% and 10%.',
       );
     }
-    if (maximumConcurrentPositions != 1) {
+    if (maximumConcurrentPositions < 1 ||
+        maximumConcurrentPositions >
+            LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions) {
       throw const FormatException(
-        'The first local live canary is limited to one concurrent position.',
+        'Local Live supports between one and three concurrent positions.',
       );
     }
     if (scanIntervalSeconds < 30 || scanIntervalSeconds > 300) {

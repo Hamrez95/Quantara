@@ -11,22 +11,21 @@ final class LocalLivePortfolioRiskRuntime {
     int timezoneOffsetMinutes = 0,
     double maximumAssetGroupRiskFraction = 0.60,
   }) => LocalLivePortfolioRiskRuntime._(
-    _store:
-        store ??
+    store ??
         DatabasePortfolioRiskLedgerStore(
           recordKey: 'local-live-portfolio-risk-ledger-v1',
         ),
-    _dailyRiskLimit: dailyRiskLimit,
-    _timezoneOffsetMinutes: timezoneOffsetMinutes,
-    maximumAssetGroupRiskFraction: maximumAssetGroupRiskFraction,
+    dailyRiskLimit,
+    timezoneOffsetMinutes,
+    maximumAssetGroupRiskFraction,
   );
 
-  const LocalLivePortfolioRiskRuntime._({
-    required this._store,
-    required this._dailyRiskLimit,
-    required this._timezoneOffsetMinutes,
-    required this.maximumAssetGroupRiskFraction,
-  });
+  const LocalLivePortfolioRiskRuntime._(
+    this._store,
+    this._dailyRiskLimit,
+    this._timezoneOffsetMinutes,
+    this.maximumAssetGroupRiskFraction,
+  );
 
   final PortfolioRiskLedgerStore _store;
   final double _dailyRiskLimit;

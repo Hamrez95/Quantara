@@ -382,6 +382,7 @@ class _LocalLiveTradeControlCardState
   int _leverage = 10;
   double _riskPercent = 0.10;
   double _dailyLossLimit = 1;
+  int _maximumConcurrentPositions = 2;
   int _tp1Percent = 65;
   int _tp2Percent = 20;
   int _tp3Percent = 15;
@@ -414,6 +415,7 @@ class _LocalLiveTradeControlCardState
         _leverage = value.leverage;
         _riskPercent = value.riskPercent;
         _dailyLossLimit = value.dailyLossLimitPercent;
+        _maximumConcurrentPositions = value.maximumConcurrentPositions;
         _tp1Percent = (value.targetAllocation.tp1Fraction * 100).round();
         _tp2Percent = (value.targetAllocation.tp2Fraction * 100).round();
         _tp3Percent = 100 - _tp1Percent - _tp2Percent;
@@ -431,6 +433,7 @@ class _LocalLiveTradeControlCardState
     leverage: _leverage,
     riskPercent: _riskPercent,
     dailyLossLimitPercent: _dailyLossLimit,
+    maximumConcurrentPositions: _maximumConcurrentPositions,
     targetAllocation: _targetAllocation,
   ).normalized(widget.analysisController.symbols);
 
@@ -533,8 +536,8 @@ class _LocalLiveTradeControlCardState
           const SizedBox(height: 12),
           _BoundaryNotice(
             text: _t(
-              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. فقط یک پوزیشن هم‌زمان و Isolated مجاز است؛ ریسک قابل تنظیم تا ۲٪ و سقف ضرر روزانه تا ۱۰٪ باز شده، اما هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.',
-              'This mode can submit real futures orders. It remains isolated and limited to one concurrent position; risk is adjustable up to 2% and the daily cap up to 10%, while every entry still requires a full exchange-confirmed stop and three targets.',
+              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. حداکثر سه پوزیشن Isolated فقط در محدوده بودجه اتمیک ریسک و مارجین پرتفوی مجاز است؛ هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.',
+              'This mode can submit real futures orders. Up to three isolated positions are allowed only inside the atomic portfolio risk and margin budget; every entry still requires a full exchange-confirmed stop and three targets.',
             ),
             color: QuantaraColors.danger,
           ),
@@ -594,8 +597,8 @@ class _LocalLiveTradeControlCardState
             children: [
               StatusPill(
                 label: _t(
-                  '${status.openPositionCount} پوزیشن باز',
-                  '${status.openPositionCount} open',
+                  '${status.openPositionCount}/$_maximumConcurrentPositions پوزیشن باز',
+                  '${status.openPositionCount}/$_maximumConcurrentPositions open',
                 ),
                 color: status.openPositionCount > 0
                     ? QuantaraColors.warning
@@ -741,6 +744,25 @@ class _LocalLiveTradeControlCardState
                       final step = _dailyLossLimit >= 3 ? 1.0 : 0.25;
                       _dailyLossLimit = math.min(10, _dailyLossLimit + step);
                     }),
+                  ),
+                  _numberRow(
+                    label: _t(
+                      'حداکثر پوزیشن هم‌زمان',
+                      'Maximum concurrent positions',
+                    ),
+                    value: _maximumConcurrentPositions.toString(),
+                    onMinus: () => _mutateAndSave(
+                      () => _maximumConcurrentPositions = math.max(
+                        1,
+                        _maximumConcurrentPositions - 1,
+                      ),
+                    ),
+                    onPlus: () => _mutateAndSave(
+                      () => _maximumConcurrentPositions = math.min(
+                        3,
+                        _maximumConcurrentPositions + 1,
+                      ),
+                    ),
                   ),
                   TpAllocationEditor(
                     allocation: _targetAllocation,
@@ -922,8 +944,8 @@ class _LocalLiveTradeControlCardState
           title: Text(_t('تأیید تنظیمات پرریسک', 'Confirm advanced risk')),
           content: Text(
             _t(
-              'این تنظیمات می‌توانند زیان واقعی را سریع‌تر افزایش دهند. Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و همچنان فقط یک پوزیشن Isolated باز می‌کند. ادامه می‌دهی؟',
-              'These settings can increase real losses faster. Quantara will not widen stops, increase risk after losses, or open more than one isolated position. Continue?',
+              'این تنظیمات می‌توانند زیان واقعی را سریع‌تر افزایش دهند. Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و هر ورود هم‌زمان را به بودجه اتمیک پرتفوی محدود می‌کند. ادامه می‌دهی؟',
+              'These settings can increase real losses faster. Quantara will not widen stops or increase risk after losses, and every concurrent entry remains constrained by the atomic portfolio budget. Continue?',
             ),
           ),
           actions: [
@@ -972,6 +994,9 @@ class _LocalLiveTradeControlCardState
                 '${_t('حد ضرر روزانه', 'Daily loss cap')}: ${_dailyLossLimit.toStringAsFixed(2)}%',
               ),
               Text(
+                '${_t('حداکثر پوزیشن هم‌زمان', 'Maximum concurrent positions')}: $_maximumConcurrentPositions',
+              ),
+              Text(
                 '${_t('تقسیم اهداف', 'Target allocation')}: TP1 $_tp1Percent% · TP2 $_tp2Percent% · TP3 $_tp3Percent%',
                 textDirection: TextDirection.ltr,
               ),
@@ -1008,7 +1033,7 @@ class _LocalLiveTradeControlCardState
         leverage: _leverage,
         riskPercent: _riskPercent,
         dailyLossLimitPercent: _dailyLossLimit,
-        maximumConcurrentPositions: 1,
+        maximumConcurrentPositions: _maximumConcurrentPositions,
         strategy: widget.analysisController.strategy,
         cadence: widget.analysisController.cadence,
         languageCode: widget.analysisController.languageCode,
