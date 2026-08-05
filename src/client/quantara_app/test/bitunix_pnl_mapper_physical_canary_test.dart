@@ -87,11 +87,8 @@ void main() {
       settlements: settlements.values,
     );
 
-    expect(fills.verified, isTrue);
-    expect(
-      fills.values.single.positionId,
-      '${BitunixPnlMapper.unassignedPositionPrefix}ambiguous',
-    );
+    expect(fills.verified, isFalse);
+    expect(fills.values.single.positionId, isEmpty);
     expect(fills.warning, contains('could not be assigned'));
   });
 }
