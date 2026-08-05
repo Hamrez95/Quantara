@@ -20,6 +20,8 @@ jobs:
         with:
           ref: feat/163-portfolio-budgeted-local-live
           fetch-depth: 0
+      - name: Correct patch anchor
+        run: sed -i 's/استاپ باقیمانده/استاپ باقی‌مانده/g' .github/scripts/feat167_adaptive_targets.py
       - name: Apply adaptive target patch
         run: python3 .github/scripts/feat167_adaptive_targets.py
       - uses: subosito/flutter-action@v2
