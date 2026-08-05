@@ -5,7 +5,7 @@ path = Path(
     'local_live_portfolio_risk_runtime.dart'
 )
 text = path.read_text()
-anchor = "import '../../portfolio_risk/domain/portfolio_risk_atomic_store.dart';\n"
+anchor = "import '../../portfolio_risk/application/portfolio_risk_coordinator.dart';\n"
 if anchor not in text:
     raise SystemExit('runtime import anchor missing')
 path.write_text(
