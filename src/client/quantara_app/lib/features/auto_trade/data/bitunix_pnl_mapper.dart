@@ -84,24 +84,32 @@ final class BitunixPnlMapper {
         continue;
       }
       final directPositionId = _string(row['positionId']);
-      final resolved = directPositionId.isNotEmpty
-          ? directPositionId
+      final resolution = directPositionId.isNotEmpty
+          ? (positionId: directPositionId, ambiguous: false)
           : _resolvePositionId(
               symbol: symbol,
               occurredAt: occurredAt,
               openPositions: open,
               settlements: closed,
             );
+      final resolved = resolution.positionId;
       if (resolved == null) {
-        attributionWarnings.add(
-          'Trade $tradeId could not be assigned to one exchange position.',
-        );
+        final warning =
+            'Trade $tradeId could not be assigned to one exchange position.';
+        if (resolution.ambiguous) {
+          warnings.add(warning);
+        } else {
+          attributionWarnings.add(warning);
+        }
       }
       values.add(
         ExchangePnlFill(
           tradeId: tradeId,
           orderId: orderId,
-          positionId: resolved ?? '$unassignedPositionPrefix$tradeId',
+          positionId: resolved ??
+              (resolution.ambiguous
+                  ? ''
+                  : '$unassignedPositionPrefix$tradeId'),
           symbol: symbol,
           quantity: quantity.abs(),
           price: price,
@@ -122,7 +130,7 @@ final class BitunixPnlMapper {
     );
   }
 
-  static String? _resolvePositionId({
+  static ({String? positionId, bool ambiguous}) _resolvePositionId({
     required String symbol,
     required DateTime occurredAt,
     required List<ExchangeUnrealizedPnl> openPositions,
@@ -141,8 +149,12 @@ final class BitunixPnlMapper {
         .map((item) => item.positionId.trim())
         .where((item) => item.isNotEmpty)
         .toSet();
-    if (exactClosedMatches.length == 1) return exactClosedMatches.single;
-    if (exactClosedMatches.length > 1) return null;
+    if (exactClosedMatches.length == 1) {
+      return (positionId: exactClosedMatches.single, ambiguous: false);
+    }
+    if (exactClosedMatches.length > 1) {
+      return (positionId: null, ambiguous: true);
+    }
 
     final toleranceMicros = _closedPositionAttributionTolerance.inMicroseconds;
     final tolerantClosedMatches =
@@ -170,16 +182,19 @@ final class BitunixPnlMapper {
             (left, right) => left.deltaMicros.compareTo(right.deltaMicros),
           );
     if (tolerantClosedMatches.length == 1) {
-      return tolerantClosedMatches.single.positionId;
+      return (
+        positionId: tolerantClosedMatches.single.positionId,
+        ambiguous: false,
+      );
     }
     if (tolerantClosedMatches.length > 1) {
       final nearest = tolerantClosedMatches[0];
       final next = tolerantClosedMatches[1];
       if (nearest.deltaMicros + _minimumNearestSeparation.inMicroseconds <
           next.deltaMicros) {
-        return nearest.positionId;
+        return (positionId: nearest.positionId, ambiguous: false);
       }
-      return null;
+      return (positionId: null, ambiguous: true);
     }
 
     final openMatches = openPositions
@@ -187,8 +202,13 @@ final class BitunixPnlMapper {
         .map((item) => item.positionId)
         .where((item) => item.trim().isNotEmpty)
         .toSet();
-    if (openMatches.length == 1) return openMatches.single;
-    return null;
+    if (openMatches.length == 1) {
+      return (positionId: openMatches.single, ambiguous: false);
+    }
+    if (openMatches.length > 1) {
+      return (positionId: null, ambiguous: true);
+    }
+    return (positionId: null, ambiguous: false);
   }
 
   static List<Map<String, Object?>> _nestedList(Object? data, String key) {
