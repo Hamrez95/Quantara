@@ -860,8 +860,8 @@ class _LocalLiveTradeControlCardState
                   const SizedBox(height: 8),
                   _BoundaryNotice(
                     text: _t(
-                      'جمع سه هدف همیشه ۱۰۰٪ است. پس از تأیید کامل Fill هدف اول توسط Bitunix، استاپ باقی‌مانده فقط رو به سود و با احتساب هزینه‌ها منتقل می‌شود؛ کاهش صرف Quantity هیچ‌وقت محرک این تغییر نیست.',
-                      'The three targets always total 100%. Only a complete Bitunix-confirmed TP1 fill may promote the remaining stop toward cost-aware profit; quantity reduction alone never triggers it.',
+                      'جمع اهداف فعال همیشه ۱۰۰٪ است. می‌توانی TP2 و TP3 را صفر کنی؛ اگر حجم یک هدف از حداقل Bitunix کمتر شود، Quantara آن بخش را خودکار با هدف قبلی ادغام می‌کند. فقط Fill تأییدشده TP1 می‌تواند استاپ باقی‌مانده را رو به سود جابه‌جا کند.',
+                      'Active targets always total 100%. TP2 and TP3 may be zero; when a target quantity is below the Bitunix minimum, Quantara automatically merges it into the previous target. Only a confirmed TP1 fill may promote the remaining stop toward profit.',
                     ),
                     color: QuantaraColors.cyan,
                   ),
@@ -1242,8 +1242,9 @@ class _LocalLiveTradeControlCardState
                   return ListTile(
                     leading: const Icon(Icons.shield_outlined),
                     title: Text(
-                      LocalLiveMessageLocalizer.localize(
-                        event.message,
+                      LocalLiveMessageLocalizer.localizeAudit(
+                        kind: event.type,
+                        message: event.message,
                         persian: _fa,
                       ),
                     ),

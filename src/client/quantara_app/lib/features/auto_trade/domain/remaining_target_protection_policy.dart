@@ -30,14 +30,18 @@ abstract final class RemainingTargetProtectionPolicy {
       final id = targetOrderIds[index].trim();
       final planned = targetQuantities[index];
       final filled = filledQuantities[index];
-      if (id.isEmpty ||
-          !planned.isFinite ||
-          planned <= 0 ||
+      if (!planned.isFinite ||
+          planned < 0 ||
           !filled.isFinite ||
           filled < 0 ||
           filled > planned + quantityTolerance) {
         return false;
       }
+      if (planned <= quantityTolerance) {
+        if (id.isNotEmpty || filled > quantityTolerance) return false;
+        continue;
+      }
+      if (id.isEmpty) return false;
       final remaining = (planned - filled).clamp(0, planned).toDouble();
       if (remaining <= quantityTolerance) continue;
       final confirmed = pending.any(

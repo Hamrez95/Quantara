@@ -601,12 +601,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       final riskBudget =
           account.estimatedEquity * configuration.riskPercent / 100;
       var quantity = rules.roundQuantityDown(riskBudget / riskPerUnit);
-      if (quantity < rules.minimumQuantity / profitPlan.minimumTargetFraction ||
+      if (quantity < rules.minimumQuantity ||
           quantity > rules.maximumMarketQuantity ||
           quantity <= 0) {
         _auditEvent(
           'scan_skip',
-          'Calculated position size is below the exchange minimum for three protected target tranches.',
+          'Calculated position size is below the exchange minimum for even one protected target.',
           symbol: idea.symbol,
         );
         return;
@@ -777,15 +777,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         quantity = rules.roundQuantityDown(
           math.min(detail.filledQuantity, position.quantity),
         );
-        if (quantity <
-            rules.minimumQuantity / profitPlan.minimumTargetFraction) {
+        if (quantity < rules.minimumQuantity) {
           await exchange.closePositionReduceOnly(
             position: position,
             clientId: '$clientId-small-close',
             credentials: credentials,
           );
           throw const LocalLiveTradeSafeException(
-            'Filled quantity was too small for safe staged protection and was closed.',
+            'Filled quantity was too small for even one exchange-valid target and was closed.',
           );
         }
         var protections = await exchange.fetchPendingProtection(
@@ -823,35 +822,44 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           confirmedStop: stopLoss,
           now: DateTime.now().toUtc(),
         );
-        final allocation = ProfitProtectionAllocation.allocate(
+        final allocation = ProfitProtectionAllocation.allocateAdaptive(
           totalQuantity: quantity,
           plan: profitPlan,
+          minimumQuantity: rules.minimumQuantity,
           roundDown: rules.roundQuantityDown,
         );
         final targetQuantities = allocation.quantities;
-        if (targetQuantities.any(
-          (targetQuantity) => targetQuantity < rules.minimumQuantity,
-        )) {
+        final effectiveAllocation = allocation.targetAllocation;
+        if (!allocation.isValidFor(rules.minimumQuantity)) {
           await exchange.closePositionReduceOnly(
             position: position,
             clientId: '$clientId-invalid-ladder-close',
             credentials: credentials,
           );
           throw const LocalLiveTradeSafeException(
-            'Filled quantity could not be split into three valid exchange targets and was closed.',
+            'Filled quantity could not support even one complete exchange-valid target and was closed.',
           );
         }
-        final targetOrderIds = <String>[];
+        if (effectiveAllocation.activeTargetCount <
+            configuration.targetAllocation.activeTargetCount) {
+          _auditEvent(
+            'target_allocation_adapted',
+            'Target allocation automatically collapsed from '
+                '${configuration.targetAllocation.activeTargetCount} to '
+                '${effectiveAllocation.activeTargetCount} exchange-valid targets.',
+            symbol: idea.symbol,
+          );
+        }
+        final targetOrderIds = <String>['', '', ''];
         try {
           for (var index = 0; index < 3; index++) {
-            targetOrderIds.add(
-              await exchange.placePartialTakeProfit(
-                symbol: idea.symbol,
-                positionId: position.positionId,
-                triggerPrice: rules.roundPrice(idea.targets[index]),
-                quantity: targetQuantities[index],
-                credentials: credentials,
-              ),
+            if (targetQuantities[index] <= 0) continue;
+            targetOrderIds[index] = await exchange.placePartialTakeProfit(
+              symbol: idea.symbol,
+              positionId: position.positionId,
+              triggerPrice: rules.roundPrice(idea.targets[index]),
+              quantity: targetQuantities[index],
+              credentials: credentials,
             );
           }
           List<BitunixPendingProtection> confirmedProtection = const [];
@@ -919,7 +927,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           leverage: leverage,
           openedAt: DateTime.now().toUtc(),
           stopOrderId: stopOrderId,
-          targetAllocation: configuration.targetAllocation,
+          targetAllocation: effectiveAllocation,
           targetQuantities: targetQuantities,
           targetOrderIds: targetOrderIds,
           costBufferRate: profitPlan.costBufferRate,
@@ -938,10 +946,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         await _persistState();
         _auditEvent(
           'position_protected',
-          'Entry fill, full stop and three staged targets confirmed '
-              '(${(configuration.targetAllocation.tp1Fraction * 100).toStringAsFixed(0)}/'
-              '${(configuration.targetAllocation.tp2Fraction * 100).toStringAsFixed(0)}/'
-              '${(configuration.targetAllocation.tp3Fraction * 100).toStringAsFixed(0)}%; '
+          'Entry fill, full stop and ${effectiveAllocation.activeTargetCount} '
+              'exchange-valid target(s) confirmed '
+              '(${(effectiveAllocation.tp1Fraction * 100).toStringAsFixed(0)}/'
+              '${(effectiveAllocation.tp2Fraction * 100).toStringAsFixed(0)}/'
+              '${(effectiveAllocation.tp3Fraction * 100).toStringAsFixed(0)}%; '
               'qty ${targetQuantities.map((item) => item.toString()).join('/')}; '
               '${profitPlan.profile.name}).',
           symbol: idea.symbol,
@@ -1224,9 +1233,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         continue;
       }
-      if (managed.targetOrderIds.length != 3 ||
-          managed.targetQuantities.length != 3 ||
-          managed.targetOrderIds.any((item) => item.trim().isEmpty)) {
+      if (!_targetIdentityLayoutValid(
+        targetOrderIds: managed.targetOrderIds,
+        targetQuantities: managed.targetQuantities,
+      )) {
         _entriesEnabled = false;
         const warning =
             'Target exchange identities are incomplete; automatic stop promotion is blocked.';
@@ -1584,18 +1594,45 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     return unresolved;
   }
 
+  bool _targetIdentityLayoutValid({
+    required List<String> targetOrderIds,
+    required List<double> targetQuantities,
+  }) {
+    if (targetOrderIds.length != 3 || targetQuantities.length != 3) {
+      return false;
+    }
+    var inactiveSeen = false;
+    for (var index = 0; index < 3; index++) {
+      final quantity = targetQuantities[index];
+      final id = targetOrderIds[index].trim();
+      if (!quantity.isFinite || quantity < 0) return false;
+      final active = quantity > 0;
+      if (!active) {
+        inactiveSeen = true;
+        if (id.isNotEmpty) return false;
+      } else {
+        if (inactiveSeen || id.isEmpty) return false;
+      }
+    }
+    return targetQuantities.first > 0;
+  }
+
   bool _targetLadderConfirmed({
     required List<BitunixPendingProtection> protection,
     required List<String> targetOrderIds,
     required List<double> targetQuantities,
     required double quantityTolerance,
   }) {
-    if (targetOrderIds.length != 3 || targetQuantities.length != 3) {
+    if (!_targetIdentityLayoutValid(
+      targetOrderIds: targetOrderIds,
+      targetQuantities: targetQuantities,
+    )) {
       return false;
     }
     for (var index = 0; index < 3; index++) {
       final id = targetOrderIds[index].trim();
-      if (id.isEmpty) return false;
+      final planned = targetQuantities[index];
+      if (planned <= quantityTolerance) continue;
       final matching = protection.where(
         (item) =>
             item.orderId.trim() == id &&

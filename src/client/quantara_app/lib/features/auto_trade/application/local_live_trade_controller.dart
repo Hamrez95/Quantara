@@ -310,6 +310,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
             markPrice: markPrice,
             minimumExchangeQuantity: rules.minimumQuantity,
             leverage: leverage,
+            takeProfitTranches: 1,
           );
           if (affordability.affordable) return;
           if (lowestFloor == null ||
@@ -333,8 +334,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
         throw LocalLiveTradeSafeException(
           'Available margin is $available USDT. The smallest exchange/margin '
           'floor among the selected symbols is about $minimum USDT '
-          '($lowestFloorSymbol, including three TP quantities and the safety '
-          'buffer). Shortfall: $shortfall USDT. The actual risk and stop '
+          '($lowestFloorSymbol, including one exchange-valid TP quantity '
+          'and the safety buffer). Shortfall: $shortfall USDT. The actual risk and stop '
           'distance checks may require more capital.',
         );
       }

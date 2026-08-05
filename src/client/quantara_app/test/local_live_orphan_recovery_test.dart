@@ -214,6 +214,6 @@ void main() {
       rules: rules,
     );
     expect(decision.allowed, isFalse);
-    expect(decision.reason, contains('three targets'));
+    expect(decision.reason, contains('do not cover'));
   });
 }

@@ -153,8 +153,10 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
     final targets = matchingProtection
         .where((item) => item.takeProfitPrice > 0)
         .toList(growable: true);
-    if (stops.length != 1 || targets.length != 3) {
-      return blocked('Exactly one stop and three targets are required.');
+    if (stops.length != 1 || targets.isEmpty || targets.length > 3) {
+      return blocked(
+        'Exactly one stop and between one and three targets are required.',
+      );
     }
     final stop = stops.single;
     if (stop.orderId.trim().isEmpty ||
@@ -183,7 +185,8 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
     )) {
       return blocked('A target identity or quantity is invalid.');
     }
-    if (targets.map((item) => item.orderId.trim()).toSet().length != 3) {
+    if (targets.map((item) => item.orderId.trim()).toSet().length !=
+        targets.length) {
       return blocked('Target order identities are not unique.');
     }
     final targetsOnProfitSide = targets.every(
@@ -202,13 +205,25 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
       (sum, item) => sum + item.takeProfitQuantity,
     );
     if ((targetQuantity - position.quantity).abs() > quantityTolerance) {
-      return blocked('The three target quantities do not cover the position.');
+      return blocked('The active target quantities do not cover the position.');
     }
 
+    final paddedQuantities = <double>[
+      ...targets.map((item) => item.takeProfitQuantity),
+      ...List<double>.filled(3 - targets.length, 0),
+    ];
+    final paddedOrderIds = <String>[
+      ...targets.map((item) => item.orderId.trim()),
+      ...List<String>.filled(3 - targets.length, ''),
+    ];
+    final paddedTargetPrices = <double>[
+      ...targets.map((item) => item.takeProfitPrice),
+      ...List<double>.filled(3 - targets.length, 0),
+    ];
     final allocation = ProfitProtectionTargetAllocation.checked(
-      tp1Fraction: targets[0].takeProfitQuantity / position.quantity,
-      tp2Fraction: targets[1].takeProfitQuantity / position.quantity,
-      tp3Fraction: targets[2].takeProfitQuantity / position.quantity,
+      tp1Fraction: paddedQuantities[0] / position.quantity,
+      tp2Fraction: paddedQuantities[1] / position.quantity,
+      tp3Fraction: paddedQuantities[2] / position.quantity,
     );
     final openedAt = entryFills
         .map((fill) => fill.occurredAt.toUtc())
@@ -224,17 +239,13 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
       initialQuantity: position.quantity,
       entryPrice: position.averageOpenPrice,
       originalStopLoss: stop.stopLossPrice,
-      targets: List.unmodifiable(targets.map((item) => item.takeProfitPrice)),
+      targets: List.unmodifiable(paddedTargetPrices),
       leverage: position.leverage,
       openedAt: openedAt,
       stopOrderId: stop.orderId.trim(),
       targetAllocation: allocation,
-      targetQuantities: List.unmodifiable(
-        targets.map((item) => item.takeProfitQuantity),
-      ),
-      targetOrderIds: List.unmodifiable(
-        targets.map((item) => item.orderId.trim()),
-      ),
+      targetQuantities: List.unmodifiable(paddedQuantities),
+      targetOrderIds: List.unmodifiable(paddedOrderIds),
       marketRegime: MarketRegime.transition,
     );
     return LocalLiveOrphanRecoveryDecision.allowed(managed);
