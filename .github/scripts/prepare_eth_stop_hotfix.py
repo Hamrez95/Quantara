@@ -2,6 +2,7 @@ from pathlib import Path
 
 path = Path('.github/scripts/apply_eth_stop_hotfix.py')
 text = path.read_text()
+
 old = """    count=1,
 )
 replace_exact(
@@ -18,4 +19,18 @@ replace_exact(
 """
 if text.count(old) != 1:
     raise SystemExit('hotfix script observer cardinality anchor changed')
-path.write_text(text.replace(old, new, 1))
+text = text.replace(old, new, 1)
+
+old = """    \"          orderId: managed.targetOrderIds[index],\\n\"
+    \"          quantity: managed.targetQuantities[index],\\n\",
+    \"          exchangeEventId: 'tp-order:$orderId',\\n\"
+"""
+new = """    \"          orderId: managed.targetOrderIds[index],\\n\"
+    \"          quantity: quantity,\\n\",
+    \"          exchangeEventId: 'tp-order:$orderId',\\n\"
+"""
+if text.count(old) != 1:
+    raise SystemExit('hotfix script recovered TP quantity anchor changed')
+text = text.replace(old, new, 1)
+
+path.write_text(text)
