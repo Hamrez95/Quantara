@@ -244,11 +244,10 @@ final class LocalLiveJournalObserver {
           details: {
             if (isTarget) 'targetIndex': targetIndex + 1,
             if (!isTarget)
-              'closeReason': fill.orderId == managed.stopOrderId
-                  ? TradingJournalCloseReason.stop.name
-                  : fill.clientId.endsWith('-emergency-close')
-                  ? TradingJournalCloseReason.emergency.name
-                  : TradingJournalCloseReason.exchange.name,
+              'closeReason': _closeReasonForFill(
+                managed: managed,
+                fill: fill,
+              ).name,
           },
         ),
       );
@@ -420,6 +419,30 @@ final class LocalLiveJournalObserver {
       // The journal is observer-only. A persistence failure must never change
       // exchange order management or trigger a compensating trade action.
     }
+  }
+
+  static TradingJournalCloseReason _closeReasonForFill({
+    required LocalLiveManagedPosition managed,
+    required ExchangePnlFill fill,
+  }) {
+    if (fill.clientId.endsWith('-emergency-close')) {
+      return TradingJournalCloseReason.emergency;
+    }
+    if (fill.orderId == managed.stopOrderId) {
+      return TradingJournalCloseReason.stop;
+    }
+    final stop = managed.originalStopLoss;
+    final price = fill.price;
+    if (stop.isFinite && stop > 0 && price.isFinite && price > 0) {
+      final tolerance = stop.abs() * 0.003;
+      final stopLike = switch (managed.direction) {
+        TradeDirection.long => price <= stop + tolerance,
+        TradeDirection.short => price >= stop - tolerance,
+        TradeDirection.wait => false,
+      };
+      if (stopLike) return TradingJournalCloseReason.stop;
+    }
+    return TradingJournalCloseReason.exchange;
   }
 
   static TradingJournalDirection _direction(TradeDirection direction) =>

@@ -34,6 +34,8 @@ const localLiveSessionStartedAtKey =
     'quantara.local-live.session-started-at.v1';
 const localLiveSessionPositionIdsKey =
     'quantara.local-live.session-positions.v1';
+const localLivePendingJournalClosuresKey =
+    'quantara.local-live.pending-journal-closures.v1';
 
 @pragma('vm:entry-point')
 void quantaraLocalLiveStartCallback() {
@@ -46,9 +48,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   BitunixApiCredentials? _credentials;
   LocalLiveTradeConfiguration? _configuration;
   final List<LocalLiveManagedPosition> _managed = [];
+  final List<LocalLiveManagedPosition> _pendingJournalClosures = [];
   final Set<String> _executedSetupIds = {};
   final List<LocalLiveAuditEvent> _audit = [];
   bool _entriesEnabled = false;
+  bool _userRequestedEntries = false;
   bool _cycleRunning = false;
   bool _destroyed = false;
   int _consecutiveFailures = 0;
@@ -88,6 +92,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   @override
   void onNotificationButtonPressed(String id) {
     if (id == 'stop_entries') {
+      _userRequestedEntries = false;
       _entriesEnabled = false;
       _auditEvent('stop', 'New local entries were stopped from notification.');
       unawaited(
@@ -161,7 +166,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _httpClient?.close();
         _httpClient = http.Client();
         _exchange = BitunixLocalLiveApiClient(client: _httpClient!);
-        _entriesEnabled = message['entriesEnabled'] == true;
+        _userRequestedEntries = message['entriesEnabled'] == true;
+        _entriesEnabled = _userRequestedEntries;
         _destroyed = false;
         if (_managed.isEmpty ||
             _sessionId == null ||
@@ -196,6 +202,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         await _runCycle();
       case 'stop':
+        _userRequestedEntries = false;
         _entriesEnabled = false;
         _auditEvent('stop', 'New entries disabled by user.');
         await _runCycle();
@@ -206,6 +213,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       case 'block_entries_private_state':
         _entriesEnabled = false;
         final reason = message['reason']?.toString() ?? 'unavailable';
+        if (reason == 'disconnected') _userRequestedEntries = false;
         _auditEvent(
           'private_state_block',
           'New entries blocked because the app private-account projection is $reason.',
@@ -215,6 +223,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           'New entries blocked because private account truth is stale or divergent. Existing protected positions continue to be reconciled.',
         );
       case 'emergency_close':
+        _userRequestedEntries = false;
         _entriesEnabled = false;
         await _emergencyCloseManagedPositions();
         await _publish(
@@ -237,6 +246,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       final account = await exchange.fetchAccountSnapshot(credentials);
       final positions = await exchange.fetchPositions(credentials);
       _lastExchangeSync = DateTime.now().toUtc();
+      _entriesEnabled = _userRequestedEntries;
       final sessionId = _sessionId;
       final sessionStartedAt = _sessionStartedAt;
       _sessionPnlProjection = sessionId == null || sessionStartedAt == null
@@ -246,6 +256,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               startedAt: sessionStartedAt,
               ownedPositionIds: Set.unmodifiable(_sessionPositionIds),
             );
+      await _reconcilePendingJournalClosures(account.authoritativePnl);
       final managedPositionIds = _managed
           .map((position) => position.positionId)
           .where((positionId) => positionId.isNotEmpty)
@@ -324,6 +335,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   100,
             );
       if (lossPercent >= configuration.dailyLossLimitPercent) {
+        _userRequestedEntries = false;
         _entriesEnabled = false;
         _auditEvent(
           'circuit_breaker',
@@ -373,6 +385,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       _consecutiveFailures++;
       _auditEvent('error', _safeError(error));
       if (_consecutiveFailures >= 3) {
+        _userRequestedEntries = false;
         _entriesEnabled = false;
         await _publish(
           LocalLiveTradeState.circuitBreaker,
@@ -874,6 +887,31 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     }
   }
 
+  Future<void> _reconcilePendingJournalClosures(
+    TradingPnlProjection pnlProjection,
+  ) async {
+    var changed = false;
+    for (final managed in List<LocalLiveManagedPosition>.of(
+      _pendingJournalClosures,
+    )) {
+      final positionPnl = pnlProjection.forPositionId(managed.positionId);
+      if (positionPnl == null || !positionPnl.isVerified) continue;
+      await _journalObserver.reconcilePosition(
+        managed: managed,
+        positionPnl: positionPnl,
+        positionClosed: true,
+      );
+      _pendingJournalClosures.remove(managed);
+      changed = true;
+      _auditEvent(
+        'journal_close_reconciled',
+        'Queued closed-position economics were reconciled from verified exchange history.',
+        symbol: managed.symbol,
+      );
+    }
+    if (changed) await _persistState();
+  }
+
   Future<void> _reconcileManagedPositions(
     List<BitunixLivePosition> positions,
     TradingPnlProjection pnlProjection,
@@ -886,29 +924,40 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .where((item) => item.positionId == managed.positionId)
           .firstOrNull;
       if (position == null || position.quantity <= 0) {
-        if (positionPnl != null) {
+        var journalReconciled = false;
+        if (positionPnl != null && positionPnl.isVerified) {
           await _journalObserver.reconcilePosition(
             managed: managed,
             positionPnl: positionPnl,
             positionClosed: true,
           );
+          journalReconciled = true;
         }
         final history = await exchange.fetchClosedPositions(
           positionId: managed.positionId,
           credentials: credentials,
         );
-        if (history.isEmpty) {
+        if (!journalReconciled &&
+            !_pendingJournalClosures.any(
+              (item) => item.positionId == managed.positionId,
+            )) {
+          _pendingJournalClosures.add(managed);
+        }
+        if (history.isEmpty || !journalReconciled) {
           _auditEvent(
             'pnl_pending',
-            'Closed position history is not available yet; PnL remains unavailable.',
+            'The position is exchange-closed; final journal economics remain queued until verified fill history is available.',
             symbol: managed.symbol,
           );
         }
         _managed.remove(managed);
         _closedPositionCount++;
+        await _persistState();
         _auditEvent(
           'position_closed',
-          'Managed position closed and realized result reconciled.',
+          journalReconciled
+              ? 'Managed position closed and realized result reconciled.'
+              : 'Managed position closed; journal economics queued for verified reconciliation.',
           symbol: managed.symbol,
         );
         continue;
@@ -1517,6 +1566,27 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _configuration = null;
       }
     }
+    final pendingClosuresRaw = await FlutterForegroundTask.getData<String>(
+      key: localLivePendingJournalClosuresKey,
+    );
+    if (pendingClosuresRaw != null) {
+      try {
+        final decoded = jsonDecode(pendingClosuresRaw);
+        if (decoded is List<Object?>) {
+          _pendingJournalClosures
+            ..clear()
+            ..addAll(
+              decoded.whereType<Map<Object?, Object?>>().map(
+                (item) => LocalLiveManagedPosition.fromJson(
+                  item.map((key, value) => MapEntry(key.toString(), value)),
+                ),
+              ),
+            );
+        }
+      } on Object {
+        _pendingJournalClosures.clear();
+      }
+    }
     final managedRaw = await FlutterForegroundTask.getData<String>(
       key: localLiveManagedPositionsKey,
     );
@@ -1604,6 +1674,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       key: localLiveManagedPositionsKey,
       value: jsonEncode(_managed.map((item) => item.toJson()).toList()),
     );
+    await FlutterForegroundTask.saveData(
+      key: localLivePendingJournalClosuresKey,
+      value: jsonEncode(
+        _pendingJournalClosures.map((item) => item.toJson()).toList(),
+      ),
+    );
     final boundedIds = _executedSetupIds.length <= 250
         ? _executedSetupIds.toList(growable: false)
         : _executedSetupIds
@@ -1645,6 +1721,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }
 
   Future<void> _trip(String message) async {
+    _userRequestedEntries = false;
     _entriesEnabled = false;
     _auditEvent('circuit_breaker', message);
     await _publish(LocalLiveTradeState.circuitBreaker, message);

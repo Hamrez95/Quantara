@@ -1,9 +1,45 @@
 import 'dart:async';
+import 'dart:convert';
 
 import '../../../core/persistence/quantara_database_provider.dart';
 import '../../../core/persistence/quantara_durable_database.dart';
 import '../domain/trading_journal_models.dart';
 import 'trading_journal_store.dart';
+
+TradingJournalLedger mergeTradingJournalLedgers(
+  TradingJournalLedger durable,
+  TradingJournalLedger foregroundMirror,
+) {
+  var merged = durable;
+  for (final plan in foregroundMirror.plans) {
+    merged = merged.appendPlan(plan);
+  }
+  for (final event in foregroundMirror.events) {
+    merged = merged.appendEvent(event);
+  }
+  for (final warning in foregroundMirror.warnings) {
+    if (merged.warnings.contains(warning)) continue;
+    merged = foregroundMirror.integrity == TradingJournalIntegrity.unverified
+        ? merged.withIntegrityWarning(warning)
+        : merged.withRecoveryWarning(warning);
+  }
+  if (foregroundMirror.integrity == TradingJournalIntegrity.unverified &&
+      foregroundMirror.warnings.isEmpty &&
+      merged.integrity != TradingJournalIntegrity.unverified) {
+    merged = merged.withIntegrityWarning(
+      'Foreground journal mirror reported unverified integrity.',
+    );
+  }
+  final highestGeneration = [
+    durable.generation,
+    foregroundMirror.generation,
+    merged.generation,
+  ].reduce((left, right) => left > right ? left : right);
+  return merged.withGeneration(highestGeneration);
+}
+
+bool _sameLedger(TradingJournalLedger left, TradingJournalLedger right) =>
+    jsonEncode(left.toJson()) == jsonEncode(right.toJson());
 
 final class DatabaseTradingJournalStore implements TradingJournalStore {
   DatabaseTradingJournalStore({
@@ -22,12 +58,15 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
   Future<TradingJournalLedger> load() => _serialValue(() async {
     final database = await _databaseFactory();
     final record = await database.read(QuantaraDurableCategory.journal, _key);
-    if (record != null) {
-      return TradingJournalLedger.fromJson(record.payload);
+    final foregroundMirror = await _legacyStore.load();
+    if (record == null) {
+      if (_isEmpty(foregroundMirror)) return foregroundMirror;
+      return _write(database, foregroundMirror, minimumRevision: 1);
     }
-    final legacy = await _legacyStore.load();
-    if (_isEmpty(legacy)) return legacy;
-    return _write(database, legacy, minimumRevision: 1);
+    final durable = TradingJournalLedger.fromJson(record.payload);
+    final merged = mergeTradingJournalLedgers(durable, foregroundMirror);
+    if (_sameLedger(durable, merged)) return durable;
+    return _write(database, merged);
   });
 
   @override
@@ -54,10 +93,15 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
     QuantaraDurableDatabase database,
   ) async {
     final record = await database.read(QuantaraDurableCategory.journal, _key);
-    if (record != null) return TradingJournalLedger.fromJson(record.payload);
-    final legacy = await _legacyStore.load();
-    if (_isEmpty(legacy)) return legacy;
-    return _write(database, legacy, minimumRevision: 1);
+    final foregroundMirror = await _legacyStore.load();
+    if (record == null) {
+      if (_isEmpty(foregroundMirror)) return foregroundMirror;
+      return _write(database, foregroundMirror, minimumRevision: 1);
+    }
+    final durable = TradingJournalLedger.fromJson(record.payload);
+    final merged = mergeTradingJournalLedgers(durable, foregroundMirror);
+    if (_sameLedger(durable, merged)) return durable;
+    return _write(database, merged);
   }
 
   Future<TradingJournalLedger> _write(

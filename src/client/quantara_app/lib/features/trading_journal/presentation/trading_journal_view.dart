@@ -650,10 +650,10 @@ final class _JournalTradeCard extends StatelessWidget {
         ? (persian ? 'ناموجود' : 'Unavailable')
         : '${net >= 0 ? '+' : ''}${QuantaraNumberFormat.marketValue(net, unit: 'USDT')}';
     final directionColor = projection.direction == TradingJournalDirection.long
-        ? QuantaraColors.success
+        ? QuantaraColors.electricBlue
         : projection.direction == TradingJournalDirection.short
-        ? QuantaraColors.danger
-        : QuantaraColors.warning;
+        ? QuantaraColors.violet
+        : scheme.onSurfaceVariant;
 
     return SectionCard(
       accentColor: stateColor,
@@ -880,8 +880,10 @@ final class _JournalDetailHero extends StatelessWidget {
                   projection.realizedR?.toStringAsFixed(2) ??
                       (persian ? 'ناموجود' : 'Unavailable'),
                   Icons.balance_rounded,
-                  (projection.realizedR ?? 0) >= 0
-                      ? QuantaraColors.cyan
+                  projection.realizedR == null
+                      ? scheme.onSurfaceVariant
+                      : projection.realizedR! >= 0
+                      ? QuantaraColors.success
                       : QuantaraColors.danger,
                 ),
                 (
@@ -890,7 +892,9 @@ final class _JournalDetailHero extends StatelessWidget {
                       ? 'TP${projection.highestTargetReached}'
                       : '—',
                   Icons.flag_outlined,
-                  QuantaraColors.violet,
+                  projection.highestTargetReached > 0
+                      ? QuantaraColors.success
+                      : scheme.onSurfaceVariant,
                 ),
               ];
               return Wrap(
@@ -959,7 +963,9 @@ final class _ProjectionSummary extends StatelessWidget {
             ? (persian ? 'ناموجود' : 'Unavailable')
             : '${projection.returnOnMarginPercent!.toStringAsFixed(2)}%',
         Icons.percent_rounded,
-        (projection.returnOnMarginPercent ?? 0) >= 0
+        projection.returnOnMarginPercent == null
+            ? Theme.of(context).colorScheme.onSurfaceVariant
+            : projection.returnOnMarginPercent! >= 0
             ? QuantaraColors.success
             : QuantaraColors.danger,
       ),
@@ -969,7 +975,9 @@ final class _ProjectionSummary extends StatelessWidget {
             ? (persian ? 'ناموجود' : 'Unavailable')
             : '${projection.priceMovePercent!.toStringAsFixed(2)}%',
         Icons.show_chart_rounded,
-        (projection.priceMovePercent ?? 0) >= 0
+        projection.priceMovePercent == null
+            ? Theme.of(context).colorScheme.onSurfaceVariant
+            : projection.priceMovePercent! >= 0
             ? QuantaraColors.success
             : QuantaraColors.danger,
       ),
@@ -977,7 +985,7 @@ final class _ProjectionSummary extends StatelessWidget {
         persian ? 'دلیل خروج' : 'Close reason',
         _closeReasonLabel(persian, projection.closeReason),
         Icons.logout_rounded,
-        QuantaraColors.electricBlue,
+        _closeReasonColor(context, projection.closeReason),
       ),
     ];
     return SectionCard(
@@ -1255,7 +1263,7 @@ Color _tradeStateColor(BuildContext context, TradingJournalTradeState state) =>
     switch (state) {
       TradingJournalTradeState.planned => QuantaraColors.violet,
       TradingJournalTradeState.open => QuantaraColors.cyan,
-      TradingJournalTradeState.closed => QuantaraColors.success,
+      TradingJournalTradeState.closed => QuantaraColors.electricBlue,
       TradingJournalTradeState.missed => QuantaraColors.warning,
       TradingJournalTradeState.simulated => QuantaraColors.electricBlue,
       TradingJournalTradeState.unverified => Theme.of(
@@ -1288,9 +1296,9 @@ Color _factQualityColor(
   BuildContext context,
   TradingJournalFactQuality quality,
 ) => switch (quality) {
-  TradingJournalFactQuality.confirmed => QuantaraColors.success,
-  TradingJournalFactQuality.calculated => QuantaraColors.cyan,
-  TradingJournalFactQuality.userEntered => QuantaraColors.violet,
+  TradingJournalFactQuality.confirmed => QuantaraColors.cyan,
+  TradingJournalFactQuality.calculated => QuantaraColors.violet,
+  TradingJournalFactQuality.userEntered => QuantaraColors.electricBlue,
   TradingJournalFactQuality.stale => QuantaraColors.warning,
   TradingJournalFactQuality.unverified => Theme.of(context).colorScheme.error,
 };
@@ -1304,6 +1312,19 @@ String _factQualityLabel(bool persian, TradingJournalFactQuality quality) =>
       TradingJournalFactQuality.unverified =>
         persian ? 'تأییدنشده' : 'Unverified',
     };
+
+Color _closeReasonColor(
+  BuildContext context,
+  TradingJournalCloseReason? reason,
+) => switch (reason) {
+  TradingJournalCloseReason.takeProfit1 ||
+  TradingJournalCloseReason.takeProfit2 ||
+  TradingJournalCloseReason.takeProfit3 => QuantaraColors.success,
+  TradingJournalCloseReason.stop ||
+  TradingJournalCloseReason.liquidation => QuantaraColors.danger,
+  TradingJournalCloseReason.emergency => QuantaraColors.warning,
+  _ => Theme.of(context).colorScheme.onSurfaceVariant,
+};
 
 String _closeReasonLabel(bool persian, TradingJournalCloseReason? reason) {
   if (reason == null) return persian ? 'باز' : 'Open';

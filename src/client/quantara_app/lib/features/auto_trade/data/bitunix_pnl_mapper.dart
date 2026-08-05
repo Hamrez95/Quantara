@@ -15,6 +15,9 @@ final class BitunixPnlParseResult<T> {
 final class BitunixPnlMapper {
   const BitunixPnlMapper._();
 
+  static const _closedPositionAttributionTolerance = Duration(minutes: 2);
+  static const _minimumNearestSeparation = Duration(seconds: 5);
+
   static BitunixPnlParseResult<ExchangePositionSettlement> settlements(
     Object? data,
   ) {
@@ -123,18 +126,58 @@ final class BitunixPnlMapper {
     required List<ExchangePositionSettlement> settlements,
   }) {
     final at = occurredAt.toUtc();
-    final closedMatches = settlements
+    final exactClosedMatches = settlements
         .where((item) {
           if (item.symbol.toUpperCase() != symbol) return false;
           final openedAt = item.openedAt;
-          if (openedAt != null && at.isBefore(openedAt.toUtc())) return false;
+          if (openedAt != null && at.isBefore(openedAt.toUtc())) {
+            return false;
+          }
           return !at.isAfter(item.closedAt.toUtc());
         })
-        .map((item) => item.positionId)
+        .map((item) => item.positionId.trim())
         .where((item) => item.isNotEmpty)
         .toSet();
-    if (closedMatches.length == 1) return closedMatches.single;
-    if (closedMatches.length > 1) return null;
+    if (exactClosedMatches.length == 1) return exactClosedMatches.single;
+    if (exactClosedMatches.length > 1) return null;
+
+    final toleranceMicros = _closedPositionAttributionTolerance.inMicroseconds;
+    final tolerantClosedMatches =
+        settlements
+            .where((item) {
+              if (item.symbol.toUpperCase() != symbol) return false;
+              final openedAt = item.openedAt;
+              if (openedAt != null && at.isBefore(openedAt.toUtc())) {
+                return false;
+              }
+              return item.positionId.trim().isNotEmpty;
+            })
+            .map(
+              (item) => (
+                positionId: item.positionId.trim(),
+                deltaMicros: at
+                    .difference(item.closedAt.toUtc())
+                    .inMicroseconds
+                    .abs(),
+              ),
+            )
+            .where((item) => item.deltaMicros <= toleranceMicros)
+            .toList(growable: false)
+          ..sort(
+            (left, right) => left.deltaMicros.compareTo(right.deltaMicros),
+          );
+    if (tolerantClosedMatches.length == 1) {
+      return tolerantClosedMatches.single.positionId;
+    }
+    if (tolerantClosedMatches.length > 1) {
+      final nearest = tolerantClosedMatches[0];
+      final next = tolerantClosedMatches[1];
+      if (nearest.deltaMicros + _minimumNearestSeparation.inMicroseconds <
+          next.deltaMicros) {
+        return nearest.positionId;
+      }
+      return null;
+    }
 
     final openMatches = openPositions
         .where((item) => item.symbol.toUpperCase() == symbol)

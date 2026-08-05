@@ -109,6 +109,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     backgroundScanGateway: widget.backgroundScanGateway,
     languageCode: widget.locale.languageCode,
   );
+  final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
+      GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
 
   @override
@@ -170,6 +172,28 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     );
   }
 
+  Future<void> _refreshCurrentDestination() async {
+    switch (_destination) {
+      case 5:
+        final state = _autoTradeViewKey.currentState;
+        if (state != null) {
+          await state.refreshAll();
+        } else {
+          await _autoTradeController.reconcile(
+            reason: PrivateAccountRefreshReason.manual,
+            force: true,
+          );
+        }
+        return;
+      case 6:
+        await _journalController.refresh();
+        return;
+      default:
+        await _controller.refresh();
+        return;
+    }
+  }
+
   Future<void> _showAddSymbolDialog() async {
     final strings = AppStrings.of(context);
     final value = await showDialog<String>(
@@ -211,6 +235,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onNavigate: (value) => setState(() => _destination = value),
             showTopBar: desktop,
             realtimeMonitor: widget.realtimeMonitor,
+            autoTradeViewKey: _autoTradeViewKey,
+            onRefresh: _refreshCurrentDestination,
           ),
         );
         if (desktop) {
@@ -264,7 +290,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             destination: _destination,
             themeMode: widget.themeMode,
             onToggleTheme: widget.onToggleTheme,
-            onRefresh: _controller.refresh,
+            onRefresh: _refreshCurrentDestination,
           ),
           body: SafeArea(
             bottom: false,
@@ -350,7 +376,7 @@ class _QuantaraMobileAppBar extends StatelessWidget
   final int destination;
   final ThemeMode themeMode;
   final VoidCallback onToggleTheme;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
 
   @override
   Size get preferredSize => const Size.fromHeight(64);
@@ -419,7 +445,7 @@ class _QuantaraMobileAppBar extends StatelessWidget
       ),
       actions: [
         IconButton(
-          onPressed: controller.isLoading ? null : onRefresh,
+          onPressed: controller.isLoading ? null : () => unawaited(onRefresh()),
           tooltip: strings.isPersian ? 'به‌روزرسانی' : 'Refresh',
           icon: AnimatedRotation(
             duration: QuantaraMotion.standard,
@@ -560,6 +586,8 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.onNavigate,
     required this.showTopBar,
     required this.realtimeMonitor,
+    required this.autoTradeViewKey,
+    required this.onRefresh,
   });
 
   final OwnerAlphaController controller;
@@ -577,12 +605,14 @@ class _OwnerAlphaBody extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   final bool showTopBar;
   final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
+  final GlobalKey<_AutoTradeViewState> autoTradeViewKey;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
     return RefreshIndicator(
-      onRefresh: controller.refresh,
+      onRefresh: onRefresh,
       child: ListView(
         key: PageStorageKey('owner-alpha-$destination'),
         physics: const AlwaysScrollableScrollPhysics(),
@@ -634,6 +664,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                     )
                   else if (destination == 5)
                     _AutoTradeView(
+                      key: autoTradeViewKey,
                       controller: autoTradeController,
                       unattendedController: unattendedAutoTradeController,
                       analysisController: controller,

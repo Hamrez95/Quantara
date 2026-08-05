@@ -5,6 +5,7 @@ class _AutoTradeView extends StatefulWidget {
     required this.controller,
     required this.unattendedController,
     required this.analysisController,
+    super.key,
   });
 
   final AutoTradeController controller;
@@ -54,6 +55,14 @@ class _AutoTradeViewState extends State<_AutoTradeView>
     WidgetsBinding.instance.removeObserver(this);
     _localController.dispose();
     super.dispose();
+  }
+
+  Future<void> refreshAll() async {
+    await widget.controller.reconcile(
+      reason: PrivateAccountRefreshReason.manual,
+      force: true,
+    );
+    await _localController.refresh();
   }
 
   Future<void> _showConnectionDialog() async {
