@@ -1,0 +1,49 @@
+name: Temporary format ETH PnL attribution hotfix
+
+on:
+  push:
+    branches:
+      - 'feat/163-portfolio-budgeted-local-live'
+    paths:
+      - '.github/workflows/temporary-format-eth-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: 'feat/163-portfolio-budgeted-local-live'
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Format and run attribution regressions
+        working-directory: src/client/quantara_app
+        run: |
+          flutter pub get
+          dart format lib/features/auto_trade/data/bitunix_pnl_mapper.dart
+          flutter test --reporter expanded \
+            test/bitunix_pnl_position_identity_test.dart \
+            test/bitunix_pnl_mapper_physical_canary_test.dart \
+            test/eth_stop_hotfix_regression_test.dart \
+            test/trading_journal_exchange_backfill_test.dart
+
+      - name: Commit formatted hotfix
+        run: |
+          git config user.name 'ChatGPT Codex Connector'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app/lib/features/auto_trade/data/bitunix_pnl_mapper.dart
+          git diff --cached --check
+          git commit -m 'style: format verified PnL attribution hotfix'
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
