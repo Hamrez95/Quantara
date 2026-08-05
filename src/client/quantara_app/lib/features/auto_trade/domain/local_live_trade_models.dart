@@ -289,6 +289,73 @@ final class LocalLiveManagedPosition {
   }
 }
 
+final class LocalLivePortfolioBudgetStatus {
+  const LocalLivePortfolioBudgetStatus({
+    required this.asOf,
+    required this.riskLimit,
+    required this.riskConsumed,
+    required this.riskAvailable,
+    required this.openRisk,
+    required this.pendingRisk,
+    required this.ambiguousRisk,
+    required this.reservedMargin,
+    required this.spendableMargin,
+    required this.accountFresh,
+    required this.allPositionsProtected,
+    required this.liveExecutionAllowed,
+    required this.blockReason,
+  });
+
+  final DateTime asOf;
+  final double riskLimit;
+  final double riskConsumed;
+  final double riskAvailable;
+  final double openRisk;
+  final double pendingRisk;
+  final double ambiguousRisk;
+  final double reservedMargin;
+  final double spendableMargin;
+  final bool accountFresh;
+  final bool allPositionsProtected;
+  final bool liveExecutionAllowed;
+  final String blockReason;
+
+  Map<String, Object?> toJson() => {
+    'asOf': asOf.toUtc().toIso8601String(),
+    'riskLimit': riskLimit,
+    'riskConsumed': riskConsumed,
+    'riskAvailable': riskAvailable,
+    'openRisk': openRisk,
+    'pendingRisk': pendingRisk,
+    'ambiguousRisk': ambiguousRisk,
+    'reservedMargin': reservedMargin,
+    'spendableMargin': spendableMargin,
+    'accountFresh': accountFresh,
+    'allPositionsProtected': allPositionsProtected,
+    'liveExecutionAllowed': liveExecutionAllowed,
+    'blockReason': blockReason,
+  };
+
+  factory LocalLivePortfolioBudgetStatus.fromJson(Map<String, Object?> json) =>
+      LocalLivePortfolioBudgetStatus(
+        asOf:
+            DateTime.tryParse(json['asOf']?.toString() ?? '')?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        riskLimit: (json['riskLimit'] as num?)?.toDouble() ?? 0,
+        riskConsumed: (json['riskConsumed'] as num?)?.toDouble() ?? 0,
+        riskAvailable: (json['riskAvailable'] as num?)?.toDouble() ?? 0,
+        openRisk: (json['openRisk'] as num?)?.toDouble() ?? 0,
+        pendingRisk: (json['pendingRisk'] as num?)?.toDouble() ?? 0,
+        ambiguousRisk: (json['ambiguousRisk'] as num?)?.toDouble() ?? 0,
+        reservedMargin: (json['reservedMargin'] as num?)?.toDouble() ?? 0,
+        spendableMargin: (json['spendableMargin'] as num?)?.toDouble() ?? 0,
+        accountFresh: json['accountFresh'] == true,
+        allPositionsProtected: json['allPositionsProtected'] == true,
+        liveExecutionAllowed: json['liveExecutionAllowed'] == true,
+        blockReason: json['blockReason']?.toString() ?? 'unknown',
+      );
+}
+
 final class LocalLiveTradeStatus {
   const LocalLiveTradeStatus({
     required this.state,
@@ -300,6 +367,7 @@ final class LocalLiveTradeStatus {
     this.closedPositionCount = 0,
     this.realizedPnl,
     this.pnlProjection,
+    this.portfolioBudget,
     this.consecutiveFailures = 0,
     this.entriesEnabled = false,
   });
@@ -314,6 +382,7 @@ final class LocalLiveTradeStatus {
   @Deprecated('Use pnlProjection metrics with source/scope/asOf metadata.')
   final double? realizedPnl;
   final TradingPnlProjection? pnlProjection;
+  final LocalLivePortfolioBudgetStatus? portfolioBudget;
 
   double? get effectiveSessionNetPnl =>
       pnlProjection?.accountNetRealized.value ?? realizedPnl;
@@ -341,6 +410,7 @@ final class LocalLiveTradeStatus {
     'closedPositionCount': closedPositionCount,
     'realizedPnl': realizedPnl,
     'pnlProjection': pnlProjection?.toJson(),
+    'portfolioBudget': portfolioBudget?.toJson(),
     'consecutiveFailures': consecutiveFailures,
     'entriesEnabled': entriesEnabled,
   };
@@ -366,9 +436,22 @@ final class LocalLiveTradeStatus {
     closedPositionCount: (json['closedPositionCount'] as num?)?.toInt() ?? 0,
     realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
     pnlProjection: _pnlProjectionFromJson(json['pnlProjection']),
+    portfolioBudget: _portfolioBudgetFromJson(json['portfolioBudget']),
     consecutiveFailures: (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
     entriesEnabled: json['entriesEnabled'] == true,
   );
+}
+
+LocalLivePortfolioBudgetStatus? _portfolioBudgetFromJson(Object? value) {
+  if (value is Map<String, Object?>) {
+    return LocalLivePortfolioBudgetStatus.fromJson(value);
+  }
+  if (value is Map<Object?, Object?>) {
+    return LocalLivePortfolioBudgetStatus.fromJson(
+      value.map((key, item) => MapEntry(key.toString(), item)),
+    );
+  }
+  return null;
 }
 
 TradingPnlProjection? _pnlProjectionFromJson(Object? value) {

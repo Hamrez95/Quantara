@@ -58,6 +58,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   int _consecutiveFailures = 0;
   int _closedPositionCount = 0;
   TradingPnlProjection? _sessionPnlProjection;
+  LocalLivePortfolioBudgetStatus? _portfolioBudget;
   String? _sessionId;
   DateTime? _sessionStartedAt;
   final Set<String> _sessionPositionIds = {};
@@ -178,6 +179,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               'local-${startedAt.microsecondsSinceEpoch.toRadixString(36)}';
           _sessionStartEquity = null;
           _sessionPnlProjection = null;
+          _portfolioBudget = null;
           _portfolioGuard = null;
           _sessionPositionIds.clear();
           await _persistSessionMetadata();
@@ -313,11 +315,36 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               _sessionStartEquity! * configuration.dailyLossLimitPercent / 100,
         );
         try {
+          final now = DateTime.now().toUtc();
+          final allOpenPositionsProtected =
+              _managed.length ==
+                  positions.where((item) => item.quantity > 0).length &&
+              _managed.every((item) => item.profitLockProgress.warning == null);
           await _portfolioGuard!.reconcileRestartAndClosedPositions(
             managed: _managed,
             exchangePositions: positions,
             pnlProjection: account.authoritativePnl,
-            now: DateTime.now().toUtc(),
+            now: now,
+          );
+          final snapshot = await _portfolioGuard!.snapshot(
+            account: account,
+            allOpenPositionsProtected: allOpenPositionsProtected,
+            now: now,
+          );
+          _portfolioBudget = LocalLivePortfolioBudgetStatus(
+            asOf: now,
+            riskLimit: snapshot.dailyRisk.limit,
+            riskConsumed: snapshot.dailyRisk.consumed,
+            riskAvailable: snapshot.dailyRisk.available,
+            openRisk: snapshot.dailyRisk.openRisk,
+            pendingRisk: snapshot.dailyRisk.pendingRisk,
+            ambiguousRisk: snapshot.dailyRisk.ambiguousRisk,
+            reservedMargin: snapshot.margin.reservedMargin,
+            spendableMargin: snapshot.margin.spendable,
+            accountFresh: snapshot.accountFresh,
+            allPositionsProtected: snapshot.allPositionsProtected,
+            liveExecutionAllowed: snapshot.liveExecutionAllowed,
+            blockReason: snapshot.blockReason.name,
           );
         } on LocalLiveTradeSafeException catch (error) {
           _entriesEnabled = false;
@@ -1738,6 +1765,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       closedPositionCount: _closedPositionCount,
       realizedPnl: null,
       pnlProjection: _sessionPnlProjection,
+      portfolioBudget: _portfolioBudget,
       consecutiveFailures: _consecutiveFailures,
       entriesEnabled: _entriesEnabled,
     );

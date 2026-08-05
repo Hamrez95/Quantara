@@ -613,6 +613,30 @@ class _LocalLiveTradeControlCardState
                     ? QuantaraColors.warning
                     : QuantaraColors.cyan,
               ),
+              if (status.portfolioBudget != null)
+                StatusPill(
+                  label: _t(
+                    'ریسک آزاد ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
+                    'Risk free ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
+                  ),
+                  color: status.portfolioBudget!.ambiguousRisk > 0
+                      ? QuantaraColors.danger
+                      : status.portfolioBudget!.riskAvailable > 0
+                      ? QuantaraColors.cyan
+                      : QuantaraColors.warning,
+                ),
+              if (status.portfolioBudget != null)
+                StatusPill(
+                  label: _t(
+                    'مارجین رزرو ${status.portfolioBudget!.reservedMargin.toStringAsFixed(2)} · قابل‌استفاده ${status.portfolioBudget!.spendableMargin.toStringAsFixed(2)}',
+                    'Margin reserved ${status.portfolioBudget!.reservedMargin.toStringAsFixed(2)} · spendable ${status.portfolioBudget!.spendableMargin.toStringAsFixed(2)}',
+                  ),
+                  color:
+                      status.portfolioBudget!.accountFresh &&
+                          status.portfolioBudget!.allPositionsProtected
+                      ? QuantaraColors.violet
+                      : QuantaraColors.warning,
+                ),
               StatusPill(
                 label: status.effectiveSessionNetPnl == null
                     ? _t('خالص جلسه: ناموجود', 'Session net: unavailable')
