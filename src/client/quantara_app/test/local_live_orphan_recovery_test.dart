@@ -31,7 +31,10 @@ void main() {
     apiSupported: true,
   );
 
-  PositionPnlProjection projection({bool withExit = false}) {
+  PositionPnlProjection projection({
+    bool withExit = false,
+    bool sourceVerified = true,
+  }) {
     final fills = <ExchangePnlFill>[
       ExchangePnlFill(
         tradeId: 'entry-trade',
@@ -78,7 +81,7 @@ void main() {
       settlements: const [],
       fillsAvailable: true,
       settlementsAvailable: true,
-      sourceVerified: true,
+      sourceVerified: sourceVerified,
     ).forPositionId('xrp-position-1')!;
   }
 
@@ -187,6 +190,18 @@ void main() {
     );
     expect(decision.allowed, isFalse);
     expect(decision.reason, contains('partially closed'));
+  });
+
+  test('refuses unverified exchange history', () {
+    final decision = LocalLiveOrphanRecoveryPolicy.evaluate(
+      position: position,
+      pnl: projection(sourceVerified: false),
+      protection: protection(),
+      entryOrder: quantaraOrder,
+      rules: rules,
+    );
+    expect(decision.allowed, isFalse);
+    expect(decision.reason, contains('not exchange-verified'));
   });
 
   test('refuses incomplete protection', () {

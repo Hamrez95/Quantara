@@ -622,8 +622,12 @@ class _LocalLiveTradeControlCardState
             const SizedBox(height: 10),
             _BoundaryNotice(
               text: _t(
-                'ورود جدید متوقف است و هیچ پوزیشن بازی برای مدیریت وجود ندارد. برای فعال‌سازی دوباره، دکمه «ازسرگیری ورود» را بزن و همه تأییدهای پول واقعی را دوباره انجام بده.',
-                'New entries are stopped and there is no open position to manage. Use Resume entries and repeat every real-money confirmation to arm entries again.',
+                status.openPositionCount == 0
+                    ? 'ورود جدید متوقف است و هیچ پوزیشن بازی برای مدیریت وجود ندارد. برای فعال‌سازی دوباره، دکمه «ازسرگیری ورود» را بزن و همه تأییدهای پول واقعی را دوباره انجام بده.'
+                    : 'پوزیشن موجود با حقیقت صرافی بازیابی و تحت مدیریت قرار گرفته است؛ ورودهای جدید هنوز خاموش‌اند. فقط برای مسلح‌کردن ورودی‌های بعدی «ازسرگیری ورود» را جداگانه تأیید کن.',
+                status.openPositionCount == 0
+                    ? 'New entries are stopped and there is no open position to manage. Use Resume entries and repeat every real-money confirmation to arm entries again.'
+                    : 'The existing position is recovered and managed from exchange truth; new entries are still off. Confirm Resume entries separately only when you intend to arm future entries.',
               ),
               color: QuantaraColors.warning,
             ),
@@ -898,7 +902,7 @@ class _LocalLiveTradeControlCardState
                           phaseOneStartBlocked ||
                           (serviceActive && !canResumeEntries)
                       ? null
-                      : _confirmStart,
+                      : () => _confirmStart(recoveryOnly: unrecoveredCount > 0),
                   icon: widget.controller.isBusy
                       ? const SizedBox.square(
                           dimension: 19,
@@ -998,7 +1002,7 @@ class _LocalLiveTradeControlCardState
     );
   }
 
-  Future<void> _confirmStart() async {
+  Future<void> _confirmStart({bool recoveryOnly = false}) async {
     if (!_preferencesLoaded) return;
     if (!widget.accountController.isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1013,7 +1017,8 @@ class _LocalLiveTradeControlCardState
       );
       return;
     }
-    if (_enabledSymbols.isEmpty || _enabledTimeframes.isEmpty) {
+    if (!recoveryOnly &&
+        (_enabledSymbols.isEmpty || _enabledTimeframes.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1026,7 +1031,8 @@ class _LocalLiveTradeControlCardState
       );
       return;
     }
-    if (_riskPercent > 0.50 || _dailyLossLimit > 3 || _leverage > 25) {
+    if (!recoveryOnly &&
+        (_riskPercent > 0.50 || _dailyLossLimit > 3 || _leverage > 25)) {
       final advancedConfirmed = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -1059,7 +1065,14 @@ class _LocalLiveTradeControlCardState
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text(_t('فعال‌سازی پول واقعی', 'Enable real-money canary')),
+        title: Text(
+          recoveryOnly
+              ? _t(
+                  'بازیابی امن پوزیشن موجود',
+                  'Securely recover existing position',
+                )
+              : _t('فعال‌سازی پول واقعی', 'Enable real-money canary'),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1067,8 +1080,12 @@ class _LocalLiveTradeControlCardState
             children: [
               Text(
                 _t(
-                  'Quantara اجازه ارسال سفارش واقعی فیوچرز خواهد داشت. شروع فقط از همین صفحه انجام می‌شود و بعد از ری‌استارت گوشی خودکار فعال نمی‌شود.',
-                  'Quantara will be allowed to submit real futures orders. It starts only from this visible screen and never auto-arms after a device reboot.',
+                  recoveryOnly
+                      ? 'Quantara فقط مالکیت، تاریخچه و حفاظت پوزیشن باز موجود را از Bitunix بررسی و بازسازی می‌کند. در این مرحله هیچ ورود جدیدی مسلح یا ارسال نمی‌شود.'
+                      : 'Quantara اجازه ارسال سفارش واقعی فیوچرز خواهد داشت. شروع فقط از همین صفحه انجام می‌شود و بعد از ری‌استارت گوشی خودکار فعال نمی‌شود.',
+                  recoveryOnly
+                      ? 'Quantara will only verify and reconstruct ownership, history, and protection for the existing Bitunix position. No new entry is armed or submitted during recovery.'
+                      : 'Quantara will be allowed to submit real futures orders. It starts only from this visible screen and never auto-arms after a device reboot.',
                 ),
               ),
               const SizedBox(height: 12),
@@ -1093,8 +1110,12 @@ class _LocalLiveTradeControlCardState
               const SizedBox(height: 12),
               Text(
                 _t(
-                  'تأیید می‌کنم کلید API دسترسی برداشت/انتقال ندارد و اولین اجرا را با موجودی کم انجام می‌دهم.',
-                  'I confirm the API key has no withdrawal/transfer permission and I will use a small balance for the first canary.',
+                  recoveryOnly
+                      ? 'تأیید می‌کنم این مرحله فقط برای بازیابی و مدیریت پوزیشن موجود است و فعال‌سازی ورودهای جدید را جداگانه انجام خواهم داد.'
+                      : 'تأیید می‌کنم کلید API دسترسی برداشت/انتقال ندارد و اولین اجرا را با موجودی کم انجام می‌دهم.',
+                  recoveryOnly
+                      ? 'I confirm this step is only for recovering and managing the existing position; I will arm new entries separately.'
+                      : 'I confirm the API key has no withdrawal/transfer permission and I will use a small balance for the first canary.',
                 ),
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
@@ -1108,7 +1129,11 @@ class _LocalLiveTradeControlCardState
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(_t('تأیید و شروع', 'Confirm & start')),
+            child: Text(
+              recoveryOnly
+                  ? _t('تأیید و بازیابی', 'Confirm & recover')
+                  : _t('تأیید و شروع', 'Confirm & start'),
+            ),
           ),
         ],
       ),
@@ -1116,10 +1141,22 @@ class _LocalLiveTradeControlCardState
     if (confirmed != true || !mounted) return;
     await _persistPreferences();
     if (!mounted) return;
+    final recoverySymbols =
+        widget.accountController.snapshot?.positions
+            .where((position) => position.quantity > 0)
+            .map((position) => position.symbol.trim().toUpperCase())
+            .where((symbol) => symbol.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
     final started = await widget.controller.start(
       LocalLiveTradeConfiguration(
-        symbols: _enabledSymbols.toList(growable: false),
-        timeframes: _enabledTimeframes.toList(growable: false),
+        symbols: recoveryOnly
+            ? recoverySymbols
+            : _enabledSymbols.toList(growable: false),
+        timeframes: recoveryOnly && _enabledTimeframes.isEmpty
+            ? const ['15m']
+            : _enabledTimeframes.toList(growable: false),
         leverage: _leverage,
         riskPercent: _riskPercent,
         dailyLossLimitPercent: _dailyLossLimit,
@@ -1129,6 +1166,7 @@ class _LocalLiveTradeControlCardState
         languageCode: widget.analysisController.languageCode,
         targetAllocation: _targetAllocation,
       ),
+      recoveryOnly: recoveryOnly,
     );
     if (!started && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

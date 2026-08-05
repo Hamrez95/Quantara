@@ -89,7 +89,10 @@ final class LocalLiveTradeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> start(LocalLiveTradeConfiguration configuration) async {
+  Future<bool> start(
+    LocalLiveTradeConfiguration configuration, {
+    bool recoveryOnly = false,
+  }) async {
     if (_busy || _disposed) return false;
     _busy = true;
     _error = null;
@@ -112,15 +115,33 @@ final class LocalLiveTradeController extends ChangeNotifier {
         force: true,
       );
       final account = _accountController.snapshot;
-      if (!reconciled ||
-          account == null ||
-          _accountController.reconciliation.blocksNewEntries) {
+      final reconciliation = _accountController.reconciliation;
+      final completedAt = reconciliation.completedAt;
+      final freshDivergenceForRecovery =
+          recoveryOnly &&
+          account != null &&
+          account.positions.any((position) => position.quantity > 0) &&
+          reconciliation.health ==
+              PrivateAccountReconciliationHealth.divergent &&
+          completedAt != null &&
+          DateTime.now().toUtc().difference(completedAt).abs() <=
+              const Duration(seconds: 20);
+      if (account == null ||
+          (!reconciled && !freshDivergenceForRecovery) ||
+          (!recoveryOnly && reconciliation.blocksNewEntries)) {
         throw const LocalLiveTradeSafeException(
           'New entries are blocked until a fresh, coherent Bitunix private-account reconciliation succeeds.',
         );
       }
+      if (recoveryOnly &&
+          !account.positions.any((position) => position.quantity > 0)) {
+        throw const LocalLiveTradeSafeException(
+          'No open Bitunix position is available for secure recovery.',
+        );
+      }
 
-      final entriesEnabled = ExchangeTruthPhaseOneGate.realEntriesAllowed;
+      final entriesEnabled =
+          ExchangeTruthPhaseOneGate.realEntriesAllowed && !recoveryOnly;
       if (!entriesEnabled && account.positions.isEmpty) {
         throw const LocalLiveTradeSafeException(
           ExchangeTruthPhaseOneGate.reason,
@@ -207,7 +228,9 @@ final class LocalLiveTradeController extends ChangeNotifier {
         state: LocalLiveTradeState.starting,
         updatedAt: DateTime.now().toUtc(),
         message: exchangePositions.isNotEmpty
-            ? 'Local live service is verifying exchange-position ownership and protection.'
+            ? recoveryOnly
+                  ? 'Local live service is recovering exchange-position ownership in management-only mode.'
+                  : 'Local live service is verifying exchange-position ownership and protection.'
             : entriesEnabled
             ? 'Local live service is starting on this device.'
             : 'Local live service is starting in management-only quarantine.',

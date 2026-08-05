@@ -92,6 +92,9 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
         'A partially closed orphan position cannot be reconstructed safely.',
       );
     }
+    if (!pnl.isVerified) {
+      return blocked('Position fill history is not exchange-verified.');
+    }
     final entryFills = explicitFills
         .where((fill) => !fill.reduceOnly)
         .toList(growable: false);
