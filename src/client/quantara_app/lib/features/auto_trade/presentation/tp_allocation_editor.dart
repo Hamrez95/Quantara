@@ -99,13 +99,26 @@ class TpAllocationEditor extends StatelessWidget {
             ),
           Align(
             alignment: AlignmentDirectional.centerEnd,
-            child: Text(
-              persian
-                  ? 'جمع: ۱۰۰٪ · ${allocation.activeTargetCount} هدف فعال'
-                  : 'Total: 100% · ${allocation.activeTargetCount} active target(s)',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w800),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.end,
+              children: [
+                Text(
+                  persian ? 'جمع: ۱۰۰٪' : 'Total: 100%',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  persian
+                      ? '${allocation.activeTargetCount} هدف فعال'
+                      : '${allocation.activeTargetCount} active target(s)',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
