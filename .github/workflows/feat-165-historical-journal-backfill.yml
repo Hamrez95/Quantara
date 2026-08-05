@@ -20,6 +20,8 @@ jobs:
         with:
           ref: feat/163-portfolio-budgeted-local-live
           fetch-depth: 0
+      - name: Align source-test anchor
+        run: python3 .github/scripts/feat165_historical_journal_backfill_fix.py
       - name: Apply verified historical close backfill
         run: python3 .github/scripts/feat165_historical_journal_backfill.py
       - uses: subosito/flutter-action@v2
