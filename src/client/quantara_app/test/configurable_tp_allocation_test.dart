@@ -143,10 +143,9 @@ void main() {
       openedAt: DateTime.utc(2026, 8, 4),
       entryPrice: 1.01,
       initialQuantity: 100,
-      remainingQuantity: 100,
       originalStopLoss: 1.02,
-      stopLoss: 1.02,
       targets: const [1.00, 0.99, 0.98],
+      leverage: 10,
       targetQuantities: const [70, 20, 10],
       targetOrderIds: const ['tp1', 'tp2', 'tp3'],
       targetAllocation: ProfitProtectionTargetAllocation.checked(
@@ -154,11 +153,7 @@ void main() {
         tp2Fraction: 0.20,
         tp3Fraction: 0.10,
       ),
-      feePaid: 0,
-      realizedPnl: 0,
-      funding: 0,
       stopOrderId: 'stop',
-      clientOrderIds: const ['q-local-xrp'],
     );
 
     final restored = LocalLiveManagedPosition.fromJson(managed.toJson());
