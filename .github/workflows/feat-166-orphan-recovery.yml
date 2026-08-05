@@ -33,6 +33,8 @@ jobs:
         run: python3 .github/scripts/feat166_service_patch.py
       - name: Wire recovery types and execution guard
         run: python3 .github/scripts/feat166_compile_fix.py
+      - name: Wire recovered position direction
+        run: python3 .github/scripts/feat166_direction_fix.py
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
