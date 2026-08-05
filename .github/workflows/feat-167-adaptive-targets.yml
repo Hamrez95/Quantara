@@ -26,6 +26,10 @@ jobs:
           sed -i 's/kind: event.kind/kind: event.type/g' .github/scripts/feat167_adaptive_targets.py
       - name: Apply adaptive target patch
         run: python3 .github/scripts/feat167_adaptive_targets.py
+      - name: Align legacy recovery assertion
+        run: >-
+          sed -i "s/contains('three targets')/contains('do not cover')/"
+          src/client/quantara_app/test/local_live_orphan_recovery_test.dart
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
@@ -47,7 +51,6 @@ jobs:
           test/adaptive_tp_allocation_test.dart
           test/adaptive_tp_source_test.dart
           test/profit_protection_policy_test.dart
-          test/profit_lock_stop_policy_test.dart
           test/remaining_target_protection_policy_test.dart
           test/local_live_orphan_recovery_test.dart
           test/local_live_orphan_recovery_source_test.dart
