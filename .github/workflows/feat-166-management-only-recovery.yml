@@ -22,6 +22,8 @@ jobs:
           fetch-depth: 0
       - name: Apply management-only recovery hardening
         run: python3 .github/scripts/feat166_management_only_recovery.py
+      - name: Preserve precise partial-close diagnostics
+        run: python3 .github/scripts/feat166_recovery_reason_order.py
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
