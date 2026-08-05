@@ -107,9 +107,6 @@ service = replace_once(
     """    return List.unmodifiable(candidates);
   }
 
-  TradeIdea? _pickPrimaryIdea(List<TradeIdea> ideas) =>
-      _rankPrimaryIdeas(ideas).firstOrNull;
-
   String _clientId(TradeIdea idea) {
 """,
     "rank helper return",
