@@ -8,34 +8,33 @@ import 'trading_journal_store.dart';
 
 TradingJournalLedger mergeTradingJournalLedgers(
   TradingJournalLedger durable,
-  TradingJournalLedger foregroundMirror,
-) {
+  TradingJournalLedger foregroundMirror, {
+  DateTime? newerThan,
+}) {
+  if (durable.integrity == TradingJournalIntegrity.unverified ||
+      foregroundMirror.integrity == TradingJournalIntegrity.unverified) {
+    return durable;
+  }
   var merged = durable;
+  bool isNewer(DateTime timestamp) =>
+      newerThan == null || timestamp.toUtc().isAfter(newerThan.toUtc());
+
   for (final plan in foregroundMirror.plans) {
+    if (plan.source != TradingJournalSource.localLive ||
+        !isNewer(plan.decidedAt)) {
+      continue;
+    }
     merged = merged.appendPlan(plan);
   }
+  final knownTradeIds = merged.plans.map((plan) => plan.journalTradeId).toSet();
   for (final event in foregroundMirror.events) {
+    if (!knownTradeIds.contains(event.journalTradeId) ||
+        !isNewer(event.recordedAt)) {
+      continue;
+    }
     merged = merged.appendEvent(event);
   }
-  for (final warning in foregroundMirror.warnings) {
-    if (merged.warnings.contains(warning)) continue;
-    merged = foregroundMirror.integrity == TradingJournalIntegrity.unverified
-        ? merged.withIntegrityWarning(warning)
-        : merged.withRecoveryWarning(warning);
-  }
-  if (foregroundMirror.integrity == TradingJournalIntegrity.unverified &&
-      foregroundMirror.warnings.isEmpty &&
-      merged.integrity != TradingJournalIntegrity.unverified) {
-    merged = merged.withIntegrityWarning(
-      'Foreground journal mirror reported unverified integrity.',
-    );
-  }
-  final highestGeneration = [
-    durable.generation,
-    foregroundMirror.generation,
-    merged.generation,
-  ].reduce((left, right) => left > right ? left : right);
-  return merged.withGeneration(highestGeneration);
+  return merged;
 }
 
 bool _sameLedger(TradingJournalLedger left, TradingJournalLedger right) =>
@@ -58,13 +57,24 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
   Future<TradingJournalLedger> load() => _serialValue(() async {
     final database = await _databaseFactory();
     final record = await database.read(QuantaraDurableCategory.journal, _key);
-    final foregroundMirror = await _legacyStore.load();
     if (record == null) {
-      if (_isEmpty(foregroundMirror)) return foregroundMirror;
-      return _write(database, foregroundMirror, minimumRevision: 1);
+      final legacy = await _legacyStore.load();
+      if (_isEmpty(legacy)) return legacy;
+      return _write(database, legacy, minimumRevision: 1);
+    }
+    if (_legacyStore is! ForegroundTradingJournalMirror) {
+      return TradingJournalLedger.fromJson(record.payload);
     }
     final durable = TradingJournalLedger.fromJson(record.payload);
-    final merged = mergeTradingJournalLedgers(durable, foregroundMirror);
+    if (durable.integrity == TradingJournalIntegrity.unverified) {
+      return durable;
+    }
+    final foregroundMirror = await _legacyStore.load();
+    final merged = mergeTradingJournalLedgers(
+      durable,
+      foregroundMirror,
+      newerThan: record.updatedAt,
+    );
     if (_sameLedger(durable, merged)) return durable;
     return _write(database, merged);
   });
@@ -93,13 +103,24 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
     QuantaraDurableDatabase database,
   ) async {
     final record = await database.read(QuantaraDurableCategory.journal, _key);
-    final foregroundMirror = await _legacyStore.load();
     if (record == null) {
-      if (_isEmpty(foregroundMirror)) return foregroundMirror;
-      return _write(database, foregroundMirror, minimumRevision: 1);
+      final legacy = await _legacyStore.load();
+      if (_isEmpty(legacy)) return legacy;
+      return _write(database, legacy, minimumRevision: 1);
+    }
+    if (_legacyStore is! ForegroundTradingJournalMirror) {
+      return TradingJournalLedger.fromJson(record.payload);
     }
     final durable = TradingJournalLedger.fromJson(record.payload);
-    final merged = mergeTradingJournalLedgers(durable, foregroundMirror);
+    if (durable.integrity == TradingJournalIntegrity.unverified) {
+      return durable;
+    }
+    final foregroundMirror = await _legacyStore.load();
+    final merged = mergeTradingJournalLedgers(
+      durable,
+      foregroundMirror,
+      newerThan: record.updatedAt,
+    );
     if (_sameLedger(durable, merged)) return durable;
     return _write(database, merged);
   }

@@ -16,6 +16,11 @@ abstract interface class TradingJournalStore {
   Future<void> appendEvent(TradingJournalEvent event);
 }
 
+/// Marks the device-local foreground-service mirror. A durable store may read
+/// this mirror only to import newer Local Live facts; generic legacy stores
+/// remain migration-only and can never override database truth.
+abstract interface class ForegroundTradingJournalMirror {}
+
 final class TradingJournalEnvelope {
   const TradingJournalEnvelope({
     required this.schemaVersion,
@@ -80,7 +85,7 @@ final class TradingJournalEnvelope {
 }
 
 final class SharedPreferencesTradingJournalStore
-    implements TradingJournalStore {
+    implements TradingJournalStore, ForegroundTradingJournalMirror {
   SharedPreferencesTradingJournalStore({
     Future<SharedPreferences> Function()? preferencesFactory,
   }) : _preferencesFactory =

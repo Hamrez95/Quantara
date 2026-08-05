@@ -26,7 +26,11 @@ void main() {
         .appendEvent(entry);
     final foreground = durable.appendEvent(close);
 
-    final merged = mergeTradingJournalLedgers(durable, foreground);
+    final merged = mergeTradingJournalLedgers(
+      durable,
+      foreground,
+      newerThan: DateTime.utc(2026, 8, 5, 3),
+    );
     final projection = TradingJournalProjector.project(
       ledger: merged,
       journalTradeId: plan.journalTradeId,
@@ -41,6 +45,27 @@ void main() {
     expect(projection.remainingQuantity, 0);
     expect(projection.grossPnl, -0.2574);
     expect(projection.fees, 0.03575286);
+  });
+
+  test('ignores stale migration-only plans after durable database exists', () {
+    final durablePlan = _plan();
+    final stalePlan = TradingJournalPlan.fromJson({
+      ...durablePlan.toJson(),
+      'journalTradeId': 'legacy-only',
+      'setupId': 'legacy-setup',
+      'decidedAt': DateTime.utc(2026, 8, 4).toIso8601String(),
+    });
+    final durable = TradingJournalLedger.empty().appendPlan(durablePlan);
+    final foreground = TradingJournalLedger.empty().appendPlan(stalePlan);
+
+    final merged = mergeTradingJournalLedgers(
+      durable,
+      foreground,
+      newerThan: DateTime.utc(2026, 8, 5),
+    );
+
+    expect(merged.plans, hasLength(1));
+    expect(merged.plans.single.journalTradeId, durablePlan.journalTradeId);
   });
 }
 
