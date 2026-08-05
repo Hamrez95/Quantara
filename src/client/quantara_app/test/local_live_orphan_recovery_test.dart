@@ -190,7 +190,7 @@ void main() {
   });
 
   test('refuses incomplete protection', () {
-    final incomplete = protection()..removeLast();
+    final incomplete = protection().toList()..removeLast();
     final decision = LocalLiveOrphanRecoveryPolicy.evaluate(
       position: position,
       pnl: projection(),
