@@ -13,6 +13,7 @@ void main() {
     expect(source, contains('_managed.remove(managed);'));
     expect(source, contains('pnlVerified: managedHistoryVerified'));
     expect(source, contains('_auditFingerprintSeenAt[fingerprint]'));
+    expect(source, contains('if (!closedHistoryAvailable || !journalReconciled)'));
   });
 
   test('inactive adaptive target slots are not journalled as TP orders', () {
