@@ -35,6 +35,22 @@ void main() {
   );
 
   test(
+    'verified historical exchange closure repairs old open journal records',
+    () {
+      final controller = File(
+        'lib/features/trading_journal/application/trading_journal_controller.dart',
+      ).readAsStringSync();
+      final page = File(
+        'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
+      ).readAsStringSync();
+      expect(controller, contains('reconcileVerifiedExchangeClosures'));
+      expect(page, contains('_reconcileJournalFromAccount'));
+      expect(page, contains('snapshot.authoritativePnl'));
+      expect(page, contains('value == 5 || value == 6'));
+    },
+  );
+
+  test(
     'journal confirmation and closed lifecycle are neutral, not profit green',
     () {
       final source = File(

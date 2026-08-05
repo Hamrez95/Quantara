@@ -172,6 +172,18 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     );
   }
 
+  Future<void> _reconcileJournalFromAccount() async {
+    final snapshot = _autoTradeController.snapshot;
+    if (snapshot == null) return;
+    await _journalController.reconcileVerifiedExchangeClosures(
+      pnlProjection: snapshot.authoritativePnl,
+      openPositionIds: snapshot.positions
+          .map((position) => position.positionId.trim())
+          .where((positionId) => positionId.isNotEmpty)
+          .toSet(),
+    );
+  }
+
   Future<void> _refreshCurrentDestination() async {
     switch (_destination) {
       case 5:
@@ -184,8 +196,16 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             force: true,
           );
         }
+        await _reconcileJournalFromAccount();
         return;
       case 6:
+        if (_autoTradeController.isConnected) {
+          await _autoTradeController.reconcile(
+            reason: PrivateAccountRefreshReason.manual,
+            force: true,
+          );
+        }
+        await _reconcileJournalFromAccount();
         await _journalController.refresh();
         return;
       default:
@@ -232,7 +252,12 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
             onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
-            onNavigate: (value) => setState(() => _destination = value),
+            onNavigate: (value) {
+              setState(() => _destination = value);
+              if (value == 5 || value == 6) {
+                unawaited(_refreshCurrentDestination());
+              }
+            },
             showTopBar: desktop,
             realtimeMonitor: widget.realtimeMonitor,
             autoTradeViewKey: _autoTradeViewKey,
