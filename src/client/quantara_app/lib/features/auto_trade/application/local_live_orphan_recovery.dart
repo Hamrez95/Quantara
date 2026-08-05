@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../data/bitunix_local_live_api_client.dart';
@@ -111,9 +112,7 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
       );
     }
 
-    final quantityTolerance = math
-        .pow(10, -rules.quantityPrecision)
-        .toDouble();
+    final quantityTolerance = math.pow(10, -rules.quantityPrecision).toDouble();
     final entryQuantity = entryFills.fold<double>(
       0,
       (sum, fill) => sum + fill.quantity,
@@ -187,7 +186,8 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
     final targetsOnProfitSide = targets.every(
       (item) => switch (direction) {
         TradeDirection.long => item.takeProfitPrice > position.averageOpenPrice,
-        TradeDirection.short => item.takeProfitPrice < position.averageOpenPrice,
+        TradeDirection.short =>
+          item.takeProfitPrice < position.averageOpenPrice,
         TradeDirection.wait => false,
       },
     );
@@ -221,9 +221,7 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
       initialQuantity: position.quantity,
       entryPrice: position.averageOpenPrice,
       originalStopLoss: stop.stopLossPrice,
-      targets: List.unmodifiable(
-        targets.map((item) => item.takeProfitPrice),
-      ),
+      targets: List.unmodifiable(targets.map((item) => item.takeProfitPrice)),
       leverage: position.leverage,
       openedAt: openedAt,
       stopOrderId: stop.orderId.trim(),

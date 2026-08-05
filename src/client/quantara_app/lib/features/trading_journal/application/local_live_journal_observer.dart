@@ -168,6 +168,170 @@ final class LocalLiveJournalObserver {
     }
   }
 
+  Future<bool> recordRecoveredPosition({
+    required LocalLiveManagedPosition managed,
+    required AutoTradeAccountSnapshot account,
+  }) async {
+    final id = journalTradeId(managed.positionId);
+    final riskPerUnit = (managed.entryPrice - managed.originalStopLoss).abs();
+    final expectedR = managed.targets
+        .map(
+          (target) => riskPerUnit <= 0
+              ? 0.0
+              : (target - managed.entryPrice).abs() / riskPerUnit,
+        )
+        .toList(growable: false);
+    final riskBudget =
+        riskPerUnit * managed.initialQuantity +
+        managed.entryPrice * managed.initialQuantity * 0.0017;
+    final riskPercent = account.estimatedEquity <= 0
+        ? 0.0
+        : riskBudget / account.estimatedEquity * 100;
+    final plan = TradingJournalPlan(
+      journalTradeId: id,
+      setupId: managed.setupId,
+      analysisVersion: 'exchange-recovery-v1',
+      symbol: managed.symbol,
+      market: 'USDT_PERPETUAL',
+      timeframe: managed.timeframe,
+      direction: _direction(managed.direction),
+      strategy: 'recovered-local-live',
+      cadence: 'recovered-after-reinstall',
+      source: TradingJournalSource.localLive,
+      decidedAt: managed.openedAt.toUtc(),
+      decisionPrice: managed.entryPrice,
+      entryLower: managed.entryPrice,
+      entryUpper: managed.entryPrice,
+      plannedEntry: managed.entryPrice,
+      originalStopLoss: managed.originalStopLoss,
+      targets: List.unmodifiable(managed.targets),
+      expectedRMultiples: List.unmodifiable(expectedR),
+      confidencePercent: 0,
+      confluence: const [
+        'verified-q-local-entry-order',
+        'verified-open-position-id',
+        'confirmed-full-stop',
+        'confirmed-three-target-ladder',
+      ],
+      regime: 'recovered-exchange-truth',
+      rationale:
+          'Recovered from verified Bitunix position, fill and protection facts after device-local state was removed.',
+      invalidation:
+          'Original signal metadata was unavailable after reinstall; no value was fabricated.',
+      accountEquity: account.estimatedEquity,
+      riskPercent: riskPercent,
+      riskBudget: riskBudget,
+      leverage: managed.leverage,
+      expectedMargin:
+          managed.initialQuantity * managed.entryPrice / managed.leverage,
+      passedGates: const [
+        'isolated-margin',
+        'verified-q-local-entry-order',
+        'confirmed-full-stop',
+        'confirmed-three-target-ladder',
+        'no-confirmed-partial-exit',
+      ],
+      blockedGates: const [],
+      appVersion: '1.2.0-rc.2+121',
+      strategyRulesVersion: 'exchange-recovery-v1',
+      positionId: managed.positionId,
+      entryOrderId: managed.entryOrderId,
+      clientId: managed.clientId,
+      notes:
+          'Recovered after app reinstall. Original signal confidence and timeframe were not reconstructed.',
+    );
+    if (!await _appendPlan(plan)) return false;
+
+    final now = DateTime.now().toUtc();
+    await _append(
+      TradingJournalEvent(
+        eventId: 'recovered-entry:${managed.entryOrderId}',
+        journalTradeId: id,
+        type: TradingJournalEventType.entryFilled,
+        occurredAt: managed.openedAt.toUtc(),
+        recordedAt: now,
+        source: TradingJournalFactSource.exchange,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: account.marginCoin,
+        asOf: account.syncedAt.toUtc(),
+        exchangeEventId: 'entry-order:${managed.entryOrderId}',
+        positionId: managed.positionId,
+        orderId: managed.entryOrderId,
+        clientId: managed.clientId,
+        quantity: managed.initialQuantity,
+        price: managed.entryPrice,
+        remainingQuantity: managed.initialQuantity,
+        details: const {
+          'marginMode': 'ISOLATION',
+          'recoveredAfterReinstall': true,
+        },
+      ),
+    );
+    await _append(
+      TradingJournalEvent(
+        eventId: 'recovered-stop:${managed.stopOrderId}',
+        journalTradeId: id,
+        type: TradingJournalEventType.stopConfirmed,
+        occurredAt: now,
+        recordedAt: now,
+        source: TradingJournalFactSource.exchange,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: account.marginCoin,
+        asOf: account.syncedAt.toUtc(),
+        exchangeEventId: 'stop-order:${managed.stopOrderId}',
+        positionId: managed.positionId,
+        orderId: managed.stopOrderId,
+        quantity: managed.initialQuantity,
+        price: managed.originalStopLoss,
+      ),
+    );
+    for (var index = 0; index < managed.targetOrderIds.length; index++) {
+      await _append(
+        TradingJournalEvent(
+          eventId: 'recovered-tp:${managed.targetOrderIds[index]}',
+          journalTradeId: id,
+          type: TradingJournalEventType.takeProfitConfirmed,
+          occurredAt: now,
+          recordedAt: now,
+          source: TradingJournalFactSource.exchange,
+          quality: TradingJournalFactQuality.confirmed,
+          scope: TradingJournalScope.position,
+          currency: account.marginCoin,
+          asOf: account.syncedAt.toUtc(),
+          exchangeEventId: 'tp-order:${managed.targetOrderIds[index]}',
+          positionId: managed.positionId,
+          orderId: managed.targetOrderIds[index],
+          quantity: managed.targetQuantities[index],
+          price: managed.targets[index],
+          details: {'targetIndex': index + 1},
+        ),
+      );
+    }
+    await _append(
+      TradingJournalEvent(
+        eventId: 'recovered:${managed.positionId}',
+        journalTradeId: id,
+        type: TradingJournalEventType.reconciliationRecovered,
+        occurredAt: now,
+        recordedAt: now,
+        source: TradingJournalFactSource.quantara,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: account.marginCoin,
+        asOf: account.syncedAt.toUtc(),
+        exchangeEventId: 'recovered-position:${managed.positionId}',
+        positionId: managed.positionId,
+        details: const {
+          'message':
+              'Device-local ownership was reconstructed from verified exchange truth after reinstall.',
+        },
+      ),
+    );
+    return true;
+  }
+
   Future<void> reconcilePosition({
     required LocalLiveManagedPosition managed,
     required PositionPnlProjection positionPnl,

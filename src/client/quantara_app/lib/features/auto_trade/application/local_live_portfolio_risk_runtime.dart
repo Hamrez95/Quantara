@@ -1,8 +1,10 @@
+import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../portfolio_risk/application/portfolio_risk_coordinator.dart';
 import '../../portfolio_risk/data/portfolio_risk_ledger_store.dart';
 import '../../portfolio_risk/domain/portfolio_risk_models.dart';
 import '../../portfolio_risk/domain/portfolio_risk_transitions.dart';
 import '../domain/local_live_portfolio_admission.dart';
+import '../domain/local_live_trade_models.dart';
 
 final class LocalLivePortfolioRiskRuntime {
   factory LocalLivePortfolioRiskRuntime({
@@ -109,6 +111,129 @@ final class LocalLivePortfolioRiskRuntime {
       );
     });
   }
+
+  Future<PortfolioRiskLedger> adoptVerifiedOpenPosition({
+    required LocalLiveManagedPosition managed,
+    required double confirmedStop,
+    required DateTime now,
+  }) => _atomicStore.mutate<PortfolioRiskLedger>((current) async {
+    final base = _normalize(current, now.toUtc());
+    final positionId = managed.positionId.trim();
+    if (positionId.isEmpty ||
+        managed.initialQuantity <= 0 ||
+        managed.entryPrice <= 0 ||
+        confirmedStop <= 0 ||
+        managed.leverage <= 0) {
+      throw const LocalLiveTradeSafeException(
+        'Recovered position risk facts are invalid.',
+      );
+    }
+    final matching = base.activeReservations
+        .where((item) => item.positionId == positionId)
+        .toList(growable: false);
+    final existingVerified = matching.where(
+      (item) =>
+          item.open &&
+          item.verification == PortfolioVerificationState.exchangeConfirmed,
+    );
+    if (existingVerified.isNotEmpty) {
+      final existing = existingVerified.single;
+      if (existing.symbol.toUpperCase() == managed.symbol.toUpperCase() &&
+          (existing.filledQuantity - managed.initialQuantity).abs() <= 1e-9) {
+        return PortfolioRiskLedgerMutation(value: base, nextLedger: base);
+      }
+      throw const LocalLiveTradeSafeException(
+        'A conflicting verified reservation already owns this position.',
+      );
+    }
+    if (matching.any(
+      (item) => !item.reservationId.startsWith('external-unmanaged:'),
+    )) {
+      throw const LocalLiveTradeSafeException(
+        'A conflicting risk reservation prevents safe recovery.',
+      );
+    }
+    if (base.activeReservations.any(
+      (item) =>
+          item.positionId != positionId &&
+          item.symbol.toUpperCase() == managed.symbol.toUpperCase(),
+    )) {
+      throw const LocalLiveTradeSafeException(
+        'Another active reservation already uses the recovered symbol.',
+      );
+    }
+
+    final notional = managed.initialQuantity * managed.entryPrice;
+    final entryFee = notional * 0.0006;
+    final exitFee = managed.initialQuantity * confirmedStop * 0.0006;
+    final slippage = notional * 0.0008;
+    final fundingReserve = notional * 0.0003;
+    final side = managed.direction == TradeDirection.long
+        ? PortfolioSide.long
+        : PortfolioSide.short;
+    final maximumLoss = PortfolioRiskMath.confirmedOpenRisk(
+      side: side,
+      entryPrice: managed.entryPrice,
+      confirmedStop: confirmedStop,
+      remainingQuantity: managed.initialQuantity,
+      contractMultiplier: 1,
+      entryFee: entryFee,
+      exitFee: exitFee,
+      slippageReserve: slippage,
+      fundingReserve: fundingReserve,
+    );
+    final observedMargin = notional / managed.leverage;
+    final retained = base.reservations
+        .where(
+          (item) =>
+              !(item.positionId == positionId &&
+                  item.reservationId.startsWith('external-unmanaged:')),
+        )
+        .toList(growable: false);
+    final reservation = PositionRiskReservation(
+      reservationId: 'recovered-local-live:$positionId',
+      journalTradeId: 'local-live:$positionId',
+      candidateId: managed.setupId,
+      symbol: managed.symbol.toUpperCase(),
+      assetGroup: LocalLivePortfolioAdmission.assetGroupForSymbol(
+        managed.symbol,
+      ),
+      side: side,
+      strategy: 'recovered-local-live',
+      entryOrderId: managed.entryOrderId,
+      positionId: positionId,
+      plannedQuantity: managed.initialQuantity,
+      filledQuantity: managed.initialQuantity,
+      entryPrice: managed.entryPrice,
+      currentExchangeConfirmedStop: confirmedStop,
+      contractMultiplier: 1,
+      estimatedEntryFee: entryFee,
+      estimatedExitFee: exitFee,
+      slippageReserve: slippage,
+      fundingReserve: fundingReserve,
+      maximumLoss: maximumLoss,
+      reservedMargin: observedMargin,
+      createdAt: managed.openedAt.toUtc(),
+      tradingDayId: base.tradingDay.value,
+      lifecycle: PortfolioReservationLifecycle.open,
+      verification: PortfolioVerificationState.exchangeConfirmed,
+      revision: 1,
+    );
+    final next = PortfolioRiskLedger(
+      schemaVersion: base.schemaVersion,
+      revision: base.revision + 1,
+      tradingDay: base.tradingDay,
+      dailyRiskLimit: base.dailyRiskLimit,
+      realizedLoss: base.realizedLoss,
+      realizedProfit: base.realizedProfit,
+      reservations: [...retained, reservation],
+      processedEventIds: {
+        ...base.processedEventIds,
+        'recover-open:$positionId',
+      },
+    );
+    return PortfolioRiskLedgerMutation(value: next, nextLedger: next);
+  });
 
   Future<PortfolioRiskLedger> release({
     required String reservationId,

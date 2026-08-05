@@ -74,6 +74,10 @@ final class LocalLiveTradeController extends ChangeNotifier {
         message:
             'Android is not running the local execution service. Exchange-native SL/TP orders remain authoritative.',
         openPositionCount: _status.openPositionCount,
+        managedPositionCount: _status.managedPositionCount,
+        unmanagedPositionCount: _status.unmanagedPositionCount,
+        unmanagedSymbols: _status.unmanagedSymbols,
+        entryBlockReason: _status.entryBlockReason,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
         pnlProjection: _status.pnlProjection,
@@ -196,13 +200,30 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'entriesEnabled': entriesEnabled,
         }),
       );
+      final exchangePositions = account.positions
+          .where((position) => position.quantity > 0)
+          .toList(growable: false);
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.starting,
         updatedAt: DateTime.now().toUtc(),
-        message: entriesEnabled
+        message: exchangePositions.isNotEmpty
+            ? 'Local live service is verifying exchange-position ownership and protection.'
+            : entriesEnabled
             ? 'Local live service is starting on this device.'
             : 'Local live service is starting in management-only quarantine.',
-        entriesEnabled: entriesEnabled,
+        openPositionCount: exchangePositions.length,
+        managedPositionCount: 0,
+        unmanagedPositionCount: exchangePositions.length,
+        unmanagedSymbols: List.unmodifiable(
+          exchangePositions
+              .map((position) => position.symbol.trim().toUpperCase())
+              .where((symbol) => symbol.isNotEmpty)
+              .toSet(),
+        ),
+        entryBlockReason: exchangePositions.isEmpty
+            ? null
+            : 'exchangeTruthPendingLocalRecovery',
+        entriesEnabled: entriesEnabled && exchangePositions.isEmpty,
       );
       _updateAccountPolling();
       return true;
@@ -341,6 +362,10 @@ final class LocalLiveTradeController extends ChangeNotifier {
             ? 'Local service stopped after emergency close requests.'
             : 'Local service stopped. Existing exchange SL/TP remains active.',
         openPositionCount: _status.openPositionCount,
+        managedPositionCount: _status.managedPositionCount,
+        unmanagedPositionCount: _status.unmanagedPositionCount,
+        unmanagedSymbols: _status.unmanagedSymbols,
+        entryBlockReason: _status.entryBlockReason,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
         pnlProjection: _status.pnlProjection,

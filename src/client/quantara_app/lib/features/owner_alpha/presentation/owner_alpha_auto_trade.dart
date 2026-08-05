@@ -469,8 +469,27 @@ class _LocalLiveTradeControlCardState
         status.state == LocalLiveTradeState.running && status.entriesEnabled;
     final canResumeEntries = status.canResumeEntries;
     final phaseOneQuarantine = !ExchangeTruthPhaseOneGate.realEntriesAllowed;
-    final hasExistingPosition =
-        widget.accountController.snapshot?.positions.isNotEmpty ?? false;
+    final exchangeOpenPositions =
+        widget.accountController.snapshot?.positions
+            .where((position) => position.quantity > 0)
+            .toList(growable: false) ??
+        const <AutoTradePosition>[];
+    final hasExistingPosition = exchangeOpenPositions.isNotEmpty;
+    final authoritativeOpenCount = math.max(
+      status.openPositionCount,
+      exchangeOpenPositions.length,
+    );
+    final unrecoveredCount = math.max(
+      status.unmanagedPositionCount,
+      authoritativeOpenCount - status.managedPositionCount,
+    );
+    final unrecoveredSymbols = status.unmanagedSymbols.isNotEmpty
+        ? status.unmanagedSymbols
+        : exchangeOpenPositions
+              .map((position) => position.symbol.trim().toUpperCase())
+              .where((symbol) => symbol.isNotEmpty)
+              .toSet()
+              .toList(growable: false);
     final phaseOneStartBlocked = phaseOneQuarantine && !hasExistingPosition;
     final starting = status.state == LocalLiveTradeState.starting;
     final breaker = status.state == LocalLiveTradeState.circuitBreaker;
@@ -570,6 +589,16 @@ class _LocalLiveTradeControlCardState
               color: QuantaraColors.warning,
             ),
           ],
+          if (unrecoveredCount > 0) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'Bitunix تعداد $authoritativeOpenCount پوزیشن باز گزارش می‌کند، اما مالکیت محلی $unrecoveredCount پوزیشن (${unrecoveredSymbols.join(', ')}) بعد از حذف برنامه از بین رفته است. این پوزیشن‌ها اسلات و بودجه را اشغال می‌کنند؛ ورود جدید تا بازیابی امن یا بسته‌شدن در صرافی مسدود می‌ماند.',
+                'Bitunix reports $authoritativeOpenCount open position(s), but local ownership for $unrecoveredCount (${unrecoveredSymbols.join(', ')}) was lost after reinstall. These positions consume slots and budget; new entries stay blocked until secure recovery or exchange closure.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
           if (widget.controller.error != null) ...[
             const SizedBox(height: 10),
             _LocalLiveStatusNotice(
@@ -606,13 +635,31 @@ class _LocalLiveTradeControlCardState
             children: [
               StatusPill(
                 label: _t(
-                  '${status.openPositionCount}/$_maximumConcurrentPositions پوزیشن باز',
-                  '${status.openPositionCount}/$_maximumConcurrentPositions open',
+                  '$authoritativeOpenCount/$_maximumConcurrentPositions پوزیشن صرافی',
+                  '$authoritativeOpenCount/$_maximumConcurrentPositions exchange open',
                 ),
-                color: status.openPositionCount > 0
+                color: authoritativeOpenCount > 0
                     ? QuantaraColors.warning
                     : QuantaraColors.cyan,
               ),
+              StatusPill(
+                label: _t(
+                  '${status.managedPositionCount} تحت مدیریت Quantara',
+                  '${status.managedPositionCount} Quantara-managed',
+                ),
+                color: status.managedPositionCount == authoritativeOpenCount
+                    ? QuantaraColors.cyan
+                    : QuantaraColors.warning,
+              ),
+              if (unrecoveredCount > 0)
+                StatusPill(
+                  label: _t(
+                    '$unrecoveredCount نیازمند بازیابی امن',
+                    '$unrecoveredCount secure recovery pending',
+                  ),
+                  color: QuantaraColors.warning,
+                  icon: Icons.sync_lock_rounded,
+                ),
               if (status.portfolioBudget != null)
                 StatusPill(
                   label: _t(
@@ -859,7 +906,17 @@ class _LocalLiveTradeControlCardState
                         )
                       : const Icon(Icons.play_arrow_rounded),
                   label: Text(
-                    phaseOneQuarantine && hasExistingPosition
+                    unrecoveredCount > 0
+                        ? serviceActive
+                              ? _t(
+                                  'در انتظار بازیابی امن',
+                                  'Secure recovery pending',
+                                )
+                              : _t(
+                                  'شروع بازیابی و مدیریت امن',
+                                  'Start secure recovery',
+                                )
+                        : phaseOneQuarantine && hasExistingPosition
                         ? _t('شروع مدیریت', 'Start management')
                         : canResumeEntries
                         ? _t('ازسرگیری ورود', 'Resume entries')

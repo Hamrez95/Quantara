@@ -9,7 +9,10 @@ void main() {
     ).readAsStringSync();
     expect(source, contains('openPositionCount: _exchangeOpenPositionCount'));
     expect(source, contains('managedPositionCount: _managed.length'));
-    expect(source, contains('unmanagedPositionCount: _unmanagedSymbols.length'));
+    expect(
+      source,
+      contains('unmanagedPositionCount: _unmanagedSymbols.length'),
+    );
     expect(source, contains('_recoverVerifiedQuantaraOrphans'));
     expect(source, contains('recordRecoveredPosition'));
     expect(source, contains('adoptVerifiedOpenPosition'));

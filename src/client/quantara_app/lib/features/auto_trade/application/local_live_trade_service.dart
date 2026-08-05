@@ -20,6 +20,7 @@ import '../domain/local_live_trade_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/remaining_target_protection_policy.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'local_live_orphan_recovery.dart';
 import 'local_live_portfolio_execution_guard.dart';
 import 'profit_lock_promotion_executor.dart';
 
@@ -59,6 +60,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   int _closedPositionCount = 0;
   TradingPnlProjection? _sessionPnlProjection;
   LocalLivePortfolioBudgetStatus? _portfolioBudget;
+  int _exchangeOpenPositionCount = 0;
+  List<String> _unmanagedSymbols = const [];
+  String? _entryBlockReason;
   String? _sessionId;
   DateTime? _sessionStartedAt;
   final Set<String> _sessionPositionIds = {};
@@ -206,6 +210,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       case 'stop':
         _userRequestedEntries = false;
         _entriesEnabled = false;
+        _entryBlockReason = null;
         _auditEvent('stop', 'New entries disabled by user.');
         await _runCycle();
         await _publish(
@@ -214,6 +219,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
       case 'block_entries_private_state':
         _entriesEnabled = false;
+        _entryBlockReason = 'privateAccountState';
         final reason = message['reason']?.toString() ?? 'unavailable';
         if (reason == 'disconnected') _userRequestedEntries = false;
         _auditEvent(
@@ -247,8 +253,27 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     try {
       final account = await exchange.fetchAccountSnapshot(credentials);
       final positions = await exchange.fetchPositions(credentials);
+      final openExchangePositions = positions
+          .where((position) => position.quantity > 0)
+          .toList(growable: false);
+      _exchangeOpenPositionCount = openExchangePositions.length;
       _lastExchangeSync = DateTime.now().toUtc();
       _entriesEnabled = _userRequestedEntries;
+      _entryBlockReason = null;
+      _sessionStartEquity ??= account.estimatedEquity;
+      if (_sessionStartEquity != null) {
+        await FlutterForegroundTask.saveData(
+          key: localLiveSessionStartEquityKey,
+          value: _sessionStartEquity!,
+        );
+      }
+      if (_sessionStartEquity != null && _sessionStartEquity! > 0) {
+        _portfolioGuard ??= LocalLivePortfolioExecutionGuard(
+          dailyRiskLimit:
+              _sessionStartEquity! * configuration.dailyLossLimitPercent / 100,
+        );
+      }
+      await _recoverVerifiedQuantaraOrphans(account, openExchangePositions);
       final sessionId = _sessionId;
       final sessionStartedAt = _sessionStartedAt;
       _sessionPnlProjection = sessionId == null || sessionStartedAt == null
@@ -263,11 +288,21 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .map((position) => position.positionId)
           .where((positionId) => positionId.isNotEmpty)
           .toSet();
-      final hasUnmanagedExchangeExposure = positions.any(
-        (position) =>
-            position.quantity > 0 &&
-            !managedPositionIds.contains(position.positionId),
+      final unmanagedPositions = openExchangePositions
+          .where(
+            (position) =>
+                !managedPositionIds.contains(position.positionId.trim()),
+          )
+          .toList(growable: false);
+      _unmanagedSymbols = List.unmodifiable(
+        unmanagedPositions
+            .map((position) => position.symbol.trim().toUpperCase())
+            .where((symbol) => symbol.isNotEmpty)
+            .toSet()
+            .toList(growable: false)
+          ..sort(),
       );
+      final hasUnmanagedExchangeExposure = unmanagedPositions.isNotEmpty;
       final readiness = LocalLiveCycleReadinessPolicy.evaluate(
         hasManagedExposure: _managed.isNotEmpty,
         hasUnmanagedExchangeExposure: hasUnmanagedExchangeExposure,
@@ -287,6 +322,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           break;
         case LocalLiveCycleReadiness.managedExposureHistoryBlocked:
           _entriesEnabled = false;
+          _entryBlockReason = 'managedExposureHistoryBlocked';
           cycleWarning =
               'Managed exchange exposure requires verified fill history. New entries are blocked while existing protection is reconciled.';
           _auditEvent(
@@ -296,17 +332,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           break;
         case LocalLiveCycleReadiness.unmanagedExposureBlocked:
           _entriesEnabled = false;
+          _entryBlockReason = 'unmanagedExchangeExposure';
           cycleWarning =
-              'An unmanaged exchange position was detected. New entries are blocked and Quantara did not adopt the position.';
+              'An open Bitunix position is not yet owned by this installation. It consumes a portfolio slot; new entries remain blocked while Quantara verifies safe recovery.';
           _auditEvent('unmanaged_exposure_block', cycleWarning);
           break;
-      }
-      _sessionStartEquity ??= account.estimatedEquity;
-      if (_sessionStartEquity != null) {
-        await FlutterForegroundTask.saveData(
-          key: localLiveSessionStartEquityKey,
-          value: _sessionStartEquity!,
-        );
       }
       await _reconcileManagedPositions(positions, account.authoritativePnl);
       if (_sessionStartEquity != null && _sessionStartEquity! > 0) {
@@ -346,8 +376,27 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             liveExecutionAllowed: snapshot.liveExecutionAllowed,
             blockReason: snapshot.blockReason.name,
           );
+          if (_unmanagedSymbols.isNotEmpty) {
+            final limit = _portfolioBudget!.riskLimit;
+            _portfolioBudget = LocalLivePortfolioBudgetStatus(
+              asOf: now,
+              riskLimit: limit,
+              riskConsumed: math.max(limit, _portfolioBudget!.riskConsumed),
+              riskAvailable: 0,
+              openRisk: _portfolioBudget!.openRisk,
+              pendingRisk: _portfolioBudget!.pendingRisk,
+              ambiguousRisk: math.max(limit, _portfolioBudget!.ambiguousRisk),
+              reservedMargin: _portfolioBudget!.reservedMargin,
+              spendableMargin: 0,
+              accountFresh: _portfolioBudget!.accountFresh,
+              allPositionsProtected: false,
+              liveExecutionAllowed: false,
+              blockReason: 'unmanagedExchangeExposure',
+            );
+          }
         } on LocalLiveTradeSafeException catch (error) {
           _entriesEnabled = false;
+          _entryBlockReason = 'portfolioLedgerBlocked';
           cycleWarning = error.message;
           _auditEvent('portfolio_ledger_block', error.message);
         }
@@ -364,6 +413,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       if (lossPercent >= configuration.dailyLossLimitPercent) {
         _userRequestedEntries = false;
         _entriesEnabled = false;
+        _entryBlockReason = 'dailyLossLimit';
         _auditEvent(
           'circuit_breaker',
           'Daily loss cap reached (${lossPercent.toStringAsFixed(2)}%).',
@@ -374,9 +424,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         return;
       }
-      final exchangePositionCount = positions
-          .where((item) => item.quantity > 0)
-          .length;
+      final exchangePositionCount = _exchangeOpenPositionCount;
       final hasExecutionSlot = LocalLivePortfolioAdmission.hasExecutionSlot(
         configuredMaximum: configuration.maximumConcurrentPositions,
         managedPositionCount: _managed.length,
@@ -385,6 +433,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       if (_entriesEnabled && hasExecutionSlot && account.estimatedEquity > 0) {
         await _scanAndMaybeEnter(account, positions);
       } else if (_entriesEnabled && _managed.length != exchangePositionCount) {
+        _entriesEnabled = false;
+        _entryBlockReason = 'positionOwnershipMismatch';
         _auditEvent(
           'portfolio_position_count_block',
           'Managed and exchange position counts differ; no new entry was evaluated.',
@@ -396,6 +446,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .whereType<String>()
           .where((item) => item.trim().isNotEmpty)
           .firstOrNull;
+      if (profitLockWarning != null) {
+        _entryBlockReason ??= 'protectionReconciliationBlocked';
+      }
       await _publish(
         _entriesEnabled
             ? LocalLiveTradeState.running
@@ -404,12 +457,15 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             profitLockWarning ??
             (_entriesEnabled
                 ? 'Local live scan and exchange reconciliation completed.'
-                : _managed.isEmpty
-                ? 'New entries are paused; no Local Live position is open.'
+                : _unmanagedSymbols.isNotEmpty
+                ? 'Exchange position recovery is pending; no new entry is allowed.'
+                : _exchangeOpenPositionCount == 0
+                ? 'New entries are paused; no exchange position is open.'
                 : 'Only exchange-protected positions are being reconciled.'),
       );
     } on Object catch (error) {
       _consecutiveFailures++;
+      _entryBlockReason = 'cycleFailure';
       _auditEvent('error', _safeError(error));
       if (_consecutiveFailures >= 3) {
         _userRequestedEntries = false;
@@ -911,6 +967,107 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       }
     } finally {
       client.close();
+    }
+  }
+
+  Future<void> _recoverVerifiedQuantaraOrphans(
+    AutoTradeAccountSnapshot account,
+    List<BitunixLivePosition> openPositions,
+  ) async {
+    final guard = _portfolioGuard;
+    final exchange = _exchange;
+    final credentials = _credentials;
+    if (guard == null || exchange == null || credentials == null) return;
+
+    final ownedIds = _managed
+        .map((item) => item.positionId.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    for (final position in openPositions) {
+      final positionId = position.positionId.trim();
+      if (positionId.isEmpty || ownedIds.contains(positionId)) continue;
+      final positionPnl = account.authoritativePnl.forPositionId(positionId);
+      final entryOrderId = LocalLiveOrphanRecoveryPolicy.uniqueEntryOrderId(
+        position: position,
+        pnl: positionPnl,
+      );
+      if (entryOrderId == null) {
+        _auditEvent(
+          'orphan_recovery_deferred',
+          'A unique explicit entry order was not available for secure ownership recovery.',
+          symbol: position.symbol,
+        );
+        continue;
+      }
+      try {
+        final entryOrder = await exchange.fetchOrderDetail(
+          orderId: entryOrderId,
+          credentials: credentials,
+        );
+        final rules = await exchange.fetchInstrumentRules(position.symbol);
+        final protection = await exchange.fetchPendingProtection(
+          credentials,
+          symbol: position.symbol,
+          positionId: positionId,
+        );
+        final decision = LocalLiveOrphanRecoveryPolicy.evaluate(
+          position: position,
+          pnl: positionPnl,
+          protection: protection,
+          entryOrder: entryOrder,
+          rules: rules,
+        );
+        final managed = decision.managed;
+        if (!decision.allowed || managed == null) {
+          _auditEvent(
+            'orphan_recovery_blocked',
+            decision.reason,
+            symbol: position.symbol,
+          );
+          continue;
+        }
+        final journalRecovered = await _journalObserver.recordRecoveredPosition(
+          managed: managed,
+          account: account,
+        );
+        if (!journalRecovered) {
+          _auditEvent(
+            'orphan_recovery_deferred',
+            'Verified ownership was found, but the durable journal recovery did not commit.',
+            symbol: position.symbol,
+          );
+          continue;
+        }
+        await guard.adoptVerifiedOpenPosition(
+          managed: managed,
+          confirmedStop: managed.originalStopLoss,
+          now: DateTime.now().toUtc(),
+        );
+        if (_managed.any((item) => item.positionId == positionId)) continue;
+        _managed.add(managed);
+        ownedIds.add(positionId);
+        _sessionPositionIds.add(positionId);
+        _executedSetupIds.add(managed.setupId);
+        await _persistState();
+        await _persistSessionMetadata();
+        _auditEvent(
+          'orphan_recovery_completed',
+          'A fully protected Quantara position was recovered from verified exchange truth after reinstall.',
+          symbol: position.symbol,
+        );
+      } on LocalLiveTradeSafeException catch (error) {
+        _auditEvent(
+          'orphan_recovery_blocked',
+          error.message,
+          symbol: position.symbol,
+        );
+      } on FormatException catch (error) {
+        _auditEvent(
+          'orphan_recovery_blocked',
+          error.message.toString(),
+          symbol: position.symbol,
+        );
+      }
     }
   }
 
@@ -1761,7 +1918,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       message: message,
       lastScanAt: _lastScanAt,
       lastSuccessfulExchangeSync: _lastExchangeSync,
-      openPositionCount: _managed.length,
+      openPositionCount: _exchangeOpenPositionCount,
+      managedPositionCount: _managed.length,
+      unmanagedPositionCount: _unmanagedSymbols.length,
+      unmanagedSymbols: _unmanagedSymbols,
+      entryBlockReason: _entryBlockReason,
       closedPositionCount: _closedPositionCount,
       realizedPnl: null,
       pnlProjection: _sessionPnlProjection,
@@ -1795,7 +1956,13 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       );
     }
     if (state == LocalLiveTradeState.managingOnly) {
-      return _managed.isEmpty
+      if (_unmanagedSymbols.isNotEmpty) {
+        return _notificationCopy(
+          'Quantara · بازیابی امن پوزیشن صرافی',
+          'Quantara · Secure exchange recovery',
+        );
+      }
+      return _exchangeOpenPositionCount == 0
           ? _notificationCopy(
               'Quantara · ورودهای جدید متوقف',
               'Quantara · Entries paused',
@@ -1812,7 +1979,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }
 
   String _notificationPnlText(LocalLiveTradeState state) {
-    if (_managed.isEmpty) {
+    if (_unmanagedSymbols.isNotEmpty) {
+      final symbols = _unmanagedSymbols.join(', ');
+      return _notificationCopy(
+        '$_exchangeOpenPositionCount پوزیشن صرافی · بازیابی $symbols در انتظار · ورود مسدود',
+        '$_exchangeOpenPositionCount exchange open · $symbols recovery pending · entries blocked',
+      );
+    }
+    if (_exchangeOpenPositionCount == 0) {
       if (state == LocalLiveTradeState.starting || _lastExchangeSync == null) {
         return _notificationCopy(
           'در حال همگام‌سازی حساب Bitunix',
@@ -1833,8 +2007,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     final projection = _sessionPnlProjection;
     if (projection == null) {
       return _notificationCopy(
-        '${_managed.length} پوزیشن باز · در حال همگام‌سازی سود و زیان',
-        '${_managed.length} open · syncing exchange PnL',
+        '$_exchangeOpenPositionCount پوزیشن باز · در حال همگام‌سازی سود و زیان',
+        '$_exchangeOpenPositionCount open · syncing exchange PnL',
       );
     }
     final net = projection.accountNetRealized;
@@ -1847,8 +2021,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         ? '${unrealized.value! >= 0 ? '+' : ''}${unrealized.value!.toStringAsFixed(2)} ${unrealized.currency}'
         : pending;
     return _notificationCopy(
-      '${_managed.length} باز · خالص جلسه $netText · باز $openText',
-      '${_managed.length} open · session net $netText · open $openText',
+      '$_exchangeOpenPositionCount باز · خالص جلسه $netText · باز $openText',
+      '$_exchangeOpenPositionCount open · session net $netText · open $openText',
     );
   }
 

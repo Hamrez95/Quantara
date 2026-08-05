@@ -45,6 +45,16 @@ final class LocalLivePortfolioExecutionGuard {
     return _runtime.reserve(candidate: candidate, account: truth, now: now);
   }
 
+  Future<PortfolioRiskLedger> adoptVerifiedOpenPosition({
+    required LocalLiveManagedPosition managed,
+    required double confirmedStop,
+    required DateTime now,
+  }) => _runtime.adoptVerifiedOpenPosition(
+    managed: managed,
+    confirmedStop: confirmedStop,
+    now: now,
+  );
+
   Future<void> releaseNoExposure({
     required String reservationId,
     required String evidence,

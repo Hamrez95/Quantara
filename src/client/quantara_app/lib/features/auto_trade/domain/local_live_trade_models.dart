@@ -364,6 +364,10 @@ final class LocalLiveTradeStatus {
     this.lastScanAt,
     this.lastSuccessfulExchangeSync,
     this.openPositionCount = 0,
+    this.managedPositionCount = 0,
+    this.unmanagedPositionCount = 0,
+    this.unmanagedSymbols = const [],
+    this.entryBlockReason,
     this.closedPositionCount = 0,
     this.realizedPnl,
     this.pnlProjection,
@@ -377,7 +381,17 @@ final class LocalLiveTradeStatus {
   final String message;
   final DateTime? lastScanAt;
   final DateTime? lastSuccessfulExchangeSync;
+
+  /// Authoritative number of currently open Bitunix positions.
   final int openPositionCount;
+
+  /// Positions whose durable Local Live ownership was verified on this device.
+  final int managedPositionCount;
+
+  /// Exchange positions that consume slots but are not yet safely recovered.
+  final int unmanagedPositionCount;
+  final List<String> unmanagedSymbols;
+  final String? entryBlockReason;
   final int closedPositionCount;
   @Deprecated('Use pnlProjection metrics with source/scope/asOf metadata.')
   final double? realizedPnl;
@@ -393,10 +407,14 @@ final class LocalLiveTradeStatus {
       state == LocalLiveTradeState.running ||
       state == LocalLiveTradeState.managingOnly;
 
+  bool get requiresExchangeRecovery => unmanagedPositionCount > 0;
+
   bool get canResumeEntries =>
       state == LocalLiveTradeState.managingOnly &&
       !entriesEnabled &&
-      openPositionCount == 0;
+      entryBlockReason == null &&
+      unmanagedPositionCount == 0 &&
+      managedPositionCount == openPositionCount;
 
   Map<String, Object?> toJson() => {
     'state': state.name,
@@ -407,6 +425,10 @@ final class LocalLiveTradeStatus {
         ?.toUtc()
         .toIso8601String(),
     'openPositionCount': openPositionCount,
+    'managedPositionCount': managedPositionCount,
+    'unmanagedPositionCount': unmanagedPositionCount,
+    'unmanagedSymbols': unmanagedSymbols,
+    'entryBlockReason': entryBlockReason,
     'closedPositionCount': closedPositionCount,
     'realizedPnl': realizedPnl,
     'pnlProjection': pnlProjection?.toJson(),
@@ -433,6 +455,18 @@ final class LocalLiveTradeStatus {
       json['lastSuccessfulExchangeSync']?.toString() ?? '',
     )?.toUtc(),
     openPositionCount: (json['openPositionCount'] as num?)?.toInt() ?? 0,
+    managedPositionCount:
+        (json['managedPositionCount'] as num?)?.toInt() ??
+        (json['openPositionCount'] as num?)?.toInt() ??
+        0,
+    unmanagedPositionCount:
+        (json['unmanagedPositionCount'] as num?)?.toInt() ?? 0,
+    unmanagedSymbols: List.unmodifiable(
+      (json['unmanagedSymbols'] as List<Object?>? ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.trim().isNotEmpty),
+    ),
+    entryBlockReason: json['entryBlockReason']?.toString(),
     closedPositionCount: (json['closedPositionCount'] as num?)?.toInt() ?? 0,
     realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
     pnlProjection: _pnlProjectionFromJson(json['pnlProjection']),
