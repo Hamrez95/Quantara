@@ -545,184 +545,151 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         return;
       }
-      final idea = _pickPrimaryIdea(ideas);
-      if (idea == null) {
+      final rankedIdeas = _rankPrimaryIdeas(ideas);
+      if (rankedIdeas.isEmpty) {
         _auditEvent(
           'scan_skip',
           'Actionable setups were skipped because selected timeframes disagreed on direction.',
         );
         return;
       }
-      if (_executedSetupIds.contains(idea.setupId)) {
-        _auditEvent(
-          'scan_skip',
-          'The highest-ranked setup was already executed in this local-live history.',
-          symbol: idea.symbol,
+      for (final idea in rankedIdeas) {
+        if (_executedSetupIds.contains(idea.setupId)) {
+          _auditEvent(
+            'scan_skip',
+            'The highest-ranked setup was already executed in this local-live history.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        if (idea.isExpiredAt(DateTime.now().toUtc()) ||
+            idea.stopLoss == null ||
+            idea.targets.length < 3 ||
+            idea.entryLower == null ||
+            idea.entryUpper == null) {
+          _auditEvent(
+            'scan_skip',
+            'The highest-ranked setup was expired or missing a complete protected plan.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        final profitPlan = ProfitProtectionPolicy.forIdea(
+          idea,
+          targetAllocation: configuration.targetAllocation,
         );
-        return;
-      }
-      if (idea.isExpiredAt(DateTime.now().toUtc()) ||
-          idea.stopLoss == null ||
-          idea.targets.length < 3 ||
-          idea.entryLower == null ||
-          idea.entryUpper == null) {
-        _auditEvent(
-          'scan_skip',
-          'The highest-ranked setup was expired or missing a complete protected plan.',
-          symbol: idea.symbol,
-        );
-        return;
-      }
-      final profitPlan = ProfitProtectionPolicy.forIdea(
-        idea,
-        targetAllocation: configuration.targetAllocation,
-      );
-      final markPrice = await exchange.fetchMarkPrice(idea.symbol);
-      final lower = math.min(idea.entryLower!, idea.entryUpper!);
-      final upper = math.max(idea.entryLower!, idea.entryUpper!);
-      if (markPrice < lower || markPrice > upper) {
-        _auditEvent(
-          'scan_skip',
-          'The highest-ranked setup is valid but the live mark price is outside its entry zone.',
-          symbol: idea.symbol,
-        );
-        return;
-      }
-      final rules = await exchange.fetchInstrumentRules(idea.symbol);
-      if (!rules.open || !rules.apiSupported) {
-        _auditEvent(
-          'scan_skip',
-          'The selected instrument is closed or unavailable for API futures execution.',
-          symbol: idea.symbol,
-        );
-        return;
-      }
-      final leverage = configuration.leverage
-          .clamp(rules.minimumLeverage, rules.maximumLeverage)
-          .toInt();
-      final entryPrice = rules.roundPrice(markPrice);
-      final stopLoss = rules.roundPrice(idea.stopLoss!);
-      final riskPerUnit = (entryPrice - stopLoss).abs() + entryPrice * 0.0017;
-      final riskBudget =
-          account.estimatedEquity * configuration.riskPercent / 100;
-      var quantity = rules.roundQuantityDown(riskBudget / riskPerUnit);
-      if (quantity < rules.minimumQuantity ||
-          quantity > rules.maximumMarketQuantity ||
-          quantity <= 0) {
-        _auditEvent(
-          'scan_skip',
-          'Calculated position size is below the exchange minimum for even one protected target.',
-          symbol: idea.symbol,
-        );
-        return;
-      }
-      final requiredMargin = quantity * entryPrice / leverage;
-      if (requiredMargin * 1.15 > account.available) {
-        _auditEvent(
-          'scan_skip',
-          'Available margin is below the protected entry requirement including the safety buffer.',
-          symbol: idea.symbol,
-        );
-        return;
-      }
-      final portfolioGuard = _portfolioGuard;
-      if (portfolioGuard == null) {
-        _auditEvent(
-          'portfolio_ledger_block',
-          'Atomic portfolio risk runtime is not initialized.',
-          symbol: idea.symbol,
-        );
-        return;
-      }
-      final existingExposureProtected =
-          _managed.length ==
-              exchangePositions.where((item) => item.quantity > 0).length &&
-          _managed.every((item) => item.profitLockProgress.warning == null);
-      final reservation = await portfolioGuard.reserve(
-        idea: idea,
-        plannedQuantity: quantity,
-        entryPrice: entryPrice,
-        stopPrice: stopLoss,
-        requiredMargin: requiredMargin,
-        leverage: leverage,
-        minimumQuantity: rules.minimumQuantity,
-        minimumNotional: rules.minimumQuantity * entryPrice,
-        account: account,
-        allOpenPositionsProtected: existingExposureProtected,
-        now: DateTime.now().toUtc(),
-      );
-      if (!reservation.decision.allowed ||
-          !reservation.decision.liveExecutionAllowed) {
-        _auditEvent(
-          'portfolio_reservation_block',
-          'Portfolio reservation rejected: ${reservation.decision.reason.name}.',
-          symbol: idea.symbol,
-        );
-        return;
-      }
-      String? activeReservationId = 'local-live:${idea.setupId}';
-      var orderRequestStarted = false;
-      try {
-        await exchange.ensureIsolatedMargin(
-          symbol: idea.symbol,
-          credentials: credentials,
-        );
-        await exchange.changeLeverage(
-          symbol: idea.symbol,
+        final markPrice = await exchange.fetchMarkPrice(idea.symbol);
+        final lower = math.min(idea.entryLower!, idea.entryUpper!);
+        final upper = math.max(idea.entryLower!, idea.entryUpper!);
+        if (markPrice < lower || markPrice > upper) {
+          _auditEvent(
+            'scan_skip',
+            'The highest-ranked setup is valid but the live mark price is outside its entry zone.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        final rules = await exchange.fetchInstrumentRules(idea.symbol);
+        if (!rules.open || !rules.apiSupported) {
+          _auditEvent(
+            'scan_skip',
+            'The selected instrument is closed or unavailable for API futures execution.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        final leverage = configuration.leverage
+            .clamp(rules.minimumLeverage, rules.maximumLeverage)
+            .toInt();
+        final entryPrice = rules.roundPrice(markPrice);
+        final stopLoss = rules.roundPrice(idea.stopLoss!);
+        final riskPerUnit = (entryPrice - stopLoss).abs() + entryPrice * 0.0017;
+        final riskBudget =
+            account.estimatedEquity * configuration.riskPercent / 100;
+        var quantity = rules.roundQuantityDown(riskBudget / riskPerUnit);
+        if (quantity < rules.minimumQuantity ||
+            quantity > rules.maximumMarketQuantity ||
+            quantity <= 0) {
+          _auditEvent(
+            'scan_skip',
+            'Calculated position size is below the exchange minimum for even one protected target.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        final requiredMargin = quantity * entryPrice / leverage;
+        if (requiredMargin * 1.15 > account.available) {
+          _auditEvent(
+            'scan_skip',
+            'Available margin is below the protected entry requirement including the safety buffer.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        final portfolioGuard = _portfolioGuard;
+        if (portfolioGuard == null) {
+          _auditEvent(
+            'portfolio_ledger_block',
+            'Atomic portfolio risk runtime is not initialized.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        final existingExposureProtected =
+            _managed.length ==
+                exchangePositions.where((item) => item.quantity > 0).length &&
+            _managed.every((item) => item.profitLockProgress.warning == null);
+        final reservation = await portfolioGuard.reserve(
+          idea: idea,
+          plannedQuantity: quantity,
+          entryPrice: entryPrice,
+          stopPrice: stopLoss,
+          requiredMargin: requiredMargin,
           leverage: leverage,
-          credentials: credentials,
+          minimumQuantity: rules.minimumQuantity,
+          minimumNotional: rules.minimumQuantity * entryPrice,
+          account: account,
+          allOpenPositionsProtected: existingExposureProtected,
+          now: DateTime.now().toUtc(),
         );
-        final clientId = _clientId(idea);
-        orderRequestStarted = true;
-        final placed = await exchange.placeMarketEntry(
-          symbol: idea.symbol,
-          quantity: quantity,
-          long: idea.direction == TradeDirection.long,
-          clientId: clientId,
-          stopLoss: stopLoss,
-          credentials: credentials,
-        );
-        _auditEvent(
-          'entry_submitted',
-          'Entry submitted with protective stop.',
-          symbol: idea.symbol,
-        );
-        BitunixOrderDetail? detail;
-        BitunixLivePosition? position;
-        for (var attempt = 0; attempt < 10; attempt++) {
-          await Future<void>.delayed(const Duration(milliseconds: 750));
-          detail = await exchange.fetchOrderDetail(
-            orderId: placed.orderId,
+        if (!reservation.decision.allowed ||
+            !reservation.decision.liveExecutionAllowed) {
+          _auditEvent(
+            'portfolio_reservation_block',
+            'Portfolio reservation rejected: ${reservation.decision.reason.name}.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
+        String? activeReservationId = 'local-live:${idea.setupId}';
+        var orderRequestStarted = false;
+        try {
+          await exchange.ensureIsolatedMargin(
+            symbol: idea.symbol,
             credentials: credentials,
           );
-          final matches = await exchange.fetchPositions(
-            credentials,
+          await exchange.changeLeverage(
             symbol: idea.symbol,
+            leverage: leverage,
+            credentials: credentials,
           );
-          position = matches.firstOrNull;
-          if (detail.fullyFilled && position != null) break;
-        }
-        if (detail == null || !detail.fullyFilled || position == null) {
-          _entriesEnabled = false;
+          final clientId = _clientId(idea);
+          orderRequestStarted = true;
+          final placed = await exchange.placeMarketEntry(
+            symbol: idea.symbol,
+            quantity: quantity,
+            long: idea.direction == TradeDirection.long,
+            clientId: clientId,
+            stopLoss: stopLoss,
+            credentials: credentials,
+          );
           _auditEvent(
-            'entry_reconciliation',
-            'Entry was not fully reconciled; cancellation and fail-closed cleanup started.',
+            'entry_submitted',
+            'Entry submitted with protective stop.',
             symbol: idea.symbol,
           );
-          try {
-            await exchange.cancelEntryOrder(
-              symbol: idea.symbol,
-              orderId: placed.orderId,
-              clientId: placed.clientId,
-              credentials: credentials,
-            );
-          } on Object catch (error) {
-            _auditEvent(
-              'entry_cancel_failed',
-              _safeError(error),
-              symbol: idea.symbol,
-            );
-          }
+          BitunixOrderDetail? detail;
+          BitunixLivePosition? position;
           for (var attempt = 0; attempt < 10; attempt++) {
             await Future<void>.delayed(const Duration(milliseconds: 750));
             detail = await exchange.fetchOrderDetail(
@@ -735,146 +702,193 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             );
             position = matches.firstOrNull;
             if (detail.fullyFilled && position != null) break;
-            if (detail.status == 'CANCELED') break;
           }
           if (detail == null || !detail.fullyFilled || position == null) {
-            if (position != null && position.quantity > 0) {
-              await portfolioGuard.recordFill(
-                reservationId: activeReservationId,
+            _entriesEnabled = false;
+            _auditEvent(
+              'entry_reconciliation',
+              'Entry was not fully reconciled; cancellation and fail-closed cleanup started.',
+              symbol: idea.symbol,
+            );
+            try {
+              await exchange.cancelEntryOrder(
+                symbol: idea.symbol,
                 orderId: placed.orderId,
-                positionId: position.positionId,
-                fillQuantity: position.quantity,
-                now: DateTime.now().toUtc(),
-              );
-              await exchange.closePositionReduceOnly(
-                position: position,
-                clientId: '$clientId-partial-close',
+                clientId: placed.clientId,
                 credentials: credentials,
               );
+            } on Object catch (error) {
               _auditEvent(
-                'partial_fill_closed',
-                'Unresolved partial fill was closed after entry cancellation.',
+                'entry_cancel_failed',
+                _safeError(error),
                 symbol: idea.symbol,
               );
             }
-            if (position == null && detail?.status == 'CANCELED') {
-              await portfolioGuard.releaseNoExposure(
-                reservationId: activeReservationId,
-                evidence: 'entry-canceled-without-position',
-                now: DateTime.now().toUtc(),
+            for (var attempt = 0; attempt < 10; attempt++) {
+              await Future<void>.delayed(const Duration(milliseconds: 750));
+              detail = await exchange.fetchOrderDetail(
+                orderId: placed.orderId,
+                credentials: credentials,
               );
-              activeReservationId = null;
+              final matches = await exchange.fetchPositions(
+                credentials,
+                symbol: idea.symbol,
+              );
+              position = matches.firstOrNull;
+              if (detail.fullyFilled && position != null) break;
+              if (detail.status == 'CANCELED') break;
             }
-            _executedSetupIds.add(idea.setupId);
-            await _persistState();
-            throw const LocalLiveTradeSafeException(
-              'Entry did not reach a confirmed full fill. The remainder was cancelled and any partial position was closed.',
-            );
+            if (detail == null || !detail.fullyFilled || position == null) {
+              if (position != null && position.quantity > 0) {
+                await portfolioGuard.recordFill(
+                  reservationId: activeReservationId,
+                  orderId: placed.orderId,
+                  positionId: position.positionId,
+                  fillQuantity: position.quantity,
+                  now: DateTime.now().toUtc(),
+                );
+                await exchange.closePositionReduceOnly(
+                  position: position,
+                  clientId: '$clientId-partial-close',
+                  credentials: credentials,
+                );
+                _auditEvent(
+                  'partial_fill_closed',
+                  'Unresolved partial fill was closed after entry cancellation.',
+                  symbol: idea.symbol,
+                );
+              }
+              if (position == null && detail?.status == 'CANCELED') {
+                await portfolioGuard.releaseNoExposure(
+                  reservationId: activeReservationId,
+                  evidence: 'entry-canceled-without-position',
+                  now: DateTime.now().toUtc(),
+                );
+                activeReservationId = null;
+              }
+              _executedSetupIds.add(idea.setupId);
+              await _persistState();
+              throw const LocalLiveTradeSafeException(
+                'Entry did not reach a confirmed full fill. The remainder was cancelled and any partial position was closed.',
+              );
+            }
           }
-        }
-        await portfolioGuard.recordFill(
-          reservationId: activeReservationId,
-          orderId: placed.orderId,
-          positionId: position.positionId,
-          fillQuantity: math.min(detail.filledQuantity, position.quantity),
-          now: DateTime.now().toUtc(),
-        );
-        quantity = rules.roundQuantityDown(
-          math.min(detail.filledQuantity, position.quantity),
-        );
-        if (quantity < rules.minimumQuantity) {
-          await exchange.closePositionReduceOnly(
-            position: position,
-            clientId: '$clientId-small-close',
-            credentials: credentials,
+          await portfolioGuard.recordFill(
+            reservationId: activeReservationId,
+            orderId: placed.orderId,
+            positionId: position.positionId,
+            fillQuantity: math.min(detail.filledQuantity, position.quantity),
+            now: DateTime.now().toUtc(),
           );
-          throw const LocalLiveTradeSafeException(
-            'Filled quantity was too small for even one exchange-valid target and was closed.',
+          quantity = rules.roundQuantityDown(
+            math.min(detail.filledQuantity, position.quantity),
           );
-        }
-        var protections = await exchange.fetchPendingProtection(
-          credentials,
-          symbol: idea.symbol,
-          positionId: position.positionId,
-        );
-        var stopOrderId = protections
-            .where((item) => item.stopLossPrice > 0)
-            .map((item) => item.orderId)
-            .firstOrNull;
-        stopOrderId ??= await exchange.placePositionStop(
-          symbol: idea.symbol,
-          positionId: position.positionId,
-          stopLoss: stopLoss,
-          credentials: credentials,
-        );
-        protections = await exchange.fetchPendingProtection(
-          credentials,
-          symbol: idea.symbol,
-          positionId: position.positionId,
-        );
-        if (!protections.any((item) => item.stopLossPrice > 0)) {
-          await exchange.closePositionReduceOnly(
-            position: position,
-            clientId: '$clientId-unprotected-close',
-            credentials: credentials,
-          );
-          throw const LocalLiveTradeSafeException(
-            'Protective stop was not confirmed; the position was closed reduce-only.',
-          );
-        }
-        await portfolioGuard.confirmStop(
-          positionId: position.positionId,
-          confirmedStop: stopLoss,
-          now: DateTime.now().toUtc(),
-        );
-        final allocation = ProfitProtectionAllocation.allocateAdaptive(
-          totalQuantity: quantity,
-          plan: profitPlan,
-          minimumQuantity: rules.minimumQuantity,
-          roundDown: rules.roundQuantityDown,
-        );
-        final targetQuantities = allocation.quantities;
-        final effectiveAllocation = allocation.targetAllocation;
-        if (!allocation.isValidFor(rules.minimumQuantity)) {
-          await exchange.closePositionReduceOnly(
-            position: position,
-            clientId: '$clientId-invalid-ladder-close',
-            credentials: credentials,
-          );
-          throw const LocalLiveTradeSafeException(
-            'Filled quantity could not support even one complete exchange-valid target and was closed.',
-          );
-        }
-        if (effectiveAllocation.activeTargetCount <
-            configuration.targetAllocation.activeTargetCount) {
-          _auditEvent(
-            'target_allocation_adapted',
-            'Target allocation automatically collapsed from '
-                '${configuration.targetAllocation.activeTargetCount} to '
-                '${effectiveAllocation.activeTargetCount} exchange-valid targets.',
-            symbol: idea.symbol,
-          );
-        }
-        final targetOrderIds = <String>['', '', ''];
-        try {
-          for (var index = 0; index < 3; index++) {
-            if (targetQuantities[index] <= 0) continue;
-            targetOrderIds[index] = await exchange.placePartialTakeProfit(
-              symbol: idea.symbol,
-              positionId: position.positionId,
-              triggerPrice: rules.roundPrice(idea.targets[index]),
-              quantity: targetQuantities[index],
+          if (quantity < rules.minimumQuantity) {
+            await exchange.closePositionReduceOnly(
+              position: position,
+              clientId: '$clientId-small-close',
               credentials: credentials,
             );
-          }
-          List<BitunixPendingProtection> confirmedProtection = const [];
-          for (var attempt = 0; attempt < 6; attempt++) {
-            await Future<void>.delayed(const Duration(milliseconds: 500));
-            confirmedProtection = await exchange.fetchPendingProtection(
-              credentials,
-              symbol: idea.symbol,
-              positionId: position.positionId,
+            throw const LocalLiveTradeSafeException(
+              'Filled quantity was too small for even one exchange-valid target and was closed.',
             );
+          }
+          var protections = await exchange.fetchPendingProtection(
+            credentials,
+            symbol: idea.symbol,
+            positionId: position.positionId,
+          );
+          var stopOrderId = protections
+              .where((item) => item.stopLossPrice > 0)
+              .map((item) => item.orderId)
+              .firstOrNull;
+          stopOrderId ??= await exchange.placePositionStop(
+            symbol: idea.symbol,
+            positionId: position.positionId,
+            stopLoss: stopLoss,
+            credentials: credentials,
+          );
+          protections = await exchange.fetchPendingProtection(
+            credentials,
+            symbol: idea.symbol,
+            positionId: position.positionId,
+          );
+          if (!protections.any((item) => item.stopLossPrice > 0)) {
+            await exchange.closePositionReduceOnly(
+              position: position,
+              clientId: '$clientId-unprotected-close',
+              credentials: credentials,
+            );
+            throw const LocalLiveTradeSafeException(
+              'Protective stop was not confirmed; the position was closed reduce-only.',
+            );
+          }
+          await portfolioGuard.confirmStop(
+            positionId: position.positionId,
+            confirmedStop: stopLoss,
+            now: DateTime.now().toUtc(),
+          );
+          final allocation = ProfitProtectionAllocation.allocateAdaptive(
+            totalQuantity: quantity,
+            plan: profitPlan,
+            minimumQuantity: rules.minimumQuantity,
+            roundDown: rules.roundQuantityDown,
+          );
+          final targetQuantities = allocation.quantities;
+          final effectiveAllocation = allocation.targetAllocation;
+          if (!allocation.isValidFor(rules.minimumQuantity)) {
+            await exchange.closePositionReduceOnly(
+              position: position,
+              clientId: '$clientId-invalid-ladder-close',
+              credentials: credentials,
+            );
+            throw const LocalLiveTradeSafeException(
+              'Filled quantity could not support even one complete exchange-valid target and was closed.',
+            );
+          }
+          if (effectiveAllocation.activeTargetCount <
+              configuration.targetAllocation.activeTargetCount) {
+            _auditEvent(
+              'target_allocation_adapted',
+              'Target allocation automatically collapsed from '
+                  '${configuration.targetAllocation.activeTargetCount} to '
+                  '${effectiveAllocation.activeTargetCount} exchange-valid targets.',
+              symbol: idea.symbol,
+            );
+          }
+          final targetOrderIds = <String>['', '', ''];
+          try {
+            for (var index = 0; index < 3; index++) {
+              if (targetQuantities[index] <= 0) continue;
+              targetOrderIds[index] = await exchange.placePartialTakeProfit(
+                symbol: idea.symbol,
+                positionId: position.positionId,
+                triggerPrice: rules.roundPrice(idea.targets[index]),
+                quantity: targetQuantities[index],
+                credentials: credentials,
+              );
+            }
+            List<BitunixPendingProtection> confirmedProtection = const [];
+            for (var attempt = 0; attempt < 6; attempt++) {
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+              confirmedProtection = await exchange.fetchPendingProtection(
+                credentials,
+                symbol: idea.symbol,
+                positionId: position.positionId,
+              );
+              final fullStopConfirmed = confirmedProtection.any(
+                (item) => item.stopLossPrice > 0,
+              );
+              final ladderConfirmed = _targetLadderConfirmed(
+                protection: confirmedProtection,
+                targetOrderIds: targetOrderIds,
+                targetQuantities: targetQuantities,
+                quantityTolerance: math
+                    .pow(10, -rules.quantityPrecision)
+                    .toDouble(),
+              );
+              if (fullStopConfirmed && ladderConfirmed) break;
+            }
             final fullStopConfirmed = confirmedProtection.any(
               (item) => item.stopLossPrice > 0,
             );
@@ -886,99 +900,92 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   .pow(10, -rules.quantityPrecision)
                   .toDouble(),
             );
-            if (fullStopConfirmed && ladderConfirmed) break;
-          }
-          final fullStopConfirmed = confirmedProtection.any(
-            (item) => item.stopLossPrice > 0,
-          );
-          final ladderConfirmed = _targetLadderConfirmed(
-            protection: confirmedProtection,
-            targetOrderIds: targetOrderIds,
-            targetQuantities: targetQuantities,
-            quantityTolerance: math
-                .pow(10, -rules.quantityPrecision)
-                .toDouble(),
-          );
-          if (!fullStopConfirmed || !ladderConfirmed) {
+            if (!fullStopConfirmed || !ladderConfirmed) {
+              throw const LocalLiveTradeSafeException(
+                'The complete SL/TP ladder was not confirmed.',
+              );
+            }
+          } on Object catch (error) {
+            await exchange.closePositionReduceOnly(
+              position: position,
+              clientId: '$clientId-incomplete-protection-close',
+              credentials: credentials,
+            );
+            if (error is LocalLiveTradeSafeException) rethrow;
             throw const LocalLiveTradeSafeException(
-              'The complete SL/TP ladder was not confirmed.',
+              'TP ladder placement failed; emergency close was submitted.',
             );
           }
+          final managedPosition = LocalLiveManagedPosition(
+            setupId: idea.setupId,
+            symbol: idea.symbol,
+            timeframe: idea.timeframe,
+            direction: idea.direction,
+            positionId: position.positionId,
+            entryOrderId: placed.orderId,
+            clientId: clientId,
+            initialQuantity: quantity,
+            entryPrice: position.averageOpenPrice > 0
+                ? position.averageOpenPrice
+                : entryPrice,
+            originalStopLoss: stopLoss,
+            targets: idea.targets.take(3).toList(growable: false),
+            leverage: leverage,
+            openedAt: DateTime.now().toUtc(),
+            stopOrderId: stopOrderId,
+            targetAllocation: effectiveAllocation,
+            targetQuantities: targetQuantities,
+            targetOrderIds: targetOrderIds,
+            costBufferRate: profitPlan.costBufferRate,
+            marketRegime: idea.marketRegime,
+          );
+          _managed.add(managedPosition);
+          await _journalObserver.recordProtectedPosition(
+            idea: idea,
+            managed: managedPosition,
+            account: account,
+            riskPercent: configuration.riskPercent,
+          );
+          _sessionPositionIds.add(position.positionId);
+          _executedSetupIds.add(idea.setupId);
+          await _persistSessionMetadata();
+          await _persistState();
+          _auditEvent(
+            'position_protected',
+            'Entry fill, full stop and ${effectiveAllocation.activeTargetCount} '
+                'exchange-valid target(s) confirmed '
+                '(${(effectiveAllocation.tp1Fraction * 100).toStringAsFixed(0)}/'
+                '${(effectiveAllocation.tp2Fraction * 100).toStringAsFixed(0)}/'
+                '${(effectiveAllocation.tp3Fraction * 100).toStringAsFixed(0)}%; '
+                'qty ${targetQuantities.map((item) => item.toString()).join('/')}; '
+                '${profitPlan.profile.name}).',
+            symbol: idea.symbol,
+          );
+          return;
         } on Object catch (error) {
-          await exchange.closePositionReduceOnly(
-            position: position,
-            clientId: '$clientId-incomplete-protection-close',
-            credentials: credentials,
-          );
-          if (error is LocalLiveTradeSafeException) rethrow;
-          throw const LocalLiveTradeSafeException(
-            'TP ladder placement failed; emergency close was submitted.',
-          );
-        }
-        final managedPosition = LocalLiveManagedPosition(
-          setupId: idea.setupId,
-          symbol: idea.symbol,
-          timeframe: idea.timeframe,
-          direction: idea.direction,
-          positionId: position.positionId,
-          entryOrderId: placed.orderId,
-          clientId: clientId,
-          initialQuantity: quantity,
-          entryPrice: position.averageOpenPrice > 0
-              ? position.averageOpenPrice
-              : entryPrice,
-          originalStopLoss: stopLoss,
-          targets: idea.targets.take(3).toList(growable: false),
-          leverage: leverage,
-          openedAt: DateTime.now().toUtc(),
-          stopOrderId: stopOrderId,
-          targetAllocation: effectiveAllocation,
-          targetQuantities: targetQuantities,
-          targetOrderIds: targetOrderIds,
-          costBufferRate: profitPlan.costBufferRate,
-          marketRegime: idea.marketRegime,
-        );
-        _managed.add(managedPosition);
-        await _journalObserver.recordProtectedPosition(
-          idea: idea,
-          managed: managedPosition,
-          account: account,
-          riskPercent: configuration.riskPercent,
-        );
-        _sessionPositionIds.add(position.positionId);
-        _executedSetupIds.add(idea.setupId);
-        await _persistSessionMetadata();
-        await _persistState();
-        _auditEvent(
-          'position_protected',
-          'Entry fill, full stop and ${effectiveAllocation.activeTargetCount} '
-              'exchange-valid target(s) confirmed '
-              '(${(effectiveAllocation.tp1Fraction * 100).toStringAsFixed(0)}/'
-              '${(effectiveAllocation.tp2Fraction * 100).toStringAsFixed(0)}/'
-              '${(effectiveAllocation.tp3Fraction * 100).toStringAsFixed(0)}%; '
-              'qty ${targetQuantities.map((item) => item.toString()).join('/')}; '
-              '${profitPlan.profile.name}).',
-          symbol: idea.symbol,
-        );
-      } on Object catch (error) {
-        final reservationId = activeReservationId;
-        if (reservationId != null) {
-          if (orderRequestStarted) {
-            await portfolioGuard.markAmbiguous(
-              reservationId: reservationId,
-              evidence: 'entry-lifecycle:${error.runtimeType}',
-              now: DateTime.now().toUtc(),
-            );
-          } else {
-            await portfolioGuard.releaseNoExposure(
-              reservationId: reservationId,
-              evidence: 'pre-order:${error.runtimeType}',
-              now: DateTime.now().toUtc(),
-            );
+          final reservationId = activeReservationId;
+          if (reservationId != null) {
+            if (orderRequestStarted) {
+              await portfolioGuard.markAmbiguous(
+                reservationId: reservationId,
+                evidence: 'entry-lifecycle:${error.runtimeType}',
+                now: DateTime.now().toUtc(),
+              );
+            } else {
+              await portfolioGuard.releaseNoExposure(
+                reservationId: reservationId,
+                evidence: 'pre-order:${error.runtimeType}',
+                now: DateTime.now().toUtc(),
+              );
+            }
           }
+          rethrow;
         }
-        rethrow;
       }
+      _auditEvent(
+        'scan_candidates_exhausted',
+        'All ranked actionable setups were evaluated, but none passed every entry gate.',
+      );
     } finally {
       client.close();
     }
@@ -1743,7 +1750,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     }
   }
 
-  TradeIdea? _pickPrimaryIdea(List<TradeIdea> ideas) {
+  List<TradeIdea> _rankPrimaryIdeas(List<TradeIdea> ideas) {
     final grouped = <String, List<TradeIdea>>{};
     for (final idea in ideas) {
       grouped.putIfAbsent(idea.symbol, () => []).add(idea);
@@ -1775,7 +1782,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       (left, right) =>
           right.confidencePercent.compareTo(left.confidencePercent),
     );
-    return candidates.firstOrNull;
+    return List.unmodifiable(candidates);
   }
 
   String _clientId(TradeIdea idea) {

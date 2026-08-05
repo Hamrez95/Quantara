@@ -45,6 +45,26 @@ void main() {
       contains('!occupiedSymbols.contains(idea.symbol.trim().toUpperCase())'),
     );
   });
+  test('blocked top-ranked setup cannot starve lower-ranked symbols', () {
+    final source = File(
+      'lib/features/auto_trade/application/local_live_trade_service.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('final rankedIdeas = _rankPrimaryIdeas(ideas);'));
+    expect(source, contains('for (final idea in rankedIdeas)'));
+    expect(source, contains('List<TradeIdea> _rankPrimaryIdeas'));
+    expect(source, contains("'scan_candidates_exhausted'"));
+
+    final reservationBlock = source.indexOf("'portfolio_reservation_block'");
+    final nextCandidate = source.indexOf('continue;', reservationBlock);
+    expect(reservationBlock, greaterThanOrEqualTo(0));
+    expect(nextCandidate, greaterThan(reservationBlock));
+
+    final protected = source.indexOf("'position_protected'");
+    final successfulReturn = source.indexOf('return;', protected);
+    expect(protected, greaterThanOrEqualTo(0));
+    expect(successfulReturn, greaterThan(protected));
+  });
 }
 
 LocalLiveTradeConfiguration _configuration(int maximum) =>
