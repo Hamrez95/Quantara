@@ -22,7 +22,6 @@ abstract final class TradingJournalExchangeBackfill {
     required DateTime recordedAt,
   }) {
     if (ledger.integrity == TradingJournalIntegrity.unverified ||
-        !pnlProjection.isVerified ||
         !pnlProjection.fillsAvailable ||
         !pnlProjection.settlementsAvailable) {
       return TradingJournalExchangeBackfillResult(

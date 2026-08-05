@@ -145,6 +145,8 @@ final class LocalLiveJournalObserver {
     }
     for (var index = 0; index < managed.targetOrderIds.length; index++) {
       final orderId = managed.targetOrderIds[index];
+      final quantity = managed.targetQuantities[index];
+      if (orderId.trim().isEmpty || quantity <= 0) continue;
       await _append(
         TradingJournalEvent(
           eventId: 'tp-confirmed:$orderId',
@@ -160,7 +162,7 @@ final class LocalLiveJournalObserver {
           exchangeEventId: 'tp-order:$orderId',
           positionId: managed.positionId,
           orderId: orderId,
-          quantity: managed.targetQuantities[index],
+          quantity: quantity,
           price: managed.targets[index],
           details: {'targetIndex': index + 1},
         ),
@@ -288,9 +290,12 @@ final class LocalLiveJournalObserver {
       ),
     );
     for (var index = 0; index < managed.targetOrderIds.length; index++) {
+      final orderId = managed.targetOrderIds[index];
+      final quantity = managed.targetQuantities[index];
+      if (orderId.trim().isEmpty || quantity <= 0) continue;
       await _append(
         TradingJournalEvent(
-          eventId: 'recovered-tp:${managed.targetOrderIds[index]}',
+          eventId: 'recovered-tp:$orderId',
           journalTradeId: id,
           type: TradingJournalEventType.takeProfitConfirmed,
           occurredAt: now,
@@ -300,10 +305,10 @@ final class LocalLiveJournalObserver {
           scope: TradingJournalScope.position,
           currency: account.marginCoin,
           asOf: account.syncedAt.toUtc(),
-          exchangeEventId: 'tp-order:${managed.targetOrderIds[index]}',
+          exchangeEventId: 'tp-order:$orderId',
           positionId: managed.positionId,
-          orderId: managed.targetOrderIds[index],
-          quantity: managed.targetQuantities[index],
+          orderId: orderId,
+          quantity: quantity,
           price: managed.targets[index],
           details: {'targetIndex': index + 1},
         ),

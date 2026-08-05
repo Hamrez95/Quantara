@@ -69,8 +69,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   double? _sessionStartEquity;
   DateTime? _lastScanAt;
   DateTime? _lastExchangeSync;
-  String? _lastAuditFingerprint;
-  DateTime? _lastAuditAt;
+  final Map<String, DateTime> _auditFingerprintSeenAt = {};
   final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();
   LocalLivePortfolioExecutionGuard? _portfolioGuard;
 
@@ -303,10 +302,16 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           ..sort(),
       );
       final hasUnmanagedExchangeExposure = unmanagedPositions.isNotEmpty;
+      final managedHistoryVerified = _managed.every((managed) {
+        final positionPnl = account.authoritativePnl.forPositionId(
+          managed.positionId,
+        );
+        return positionPnl != null && positionPnl.isVerified;
+      });
       final readiness = LocalLiveCycleReadinessPolicy.evaluate(
         hasManagedExposure: _managed.isNotEmpty,
         hasUnmanagedExchangeExposure: hasUnmanagedExchangeExposure,
-        pnlVerified: account.authoritativePnl.isVerified,
+        pnlVerified: managedHistoryVerified,
         fillsAvailable: account.authoritativePnl.fillsAvailable,
       );
       String? cycleWarning;
@@ -1126,17 +1131,27 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           );
           journalReconciled = true;
         }
-        final history = await exchange.fetchClosedPositions(
-          positionId: managed.positionId,
-          credentials: credentials,
-        );
+        var closedHistoryAvailable = false;
+        try {
+          final history = await exchange.fetchClosedPositions(
+            positionId: managed.positionId,
+            credentials: credentials,
+          );
+          closedHistoryAvailable = history.isNotEmpty;
+        } on Object catch (error) {
+          _auditEvent(
+            'closed_history_deferred',
+            'The exchange position is closed; closed-position history will be retried (${_safeError(error)}).',
+            symbol: managed.symbol,
+          );
+        }
         if (!journalReconciled &&
             !_pendingJournalClosures.any(
               (item) => item.positionId == managed.positionId,
             )) {
           _pendingJournalClosures.add(managed);
         }
-        if (history.isEmpty || !journalReconciled) {
+        if (!closedHistoryAvailable || !journalReconciled) {
           _auditEvent(
             'pnl_pending',
             'The position is exchange-closed; final journal economics remain queued until verified fill history is available.',
@@ -1922,13 +1937,18 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   void _auditEvent(String type, String message, {String? symbol}) {
     final now = DateTime.now().toUtc();
     final fingerprint = '$type|${symbol ?? ''}|$message';
-    if (_lastAuditFingerprint == fingerprint &&
-        _lastAuditAt != null &&
-        now.difference(_lastAuditAt!) < const Duration(minutes: 10)) {
+    _auditFingerprintSeenAt.removeWhere(
+      (_, seenAt) => now.difference(seenAt) >= const Duration(minutes: 30),
+    );
+    final lastSeenAt = _auditFingerprintSeenAt[fingerprint];
+    if (lastSeenAt != null &&
+        now.difference(lastSeenAt) < const Duration(minutes: 10)) {
       return;
     }
-    _lastAuditFingerprint = fingerprint;
-    _lastAuditAt = now;
+    _auditFingerprintSeenAt[fingerprint] = now;
+    if (_auditFingerprintSeenAt.length > 256) {
+      _auditFingerprintSeenAt.remove(_auditFingerprintSeenAt.keys.first);
+    }
     _audit.add(
       LocalLiveAuditEvent(
         at: now,

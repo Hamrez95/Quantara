@@ -481,12 +481,15 @@ final class TradingPnlProjection {
           (positionFills.isNotEmpty
               ? positionFills.first.positionId
               : settlement?.positionId ?? key);
-      final positionConflict = conflicts.any(
-        (item) =>
-            positionFills.any((fill) => fill.tradeId == item) ||
-            item == 'settlement:$key' ||
-            item == 'missing tradeId',
-      );
+      final unassignedAttribution = key.startsWith('unassigned-trade:');
+      final positionConflict =
+          unassignedAttribution ||
+          conflicts.any(
+            (item) =>
+                positionFills.any((fill) => fill.tradeId == item) ||
+                item == 'settlement:$key' ||
+                item == 'missing tradeId',
+          );
       final verified = !positionConflict && sourceVerified;
 
       final realizedValue = fillsAvailable
@@ -520,7 +523,9 @@ final class TradingPnlProjection {
           pendingRealizedMismatch ||
           pendingFeeMismatch;
       final positionVerified = verified && !totalsMismatch;
-      final positionWarning = totalsMismatch
+      final positionWarning = unassignedAttribution
+          ? 'A valid exchange trade remains quarantined because it could not be assigned to one position.'
+          : totalsMismatch
           ? 'Trade-history totals diverge from the Bitunix position totals.'
           : positionConflict
           ? 'Conflicting exchange event identity for $key.'
@@ -810,8 +815,10 @@ final class TradingPnlProjection {
       settlements: settlements,
       fillsAvailable: fillsAvailable,
       settlementsAvailable: settlementsAvailable,
-      sourceVerified: isVerified,
-      stale: positions.any(
+      sourceVerified: includedPositions.every(
+        (position) => position.isVerified,
+      ),
+      stale: includedPositions.any(
         (item) => item.unrealized.state == TradingPnlState.stale,
       ),
       warning: warning,

@@ -17,6 +17,7 @@ final class BitunixPnlMapper {
 
   static const _closedPositionAttributionTolerance = Duration(minutes: 2);
   static const _minimumNearestSeparation = Duration(seconds: 5);
+  static const unassignedPositionPrefix = 'unassigned-trade:';
 
   static BitunixPnlParseResult<ExchangePositionSettlement> settlements(
     Object? data,
@@ -61,6 +62,7 @@ final class BitunixPnlMapper {
     final closed = settlements.toList(growable: false);
     final values = <ExchangePnlFill>[];
     final warnings = <String>[];
+    final attributionWarnings = <String>[];
     for (final row in rows) {
       final tradeId = _string(row['tradeId']);
       final orderId = _string(row['orderId']);
@@ -91,7 +93,7 @@ final class BitunixPnlMapper {
               settlements: closed,
             );
       if (resolved == null) {
-        warnings.add(
+        attributionWarnings.add(
           'Trade $tradeId could not be assigned to one exchange position.',
         );
       }
@@ -99,7 +101,7 @@ final class BitunixPnlMapper {
         ExchangePnlFill(
           tradeId: tradeId,
           orderId: orderId,
-          positionId: resolved ?? '',
+          positionId: resolved ?? '$unassignedPositionPrefix$tradeId',
           symbol: symbol,
           quantity: quantity.abs(),
           price: price,
@@ -112,10 +114,11 @@ final class BitunixPnlMapper {
         ),
       );
     }
+    final allWarnings = [...warnings, ...attributionWarnings];
     return BitunixPnlParseResult(
       values: List.unmodifiable(values),
       verified: warnings.isEmpty,
-      warning: warnings.isEmpty ? null : warnings.toSet().join(' '),
+      warning: allWarnings.isEmpty ? null : allWarnings.toSet().join(' '),
     );
   }
 
