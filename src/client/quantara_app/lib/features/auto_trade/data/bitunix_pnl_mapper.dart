@@ -106,10 +106,9 @@ final class BitunixPnlMapper {
         ExchangePnlFill(
           tradeId: tradeId,
           orderId: orderId,
-          positionId: resolved ??
-              (resolution.ambiguous
-                  ? ''
-                  : '$unassignedPositionPrefix$tradeId'),
+          positionId:
+              resolved ??
+              (resolution.ambiguous ? '' : '$unassignedPositionPrefix$tradeId'),
           symbol: symbol,
           quantity: quantity.abs(),
           price: price,
