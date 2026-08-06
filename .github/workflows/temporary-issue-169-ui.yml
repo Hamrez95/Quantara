@@ -8,6 +8,7 @@ on:
       - .github/workflows/temporary-issue-169-ui.yml
       - .github/scripts/apply_issue_169_ui.py
       - .github/scripts/fix_issue_169_ui_analyzer.py
+      - .github/scripts/fix_issue_169_ui_tests.py
       - src/client/quantara_app/lib/features/auto_trade/application/local_live_diagnostic_bundle.dart
       - src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart
 
@@ -29,6 +30,7 @@ jobs:
         run: |
           python3 .github/scripts/apply_issue_169_ui.py
           python3 .github/scripts/fix_issue_169_ui_analyzer.py
+          python3 .github/scripts/fix_issue_169_ui_tests.py
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
