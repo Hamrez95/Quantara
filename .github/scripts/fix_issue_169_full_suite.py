@@ -81,7 +81,12 @@ v101 = replace_once(
 v101 = replace_once(
     v101,
     "      expect(ui, contains(\"['5m', '15m', '1h', '4h']\"));\n",
-    "      expect(settingsUi, contains(\"['5m', '15m', '1h', '4h']\"));\n",
+    """      final compactSettingsUi = settingsUi.replaceAll(RegExp(r'\\s+'), '');
+      expect(
+        compactSettingsUi,
+        contains("for(finaltimeframeinconst['5m','15m','1h','4h'])"),
+      );
+""",
     'timeframe source assertion',
 )
 V101_TEST.write_text(v101, encoding='utf-8')
