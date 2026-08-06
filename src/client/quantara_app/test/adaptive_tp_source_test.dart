@@ -22,7 +22,7 @@ void main() {
 
   test('audit UI localizes normal status kinds instead of generic errors', () {
     final ui = File(
-      'lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart',
+      'lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart',
     ).readAsStringSync();
     final localizer = File(
       'lib/core/localization/local_live_message_localizer.dart',

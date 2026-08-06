@@ -623,14 +623,21 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                           ),
                           leading: const Icon(Icons.shield_outlined),
                           title: SelectableText(
-                            event.type,
+                            LocalLiveMessageLocalizer.localizeAudit(
+                              kind: event.type,
+                              message: event.message,
+                              persian: _fa,
+                            ),
                             style: const TextStyle(fontWeight: FontWeight.w900),
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 4),
-                              SelectableText(event.message),
+                              SelectableText(
+                                '${event.type}\n${event.message}',
+                                textDirection: TextDirection.ltr,
+                              ),
                               const SizedBox(height: 5),
                               SelectableText(
                                 '${event.symbol ?? '—'} · ${event.at.toLocal().toIso8601String()}',
