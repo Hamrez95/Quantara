@@ -19,10 +19,9 @@ old_guard = """            if (!idea.isActionable ||
               continue;
             }
 """
-new_guard = """            final symbolAvailable = !occupiedSymbols.contains(
-              idea.symbol.trim().toUpperCase(),
-            );
-            if (!idea.isActionable || !symbolAvailable) {
+new_guard = """            bool symbolIsAvailable(TradeIdea idea) =>
+                !occupiedSymbols.contains(idea.symbol.trim().toUpperCase());
+            if (!idea.isActionable || !symbolIsAvailable(idea)) {
               continue;
             }
 """
