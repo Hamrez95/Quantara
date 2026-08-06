@@ -1,0 +1,58 @@
+name: Temporary issue 169 full-suite fix
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - .github/workflows/temporary-issue-169-full-suite.yml
+      - .github/scripts/fix_issue_169_full_suite.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+
+      - name: Apply deterministic compatibility patch
+        run: python3 .github/scripts/fix_issue_169_full_suite.py
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Format changed Dart files
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart test/adaptive_tp_source_test.dart test/local_live_v1_0_1_source_test.dart
+
+      - name: Analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze
+
+      - name: Run full widget and safety suite
+        working-directory: src/client/quantara_app
+        run: flutter test
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart \
+                  src/client/quantara_app/test/adaptive_tp_source_test.dart \
+                  src/client/quantara_app/test/local_live_v1_0_1_source_test.dart
+          git commit -m "fix: preserve localized audit details after settings split (#169)"
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
