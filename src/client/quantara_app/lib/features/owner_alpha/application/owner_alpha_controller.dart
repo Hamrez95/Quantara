@@ -55,6 +55,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   }
 
   static const defaultSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT'];
+  static const maximumSymbols = 30;
   static final _symbolPattern = RegExp(r'^[A-Z0-9]{2,20}$');
   static const timeframes = ['5m', '15m', '1h', '4h', '1D'];
   static const outcomeCatchUpBatchSize = 2;
@@ -154,7 +155,7 @@ final class OwnerAlphaController extends ChangeNotifier {
           .map(_normalizeSymbol)
           .whereType<String>()
           .toSet()
-          .take(12)
+          .take(maximumSymbols)
           .toList(growable: false);
       if (normalized.isNotEmpty) {
         _symbols = normalized;
@@ -411,10 +412,10 @@ final class OwnerAlphaController extends ChangeNotifier {
         'This symbol is already in the watchlist.',
       );
     }
-    if (_symbols.length >= 12) {
+    if (_symbols.length >= maximumSymbols) {
       return _t(
-        'حداکثر ۱۲ نماد قابل پایش است.',
-        'You can monitor up to 12 symbols.',
+        'حداکثر ۳۰ نماد قابل پایش است.',
+        'You can monitor up to 30 symbols.',
       );
     }
     final added = await _requestScan(
@@ -507,7 +508,7 @@ final class OwnerAlphaController extends ChangeNotifier {
         .map(_normalizeSymbol)
         .whereType<String>()
         .toSet()
-        .take(12)
+        .take(maximumSymbols)
         .toList(growable: false);
     if (normalized.isEmpty) {
       return _t(

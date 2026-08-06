@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/persistence/quantara_database_provider.dart';
 import '../../../core/persistence/quantara_durable_database.dart';
+import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
 
 @immutable
@@ -14,6 +15,7 @@ class LocalLivePreferences {
     required this.riskPercent,
     required this.dailyLossLimitPercent,
     this.maximumConcurrentPositions = 2,
+    this.strategies = recommendedStrategies,
     this.targetAllocation = ProfitProtectionTargetAllocation.standard,
   });
 
@@ -26,6 +28,12 @@ class LocalLivePreferences {
   static const maximumDailyLossPercent = 10.0;
   static const minimumConcurrentPositionCount = 1;
   static const maximumConcurrentPositionCount = 3;
+  static const maximumSymbolCount = 30;
+  static const recommendedStrategies = <AnalysisStrategy>[
+    AnalysisStrategy.structureZones,
+    AnalysisStrategy.trendPullback,
+    AnalysisStrategy.momentumContinuation,
+  ];
 
   final List<String> symbols;
   final Set<String> timeframes;
@@ -33,6 +41,7 @@ class LocalLivePreferences {
   final double riskPercent;
   final double dailyLossLimitPercent;
   final int maximumConcurrentPositions;
+  final List<AnalysisStrategy> strategies;
   final ProfitProtectionTargetAllocation targetAllocation;
 
   factory LocalLivePreferences.defaults(List<String> availableSymbols) =>
@@ -43,6 +52,7 @@ class LocalLivePreferences {
         riskPercent: 0.10,
         dailyLossLimitPercent: 1,
         maximumConcurrentPositions: 2,
+        strategies: recommendedStrategies,
       );
 
   LocalLivePreferences normalized(List<String> availableSymbols) {
@@ -54,11 +64,13 @@ class LocalLivePreferences {
         .map((item) => item.trim().toUpperCase())
         .where(allowed.contains)
         .toSet()
+        .take(maximumSymbolCount)
         .toList(growable: false);
     final defaults = LocalLivePreferences.defaults(availableSymbols);
     final keptTimeframes = timeframes
         .where(supportedTimeframes.contains)
         .toSet();
+    final keptStrategies = strategies.toSet().toList(growable: false);
     return LocalLivePreferences(
       symbols: keptSymbols.isEmpty ? defaults.symbols : keptSymbols,
       timeframes: keptTimeframes.isEmpty
@@ -75,6 +87,9 @@ class LocalLivePreferences {
         minimumConcurrentPositionCount,
         maximumConcurrentPositionCount,
       ),
+      strategies: keptStrategies.isEmpty
+          ? recommendedStrategies
+          : List.unmodifiable(keptStrategies),
       targetAllocation: ProfitProtectionTargetAllocation.fromFractions(
         targetAllocation.fractions,
       ),
@@ -100,6 +115,7 @@ final class SharedPreferencesLocalLivePreferencesStore
   static const _dailyLossKey = 'quantara.local-live.ui.daily-loss.v2';
   static const _maximumPositionsKey =
       'quantara.local-live.ui.maximum-positions.v4';
+  static const _strategiesKey = 'quantara.local-live.ui.strategies.v1';
   static const _tp1Key = 'quantara.local-live.ui.tp1-fraction.v3';
   static const _tp2Key = 'quantara.local-live.ui.tp2-fraction.v3';
   static const _tp3Key = 'quantara.local-live.ui.tp3-fraction.v3';
@@ -144,6 +160,7 @@ final class SharedPreferencesLocalLivePreferencesStore
     final symbols = payload['symbols'];
     final timeframes = payload['timeframes'];
     final allocation = payload['targetAllocation'];
+    final strategies = payload['strategies'];
     return LocalLivePreferences(
       symbols: symbols is List<Object?>
           ? symbols.map((item) => item.toString()).toList(growable: false)
@@ -164,6 +181,17 @@ final class SharedPreferencesLocalLivePreferencesStore
         payload['maximumConcurrentPositions'],
         fallback: defaults.maximumConcurrentPositions,
       ),
+      strategies: strategies is List<Object?>
+          ? strategies
+                .map(
+                  (value) => AnalysisStrategy.values
+                      .where((item) => item.name == value.toString())
+                      .firstOrNull,
+                )
+                .whereType<AnalysisStrategy>()
+                .toSet()
+                .toList(growable: false)
+          : defaults.strategies,
       targetAllocation: ProfitProtectionTargetAllocation.fromFractions(
         allocation is List<Object?>
             ? allocation
@@ -197,6 +225,15 @@ final class SharedPreferencesLocalLivePreferencesStore
       maximumConcurrentPositions:
           preferences.getInt(_maximumPositionsKey) ??
           defaults.maximumConcurrentPositions,
+      strategies: (preferences.getStringList(_strategiesKey) ?? const [])
+          .map(
+            (value) => AnalysisStrategy.values
+                .where((item) => item.name == value)
+                .firstOrNull,
+          )
+          .whereType<AnalysisStrategy>()
+          .toSet()
+          .toList(growable: false),
       targetAllocation: targetAllocation,
     );
   }
@@ -223,6 +260,7 @@ final class SharedPreferencesLocalLivePreferencesStore
           'riskPercent': value.riskPercent,
           'dailyLossLimitPercent': value.dailyLossLimitPercent,
           'maximumConcurrentPositions': value.maximumConcurrentPositions,
+          'strategies': value.strategies.map((item) => item.name).toList(),
           'targetAllocation': value.targetAllocation.fractions,
         },
       ),
@@ -243,6 +281,10 @@ final class SharedPreferencesLocalLivePreferencesStore
       preferences.setInt(
         _maximumPositionsKey,
         value.maximumConcurrentPositions,
+      ),
+      preferences.setStringList(
+        _strategiesKey,
+        value.strategies.map((item) => item.name).toList(growable: false),
       ),
       preferences.setDouble(_tp1Key, value.targetAllocation.tp1Fraction),
       preferences.setDouble(_tp2Key, value.targetAllocation.tp2Fraction),

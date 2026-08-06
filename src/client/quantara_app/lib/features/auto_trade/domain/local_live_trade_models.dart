@@ -27,6 +27,7 @@ final class LocalLiveTradeConfiguration {
     required this.strategy,
     required this.cadence,
     required this.languageCode,
+    this.strategies = const [],
     this.targetAllocation = ProfitProtectionTargetAllocation.standard,
     this.scanIntervalSeconds = 60,
   });
@@ -38,14 +39,22 @@ final class LocalLiveTradeConfiguration {
   final double dailyLossLimitPercent;
   final int maximumConcurrentPositions;
   final AnalysisStrategy strategy;
+  final List<AnalysisStrategy> strategies;
   final SignalCadence cadence;
   final String languageCode;
+
+  List<AnalysisStrategy> get enabledStrategies {
+    final result = <AnalysisStrategy>{...strategies};
+    if (result.isEmpty) result.add(strategy);
+    return List.unmodifiable(result);
+  }
+
   final ProfitProtectionTargetAllocation targetAllocation;
   final int scanIntervalSeconds;
 
   void validate() {
-    if (symbols.isEmpty || symbols.length > 12) {
-      throw const FormatException('Select between 1 and 12 symbols.');
+    if (symbols.isEmpty || symbols.length > 30) {
+      throw const FormatException('Select between 1 and 30 symbols.');
     }
     if (timeframes.isEmpty ||
         timeframes.any(
@@ -93,6 +102,7 @@ final class LocalLiveTradeConfiguration {
     'dailyLossLimitPercent': dailyLossLimitPercent,
     'maximumConcurrentPositions': maximumConcurrentPositions,
     'strategy': strategy.name,
+    'strategies': enabledStrategies.map((item) => item.name).toList(),
     'cadence': cadence.name,
     'languageCode': languageCode == 'en' ? 'en' : 'fa',
     'targetAllocation': targetAllocation.toJson(),
@@ -125,6 +135,15 @@ final class LocalLiveTradeConfiguration {
         (item) => item.name == json['strategy'],
         orElse: () => AnalysisStrategy.structureZones,
       ),
+      strategies: (json['strategies'] as List<Object?>? ?? const [])
+          .map(
+            (item) => AnalysisStrategy.values
+                .where((strategy) => strategy.name == item.toString())
+                .firstOrNull,
+          )
+          .whereType<AnalysisStrategy>()
+          .toSet()
+          .toList(growable: false),
       cadence: SignalCadence.values.firstWhere(
         (item) => item.name == json['cadence'],
         orElse: () => SignalCadence.balanced,
@@ -356,6 +375,54 @@ final class LocalLivePortfolioBudgetStatus {
       );
 }
 
+final class LocalLiveManagedPositionSummary {
+  const LocalLiveManagedPositionSummary({
+    required this.positionId,
+    required this.symbol,
+    required this.timeframe,
+    required this.direction,
+    required this.openedAt,
+  });
+
+  factory LocalLiveManagedPositionSummary.fromManaged(
+    LocalLiveManagedPosition managed,
+  ) => LocalLiveManagedPositionSummary(
+    positionId: managed.positionId,
+    symbol: managed.symbol,
+    timeframe: managed.timeframe,
+    direction: managed.direction,
+    openedAt: managed.openedAt,
+  );
+
+  final String positionId;
+  final String symbol;
+  final String timeframe;
+  final TradeDirection direction;
+  final DateTime openedAt;
+
+  Map<String, Object?> toJson() => {
+    'positionId': positionId,
+    'symbol': symbol,
+    'timeframe': timeframe,
+    'direction': direction.name,
+    'openedAt': openedAt.toUtc().toIso8601String(),
+  };
+
+  factory LocalLiveManagedPositionSummary.fromJson(Map<String, Object?> json) =>
+      LocalLiveManagedPositionSummary(
+        positionId: json['positionId']?.toString() ?? '',
+        symbol: json['symbol']?.toString() ?? '',
+        timeframe: json['timeframe']?.toString() ?? '',
+        direction: TradeDirection.values.firstWhere(
+          (item) => item.name == json['direction'],
+          orElse: () => TradeDirection.wait,
+        ),
+        openedAt:
+            DateTime.tryParse(json['openedAt']?.toString() ?? '')?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      );
+}
+
 final class LocalLiveTradeStatus {
   const LocalLiveTradeStatus({
     required this.state,
@@ -365,6 +432,7 @@ final class LocalLiveTradeStatus {
     this.lastSuccessfulExchangeSync,
     this.openPositionCount = 0,
     this.managedPositionCount = 0,
+    this.managedPositions = const [],
     this.unmanagedPositionCount = 0,
     this.unmanagedSymbols = const [],
     this.entryBlockReason,
@@ -387,6 +455,7 @@ final class LocalLiveTradeStatus {
 
   /// Positions whose durable Local Live ownership was verified on this device.
   final int managedPositionCount;
+  final List<LocalLiveManagedPositionSummary> managedPositions;
 
   /// Exchange positions that consume slots but are not yet safely recovered.
   final int unmanagedPositionCount;
@@ -426,6 +495,7 @@ final class LocalLiveTradeStatus {
         .toIso8601String(),
     'openPositionCount': openPositionCount,
     'managedPositionCount': managedPositionCount,
+    'managedPositions': managedPositions.map((item) => item.toJson()).toList(),
     'unmanagedPositionCount': unmanagedPositionCount,
     'unmanagedSymbols': unmanagedSymbols,
     'entryBlockReason': entryBlockReason,
@@ -459,6 +529,15 @@ final class LocalLiveTradeStatus {
         (json['managedPositionCount'] as num?)?.toInt() ??
         (json['openPositionCount'] as num?)?.toInt() ??
         0,
+    managedPositions: List.unmodifiable(
+      (json['managedPositions'] as List<Object?>? ?? const [])
+          .whereType<Map<Object?, Object?>>()
+          .map(
+            (item) => LocalLiveManagedPositionSummary.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          ),
+    ),
     unmanagedPositionCount:
         (json['unmanagedPositionCount'] as num?)?.toInt() ?? 0,
     unmanagedSymbols: List.unmodifiable(

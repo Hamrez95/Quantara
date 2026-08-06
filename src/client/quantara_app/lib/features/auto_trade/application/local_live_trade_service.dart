@@ -513,31 +513,34 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .where((item) => item.quantity > 0)
           .map((item) => item.symbol.trim().toUpperCase())
           .toSet();
-      final ideas =
-          <TradeIdea>[
-                for (final result in snapshot.radar)
-                  for (final entry in result.analysesByTimeframe.entries)
-                    if (configuration.timeframes.contains(entry.key))
-                      TradeIdeaFactory.create(
-                        analysis: entry.value,
-                        capital: account.estimatedEquity,
-                        riskPercent: configuration.riskPercent,
-                        languageCode: configuration.languageCode,
-                        strategy: configuration.strategy,
-                        cadence: configuration.cadence,
-                        confluence: {
-                          for (final direction
-                              in result.analysesByTimeframe.entries)
-                            direction.key: direction.value.direction,
-                        },
-                      ),
-              ]
-              .where(
-                (idea) =>
-                    idea.isActionable &&
-                    !occupiedSymbols.contains(idea.symbol.trim().toUpperCase()),
-              )
-              .toList(growable: false);
+      final ideasBySetupId = <String, TradeIdea>{};
+      for (final result in snapshot.radar) {
+        final confluence = {
+          for (final direction in result.analysesByTimeframe.entries)
+            direction.key: direction.value.direction,
+        };
+        for (final entry in result.analysesByTimeframe.entries) {
+          if (!configuration.timeframes.contains(entry.key)) continue;
+          for (final strategy in configuration.enabledStrategies) {
+            final idea = TradeIdeaFactory.create(
+              analysis: entry.value,
+              capital: account.estimatedEquity,
+              riskPercent: configuration.riskPercent,
+              languageCode: configuration.languageCode,
+              strategy: strategy,
+              cadence: configuration.cadence,
+              confluence: confluence,
+            );
+            bool symbolIsAvailable(TradeIdea idea) =>
+                !occupiedSymbols.contains(idea.symbol.trim().toUpperCase());
+            if (!idea.isActionable || !symbolIsAvailable(idea)) {
+              continue;
+            }
+            ideasBySetupId[idea.setupId] = idea;
+          }
+        }
+      }
+      final ideas = ideasBySetupId.values.toList(growable: false);
       if (ideas.isEmpty) {
         _auditEvent(
           'scan_skip',
@@ -1753,7 +1756,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   List<TradeIdea> _rankPrimaryIdeas(List<TradeIdea> ideas) {
     final grouped = <String, List<TradeIdea>>{};
     for (final idea in ideas) {
-      grouped.putIfAbsent(idea.symbol, () => []).add(idea);
+      final key = '${idea.symbol}|${idea.strategy.name}';
+      grouped.putIfAbsent(key, () => []).add(idea);
     }
     final candidates = <TradeIdea>[];
     for (final group in grouped.values) {
@@ -1984,6 +1988,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       lastSuccessfulExchangeSync: _lastExchangeSync,
       openPositionCount: _exchangeOpenPositionCount,
       managedPositionCount: _managed.length,
+      managedPositions: _managed
+          .map(LocalLiveManagedPositionSummary.fromManaged)
+          .toList(growable: false),
       unmanagedPositionCount: _unmanagedSymbols.length,
       unmanagedSymbols: _unmanagedSymbols,
       entryBlockReason: _entryBlockReason,
