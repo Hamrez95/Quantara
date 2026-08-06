@@ -92,13 +92,10 @@ abstract final class LocalLiveDiagnosticBundle {
     for (final secret in secrets) {
       result = result.replaceAll(secret, '[REDACTED]');
     }
-    result = result.replaceAll(
-      RegExp(
-        r'(api\s*[_-]?\s*key|api\s*[_-]?\s*secret|secret\s*[_-]?\s*key|authorization|password|access\s*[_-]?\s*token|refresh\s*[_-]?\s*token)\s*[:=]\s*[^\s,;]+',
-        caseSensitive: false,
-      ),
-      '[REDACTED_CREDENTIAL]',
-    );
+
+    // Redact full authorization schemes before the generic key/value rule so
+    // a prefix such as `authorization=Basic` cannot leave the encoded payload
+    // behind in a support bundle.
     result = result.replaceAll(
       RegExp(r'bearer\s+[a-z0-9._~+/=-]+', caseSensitive: false),
       'Bearer [REDACTED]',
@@ -106,6 +103,13 @@ abstract final class LocalLiveDiagnosticBundle {
     result = result.replaceAll(
       RegExp(r'basic\s+[a-z0-9+/=]+', caseSensitive: false),
       'Basic [REDACTED]',
+    );
+    result = result.replaceAll(
+      RegExp(
+        r'(api\s*[_-]?\s*key|api\s*[_-]?\s*secret|secret\s*[_-]?\s*key|authorization|password|access\s*[_-]?\s*token|refresh\s*[_-]?\s*token)\s*[:=]\s*(?:bearer\s+|basic\s+)?[^\s,;]+',
+        caseSensitive: false,
+      ),
+      '[REDACTED_CREDENTIAL]',
     );
     return result;
   }
