@@ -84,7 +84,7 @@ v101 = replace_once(
     """      final compactSettingsUi = settingsUi.replaceAll(RegExp(r'\\s+'), '');
       expect(
         compactSettingsUi,
-        contains("for(finaltimeframeinconst['5m','15m','1h','4h'])"),
+        contains("for(finaltimeframeinconst['5m','15m','1h','4h',])"),
       );
 """,
     'timeframe source assertion',
