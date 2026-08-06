@@ -6,10 +6,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
       'ساختار تطبیقی بازار',
       'Adaptive market structure',
     ),
-    AnalysisStrategy.trendPullback => _t(
-      'پولبک در روند',
-      'Trend pullback',
-    ),
+    AnalysisStrategy.trendPullback => _t('پولبک در روند', 'Trend pullback'),
     AnalysisStrategy.momentumContinuation => _t(
       'شکست، بازآزمایی و ادامه مومنتوم',
       'Breakout, retest & momentum',
@@ -31,17 +28,13 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
     ),
   };
 
-  Widget _buildLocalLiveConfigurationSummary({
-    required bool serviceActive,
-  }) {
+  Widget _buildLocalLiveConfigurationSummary({required bool serviceActive}) {
     final preferences = _currentPreferences;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: QuantaraColors.cyan.withValues(alpha: 0.055),
         borderRadius: BorderRadius.circular(QuantaraRadius.card),
-        border: Border.all(
-          color: QuantaraColors.cyan.withValues(alpha: 0.18),
-        ),
+        border: Border.all(color: QuantaraColors.cyan.withValues(alpha: 0.18)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -56,9 +49,8 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                     children: [
                       Text(
                         _t('تنظیمات ترید خودکار', 'Auto-trade settings'),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       Text(
                         serviceActive
@@ -77,9 +69,8 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                 ),
                 IconButton.filledTonal(
                   tooltip: _t('بازکردن تنظیمات', 'Open settings'),
-                  onPressed: () => _showLocalLiveSettings(
-                    serviceActive: serviceActive,
-                  ),
+                  onPressed: () =>
+                      _showLocalLiveSettings(serviceActive: serviceActive),
                   icon: const Icon(Icons.settings_rounded),
                 ),
               ],
@@ -128,8 +119,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                   icon: Icons.layers_outlined,
                 ),
                 StatusPill(
-                  label:
-                      'TP $_tp1Percent / $_tp2Percent / $_tp3Percent',
+                  label: 'TP $_tp1Percent / $_tp2Percent / $_tp3Percent',
                   color: QuantaraColors.violet,
                   icon: Icons.flag_outlined,
                 ),
@@ -141,9 +131,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
     );
   }
 
-  Future<void> _showLocalLiveSettings({
-    required bool serviceActive,
-  }) async {
+  Future<void> _showLocalLiveSettings({required bool serviceActive}) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -152,9 +140,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheetState) {
           final canEdit =
-              !serviceActive &&
-              !widget.controller.isBusy &&
-              _preferencesLoaded;
+              !serviceActive && !widget.controller.isBusy && _preferencesLoaded;
 
           void mutate(VoidCallback mutation) {
             if (!canEdit) return;
@@ -174,13 +160,8 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          _t(
-                            'تنظیمات ترید واقعی محلی',
-                            'Local Live settings',
-                          ),
-                          style: Theme.of(sheetContext)
-                              .textTheme
-                              .titleLarge
+                          _t('تنظیمات ترید واقعی محلی', 'Local Live settings'),
+                          style: Theme.of(sheetContext).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                       ),
@@ -214,9 +195,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                         ],
                         Text(
                           _t('استراتژی‌های فعال', 'Enabled strategies'),
-                          style: Theme.of(sheetContext)
-                              .textTheme
-                              .titleMedium
+                          style: Theme.of(sheetContext).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                         const SizedBox(height: 4),
@@ -237,7 +216,9 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                                 : (selected) {
                                     if (selected != true &&
                                         _enabledStrategies.length == 1) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text(
                                             _t(
@@ -264,16 +245,14 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                               ),
                             ),
                             subtitle: Text(_strategyDescription(strategy)),
-                            secondary: Icon(
-                              switch (strategy) {
-                                AnalysisStrategy.structureZones =>
-                                  Icons.hub_outlined,
-                                AnalysisStrategy.trendPullback =>
-                                  Icons.trending_up_rounded,
-                                AnalysisStrategy.momentumContinuation =>
-                                  Icons.rocket_launch_outlined,
-                              },
-                            ),
+                            secondary: Icon(switch (strategy) {
+                              AnalysisStrategy.structureZones =>
+                                Icons.hub_outlined,
+                              AnalysisStrategy.trendPullback =>
+                                Icons.trending_up_rounded,
+                              AnalysisStrategy.momentumContinuation =>
+                                Icons.rocket_launch_outlined,
+                            }),
                           ),
                         Align(
                           alignment: AlignmentDirectional.centerStart,
@@ -300,9 +279,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                         const Divider(height: 28),
                         Text(
                           _t('نمادهای مجاز', 'Allowed symbols'),
-                          style: Theme.of(sheetContext)
-                              .textTheme
-                              .titleMedium
+                          style: Theme.of(sheetContext).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                         const SizedBox(height: 4),
@@ -350,9 +327,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                         const Divider(height: 28),
                         Text(
                           _t('تایم‌فریم‌های مجاز', 'Allowed timeframes'),
-                          style: Theme.of(sheetContext)
-                              .textTheme
-                              .titleMedium
+                          style: Theme.of(sheetContext).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                         const SizedBox(height: 8),
@@ -360,14 +335,20 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            for (final timeframe
-                                in const ['5m', '15m', '1h', '4h'])
+                            for (final timeframe in const [
+                              '5m',
+                              '15m',
+                              '1h',
+                              '4h',
+                            ])
                               FilterChip(
                                 label: Text(
                                   timeframe,
                                   textDirection: TextDirection.ltr,
                                 ),
-                                selected: _enabledTimeframes.contains(timeframe),
+                                selected: _enabledTimeframes.contains(
+                                  timeframe,
+                                ),
                                 onSelected: !canEdit
                                     ? null
                                     : (selected) => mutate(() {
@@ -402,7 +383,9 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                           value: '${_riskPercent.toStringAsFixed(2)}%',
                           onMinus: canEdit
                               ? () => mutate(() {
-                                  final step = _riskPercent > 0.50 ? 0.25 : 0.05;
+                                  final step = _riskPercent > 0.50
+                                      ? 0.25
+                                      : 0.05;
                                   _riskPercent = math.max(
                                     0.05,
                                     _riskPercent - step,
@@ -411,7 +394,9 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                               : () {},
                           onPlus: canEdit
                               ? () => mutate(() {
-                                  final step = _riskPercent >= 0.50 ? 0.25 : 0.05;
+                                  final step = _riskPercent >= 0.50
+                                      ? 0.25
+                                      : 0.05;
                                   _riskPercent = math.min(
                                     2.0,
                                     _riskPercent + step,
@@ -433,7 +418,9 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                               : () {},
                           onPlus: canEdit
                               ? () => mutate(() {
-                                  final step = _dailyLossLimit >= 3 ? 1.0 : 0.25;
+                                  final step = _dailyLossLimit >= 3
+                                      ? 1.0
+                                      : 0.25;
                                   _dailyLossLimit = math.min(
                                     10,
                                     _dailyLossLimit + step,
@@ -472,12 +459,11 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                               allocation: _targetAllocation,
                               persian: _fa,
                               onChanged: (allocation) => mutate(() {
-                                _tp1Percent =
-                                    (allocation.tp1Fraction * 100).round();
-                                _tp2Percent =
-                                    (allocation.tp2Fraction * 100).round();
-                                _tp3Percent =
-                                    100 - _tp1Percent - _tp2Percent;
+                                _tp1Percent = (allocation.tp1Fraction * 100)
+                                    .round();
+                                _tp2Percent = (allocation.tp2Fraction * 100)
+                                    .round();
+                                _tp3Percent = 100 - _tp1Percent - _tp2Percent;
                               }),
                             ),
                           ),
@@ -528,9 +514,9 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
           children: [
             Text(
               _t('پوزیشن‌های باز و تایم‌فریم', 'Open positions & timeframe'),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             for (final managed in status.managedPositions)
@@ -601,9 +587,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                   Expanded(
                     child: Text(
                       _t('گزارش کامل اجرا', 'Full execution log'),
-                      style: Theme.of(sheetContext)
-                          .textTheme
-                          .titleLarge
+                      style: Theme.of(sheetContext).textTheme.titleLarge
                           ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                   ),
@@ -675,23 +659,17 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
       final persisted = <String, Object?>{
         'configuration': await _storedJson(localLiveConfigurationKey),
         'status': await _storedJson(localLiveStatusKey),
-        'managedPositions': await _storedJson(
-          localLiveManagedPositionsKey,
-        ),
+        'managedPositions': await _storedJson(localLiveManagedPositionsKey),
         'pendingJournalClosures': await _storedJson(
           localLivePendingJournalClosuresKey,
         ),
-        'executedSetupIds': await _storedJson(
-          localLiveExecutedSetupIdsKey,
-        ),
+        'executedSetupIds': await _storedJson(localLiveExecutedSetupIdsKey),
         'audit': await _storedJson(localLiveAuditKey),
         'sessionId': await _storedValue<String>(localLiveSessionIdKey),
         'sessionStartedAt': await _storedValue<String>(
           localLiveSessionStartedAtKey,
         ),
-        'sessionPositionIds': await _storedJson(
-          localLiveSessionPositionIdsKey,
-        ),
+        'sessionPositionIds': await _storedJson(localLiveSessionPositionIdsKey),
         'sessionStartEquity': await _storedValue<double>(
           localLiveSessionStartEquityKey,
         ),
@@ -738,8 +716,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
           'analysisRuntime': {
             'watchlist': widget.analysisController.symbols,
             'selectedSymbol': widget.analysisController.selectedSymbol,
-            'selectedTimeframe':
-                widget.analysisController.selectedTimeframe,
+            'selectedTimeframe': widget.analysisController.selectedTimeframe,
             'primaryStrategy': widget.analysisController.strategy.name,
             'cadence': widget.analysisController.cadence.name,
             'languageCode': widget.analysisController.languageCode,
@@ -748,9 +725,10 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
           'persistedLocalServiceState': persisted,
         },
       );
-      final stamp = generatedAt
-          .toIso8601String()
-          .replaceAll(RegExp(r'[:.]'), '-');
+      final stamp = generatedAt.toIso8601String().replaceAll(
+        RegExp(r'[:.]'),
+        '-',
+      );
       final fileName = 'quantara-local-live-diagnostics-$stamp.json';
       await SharePlus.instance.share(
         ShareParams(

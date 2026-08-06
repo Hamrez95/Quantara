@@ -13,6 +13,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   http: ^1.6.0
+  share_plus: ^13.3.0
   crypto: ^3.0.7
   cryptography: ^2.9.0
   crypto_icons: ^1.0.0

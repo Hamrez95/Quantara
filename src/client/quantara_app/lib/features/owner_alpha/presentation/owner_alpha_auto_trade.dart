@@ -388,6 +388,9 @@ class _LocalLiveTradeControlCardState
       const SharedPreferencesLocalLivePreferencesStore();
   final Set<String> _enabledSymbols = {};
   final Set<String> _enabledTimeframes = {'1h', '4h'};
+  final Set<AnalysisStrategy> _enabledStrategies = {
+    ...LocalLivePreferences.recommendedStrategies,
+  };
   int _leverage = 10;
   double _riskPercent = 0.10;
   double _dailyLossLimit = 1;
@@ -421,6 +424,9 @@ class _LocalLiveTradeControlCardState
         _enabledTimeframes
           ..clear()
           ..addAll(value.timeframes);
+        _enabledStrategies
+          ..clear()
+          ..addAll(value.strategies);
         _leverage = value.leverage;
         _riskPercent = value.riskPercent;
         _dailyLossLimit = value.dailyLossLimitPercent;
@@ -443,6 +449,7 @@ class _LocalLiveTradeControlCardState
     riskPercent: _riskPercent,
     dailyLossLimitPercent: _dailyLossLimit,
     maximumConcurrentPositions: _maximumConcurrentPositions,
+    strategies: _enabledStrategies.toList(growable: false),
     targetAllocation: _targetAllocation,
   ).normalized(widget.analysisController.symbols);
 
@@ -564,8 +571,8 @@ class _LocalLiveTradeControlCardState
           const SizedBox(height: 12),
           _BoundaryNotice(
             text: _t(
-              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. حداکثر سه پوزیشن Isolated فقط در محدوده بودجه اتمیک ریسک و مارجین پرتفوی مجاز است؛ هر ورود همچنان باید با SL کامل و سه TP تأییدشده صرافی محافظت شود.',
-              'This mode can submit real futures orders. Up to three isolated positions are allowed only inside the atomic portfolio risk and margin budget; every entry still requires a full exchange-confirmed stop and three targets.',
+              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. حداکثر سه پوزیشن Isolated فقط در محدوده بودجه اتمیک ریسک و مارجین پرتفوی مجاز است؛ هر ورود همچنان باید با SL کامل و پوشش کامل حجم توسط هدف‌های فعال تأییدشده صرافی محافظت شود.',
+              'This mode can submit real futures orders. Up to three isolated positions are allowed only inside the atomic portfolio risk and margin budget; every entry still requires a full exchange-confirmed stop and complete coverage by active targets.',
             ),
             color: QuantaraColors.danger,
           ),
@@ -726,161 +733,15 @@ class _LocalLiveTradeControlCardState
             const LinearProgressIndicator(),
             const SizedBox(height: 12),
           ],
-          AbsorbPointer(
-            absorbing:
-                serviceActive ||
-                widget.controller.isBusy ||
-                !_preferencesLoaded,
-            child: Opacity(
-              opacity: serviceActive ? 0.60 : 1,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _t('نمادهای مجاز', 'Allowed symbols'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final symbol in widget.analysisController.symbols)
-                        FilterChip(
-                          avatar: SymbolAvatar(
-                            symbol: symbol,
-                            size: 22,
-                            showBorder: false,
-                          ),
-                          label: Text(symbol, textDirection: TextDirection.ltr),
-                          selected: _enabledSymbols.contains(symbol),
-                          onSelected: (selected) => _mutateAndSave(() {
-                            if (selected) {
-                              _enabledSymbols.add(symbol);
-                            } else {
-                              _enabledSymbols.remove(symbol);
-                            }
-                          }),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    _t('تایم‌فریم‌های مجاز', 'Allowed timeframes'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final timeframe in const ['5m', '15m', '1h', '4h'])
-                        FilterChip(
-                          label: Text(
-                            timeframe,
-                            textDirection: TextDirection.ltr,
-                          ),
-                          selected: _enabledTimeframes.contains(timeframe),
-                          onSelected: (selected) => _mutateAndSave(() {
-                            if (selected) {
-                              _enabledTimeframes.add(timeframe);
-                            } else {
-                              _enabledTimeframes.remove(timeframe);
-                            }
-                          }),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _numberRow(
-                    label: _t('اهرم عمومی', 'Global leverage'),
-                    value: '${_leverage}x',
-                    onMinus: () => _mutateAndSave(
-                      () => _leverage = math.max(1, _leverage - 1),
-                    ),
-                    onPlus: () => _mutateAndSave(
-                      () => _leverage = math.min(125, _leverage + 1),
-                    ),
-                  ),
-                  _numberRow(
-                    label: _t('ریسک هر معامله', 'Risk per trade'),
-                    value: '${_riskPercent.toStringAsFixed(2)}%',
-                    onMinus: () => _mutateAndSave(() {
-                      final step = _riskPercent > 0.50 ? 0.25 : 0.05;
-                      _riskPercent = math.max(0.05, _riskPercent - step);
-                    }),
-                    onPlus: () => _mutateAndSave(() {
-                      final step = _riskPercent >= 0.50 ? 0.25 : 0.05;
-                      _riskPercent = math.min(2.0, _riskPercent + step);
-                    }),
-                  ),
-                  _numberRow(
-                    label: _t('سقف ضرر روزانه', 'Daily loss cap'),
-                    value: '${_dailyLossLimit.toStringAsFixed(2)}%',
-                    onMinus: () => _mutateAndSave(() {
-                      final step = _dailyLossLimit > 3 ? 1.0 : 0.25;
-                      _dailyLossLimit = math.max(0.25, _dailyLossLimit - step);
-                    }),
-                    onPlus: () => _mutateAndSave(() {
-                      final step = _dailyLossLimit >= 3 ? 1.0 : 0.25;
-                      _dailyLossLimit = math.min(10, _dailyLossLimit + step);
-                    }),
-                  ),
-                  _numberRow(
-                    label: _t(
-                      'حداکثر پوزیشن هم‌زمان',
-                      'Maximum concurrent positions',
-                    ),
-                    value: _maximumConcurrentPositions.toString(),
-                    onMinus: () => _mutateAndSave(
-                      () => _maximumConcurrentPositions = math.max(
-                        1,
-                        _maximumConcurrentPositions - 1,
-                      ),
-                    ),
-                    onPlus: () => _mutateAndSave(
-                      () => _maximumConcurrentPositions = math.min(
-                        3,
-                        _maximumConcurrentPositions + 1,
-                      ),
-                    ),
-                  ),
-                  TpAllocationEditor(
-                    allocation: _targetAllocation,
-                    persian: _fa,
-                    onChanged: (allocation) => _mutateAndSave(() {
-                      _tp1Percent = (allocation.tp1Fraction * 100).round();
-                      _tp2Percent = (allocation.tp2Fraction * 100).round();
-                      _tp3Percent = 100 - _tp1Percent - _tp2Percent;
-                    }),
-                  ),
-                  const SizedBox(height: 8),
-                  _BoundaryNotice(
-                    text: _t(
-                      'جمع اهداف فعال همیشه ۱۰۰٪ است. می‌توانی TP2 و TP3 را صفر کنی؛ اگر حجم یک هدف از حداقل Bitunix کمتر شود، Quantara آن بخش را خودکار با هدف قبلی ادغام می‌کند. فقط Fill تأییدشده TP1 می‌تواند استاپ باقی‌مانده را رو به سود جابه‌جا کند.',
-                      'Active targets always total 100%. TP2 and TP3 may be zero; when a target quantity is below the Bitunix minimum, Quantara automatically merges it into the previous target. Only a confirmed TP1 fill may promote the remaining stop toward profit.',
-                    ),
-                    color: QuantaraColors.cyan,
-                  ),
-                  if (_riskPercent > 0.50 ||
-                      _dailyLossLimit > 3 ||
-                      _leverage > 25) ...[
-                    const SizedBox(height: 8),
-                    _BoundaryNotice(
-                      text: _t(
-                        'حالت پیشرفته فعال است. اهرم بالا فقط مارجین را کم می‌کند و فاصله لیکویید را کاهش می‌دهد؛ ریسک بالاتر مستقیماً زیان مجاز هر معامله را افزایش می‌دهد.',
-                        'Advanced settings are active. Higher leverage reduces required margin but narrows liquidation distance; higher risk directly increases allowed loss per trade.',
-                      ),
-                      color: QuantaraColors.warning,
-                    ),
-                  ],
-                ],
-              ),
+          _buildLocalLiveConfigurationSummary(serviceActive: serviceActive),
+          if (status.managedPositions.isNotEmpty ||
+              exchangeOpenPositions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildManagedPositionTimeframes(
+              status: status,
+              exchangePositions: exchangeOpenPositions,
             ),
-          ),
+          ],
           const SizedBox(height: 14),
           Row(
             children: [
@@ -1018,13 +879,15 @@ class _LocalLiveTradeControlCardState
       return;
     }
     if (!recoveryOnly &&
-        (_enabledSymbols.isEmpty || _enabledTimeframes.isEmpty)) {
+        (_enabledSymbols.isEmpty ||
+            _enabledTimeframes.isEmpty ||
+            _enabledStrategies.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _t(
-              'حداقل یک نماد و یک تایم‌فریم انتخاب کن.',
-              'Select at least one symbol and timeframe.',
+              'حداقل یک نماد، یک تایم‌فریم و یک استراتژی انتخاب کن.',
+              'Select at least one symbol, timeframe and strategy.',
             ),
           ),
         ),
@@ -1092,6 +955,9 @@ class _LocalLiveTradeControlCardState
               Text(
                 '${_t('نمادها', 'Symbols')}: ${_enabledSymbols.join(', ')}',
                 textDirection: TextDirection.ltr,
+              ),
+              Text(
+                '${_t('استراتژی‌ها', 'Strategies')}: ${_enabledStrategies.map(_strategyTitle).join(' · ')}',
               ),
               Text('${_t('اهرم', 'Leverage')}: ${_leverage}x'),
               Text(
@@ -1161,7 +1027,8 @@ class _LocalLiveTradeControlCardState
         riskPercent: _riskPercent,
         dailyLossLimitPercent: _dailyLossLimit,
         maximumConcurrentPositions: _maximumConcurrentPositions,
-        strategy: widget.analysisController.strategy,
+        strategy: _enabledStrategies.first,
+        strategies: _enabledStrategies.toList(growable: false),
         cadence: widget.analysisController.cadence,
         languageCode: widget.analysisController.languageCode,
         targetAllocation: _targetAllocation,
@@ -1219,45 +1086,7 @@ class _LocalLiveTradeControlCardState
     if (policy != null) await widget.controller.stop(policy);
   }
 
-  Future<void> _showAudit() async {
-    final events = await widget.controller.loadAudit();
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: events.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _t('هنوز رویدادی ثبت نشده.', 'No events recorded yet.'),
-                ),
-              )
-            : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                itemCount: events.length,
-                separatorBuilder: (_, _) => const Divider(),
-                itemBuilder: (context, index) {
-                  final event = events[index];
-                  return ListTile(
-                    leading: const Icon(Icons.shield_outlined),
-                    title: Text(
-                      LocalLiveMessageLocalizer.localizeAudit(
-                        kind: event.type,
-                        message: event.message,
-                        persian: _fa,
-                      ),
-                    ),
-                    subtitle: Text(
-                      '${event.symbol ?? event.type} · ${event.at.toLocal()}',
-                      textDirection: TextDirection.ltr,
-                    ),
-                  );
-                },
-              ),
-      ),
-    );
-  }
+  Future<void> _showAudit() => _showDetailedLocalLiveAudit();
 
   String _stateLabel(LocalLiveTradeState state) => switch (state) {
     LocalLiveTradeState.stopped => _t('متوقف', 'Stopped'),

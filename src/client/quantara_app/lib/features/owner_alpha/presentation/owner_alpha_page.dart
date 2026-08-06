@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/formatting/number_formatters.dart';
 import '../../../core/localization/app_strings.dart';
@@ -13,6 +16,8 @@ import '../../../core/localization/local_live_message_localizer.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
+import '../../auto_trade/application/local_live_diagnostic_bundle.dart';
+import '../../auto_trade/application/local_live_trade_service.dart';
 import '../../auto_trade/application/unattended_auto_trade_controller.dart';
 import '../../auto_trade/data/bitunix_private_api_client.dart';
 import '../../auto_trade/data/local_live_preferences_store.dart';
@@ -46,6 +51,7 @@ part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_auto_trade.dart';
+part 'owner_alpha_local_live_tools.dart';
 part 'owner_alpha_auto_trade_support.dart';
 part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
