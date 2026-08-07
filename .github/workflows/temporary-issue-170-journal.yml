@@ -1,0 +1,62 @@
+name: Temporary issue 170 journal fix
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - .github/workflows/temporary-issue-170-journal.yml
+      - .github/scripts/fix_issue_170_journal.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+
+      - name: Apply issue 170 patch
+        run: python3 .github/scripts/fix_issue_170_journal.py
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Format
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/auto_trade/domain/trading_pnl_projection.dart lib/features/trading_journal/data/database_trading_journal_store.dart lib/features/trading_journal/application/local_live_journal_observer.dart lib/features/auto_trade/application/local_live_trade_service.dart lib/features/owner_alpha/presentation/owner_alpha_page.dart lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart test/issue_170_journal_closure_test.dart
+
+      - name: Analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze
+
+      - name: Run issue 170 and journal regressions
+        working-directory: src/client/quantara_app
+        run: flutter test test/issue_170_journal_closure_test.dart test/trading_journal_test.dart test/eth_stop_hotfix_regression_test.dart test/local_live_multi_position_service_source_test.dart
+
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/auto_trade/domain/trading_pnl_projection.dart \
+                  src/client/quantara_app/lib/features/trading_journal/data/database_trading_journal_store.dart \
+                  src/client/quantara_app/lib/features/trading_journal/application/local_live_journal_observer.dart \
+                  src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
+                  src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+                  src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart \
+                  src/client/quantara_app/test/issue_170_journal_closure_test.dart
+          git commit -m "fix: reconcile closed Local Live journal facts (#170)"
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
