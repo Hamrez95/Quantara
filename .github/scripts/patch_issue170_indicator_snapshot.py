@@ -11,6 +11,14 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
 
+pagination = ROOT / 'lib/features/auto_trade/data/bitunix_private_api_client.dart'
+replace_once(
+    pagination,
+    "final reachedReportedTotal = total != null && skip >= total!;",
+    "final reachedReportedTotal = total != null && skip >= total;",
+    'pagination unnecessary non-null assertion',
+)
+
 models = ROOT / 'lib/features/owner_alpha/domain/owner_alpha_models.dart'
 replace_once(
     models,
