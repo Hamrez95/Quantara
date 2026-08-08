@@ -8,8 +8,13 @@ val quantaraStableRelease =
     (System.getenv("QUANTARA_STABLE_RELEASE") ?: "false").equals("true", ignoreCase = true)
 val quantaraPreviewRelease =
     (System.getenv("QUANTARA_PREVIEW_RELEASE") ?: "false").equals("true", ignoreCase = true)
-require(!(quantaraStableRelease && quantaraPreviewRelease)) {
-    "A build cannot be both Stable and Preview."
+val quantaraUnsignedCandidate =
+    (System.getenv("QUANTARA_UNSIGNED_CANDIDATE") ?: "false").equals("true", ignoreCase = true)
+require(
+    listOf(quantaraStableRelease, quantaraPreviewRelease, quantaraUnsignedCandidate)
+        .count { it } <= 1
+) {
+    "A build can select only one of Stable, Preview, or Unsigned Candidate."
 }
 
 val quantaraKeystorePath = System.getenv("QUANTARA_ANDROID_KEYSTORE_PATH")
@@ -90,11 +95,20 @@ android {
                     versionNameSuffix = "-preview"
                     signingConfig = signingConfigs.getByName("quantaraPreview")
                 }
+                quantaraUnsignedCandidate -> {
+                    // Internal CI transport only. This APK is deliberately
+                    // unsigned and must never be distributed until it is
+                    // signed with the owner-controlled Preview keystore.
+                    applicationIdSuffix = ".alpha"
+                    versionNameSuffix = "-preview"
+                    signingConfig = null
+                }
                 else -> {
                     throw GradleException(
                         "Release APK signing is fail-closed. Set QUANTARA_PREVIEW_RELEASE=true " +
-                            "with the owner-controlled Preview keystore, or QUANTARA_STABLE_RELEASE=true " +
-                            "with the Stable keystore. Runner-local debug signing is forbidden."
+                            "with the owner-controlled Preview keystore, QUANTARA_STABLE_RELEASE=true " +
+                            "with the Stable keystore, or QUANTARA_UNSIGNED_CANDIDATE=true only for " +
+                            "an internal offline-signing candidate. Runner-local debug signing is forbidden."
                     )
                 }
             }
