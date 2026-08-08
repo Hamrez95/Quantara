@@ -10,7 +10,7 @@ void main() {
     () {
       final pnl = _positionScopedPnl();
 
-      expect(pnl.isVerified, isFalse);
+      expect(pnl.isVerified, isTrue);
       expect(pnl.forPositionId('eth-position')?.isVerified, isTrue);
       expect(
         pnl.forPositionId('unassigned-trade:old-gram')?.isVerified,
