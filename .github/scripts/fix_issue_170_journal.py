@@ -10,9 +10,9 @@ def replace_once(path: Path, old: str, new: str, label: str) -> None:
         raise RuntimeError(f'{label}: expected one match, found {count}')
     path.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-# Stage 2: legacy exchange backfill must operate per position/trade. A stale
-# unrelated ledger warning is data-quality metadata; it must not keep a
-# confirmed exchange-closed trade open.
+
+# Legacy exchange backfill is position-scoped. An unrelated old ledger warning
+# must not keep an exchange-confirmed closed position open.
 backfill = ROOT / 'lib/features/trading_journal/application/trading_journal_exchange_backfill.dart'
 replace_once(
     backfill,
@@ -60,7 +60,9 @@ replace_once(
 """,
     'reject only newly ambiguous backfill facts',
 )
-start = """  static bool _isVerifiedClosedPosition(
+replace_once(
+    backfill,
+    """  static bool _isVerifiedClosedPosition(
     PositionPnlProjection? position,
     TradingJournalPlan plan,
   ) {
@@ -93,8 +95,8 @@ start = """  static bool _isVerifiedClosedPosition(
     );
   }
 
-"""
-replacement = """  static bool _isVerifiedClosedPosition(
+""",
+    """  static bool _isVerifiedClosedPosition(
     PositionPnlProjection? position,
     TradingJournalPlan plan,
   ) {
@@ -142,12 +144,13 @@ replacement = """  static bool _isVerifiedClosedPosition(
     };
   }
 
-"""
-replace_once(backfill, start, replacement, 'verified close evidence rules')
+""",
+    'verified close evidence rules',
+)
 
-# Trade lifecycle state is position-scoped. A global ledger warning remains
-# visible through integrity/warning but does not turn an exchange-confirmed
-# CLOSED trade back into an Unverified/Open-looking lifecycle state.
+# Lifecycle truth is scoped to the trade. Global journal integrity remains
+# visible as data quality, but must not turn an exchange-confirmed close into an
+# Open/Unverified lifecycle state.
 projector = ROOT / 'lib/features/trading_journal/domain/trading_journal_projection.dart'
 replace_once(
     projector,
@@ -174,28 +177,23 @@ replace_once(
     'position lifecycle before global data quality',
 )
 
-# Diagnostic export must read the durable journal authority rather than the
-# rollback/foreground mirror.
+# Export the durable journal authority, not the foreground rollback mirror.
 tools = ROOT / 'lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart'
 replace_once(
     tools,
-    """      final journalLedger = await SharedPreferencesTradingJournalStore().load();
-""",
-    """      final journalLedger = await DatabaseTradingJournalStore().load();
-""",
+    "      final journalLedger = await SharedPreferencesTradingJournalStore().load();\n",
+    "      final journalLedger = await DatabaseTradingJournalStore().load();\n",
     'durable journal diagnostic source',
 )
 page = ROOT / 'lib/features/owner_alpha/presentation/owner_alpha_page.dart'
 replace_once(
     page,
-    """import '../../trading_journal/data/trading_journal_store.dart';
-""",
-    """,
-    'remove temporary mirror import',
+    "import '../../trading_journal/data/trading_journal_store.dart';\n",
+    '',
+    'remove foreground mirror import',
 )
 
-# Recursive secret sanitizer: protect prefixed/suffixed credential keys too,
-# including future support-session tokens and request signatures.
+# Recursive sanitizer also catches prefixed/suffixed future credential keys.
 diag = ROOT / 'lib/features/auto_trade/application/local_live_diagnostic_bundle.dart'
 replace_once(
     diag,
@@ -246,111 +244,186 @@ replace_once(
 """,
     'prefixed credential keys',
 )
-text = diag.read_text(encoding='utf-8')
-old = r"refresh\s*[_-]?\s*token)\s*[:=]"
-new = r"refresh\s*[_-]?\s*token|session\s*[_-]?\s*token|private\s*[_-]?\s*key|request\s*[_-]?\s*signature|signature)\s*[:=]"
-if text.count(old) != 1:
-    raise RuntimeError(f'diagnostic string sanitizer: expected one match, found {text.count(old)}')
-diag.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-# Behavioral regressions for Bitunix rows where reduceOnly is missing/false and
-# for unrelated legacy ledger warnings.
-backfill_test = ROOT / 'test/trading_journal_exchange_backfill_test.dart'
 replace_once(
-    backfill_test,
-    """}\n\nTradingPnlProjection _verifiedPnl() => TradingPnlProjection.reconcile(
-""",
-    """  test('closes from opposite-side stop fill when reduceOnly is false', () {
-    final ledger = TradingJournalLedger.empty()
-        .appendPlan(_plan())
-        .appendEvent(_entry());
+    diag,
+    r"refresh\s*[_-]?\s*token)\s*[:=]",
+    r"refresh\s*[_-]?\s*token|session\s*[_-]?\s*token|private\s*[_-]?\s*key|request\s*[_-]?\s*signature|signature)\s*[:=]",
+    'credential-like string sanitizer',
+)
+
+# Dedicated regressions avoid weakening or rewriting existing safety tests.
+(ROOT / 'test/issue_170_legacy_backfill_regression_test.dart').write_text(r'''import 'package:flutter_test/flutter_test.dart';
+import 'package:quantara_app/features/auto_trade/domain/trading_pnl_projection.dart';
+import 'package:quantara_app/features/trading_journal/application/trading_journal_exchange_backfill.dart';
+import 'package:quantara_app/features/trading_journal/domain/trading_journal_models.dart';
+import 'package:quantara_app/features/trading_journal/domain/trading_journal_projection.dart';
+
+void main() {
+  test('opposite-side Bitunix stop fill closes even when reduceOnly is false', () {
     final result = TradingJournalExchangeBackfill.reconcileVerifiedClosures(
-      ledger: ledger,
-      pnlProjection: _verifiedPnl(reduceOnly: false),
+      ledger: TradingJournalLedger.empty().appendPlan(_plan()).appendEvent(_entry()),
+      pnlProjection: _pnl(reduceOnly: false),
       openPositionIds: const {},
-      recordedAt: DateTime.utc(2026, 8, 5, 5),
+      recordedAt: DateTime.utc(2026, 8, 7, 15, 30),
     );
     final projection = TradingJournalProjector.project(
       ledger: result.ledger,
-      journalTradeId: 'local-live:gram-position',
+      journalTradeId: 'local-live:sol-position',
     );
 
-    expect(result.closedTradeIds, ['local-live:gram-position']);
+    expect(result.closedTradeIds, ['local-live:sol-position']);
     expect(projection.state, TradingJournalTradeState.closed);
     expect(projection.closeReason, TradingJournalCloseReason.stop);
+    expect(projection.netPnl, closeTo(-0.10777156, 0.00000001));
   });
 
-  test('unrelated legacy ledger warning cannot keep verified trade open', () {
+  test('unrelated legacy journal warning cannot keep confirmed SOL close open', () {
     final ledger = TradingJournalLedger.empty()
         .appendPlan(_plan())
         .appendEvent(_entry())
-        .withIntegrityWarning('Legacy warning for unrelated trade.');
+        .withIntegrityWarning('Legacy warning for an unrelated historical trade.');
     final result = TradingJournalExchangeBackfill.reconcileVerifiedClosures(
       ledger: ledger,
-      pnlProjection: _verifiedPnl(),
+      pnlProjection: _pnl(),
       openPositionIds: const {},
-      recordedAt: DateTime.utc(2026, 8, 5, 5),
+      recordedAt: DateTime.utc(2026, 8, 7, 15, 30),
     );
     final projection = TradingJournalProjector.project(
       ledger: result.ledger,
-      journalTradeId: 'local-live:gram-position',
+      journalTradeId: 'local-live:sol-position',
     );
 
-    expect(result.closedTradeIds, ['local-live:gram-position']);
+    expect(result.closedTradeIds, ['local-live:sol-position']);
     expect(projection.state, TradingJournalTradeState.closed);
     expect(projection.integrity, TradingJournalIntegrity.unverified);
-    expect(result.ledger.warnings, contains('Legacy warning for unrelated trade.'));
+    expect(result.ledger.warnings, contains('Legacy warning for an unrelated historical trade.'));
   });
-}\n\nTradingPnlProjection _verifiedPnl({bool reduceOnly = true}) => TradingPnlProjection.reconcile(
-""",
-    'issue170 backfill behavioral tests',
-)
-replace_once(
-    backfill_test,
-    """      reduceOnly: true,
-      occurredAt: DateTime.utc(2026, 8, 5, 3, 19, 14),
-      side: 'SELL',
-""",
-    """      reduceOnly: reduceOnly,
-      occurredAt: DateTime.utc(2026, 8, 5, 3, 19, 14),
-      side: 'SELL',
-""",
-    'parameterize reduceOnly backfill fixture',
-)
+}
 
-# Sanitizer regression for prefixed future keys and nested session tokens.
-diag_test = ROOT / 'test/local_live_diagnostic_bundle_test.dart'
-replace_once(
-    diag_test,
-    """            'nested': {
-              'Authorization': 'Bearer token-value',
-              'safe': 'BTCUSDT',
-            },
-""",
-    """            'nested': {
-              'Authorization': 'Bearer token-value',
-              'bitunixApiKey': 'prefixed-key-value',
-              'exchangeApiSecret': 'prefixed-secret-value',
-              'supportSessionToken': 'support-session-value',
-              'requestSignature': 'signed-request-value',
-              'safe': 'BTCUSDT',
-            },
-""",
-    'nested prefixed secret fixture',
-)
-replace_once(
-    diag_test,
-    """      expect(encoded, isNot(contains('dXNlcjpwYXNz')));
-      expect(encoded, isNot(contains('secretKey')));
-      expect(encoded, contains('BTCUSDT'));
-""",
-    """      expect(encoded, isNot(contains('dXNlcjpwYXNz')));
-      expect(encoded, isNot(contains('prefixed-key-value')));
-      expect(encoded, isNot(contains('prefixed-secret-value')));
-      expect(encoded, isNot(contains('support-session-value')));
-      expect(encoded, isNot(contains('signed-request-value')));
-      expect(encoded, isNot(contains('secretKey')));
-      expect(encoded, contains('BTCUSDT'));
-""",
-    'prefixed secret assertions',
-)
+TradingPnlProjection _pnl({bool reduceOnly = true}) => TradingPnlProjection.reconcile(
+  currency: 'USDT',
+  asOf: DateTime.utc(2026, 8, 7, 15, 25),
+  unrealizedByPosition: const {},
+  fills: [
+    ExchangePnlFill(
+      tradeId: 'sol-stop-fill',
+      orderId: 'sol-stop-order',
+      positionId: 'sol-position',
+      symbol: 'SOLUSDT',
+      quantity: 0.23,
+      price: 73.62,
+      realizedPnl: -0.0874,
+      fee: 0.02037156,
+      reduceOnly: reduceOnly,
+      occurredAt: DateTime.utc(2026, 8, 7, 15, 25),
+      side: 'SELL',
+    ),
+  ],
+  settlements: [
+    ExchangePositionSettlement(
+      positionId: 'sol-position',
+      symbol: 'SOLUSDT',
+      funding: 0,
+      openedAt: DateTime.utc(2026, 8, 7, 15),
+      closedAt: DateTime.utc(2026, 8, 7, 15, 25),
+      realizedPnl: -0.0874,
+      fee: 0.02037156,
+    ),
+  ],
+);
+
+TradingJournalPlan _plan() => TradingJournalPlan(
+  journalTradeId: 'local-live:sol-position',
+  setupId: 'sol-5m-trend-pullback',
+  analysisVersion: 'v1',
+  symbol: 'SOLUSDT',
+  market: 'USDT_PERPETUAL',
+  timeframe: '5m',
+  direction: TradingJournalDirection.long,
+  strategy: 'trendPullback',
+  cadence: 'local-live',
+  source: TradingJournalSource.localLive,
+  decidedAt: DateTime.utc(2026, 8, 7, 15),
+  decisionPrice: 74.00,
+  entryLower: 74.00,
+  entryUpper: 74.00,
+  plannedEntry: 74.00,
+  originalStopLoss: 73.69,
+  targets: const [74.9022],
+  expectedRMultiples: const [1],
+  confidencePercent: 70,
+  confluence: const ['trendPullback'],
+  regime: 'trend',
+  rationale: 'physical SOL canary',
+  invalidation: 'planned stop',
+  accountEquity: 29.81,
+  riskPercent: 0.1,
+  riskBudget: 0.10,
+  leverage: 10,
+  expectedMargin: 1.702,
+  passedGates: const ['isolated-margin', 'protection-ready'],
+  blockedGates: const [],
+  appVersion: '1.2.0-rc.2',
+  strategyRulesVersion: 'v1',
+  positionId: 'sol-position',
+  entryOrderId: 'sol-entry-order',
+  clientId: 'q-local-sol',
+);
+
+TradingJournalEvent _entry() => TradingJournalEvent(
+  eventId: 'sol-entry',
+  journalTradeId: 'local-live:sol-position',
+  type: TradingJournalEventType.entryFilled,
+  occurredAt: DateTime.utc(2026, 8, 7, 15),
+  recordedAt: DateTime.utc(2026, 8, 7, 15),
+  source: TradingJournalFactSource.exchange,
+  quality: TradingJournalFactQuality.confirmed,
+  scope: TradingJournalScope.position,
+  currency: 'USDT',
+  asOf: DateTime.utc(2026, 8, 7, 15),
+  positionId: 'sol-position',
+  orderId: 'sol-entry-order',
+  quantity: 0.23,
+  price: 74.00,
+  remainingQuantity: 0.23,
+);
+''', encoding='utf-8')
+
+(ROOT / 'test/issue_170_diagnostic_sanitizer_regression_test.dart').write_text(r'''import 'package:flutter_test/flutter_test.dart';
+import 'package:quantara_app/features/auto_trade/application/local_live_diagnostic_bundle.dart';
+
+void main() {
+  test('prefixed credential and support-session keys never leak', () {
+    final encoded = LocalLiveDiagnosticBundle.encode(
+      generatedAt: DateTime.utc(2026, 8, 8),
+      sections: const {
+        'nested': {
+          'bitunixApiKey': 'bitunix-key-leak',
+          'exchangeApiSecret': 'exchange-secret-leak',
+          'supportSessionToken': 'support-token-leak',
+          'requestSignature': 'signature-leak',
+          'safeSymbol': 'SOLUSDT',
+        },
+        'messages': [
+          'session_token=support-token-in-string',
+          'request_signature=signed-string',
+          'safe diagnostic',
+        ],
+      },
+    );
+
+    for (final secret in const [
+      'bitunix-key-leak',
+      'exchange-secret-leak',
+      'support-token-leak',
+      'signature-leak',
+      'support-token-in-string',
+      'signed-string',
+    ]) {
+      expect(encoded, isNot(contains(secret)));
+    }
+    expect(encoded, contains('SOLUSDT'));
+    expect(encoded, contains('safe diagnostic'));
+  });
+}
+''', encoding='utf-8')
