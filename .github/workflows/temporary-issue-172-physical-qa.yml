@@ -5,11 +5,10 @@ on:
     branches:
       - feat/163-portfolio-budgeted-local-live
     paths:
-      - .github/scripts/issue_172_test_fix.py
       - .github/workflows/temporary-issue-172-physical-qa.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -28,13 +27,10 @@ jobs:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Apply test-only correction
-        working-directory: .
-        run: python3 .github/scripts/issue_172_test_fix.py
       - name: Restore packages
         run: flutter pub get
-      - name: Normalize format
-        run: dart format lib test
+      - name: Verify format
+        run: dart format --set-exit-if-changed lib test
       - name: Verify diff whitespace
         working-directory: .
         run: git diff --check
@@ -48,6 +44,8 @@ jobs:
           test/advanced_strategy_engine_test.dart
           test/auto_trade_account_reconciliation_controller_test.dart
           test/bitunix_pnl_mapper_physical_canary_test.dart
+          test/bitunix_pnl_position_identity_test.dart
+          test/eth_stop_hotfix_regression_test.dart
           test/decision_indicator_snapshot_test.dart
           test/issue_170_pending_close_reconciliation_test.dart
           test/local_live_status_exchange_truth_test.dart
@@ -55,15 +53,3 @@ jobs:
         run: flutter test
       - name: PWA compile validation
         run: flutter build web --release
-      - name: Commit verified test normalization
-        working-directory: .
-        run: |
-          git config user.name "Quantara CI"
-          git config user.email "actions@users.noreply.github.com"
-          git add src/client/quantara_app/test
-          if git diff --cached --quiet; then
-            echo "No test normalization required"
-            exit 0
-          fi
-          git commit -m "test: finalize issue 172 sync regression coverage"
-          git push origin HEAD:feat/163-portfolio-budgeted-local-live
