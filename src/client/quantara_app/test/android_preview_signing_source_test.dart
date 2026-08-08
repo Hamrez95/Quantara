@@ -14,10 +14,7 @@ void main() {
     expect(gradle, contains('quantaraPreview'));
     expect(gradle, contains('Runner-local debug signing is forbidden'));
     expect(gradle, contains('signingConfig = null'));
-    expect(
-      gradle,
-      contains('must never be distributed until it is'),
-    );
+    expect(gradle, contains('must never be distributed until it is'));
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
   });
 
