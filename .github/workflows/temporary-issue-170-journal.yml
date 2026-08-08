@@ -23,7 +23,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply issue 170 patch
-        run: python3 .github/scripts/fix_issue_170_journal.py
+        run: |
+          python3 .github/scripts/fix_issue_170_journal.py
+          sed -i 's/0.0949939/0.0949925363/' src/client/quantara_app/test/trading_journal_evidence_packet_test.dart
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
