@@ -44,8 +44,8 @@ jobs:
           lib/features/auto_trade/application/local_live_diagnostic_bundle.dart
           lib/features/owner_alpha/presentation/owner_alpha_page.dart
           lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart
-          test/trading_journal_exchange_backfill_test.dart
-          test/local_live_diagnostic_bundle_test.dart
+          test/issue_170_legacy_backfill_regression_test.dart
+          test/issue_170_diagnostic_sanitizer_regression_test.dart
 
       - name: Analyze
         working-directory: src/client/quantara_app
@@ -56,6 +56,8 @@ jobs:
         run: >-
           flutter test
           test/issue_170_journal_closure_test.dart
+          test/issue_170_legacy_backfill_regression_test.dart
+          test/issue_170_diagnostic_sanitizer_regression_test.dart
           test/eth_stop_hotfix_regression_test.dart
           test/trading_journal_exchange_backfill_test.dart
           test/trading_journal_exchange_truth_regression_test.dart
@@ -77,7 +79,7 @@ jobs:
                   src/client/quantara_app/lib/features/auto_trade/application/local_live_diagnostic_bundle.dart \
                   src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
                   src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart \
-                  src/client/quantara_app/test/trading_journal_exchange_backfill_test.dart \
-                  src/client/quantara_app/test/local_live_diagnostic_bundle_test.dart
+                  src/client/quantara_app/test/issue_170_legacy_backfill_regression_test.dart \
+                  src/client/quantara_app/test/issue_170_diagnostic_sanitizer_regression_test.dart
           git commit -m "fix: harden journal backfill and diagnostics (#170)"
           git push origin HEAD:feat/163-portfolio-budgeted-local-live
