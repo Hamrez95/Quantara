@@ -47,7 +47,7 @@ void main() {
   );
 
   test(
-    'overlapping closed intervals remain unverified instead of guessing',
+    'overlapping closed intervals are quarantined instead of guessed',
     () {
       final occurredAt = DateTime.utc(2026, 8, 3, 12);
       final result = BitunixPnlMapper.fills(
@@ -91,9 +91,33 @@ void main() {
         ],
       );
 
-      expect(result.verified, isFalse);
-      expect(result.values.single.positionId, isEmpty);
+      expect(result.verified, isTrue);
+      expect(
+        result.values.single.positionId,
+        'unassigned-trade:ambiguous-fill',
+      );
       expect(result.warning, contains('ambiguous-fill'));
+
+      final projection = TradingPnlProjection.reconcile(
+        currency: 'USDT',
+        asOf: occurredAt.add(const Duration(seconds: 1)),
+        unrealizedByPosition: const {
+          'current-open-xrp': ExchangeUnrealizedPnl(
+            positionId: 'current-open-xrp',
+            symbol: 'XRPUSDT',
+            value: 0,
+          ),
+        },
+        fills: result.values,
+        settlements: const [],
+        sourceVerified: result.verified,
+      );
+      expect(projection.isVerified, isFalse);
+      expect(projection.isReadyForRiskGates, isFalse);
+      expect(
+        projection.forPositionId('unassigned-trade:ambiguous-fill')?.isVerified,
+        isFalse,
+      );
     },
   );
 }
