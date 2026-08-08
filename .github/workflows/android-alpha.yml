@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  PREVIEW_CERT_SHA256: b90fc29c804534987316d5fda134de2940243715338fc79a561791f1a9593c72
+  PREVIEW_CERT_SHA256: c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984
 
 concurrency:
   group: android-alpha-${{ github.ref }}
