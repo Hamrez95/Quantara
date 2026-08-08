@@ -1,0 +1,77 @@
+name: Final signed Android smoke
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - '.github/workflows/temporary-final-signed-smoke.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  SOURCE_RUN_ID: '31249144853'
+  FINAL_ARTIFACT: quantara-final-persistent-preview
+
+jobs:
+  android-launch:
+    name: Persistent signed Android ${{ matrix.api-level }} cold-start
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [34, 35, 36]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download exact signed candidate from source run
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.FINAL_ARTIFACT }}
+          path: apk
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Resolve exact APK path
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_path="$(find apk -type f -path '*/build/app/outputs/flutter-apk/app-release.apk' -print -quit)"
+          test -n "$apk_path"
+          test -f "$apk_path"
+          echo "FINAL_APK_PATH=$apk_path" >> "$GITHUB_ENV"
+          sha256sum "$apk_path"
+
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot emulator and verify exact signed cold start
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
+          script: bash scripts/android-cold-start-smoke.sh "$FINAL_APK_PATH"
+
+      - name: Upload launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persistent-signed-android-api-${{ matrix.api-level }}-launch-diagnostics
+          path: |
+            android-start.txt
+            android-pid.txt
+            android-pid-after-settle.txt
+            android-logcat.txt
+            android-jobscheduler.txt
+          if-no-files-found: ignore
+          retention-days: 14
