@@ -17,30 +17,6 @@ val quantaraKeystorePassword = System.getenv("QUANTARA_ANDROID_KEYSTORE_PASSWORD
 val quantaraKeyAlias = System.getenv("QUANTARA_ANDROID_KEY_ALIAS")
 val quantaraKeyPassword = System.getenv("QUANTARA_ANDROID_KEY_PASSWORD")
 
-fun org.gradle.api.NamedDomainObjectContainer<com.android.build.api.dsl.ApplicationSigningConfig>.createQuantaraSigningConfig(
-    name: String,
-    releaseLabel: String,
-) {
-    create(name) {
-        require(!quantaraKeystorePath.isNullOrBlank()) {
-            "QUANTARA_ANDROID_KEYSTORE_PATH is required for a $releaseLabel build."
-        }
-        require(!quantaraKeystorePassword.isNullOrBlank()) {
-            "QUANTARA_ANDROID_KEYSTORE_PASSWORD is required for a $releaseLabel build."
-        }
-        require(!quantaraKeyAlias.isNullOrBlank()) {
-            "QUANTARA_ANDROID_KEY_ALIAS is required for a $releaseLabel build."
-        }
-        require(!quantaraKeyPassword.isNullOrBlank()) {
-            "QUANTARA_ANDROID_KEY_PASSWORD is required for a $releaseLabel build."
-        }
-        storeFile = file(quantaraKeystorePath!!)
-        storePassword = quantaraKeystorePassword
-        keyAlias = quantaraKeyAlias
-        keyPassword = quantaraKeyPassword
-    }
-}
-
 android {
     namespace = "com.quantara.quantara_app"
     compileSdk = flutter.compileSdkVersion
@@ -62,10 +38,44 @@ android {
 
     signingConfigs {
         if (quantaraStableRelease) {
-            createQuantaraSigningConfig("quantaraStable", "Stable")
+            create("quantaraStable") {
+                require(!quantaraKeystorePath.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PATH is required for a Stable build."
+                }
+                require(!quantaraKeystorePassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PASSWORD is required for a Stable build."
+                }
+                require(!quantaraKeyAlias.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_ALIAS is required for a Stable build."
+                }
+                require(!quantaraKeyPassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_PASSWORD is required for a Stable build."
+                }
+                storeFile = file(quantaraKeystorePath!!)
+                storePassword = quantaraKeystorePassword
+                keyAlias = quantaraKeyAlias
+                keyPassword = quantaraKeyPassword
+            }
         }
         if (quantaraPreviewRelease) {
-            createQuantaraSigningConfig("quantaraPreview", "Preview")
+            create("quantaraPreview") {
+                require(!quantaraKeystorePath.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PATH is required for a Preview build."
+                }
+                require(!quantaraKeystorePassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PASSWORD is required for a Preview build."
+                }
+                require(!quantaraKeyAlias.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_ALIAS is required for a Preview build."
+                }
+                require(!quantaraKeyPassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_PASSWORD is required for a Preview build."
+                }
+                storeFile = file(quantaraKeystorePath!!)
+                storePassword = quantaraKeystorePassword
+                keyAlias = quantaraKeyAlias
+                keyPassword = quantaraKeyPassword
+            }
         }
     }
 
