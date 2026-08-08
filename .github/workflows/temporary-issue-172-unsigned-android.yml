@@ -35,25 +35,26 @@ jobs:
           from pathlib import Path
           p = Path('src/client/quantara_app/android/app/build.gradle.kts')
           s = p.read_text()
-          old = '''                else -> {
-                    throw GradleException(
-                        "Release APK signing is fail-closed. Set QUANTARA_PREVIEW_RELEASE=true " +
-                            "with the owner-controlled Preview keystore, or QUANTARA_STABLE_RELEASE=true " +
-                            "with the Stable keystore. Runner-local debug signing is forbidden."
-                    )
-                }
-          '''
-          new = '''                else -> {
-                    // One-shot CI transport only. This patch exists only in the runner
-                    // checkout so the owner-controlled key can stay completely offline.
-                    applicationIdSuffix = ".alpha"
-                    versionNameSuffix = "-preview"
-                    signingConfig = null
-                }
-          '''
-          if old not in s:
-              raise SystemExit('fail-closed release block not found')
-          p.write_text(s.replace(old, new, 1))
+          marker = "                else -> {\n                    throw GradleException("
+          start = s.find(marker)
+          if start < 0:
+              raise SystemExit('fail-closed release marker not found')
+          end_marker = "\n                }\n"
+          end = s.find(end_marker, start)
+          if end < 0:
+              raise SystemExit('fail-closed release block end not found')
+          end += len(end_marker)
+          i16 = ' ' * 16
+          i20 = ' ' * 20
+          replacement = (
+              f'{i16}else -> {{\n'
+              f'{i20}// One-shot CI transport only; never committed to product code.\n'
+              f'{i20}applicationIdSuffix = ".alpha"\n'
+              f'{i20}versionNameSuffix = "-preview"\n'
+              f'{i20}signingConfig = null\n'
+              f'{i16}}}\n'
+          )
+          p.write_text(s[:start] + replacement + s[end:])
           PY
           git diff --check
           grep -Fq 'signingConfig = null' src/client/quantara_app/android/app/build.gradle.kts
