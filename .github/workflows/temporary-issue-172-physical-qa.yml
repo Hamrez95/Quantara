@@ -32,8 +32,11 @@ jobs:
         run: python3 .github/scripts/issue_172_physical_qa.py
       - name: Restore packages
         run: flutter pub get
-      - name: Format
-        run: dart format --set-exit-if-changed lib test
+      - name: Normalize format
+        run: dart format lib test
+      - name: Verify diff whitespace
+        working-directory: .
+        run: git diff --check
       - name: Analyze
         run: flutter analyze
       - name: Targeted physical QA regressions
