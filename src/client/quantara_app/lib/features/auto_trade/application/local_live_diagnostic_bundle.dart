@@ -71,20 +71,29 @@ abstract final class LocalLiveDiagnosticBundle {
 
   static bool _sensitiveKey(String key) {
     final normalized = key.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    return const {
-      'apikey',
-      'apisecret',
-      'secretkey',
+    const exact = {
       'secret',
       'authorization',
       'password',
+      'credentials',
+      'credential',
+      'signature',
+    };
+    if (exact.contains(normalized)) return true;
+    const sensitiveSuffixes = {
+      'apikey',
+      'apisecret',
+      'secretkey',
+      'password',
       'accesstoken',
       'refreshtoken',
+      'sessiontoken',
       'credentials',
       'credential',
       'privatekey',
       'signature',
-    }.contains(normalized);
+    };
+    return sensitiveSuffixes.any(normalized.endsWith);
   }
 
   static String _sanitizeString(String input, Set<String> secrets) {
@@ -106,7 +115,7 @@ abstract final class LocalLiveDiagnosticBundle {
     );
     result = result.replaceAll(
       RegExp(
-        r'(api\s*[_-]?\s*key|api\s*[_-]?\s*secret|secret\s*[_-]?\s*key|authorization|password|access\s*[_-]?\s*token|refresh\s*[_-]?\s*token)\s*[:=]\s*(?:bearer\s+|basic\s+)?[^\s,;]+',
+        r'(api\s*[_-]?\s*key|api\s*[_-]?\s*secret|secret\s*[_-]?\s*key|authorization|password|access\s*[_-]?\s*token|refresh\s*[_-]?\s*token|session\s*[_-]?\s*token|private\s*[_-]?\s*key|request\s*[_-]?\s*signature|signature)\s*[:=]\s*(?:bearer\s+|basic\s+)?[^\s,;]+',
         caseSensitive: false,
       ),
       '[REDACTED_CREDENTIAL]',

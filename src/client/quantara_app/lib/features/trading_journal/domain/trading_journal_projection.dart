@@ -325,14 +325,16 @@ abstract final class TradingJournalProjector {
     required bool hasClose,
     required TradingJournalCounterfactualOutcome? counterfactual,
   }) {
-    if (ledger.integrity == TradingJournalIntegrity.unverified ||
-        timeline.any(
-          (item) => item.quality == TradingJournalFactQuality.unverified,
-        )) {
+    if (timeline.any(
+      (item) => item.quality == TradingJournalFactQuality.unverified,
+    )) {
       return TradingJournalTradeState.unverified;
     }
     if (hasClose) return TradingJournalTradeState.closed;
     if (hasEntry) return TradingJournalTradeState.open;
+    if (ledger.integrity == TradingJournalIntegrity.unverified) {
+      return TradingJournalTradeState.unverified;
+    }
     if (plan.source == TradingJournalSource.paper) {
       return TradingJournalTradeState.simulated;
     }

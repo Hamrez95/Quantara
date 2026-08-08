@@ -21,9 +21,7 @@ abstract final class TradingJournalExchangeBackfill {
     required Set<String> openPositionIds,
     required DateTime recordedAt,
   }) {
-    if (ledger.integrity == TradingJournalIntegrity.unverified ||
-        !pnlProjection.fillsAvailable ||
-        !pnlProjection.settlementsAvailable) {
+    if (!pnlProjection.fillsAvailable || !pnlProjection.settlementsAvailable) {
       return TradingJournalExchangeBackfillResult(
         ledger: ledger,
         closedTradeIds: const [],
@@ -55,8 +53,13 @@ abstract final class TradingJournalExchangeBackfill {
       final position = pnlProjection.forPositionId(positionId);
       if (!_isVerifiedClosedPosition(position, plan)) continue;
 
-      final exits = [...position!.exitFills]
-        ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
+      final exits =
+          position!.fills
+              .where((fill) => _isExitFill(plan, fill))
+              .toList(growable: false)
+            ..sort(
+              (left, right) => left.occurredAt.compareTo(right.occurredAt),
+            );
       final latest = exits.last;
       final totalQuantity = exits.fold<double>(
         0,
@@ -116,11 +119,12 @@ abstract final class TradingJournalExchangeBackfill {
       );
       final appended = next.appendEvent(event);
       if (appended.generation == next.generation) continue;
-      if (appended.integrity == TradingJournalIntegrity.unverified) {
-        return TradingJournalExchangeBackfillResult(
-          ledger: ledger,
-          closedTradeIds: const [],
-        );
+      final introducedWarning = appended.warnings.length > next.warnings.length;
+      final introducedUnverified =
+          next.integrity != TradingJournalIntegrity.unverified &&
+          appended.integrity == TradingJournalIntegrity.unverified;
+      if (introducedWarning || introducedUnverified) {
+        continue;
       }
       next = appended;
       closedTradeIds.add(plan.journalTradeId);
@@ -139,7 +143,6 @@ abstract final class TradingJournalExchangeBackfill {
     if (position == null ||
         !position.isVerified ||
         position.settlement == null ||
-        position.exitFills.isEmpty ||
         !position.realizedGross.isFinal ||
         !position.fees.isFinal ||
         !position.funding.isFinal) {
@@ -153,9 +156,12 @@ abstract final class TradingJournalExchangeBackfill {
         plan.symbol.trim().toUpperCase()) {
       return false;
     }
-    return position.exitFills.every(
+    final exits = position.fills
+        .where((fill) => _isExitFill(plan, fill))
+        .toList(growable: false);
+    if (exits.isEmpty) return false;
+    return exits.every(
       (fill) =>
-          fill.reduceOnly &&
           fill.positionId.trim() == position.positionId.trim() &&
           fill.tradeId.trim().isNotEmpty &&
           fill.quantity.isFinite &&
@@ -163,6 +169,16 @@ abstract final class TradingJournalExchangeBackfill {
           fill.price.isFinite &&
           fill.price > 0,
     );
+  }
+
+  static bool _isExitFill(TradingJournalPlan plan, ExchangePnlFill fill) {
+    if (fill.reduceOnly) return true;
+    final side = fill.side.trim().toUpperCase();
+    return switch (plan.direction) {
+      TradingJournalDirection.long => side == 'SELL',
+      TradingJournalDirection.short => side == 'BUY',
+      TradingJournalDirection.wait => false,
+    };
   }
 
   static double _economicDelta({

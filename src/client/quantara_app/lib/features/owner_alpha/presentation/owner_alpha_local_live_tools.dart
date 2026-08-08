@@ -663,7 +663,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
     try {
       final snapshot = widget.accountController.snapshot;
       final reconciliation = widget.accountController.reconciliation;
-      final journalLedger = await SharedPreferencesTradingJournalStore().load();
+      final journalLedger = await DatabaseTradingJournalStore().load();
       final persisted = <String, Object?>{
         'configuration': await _storedJson(localLiveConfigurationKey),
         'status': await _storedJson(localLiveStatusKey),
