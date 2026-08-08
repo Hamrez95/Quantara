@@ -315,6 +315,23 @@ final class TradingJournalEvent {
         type == other.type &&
         (type == TradingJournalEventType.stopConfirmed ||
             type == TradingJournalEventType.takeProfitConfirmed);
+    final replayableExchangeClosureObservation =
+        type == TradingJournalEventType.positionClosed &&
+        other.type == TradingJournalEventType.positionClosed &&
+        exchangeEventId != null &&
+        exchangeEventId!.startsWith('exchange-close-observed:') &&
+        exchangeEventId == other.exchangeEventId &&
+        journalTradeId == other.journalTradeId &&
+        source == other.source &&
+        quality == other.quality &&
+        scope == other.scope &&
+        currency == other.currency &&
+        positionId == other.positionId &&
+        remainingQuantity == 0 &&
+        other.remainingQuantity == 0 &&
+        details['economicsPending'] == true &&
+        other.details['economicsPending'] == true;
+    if (replayableExchangeClosureObservation) return true;
     return journalTradeId == other.journalTradeId &&
         type == other.type &&
         (replayableProtectionConfirmation ||

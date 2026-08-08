@@ -135,12 +135,21 @@ abstract final class TradingJournalProjector {
         : partialEntries.isEmpty
         ? null
         : partialEntries.first;
-    final closed = timeline.where(
-      (item) =>
-          item.type == TradingJournalEventType.positionClosed ||
-          item.type == TradingJournalEventType.liquidation,
-    );
-    final close = closed.isEmpty ? null : closed.last;
+    final closed = timeline
+        .where(
+          (item) =>
+              item.type == TradingJournalEventType.positionClosed ||
+              item.type == TradingJournalEventType.liquidation,
+        )
+        .toList(growable: false);
+    final authoritativeClosed = closed
+        .where((item) => item.details['economicsPending'] != true)
+        .toList(growable: false);
+    final close = authoritativeClosed.isNotEmpty
+        ? authoritativeClosed.last
+        : closed.isEmpty
+        ? null
+        : closed.last;
 
     final grossValues = timeline
         .map((item) => item.grossPnl)
