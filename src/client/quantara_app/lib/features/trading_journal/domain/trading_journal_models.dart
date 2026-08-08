@@ -124,6 +124,7 @@ final class TradingJournalPlan {
     this.entryOrderId,
     this.clientId,
     this.notes,
+    this.indicatorSnapshot = const {},
   });
 
   final String journalTradeId;
@@ -162,6 +163,7 @@ final class TradingJournalPlan {
   final String? entryOrderId;
   final String? clientId;
   final String? notes;
+  final Map<String, double> indicatorSnapshot;
 
   Map<String, Object?> toJson() => {
     'journalTradeId': journalTradeId,
@@ -200,6 +202,7 @@ final class TradingJournalPlan {
     'entryOrderId': entryOrderId,
     'clientId': clientId,
     'notes': notes,
+    'indicatorSnapshot': indicatorSnapshot,
   };
 
   factory TradingJournalPlan.fromJson(Map<String, Object?> json) =>
@@ -250,6 +253,7 @@ final class TradingJournalPlan {
         entryOrderId: _nullableString(json['entryOrderId']),
         clientId: _nullableString(json['clientId']),
         notes: _nullableString(json['notes']),
+        indicatorSnapshot: _doubleMap(json['indicatorSnapshot']),
       );
 }
 
@@ -310,26 +314,49 @@ final class TradingJournalEvent {
     return 'event:$eventId';
   }
 
-  bool sameEconomicEvent(TradingJournalEvent other) =>
-      journalTradeId == other.journalTradeId &&
-      type == other.type &&
-      occurredAt.toUtc() == other.occurredAt.toUtc() &&
-      source == other.source &&
-      quality == other.quality &&
-      scope == other.scope &&
-      currency == other.currency &&
-      exchangeEventId == other.exchangeEventId &&
-      positionId == other.positionId &&
-      orderId == other.orderId &&
-      clientId == other.clientId &&
-      tradeId == other.tradeId &&
-      quantity == other.quantity &&
-      price == other.price &&
-      grossPnl == other.grossPnl &&
-      fee == other.fee &&
-      funding == other.funding &&
-      remainingQuantity == other.remainingQuantity &&
-      _deepEquals(details, other.details);
+  bool sameEconomicEvent(TradingJournalEvent other) {
+    final replayableProtectionConfirmation =
+        type == other.type &&
+        (type == TradingJournalEventType.stopConfirmed ||
+            type == TradingJournalEventType.takeProfitConfirmed);
+    final replayableExchangeClosureObservation =
+        type == TradingJournalEventType.positionClosed &&
+        other.type == TradingJournalEventType.positionClosed &&
+        exchangeEventId != null &&
+        exchangeEventId!.startsWith('exchange-close-observed:') &&
+        exchangeEventId == other.exchangeEventId &&
+        journalTradeId == other.journalTradeId &&
+        source == other.source &&
+        quality == other.quality &&
+        scope == other.scope &&
+        currency == other.currency &&
+        positionId == other.positionId &&
+        remainingQuantity == 0 &&
+        other.remainingQuantity == 0 &&
+        details['economicsPending'] == true &&
+        other.details['economicsPending'] == true;
+    if (replayableExchangeClosureObservation) return true;
+    return journalTradeId == other.journalTradeId &&
+        type == other.type &&
+        (replayableProtectionConfirmation ||
+            occurredAt.toUtc() == other.occurredAt.toUtc()) &&
+        source == other.source &&
+        quality == other.quality &&
+        scope == other.scope &&
+        currency == other.currency &&
+        exchangeEventId == other.exchangeEventId &&
+        positionId == other.positionId &&
+        orderId == other.orderId &&
+        clientId == other.clientId &&
+        tradeId == other.tradeId &&
+        quantity == other.quantity &&
+        price == other.price &&
+        grossPnl == other.grossPnl &&
+        fee == other.fee &&
+        funding == other.funding &&
+        remainingQuantity == other.remainingQuantity &&
+        _deepEquals(details, other.details);
+  }
 
   TradingJournalEvent copyWith({String? eventId}) => TradingJournalEvent(
     eventId: eventId ?? this.eventId,
@@ -484,6 +511,45 @@ final class TradingJournalLedger {
     );
   }
 
+  TradingJournalLedger repairKnownProtectionReplayConflicts() {
+    if (warnings.isEmpty) return this;
+    final remainingWarnings = <String>[];
+    var repaired = false;
+    const prefix = 'Conflicting journal event identity ';
+    for (final warning in warnings) {
+      if (!warning.startsWith(prefix)) {
+        remainingWarnings.add(warning);
+        continue;
+      }
+      var identity = warning.substring(prefix.length).trim();
+      if (identity.endsWith('.')) {
+        identity = identity.substring(0, identity.length - 1);
+      }
+      final protectionIdentity =
+          identity.startsWith('exchange:tp-order:') ||
+          identity.startsWith('exchange:stop-order:');
+      final matching = events.where(
+        (event) =>
+            event.economicIdentity == identity &&
+            (event.type == TradingJournalEventType.takeProfitConfirmed ||
+                event.type == TradingJournalEventType.stopConfirmed),
+      );
+      if (protectionIdentity && matching.length == 1) {
+        repaired = true;
+      } else {
+        remainingWarnings.add(warning);
+      }
+    }
+    if (!repaired) return this;
+    return _copy(
+      generation: generation + 1,
+      integrity: remainingWarnings.isEmpty
+          ? TradingJournalIntegrity.verified
+          : TradingJournalIntegrity.unverified,
+      warnings: remainingWarnings,
+    );
+  }
+
   TradingJournalLedger withRecoveryWarning(String warning) => _copy(
     integrity: integrity == TradingJournalIntegrity.unverified
         ? integrity
@@ -522,23 +588,25 @@ final class TradingJournalLedger {
     'warnings': warnings,
   };
 
-  factory TradingJournalLedger.fromJson(Map<String, Object?> json) =>
-      TradingJournalLedger._(
-        schemaVersion: _int(json['schemaVersion'], fallback: 1),
-        generation: _int(json['generation']),
-        plans: List.unmodifiable(
-          _mapList(json['plans']).map(TradingJournalPlan.fromJson),
-        ),
-        events: List.unmodifiable(
-          _mapList(json['events']).map(TradingJournalEvent.fromJson),
-        ),
-        integrity: _enumValue(
-          TradingJournalIntegrity.values,
-          json['integrity'],
-          TradingJournalIntegrity.unverified,
-        ),
-        warnings: List.unmodifiable(_stringList(json['warnings'])),
-      );
+  factory TradingJournalLedger.fromJson(Map<String, Object?> json) {
+    final ledger = TradingJournalLedger._(
+      schemaVersion: _int(json['schemaVersion'], fallback: 1),
+      generation: _int(json['generation']),
+      plans: List.unmodifiable(
+        _mapList(json['plans']).map(TradingJournalPlan.fromJson),
+      ),
+      events: List.unmodifiable(
+        _mapList(json['events']).map(TradingJournalEvent.fromJson),
+      ),
+      integrity: _enumValue(
+        TradingJournalIntegrity.values,
+        json['integrity'],
+        TradingJournalIntegrity.unverified,
+      ),
+      warnings: List.unmodifiable(_stringList(json['warnings'])),
+    );
+    return ledger.repairKnownProtectionReplayConflicts();
+  }
 }
 
 final class TradingJournalCounterfactualOutcome {
@@ -618,6 +686,16 @@ List<double> _doubleList(Object? value) => value is List<Object?>
 List<String> _stringList(Object? value) => value is List<Object?>
     ? value.map((item) => item.toString()).toList(growable: false)
     : const [];
+
+Map<String, double> _doubleMap(Object? value) {
+  if (value is! Map<Object?, Object?>) return const {};
+  final result = <String, double>{};
+  for (final entry in value.entries) {
+    final parsed = _nullableDouble(entry.value);
+    if (parsed != null) result[entry.key.toString()] = parsed;
+  }
+  return Map.unmodifiable(result);
+}
 
 Map<String, Object?> _objectMap(Object? value) {
   if (value is Map<String, Object?>) return Map.unmodifiable(value);

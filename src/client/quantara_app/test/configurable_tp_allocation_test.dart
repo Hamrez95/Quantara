@@ -43,7 +43,33 @@ void main() {
     expect(restored.targetAllocation.fractions, const [0.70, 0.20, 0.10]);
   });
 
-  test('invalid totals and non-positive tranches fail before arming', () {
+  test('one and two active targets survive configuration JSON round-trip', () {
+    final oneTarget = ProfitProtectionTargetAllocation.checked(
+      tp1Fraction: 1,
+      tp2Fraction: 0,
+      tp3Fraction: 0,
+    );
+    final twoTargets = ProfitProtectionTargetAllocation.checked(
+      tp1Fraction: 0.80,
+      tp2Fraction: 0.20,
+      tp3Fraction: 0,
+    );
+
+    expect(
+      LocalLiveTradeConfiguration.fromJson(
+        configuration(targetAllocation: oneTarget).toJson(),
+      ).targetAllocation,
+      oneTarget,
+    );
+    expect(
+      LocalLiveTradeConfiguration.fromJson(
+        configuration(targetAllocation: twoTargets).toJson(),
+      ).targetAllocation,
+      twoTargets,
+    );
+  });
+
+  test('invalid totals, zero TP1 and target gaps fail before arming', () {
     expect(
       () => ProfitProtectionTargetAllocation.checked(
         tp1Fraction: 0.70,
@@ -54,9 +80,25 @@ void main() {
     );
     expect(
       () => ProfitProtectionTargetAllocation.checked(
+        tp1Fraction: 0,
+        tp2Fraction: 0.80,
+        tp3Fraction: 0.20,
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => ProfitProtectionTargetAllocation.checked(
         tp1Fraction: 0.80,
-        tp2Fraction: 0.20,
-        tp3Fraction: 0,
+        tp2Fraction: 0,
+        tp3Fraction: 0.20,
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => ProfitProtectionTargetAllocation.checked(
+        tp1Fraction: 0.80,
+        tp2Fraction: -0.05,
+        tp3Fraction: 0.25,
       ),
       throwsFormatException,
     );
@@ -98,28 +140,23 @@ void main() {
       positionId: 'position-xrp',
       entryOrderId: 'entry-order',
       clientId: 'q-local-xrp',
-      initialQuantity: 21.4,
-      entryPrice: 1.0665,
-      originalStopLoss: 1.0691,
-      targets: const [1.0603, 1.0567, 1.0531],
+      openedAt: DateTime.utc(2026, 8, 4),
+      entryPrice: 1.01,
+      initialQuantity: 100,
+      originalStopLoss: 1.02,
+      targets: const [1.00, 0.99, 0.98],
       leverage: 10,
-      openedAt: DateTime.utc(2026, 8, 3, 11, 57),
+      targetQuantities: const [70, 20, 10],
+      targetOrderIds: const ['tp1', 'tp2', 'tp3'],
       targetAllocation: ProfitProtectionTargetAllocation.checked(
-        tp1Fraction: 0.65,
+        tp1Fraction: 0.70,
         tp2Fraction: 0.20,
-        tp3Fraction: 0.15,
+        tp3Fraction: 0.10,
       ),
-      targetQuantities: const [14.0, 4.2, 3.2],
-      targetOrderIds: const ['tp1-order', 'tp2-order', 'tp3-order'],
+      stopOrderId: 'stop',
     );
 
     final restored = LocalLiveManagedPosition.fromJson(managed.toJson());
-    expect(restored.targetAllocation.fractions, const [0.65, 0.20, 0.15]);
-    expect(restored.targetQuantities, const [14.0, 4.2, 3.2]);
-    expect(restored.targetOrderIds, const [
-      'tp1-order',
-      'tp2-order',
-      'tp3-order',
-    ]);
+    expect(restored.targetAllocation.fractions, const [0.70, 0.20, 0.10]);
   });
 }

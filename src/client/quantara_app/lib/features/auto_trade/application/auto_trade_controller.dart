@@ -118,21 +118,32 @@ final class AutoTradeController extends ChangeNotifier {
     DateTime? exchangeSyncedAt,
   }) async {
     if (_disposed) return false;
-    final effectiveObservedAt = exchangeSyncedAt ?? observedAt;
+    final effectiveObservedAt = (exchangeSyncedAt ?? observedAt).toUtc();
+    final currentSnapshot = _reconciliation.snapshot;
+    final newerOrEqualObservation =
+        currentSnapshot != null &&
+        !effectiveObservedAt.isBefore(currentSnapshot.syncedAt.toUtc());
+    final countMismatch =
+        currentSnapshot != null &&
+        currentSnapshot.positions.length != openPositionCount;
+
+    if (newerOrEqualObservation && countMismatch) {
+      await reconcile(
+        reason: PrivateAccountRefreshReason.localLiveEvent,
+        force: true,
+      );
+      if (_disposed) return false;
+    }
+
     final previousHealth = _reconciliation.health;
     _reconciliation = _reconciliation.observeLocalLiveOpenPositions(
       openPositionCount: openPositionCount,
       observedAt: effectiveObservedAt,
     );
-    final becameDivergent =
-        _reconciliation.health == PrivateAccountReconciliationHealth.divergent;
-    if (becameDivergent || previousHealth != _reconciliation.health) {
+    if (previousHealth != _reconciliation.health) {
       notifyListeners();
     }
-    return reconcile(
-      reason: PrivateAccountRefreshReason.localLiveEvent,
-      force: becameDivergent,
-    );
+    return !_reconciliation.blocksNewEntries;
   }
 
   Future<void> disconnect() async {

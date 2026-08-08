@@ -87,6 +87,7 @@ void main() {
     expect(idea.stopLoss, lessThan(idea.entryLower!));
     expect(idea.targets.first, greaterThan(idea.entryUpper!));
     expect(idea.maximumLoss, closeTo(100, 0.001));
+    _expectDecisionIndicatorSnapshot(idea);
   });
 
   test('trend pullback promotes an aligned no-lookahead setup', () {
@@ -160,5 +161,39 @@ void main() {
     expect(idea.stopLoss, lessThan(idea.entryLower!));
     expect(idea.targets, hasLength(3));
     expect(idea.candleClosedAt, closedAt);
+    _expectDecisionIndicatorSnapshot(idea);
   });
+}
+
+void _expectDecisionIndicatorSnapshot(TradeIdea idea) {
+  expect(idea.indicatorSnapshot, hasLength(23));
+  for (final key in const [
+    'ema20',
+    'ema50',
+    'ema200',
+    'ema20SlopeAtr',
+    'ema50SlopeAtr',
+    'atr14',
+    'atrPercent',
+    'atrExpansionRatio',
+    'rsi14',
+    'adx14',
+    'plusDi14',
+    'minusDi14',
+    'relativeVolume20',
+    'volumeZScore20',
+    'previousDonchianHigh20',
+    'previousDonchianLow20',
+    'bollingerMiddle20',
+    'bollingerUpper20',
+    'bollingerLower20',
+    'bollingerBandwidthPercent',
+    'trendEfficiency20',
+    'recentSwingHigh',
+    'recentSwingLow',
+  ]) {
+    final value = idea.indicatorSnapshot[key];
+    expect(value, isNotNull, reason: 'missing $key');
+    expect(value!.isFinite, isTrue, reason: '$key must be finite');
+  }
 }

@@ -202,6 +202,7 @@ abstract final class ProfessionalStrategyEngine {
       riskPercent: riskPercent,
       strategy: strategy,
       context: effectiveContext,
+      indicators: indicators,
       fa: fa,
       externalContextAvailable:
           effectiveContext.externalContextState == ExternalContextState.fresh,
@@ -516,6 +517,7 @@ abstract final class ProfessionalStrategyEngine {
     required double riskPercent,
     required AnalysisStrategy strategy,
     required ProfessionalStrategyContext context,
+    required TechnicalIndicatorSnapshot indicators,
     required bool fa,
     required bool externalContextAvailable,
   }) {
@@ -644,8 +646,37 @@ abstract final class ProfessionalStrategyEngine {
       strategy: strategy,
       strategyVersion: '${kind.name}/1.0',
       marketRegime: setup.regime,
+      indicatorSnapshot: _indicatorSnapshot(indicators),
     );
   }
+
+  static Map<String, double> _indicatorSnapshot(
+    TechnicalIndicatorSnapshot value,
+  ) => Map.unmodifiable({
+    'ema20': value.ema20,
+    'ema50': value.ema50,
+    'ema200': value.ema200,
+    'ema20SlopeAtr': value.ema20SlopeAtr,
+    'ema50SlopeAtr': value.ema50SlopeAtr,
+    'atr14': value.atr14,
+    'atrPercent': value.atrPercent,
+    'atrExpansionRatio': value.atrExpansionRatio,
+    'rsi14': value.rsi14,
+    'adx14': value.adx14,
+    'plusDi14': value.plusDi14,
+    'minusDi14': value.minusDi14,
+    'relativeVolume20': value.relativeVolume20,
+    'volumeZScore20': value.volumeZScore20,
+    'previousDonchianHigh20': value.previousDonchianHigh20,
+    'previousDonchianLow20': value.previousDonchianLow20,
+    'bollingerMiddle20': value.bollingerMiddle20,
+    'bollingerUpper20': value.bollingerUpper20,
+    'bollingerLower20': value.bollingerLower20,
+    'bollingerBandwidthPercent': value.bollingerBandwidthPercent,
+    'trendEfficiency20': value.trendEfficiency20,
+    'recentSwingHigh': value.recentSwingHigh,
+    'recentSwingLow': value.recentSwingLow,
+  });
 
   static TradeIdea _wait({
     required TimeframeChartAnalysis analysis,

@@ -6,6 +6,12 @@ plugins {
 
 val quantaraStableRelease =
     (System.getenv("QUANTARA_STABLE_RELEASE") ?: "false").equals("true", ignoreCase = true)
+val quantaraPreviewRelease =
+    (System.getenv("QUANTARA_PREVIEW_RELEASE") ?: "false").equals("true", ignoreCase = true)
+require(!(quantaraStableRelease && quantaraPreviewRelease)) {
+    "A build cannot be both Stable and Preview."
+}
+
 val quantaraKeystorePath = System.getenv("QUANTARA_ANDROID_KEYSTORE_PATH")
 val quantaraKeystorePassword = System.getenv("QUANTARA_ANDROID_KEYSTORE_PASSWORD")
 val quantaraKeyAlias = System.getenv("QUANTARA_ANDROID_KEY_ALIAS")
@@ -51,17 +57,46 @@ android {
                 keyPassword = quantaraKeyPassword
             }
         }
+        if (quantaraPreviewRelease) {
+            create("quantaraPreview") {
+                require(!quantaraKeystorePath.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PATH is required for a Preview build."
+                }
+                require(!quantaraKeystorePassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEYSTORE_PASSWORD is required for a Preview build."
+                }
+                require(!quantaraKeyAlias.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_ALIAS is required for a Preview build."
+                }
+                require(!quantaraKeyPassword.isNullOrBlank()) {
+                    "QUANTARA_ANDROID_KEY_PASSWORD is required for a Preview build."
+                }
+                storeFile = file(quantaraKeystorePath!!)
+                storePassword = quantaraKeystorePassword
+                keyAlias = quantaraKeyAlias
+                keyPassword = quantaraKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
-            if (quantaraStableRelease) {
-                signingConfig = signingConfigs.getByName("quantaraStable")
-            } else {
-                // Internal preview identity can coexist with Stable and is not update-compatible with it.
-                applicationIdSuffix = ".alpha"
-                versionNameSuffix = "-preview"
-                signingConfig = signingConfigs.getByName("debug")
+            when {
+                quantaraStableRelease -> {
+                    signingConfig = signingConfigs.getByName("quantaraStable")
+                }
+                quantaraPreviewRelease -> {
+                    applicationIdSuffix = ".alpha"
+                    versionNameSuffix = "-preview"
+                    signingConfig = signingConfigs.getByName("quantaraPreview")
+                }
+                else -> {
+                    throw GradleException(
+                        "Release APK signing is fail-closed. Set QUANTARA_PREVIEW_RELEASE=true " +
+                            "with the owner-controlled Preview keystore, or QUANTARA_STABLE_RELEASE=true " +
+                            "with the Stable keystore. Runner-local debug signing is forbidden."
+                    )
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
+import 'local_live_portfolio_admission.dart';
 import 'profit_lock_stop_policy.dart';
 import 'trading_pnl_projection.dart';
 
@@ -26,6 +27,7 @@ final class LocalLiveTradeConfiguration {
     required this.strategy,
     required this.cadence,
     required this.languageCode,
+    this.strategies = const [],
     this.targetAllocation = ProfitProtectionTargetAllocation.standard,
     this.scanIntervalSeconds = 60,
   });
@@ -37,14 +39,22 @@ final class LocalLiveTradeConfiguration {
   final double dailyLossLimitPercent;
   final int maximumConcurrentPositions;
   final AnalysisStrategy strategy;
+  final List<AnalysisStrategy> strategies;
   final SignalCadence cadence;
   final String languageCode;
+
+  List<AnalysisStrategy> get enabledStrategies {
+    final result = <AnalysisStrategy>{...strategies};
+    if (result.isEmpty) result.add(strategy);
+    return List.unmodifiable(result);
+  }
+
   final ProfitProtectionTargetAllocation targetAllocation;
   final int scanIntervalSeconds;
 
   void validate() {
-    if (symbols.isEmpty || symbols.length > 12) {
-      throw const FormatException('Select between 1 and 12 symbols.');
+    if (symbols.isEmpty || symbols.length > 30) {
+      throw const FormatException('Select between 1 and 30 symbols.');
     }
     if (timeframes.isEmpty ||
         timeframes.any(
@@ -67,9 +77,11 @@ final class LocalLiveTradeConfiguration {
         'Daily loss limit must be between 0.25% and 10%.',
       );
     }
-    if (maximumConcurrentPositions != 1) {
+    if (maximumConcurrentPositions < 1 ||
+        maximumConcurrentPositions >
+            LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions) {
       throw const FormatException(
-        'The first local live canary is limited to one concurrent position.',
+        'Local Live supports between one and three concurrent positions.',
       );
     }
     if (scanIntervalSeconds < 30 || scanIntervalSeconds > 300) {
@@ -90,6 +102,7 @@ final class LocalLiveTradeConfiguration {
     'dailyLossLimitPercent': dailyLossLimitPercent,
     'maximumConcurrentPositions': maximumConcurrentPositions,
     'strategy': strategy.name,
+    'strategies': enabledStrategies.map((item) => item.name).toList(),
     'cadence': cadence.name,
     'languageCode': languageCode == 'en' ? 'en' : 'fa',
     'targetAllocation': targetAllocation.toJson(),
@@ -122,6 +135,15 @@ final class LocalLiveTradeConfiguration {
         (item) => item.name == json['strategy'],
         orElse: () => AnalysisStrategy.structureZones,
       ),
+      strategies: (json['strategies'] as List<Object?>? ?? const [])
+          .map(
+            (item) => AnalysisStrategy.values
+                .where((strategy) => strategy.name == item.toString())
+                .firstOrNull,
+          )
+          .whereType<AnalysisStrategy>()
+          .toSet()
+          .toList(growable: false),
       cadence: SignalCadence.values.firstWhere(
         (item) => item.name == json['cadence'],
         orElse: () => SignalCadence.balanced,
@@ -286,6 +308,121 @@ final class LocalLiveManagedPosition {
   }
 }
 
+final class LocalLivePortfolioBudgetStatus {
+  const LocalLivePortfolioBudgetStatus({
+    required this.asOf,
+    required this.riskLimit,
+    required this.riskConsumed,
+    required this.riskAvailable,
+    required this.openRisk,
+    required this.pendingRisk,
+    required this.ambiguousRisk,
+    required this.reservedMargin,
+    required this.spendableMargin,
+    required this.accountFresh,
+    required this.allPositionsProtected,
+    required this.liveExecutionAllowed,
+    required this.blockReason,
+  });
+
+  final DateTime asOf;
+  final double riskLimit;
+  final double riskConsumed;
+  final double riskAvailable;
+  final double openRisk;
+  final double pendingRisk;
+  final double ambiguousRisk;
+  final double reservedMargin;
+  final double spendableMargin;
+  final bool accountFresh;
+  final bool allPositionsProtected;
+  final bool liveExecutionAllowed;
+  final String blockReason;
+
+  Map<String, Object?> toJson() => {
+    'asOf': asOf.toUtc().toIso8601String(),
+    'riskLimit': riskLimit,
+    'riskConsumed': riskConsumed,
+    'riskAvailable': riskAvailable,
+    'openRisk': openRisk,
+    'pendingRisk': pendingRisk,
+    'ambiguousRisk': ambiguousRisk,
+    'reservedMargin': reservedMargin,
+    'spendableMargin': spendableMargin,
+    'accountFresh': accountFresh,
+    'allPositionsProtected': allPositionsProtected,
+    'liveExecutionAllowed': liveExecutionAllowed,
+    'blockReason': blockReason,
+  };
+
+  factory LocalLivePortfolioBudgetStatus.fromJson(Map<String, Object?> json) =>
+      LocalLivePortfolioBudgetStatus(
+        asOf:
+            DateTime.tryParse(json['asOf']?.toString() ?? '')?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        riskLimit: (json['riskLimit'] as num?)?.toDouble() ?? 0,
+        riskConsumed: (json['riskConsumed'] as num?)?.toDouble() ?? 0,
+        riskAvailable: (json['riskAvailable'] as num?)?.toDouble() ?? 0,
+        openRisk: (json['openRisk'] as num?)?.toDouble() ?? 0,
+        pendingRisk: (json['pendingRisk'] as num?)?.toDouble() ?? 0,
+        ambiguousRisk: (json['ambiguousRisk'] as num?)?.toDouble() ?? 0,
+        reservedMargin: (json['reservedMargin'] as num?)?.toDouble() ?? 0,
+        spendableMargin: (json['spendableMargin'] as num?)?.toDouble() ?? 0,
+        accountFresh: json['accountFresh'] == true,
+        allPositionsProtected: json['allPositionsProtected'] == true,
+        liveExecutionAllowed: json['liveExecutionAllowed'] == true,
+        blockReason: json['blockReason']?.toString() ?? 'unknown',
+      );
+}
+
+final class LocalLiveManagedPositionSummary {
+  const LocalLiveManagedPositionSummary({
+    required this.positionId,
+    required this.symbol,
+    required this.timeframe,
+    required this.direction,
+    required this.openedAt,
+  });
+
+  factory LocalLiveManagedPositionSummary.fromManaged(
+    LocalLiveManagedPosition managed,
+  ) => LocalLiveManagedPositionSummary(
+    positionId: managed.positionId,
+    symbol: managed.symbol,
+    timeframe: managed.timeframe,
+    direction: managed.direction,
+    openedAt: managed.openedAt,
+  );
+
+  final String positionId;
+  final String symbol;
+  final String timeframe;
+  final TradeDirection direction;
+  final DateTime openedAt;
+
+  Map<String, Object?> toJson() => {
+    'positionId': positionId,
+    'symbol': symbol,
+    'timeframe': timeframe,
+    'direction': direction.name,
+    'openedAt': openedAt.toUtc().toIso8601String(),
+  };
+
+  factory LocalLiveManagedPositionSummary.fromJson(Map<String, Object?> json) =>
+      LocalLiveManagedPositionSummary(
+        positionId: json['positionId']?.toString() ?? '',
+        symbol: json['symbol']?.toString() ?? '',
+        timeframe: json['timeframe']?.toString() ?? '',
+        direction: TradeDirection.values.firstWhere(
+          (item) => item.name == json['direction'],
+          orElse: () => TradeDirection.wait,
+        ),
+        openedAt:
+            DateTime.tryParse(json['openedAt']?.toString() ?? '')?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      );
+}
+
 final class LocalLiveTradeStatus {
   const LocalLiveTradeStatus({
     required this.state,
@@ -294,9 +431,15 @@ final class LocalLiveTradeStatus {
     this.lastScanAt,
     this.lastSuccessfulExchangeSync,
     this.openPositionCount = 0,
+    this.managedPositionCount = 0,
+    this.managedPositions = const [],
+    this.unmanagedPositionCount = 0,
+    this.unmanagedSymbols = const [],
+    this.entryBlockReason,
     this.closedPositionCount = 0,
     this.realizedPnl,
     this.pnlProjection,
+    this.portfolioBudget,
     this.consecutiveFailures = 0,
     this.entriesEnabled = false,
   });
@@ -306,11 +449,23 @@ final class LocalLiveTradeStatus {
   final String message;
   final DateTime? lastScanAt;
   final DateTime? lastSuccessfulExchangeSync;
+
+  /// Authoritative number of currently open Bitunix positions.
   final int openPositionCount;
+
+  /// Positions whose durable Local Live ownership was verified on this device.
+  final int managedPositionCount;
+  final List<LocalLiveManagedPositionSummary> managedPositions;
+
+  /// Exchange positions that consume slots but are not yet safely recovered.
+  final int unmanagedPositionCount;
+  final List<String> unmanagedSymbols;
+  final String? entryBlockReason;
   final int closedPositionCount;
   @Deprecated('Use pnlProjection metrics with source/scope/asOf metadata.')
   final double? realizedPnl;
   final TradingPnlProjection? pnlProjection;
+  final LocalLivePortfolioBudgetStatus? portfolioBudget;
 
   double? get effectiveSessionNetPnl =>
       pnlProjection?.accountNetRealized.value ?? realizedPnl;
@@ -321,10 +476,14 @@ final class LocalLiveTradeStatus {
       state == LocalLiveTradeState.running ||
       state == LocalLiveTradeState.managingOnly;
 
+  bool get requiresExchangeRecovery => unmanagedPositionCount > 0;
+
   bool get canResumeEntries =>
       state == LocalLiveTradeState.managingOnly &&
       !entriesEnabled &&
-      openPositionCount == 0;
+      entryBlockReason == null &&
+      unmanagedPositionCount == 0 &&
+      managedPositionCount == openPositionCount;
 
   Map<String, Object?> toJson() => {
     'state': state.name,
@@ -335,9 +494,15 @@ final class LocalLiveTradeStatus {
         ?.toUtc()
         .toIso8601String(),
     'openPositionCount': openPositionCount,
+    'managedPositionCount': managedPositionCount,
+    'managedPositions': managedPositions.map((item) => item.toJson()).toList(),
+    'unmanagedPositionCount': unmanagedPositionCount,
+    'unmanagedSymbols': unmanagedSymbols,
+    'entryBlockReason': entryBlockReason,
     'closedPositionCount': closedPositionCount,
     'realizedPnl': realizedPnl,
     'pnlProjection': pnlProjection?.toJson(),
+    'portfolioBudget': portfolioBudget?.toJson(),
     'consecutiveFailures': consecutiveFailures,
     'entriesEnabled': entriesEnabled,
   };
@@ -360,12 +525,46 @@ final class LocalLiveTradeStatus {
       json['lastSuccessfulExchangeSync']?.toString() ?? '',
     )?.toUtc(),
     openPositionCount: (json['openPositionCount'] as num?)?.toInt() ?? 0,
+    managedPositionCount:
+        (json['managedPositionCount'] as num?)?.toInt() ??
+        (json['openPositionCount'] as num?)?.toInt() ??
+        0,
+    managedPositions: List.unmodifiable(
+      (json['managedPositions'] as List<Object?>? ?? const [])
+          .whereType<Map<Object?, Object?>>()
+          .map(
+            (item) => LocalLiveManagedPositionSummary.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            ),
+          ),
+    ),
+    unmanagedPositionCount:
+        (json['unmanagedPositionCount'] as num?)?.toInt() ?? 0,
+    unmanagedSymbols: List.unmodifiable(
+      (json['unmanagedSymbols'] as List<Object?>? ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.trim().isNotEmpty),
+    ),
+    entryBlockReason: json['entryBlockReason']?.toString(),
     closedPositionCount: (json['closedPositionCount'] as num?)?.toInt() ?? 0,
     realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
     pnlProjection: _pnlProjectionFromJson(json['pnlProjection']),
+    portfolioBudget: _portfolioBudgetFromJson(json['portfolioBudget']),
     consecutiveFailures: (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
     entriesEnabled: json['entriesEnabled'] == true,
   );
+}
+
+LocalLivePortfolioBudgetStatus? _portfolioBudgetFromJson(Object? value) {
+  if (value is Map<String, Object?>) {
+    return LocalLivePortfolioBudgetStatus.fromJson(value);
+  }
+  if (value is Map<Object?, Object?>) {
+    return LocalLivePortfolioBudgetStatus.fromJson(
+      value.map((key, item) => MapEntry(key.toString(), item)),
+    );
+  }
+  return null;
 }
 
 TradingPnlProjection? _pnlProjectionFromJson(Object? value) {

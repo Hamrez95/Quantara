@@ -74,6 +74,11 @@ final class LocalLiveTradeController extends ChangeNotifier {
         message:
             'Android is not running the local execution service. Exchange-native SL/TP orders remain authoritative.',
         openPositionCount: _status.openPositionCount,
+        managedPositionCount: _status.managedPositionCount,
+        managedPositions: _status.managedPositions,
+        unmanagedPositionCount: _status.unmanagedPositionCount,
+        unmanagedSymbols: _status.unmanagedSymbols,
+        entryBlockReason: _status.entryBlockReason,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
         pnlProjection: _status.pnlProjection,
@@ -85,7 +90,10 @@ final class LocalLiveTradeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> start(LocalLiveTradeConfiguration configuration) async {
+  Future<bool> start(
+    LocalLiveTradeConfiguration configuration, {
+    bool recoveryOnly = false,
+  }) async {
     if (_busy || _disposed) return false;
     _busy = true;
     _error = null;
@@ -108,15 +116,33 @@ final class LocalLiveTradeController extends ChangeNotifier {
         force: true,
       );
       final account = _accountController.snapshot;
-      if (!reconciled ||
-          account == null ||
-          _accountController.reconciliation.blocksNewEntries) {
+      final reconciliation = _accountController.reconciliation;
+      final completedAt = reconciliation.completedAt;
+      final freshDivergenceForRecovery =
+          recoveryOnly &&
+          account != null &&
+          account.positions.any((position) => position.quantity > 0) &&
+          reconciliation.health ==
+              PrivateAccountReconciliationHealth.divergent &&
+          completedAt != null &&
+          DateTime.now().toUtc().difference(completedAt).abs() <=
+              const Duration(seconds: 20);
+      if (account == null ||
+          (!reconciled && !freshDivergenceForRecovery) ||
+          (!recoveryOnly && reconciliation.blocksNewEntries)) {
         throw const LocalLiveTradeSafeException(
           'New entries are blocked until a fresh, coherent Bitunix private-account reconciliation succeeds.',
         );
       }
+      if (recoveryOnly &&
+          !account.positions.any((position) => position.quantity > 0)) {
+        throw const LocalLiveTradeSafeException(
+          'No open Bitunix position is available for secure recovery.',
+        );
+      }
 
-      final entriesEnabled = ExchangeTruthPhaseOneGate.realEntriesAllowed;
+      final entriesEnabled =
+          ExchangeTruthPhaseOneGate.realEntriesAllowed && !recoveryOnly;
       if (!entriesEnabled && account.positions.isEmpty) {
         throw const LocalLiveTradeSafeException(
           ExchangeTruthPhaseOneGate.reason,
@@ -196,13 +222,32 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'entriesEnabled': entriesEnabled,
         }),
       );
+      final exchangePositions = account.positions
+          .where((position) => position.quantity > 0)
+          .toList(growable: false);
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.starting,
         updatedAt: DateTime.now().toUtc(),
-        message: entriesEnabled
+        message: exchangePositions.isNotEmpty
+            ? recoveryOnly
+                  ? 'Local live service is recovering exchange-position ownership in management-only mode.'
+                  : 'Local live service is verifying exchange-position ownership and protection.'
+            : entriesEnabled
             ? 'Local live service is starting on this device.'
             : 'Local live service is starting in management-only quarantine.',
-        entriesEnabled: entriesEnabled,
+        openPositionCount: exchangePositions.length,
+        managedPositionCount: 0,
+        unmanagedPositionCount: exchangePositions.length,
+        unmanagedSymbols: List.unmodifiable(
+          exchangePositions
+              .map((position) => position.symbol.trim().toUpperCase())
+              .where((symbol) => symbol.isNotEmpty)
+              .toSet(),
+        ),
+        entryBlockReason: exchangePositions.isEmpty
+            ? null
+            : 'exchangeTruthPendingLocalRecovery',
+        entriesEnabled: entriesEnabled && exchangePositions.isEmpty,
       );
       _updateAccountPolling();
       return true;
@@ -266,6 +311,7 @@ final class LocalLiveTradeController extends ChangeNotifier {
             markPrice: markPrice,
             minimumExchangeQuantity: rules.minimumQuantity,
             leverage: leverage,
+            takeProfitTranches: 1,
           );
           if (affordability.affordable) return;
           if (lowestFloor == null ||
@@ -289,8 +335,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
         throw LocalLiveTradeSafeException(
           'Available margin is $available USDT. The smallest exchange/margin '
           'floor among the selected symbols is about $minimum USDT '
-          '($lowestFloorSymbol, including three TP quantities and the safety '
-          'buffer). Shortfall: $shortfall USDT. The actual risk and stop '
+          '($lowestFloorSymbol, including one exchange-valid TP quantity '
+          'and the safety buffer). Shortfall: $shortfall USDT. The actual risk and stop '
           'distance checks may require more capital.',
         );
       }
@@ -341,6 +387,11 @@ final class LocalLiveTradeController extends ChangeNotifier {
             ? 'Local service stopped after emergency close requests.'
             : 'Local service stopped. Existing exchange SL/TP remains active.',
         openPositionCount: _status.openPositionCount,
+        managedPositionCount: _status.managedPositionCount,
+        managedPositions: _status.managedPositions,
+        unmanagedPositionCount: _status.unmanagedPositionCount,
+        unmanagedSymbols: _status.unmanagedSymbols,
+        entryBlockReason: _status.entryBlockReason,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
         pnlProjection: _status.pnlProjection,

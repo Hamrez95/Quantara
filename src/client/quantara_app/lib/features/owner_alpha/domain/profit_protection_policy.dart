@@ -29,11 +29,13 @@ final class ProfitProtectionTargetAllocation {
   List<double> get fractions =>
       List.unmodifiable([tp1Fraction, tp2Fraction, tp3Fraction]);
 
-  double get minimumFraction => [
-    tp1Fraction,
-    tp2Fraction,
-    tp3Fraction,
-  ].reduce((left, right) => left < right ? left : right);
+  List<double> get activeFractions =>
+      List.unmodifiable(fractions.where((value) => value > 0));
+
+  int get activeTargetCount => activeFractions.length;
+
+  double get minimumActiveFraction =>
+      activeFractions.reduce((left, right) => left < right ? left : right);
 
   factory ProfitProtectionTargetAllocation.checked({
     required double tp1Fraction,
@@ -42,10 +44,13 @@ final class ProfitProtectionTargetAllocation {
   }) {
     final values = [tp1Fraction, tp2Fraction, tp3Fraction];
     final total = values.fold<double>(0, (sum, value) => sum + value);
-    if (values.any((value) => !value.isFinite || value <= 0) ||
+    final hasGap = tp2Fraction <= 0 && tp3Fraction > 0;
+    if (values.any((value) => !value.isFinite || value < 0) ||
+        tp1Fraction <= 0 ||
+        hasGap ||
         (total - 1).abs() > 0.000001) {
       throw const FormatException(
-        'TP1, TP2 and TP3 must be positive and total exactly 100%.',
+        'TP1 must be active; TP2 and TP3 may be zero, active targets must be contiguous, and the total must be exactly 100%.',
       );
     }
     return ProfitProtectionTargetAllocation._(
@@ -122,7 +127,7 @@ final class ProfitProtectionPlan {
 
   List<double> get targetFractions => targetAllocation.fractions;
 
-  double get minimumTargetFraction => targetAllocation.minimumFraction;
+  double get minimumTargetFraction => targetAllocation.minimumActiveFraction;
 
   double get tp1RemainingTrigger =>
       (1 - targetAllocation.tp1Fraction + 0.02).clamp(0, 1).toDouble();
@@ -143,10 +148,14 @@ final class ProfitProtectionAllocation {
   const ProfitProtectionAllocation({
     required this.totalQuantity,
     required this.quantities,
+    required this.targetAllocation,
   });
 
   final double totalQuantity;
   final List<double> quantities;
+  final ProfitProtectionTargetAllocation targetAllocation;
+
+  int get activeTargetCount => targetAllocation.activeTargetCount;
 
   List<double> get actualFractions => List.unmodifiable(
     quantities.map(
@@ -162,27 +171,84 @@ final class ProfitProtectionAllocation {
     return value.abs() <= 0.000000001 ? 0 : value;
   }
 
-  bool isValidFor(double minimumQuantity) =>
-      totalQuantity > 0 &&
-      quantities.length == 3 &&
-      quantities.every(
-        (quantity) => quantity.isFinite && quantity >= minimumQuantity,
-      ) &&
-      residualQuantity >= -0.000000001;
+  bool isValidFor(double minimumQuantity) {
+    if (totalQuantity <= 0 ||
+        quantities.length != 3 ||
+        !minimumQuantity.isFinite ||
+        minimumQuantity <= 0 ||
+        residualQuantity < -0.000000001) {
+      return false;
+    }
+    for (var index = 0; index < 3; index++) {
+      final fraction = targetAllocation.fractions[index];
+      final quantity = quantities[index];
+      if (!quantity.isFinite || quantity < 0) return false;
+      if (fraction > 0) {
+        if (quantity < minimumQuantity) return false;
+      } else if (quantity.abs() > 0.000000001) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   static ProfitProtectionAllocation allocate({
     required double totalQuantity,
     required ProfitProtectionPlan plan,
     required double Function(double value) roundDown,
   }) {
-    // Later targets are rounded down first. Only the deterministic exchange
-    // step remainder is assigned to TP1 so the total never exceeds exposure.
-    final tp2 = roundDown(totalQuantity * plan.targetAllocation.tp2Fraction);
-    final tp3 = roundDown(totalQuantity * plan.targetAllocation.tp3Fraction);
+    final tp2 = plan.targetAllocation.tp2Fraction <= 0
+        ? 0.0
+        : roundDown(totalQuantity * plan.targetAllocation.tp2Fraction);
+    final tp3 = plan.targetAllocation.tp3Fraction <= 0
+        ? 0.0
+        : roundDown(totalQuantity * plan.targetAllocation.tp3Fraction);
     final tp1 = roundDown(totalQuantity - tp2 - tp3);
     return ProfitProtectionAllocation(
       totalQuantity: totalQuantity,
       quantities: List.unmodifiable([tp1, tp2, tp3]),
+      targetAllocation: plan.targetAllocation,
+    );
+  }
+
+  static ProfitProtectionAllocation allocateAdaptive({
+    required double totalQuantity,
+    required ProfitProtectionPlan plan,
+    required double minimumQuantity,
+    required double Function(double value) roundDown,
+  }) {
+    var effective = plan.targetAllocation;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final candidate = allocate(
+        totalQuantity: totalQuantity,
+        plan: plan.withTargetAllocation(effective),
+        roundDown: roundDown,
+      );
+      if (candidate.isValidFor(minimumQuantity)) return candidate;
+
+      final values = effective.fractions.toList(growable: false);
+      var collapsed = false;
+      for (var index = 2; index >= 1; index--) {
+        final configured = values[index] > 0;
+        final undersized =
+            configured && candidate.quantities[index] < minimumQuantity;
+        if (!undersized) continue;
+        values[index - 1] += values[index];
+        values[index] = 0;
+        effective = ProfitProtectionTargetAllocation.checked(
+          tp1Fraction: values[0],
+          tp2Fraction: values[1],
+          tp3Fraction: values[2],
+        );
+        collapsed = true;
+        break;
+      }
+      if (!collapsed) return candidate;
+    }
+    return allocate(
+      totalQuantity: totalQuantity,
+      plan: plan.withTargetAllocation(effective),
+      roundDown: roundDown,
     );
   }
 }

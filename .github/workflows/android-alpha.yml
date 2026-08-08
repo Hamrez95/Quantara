@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PREVIEW_CERT_SHA256: c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984
+
 concurrency:
   group: android-alpha-${{ github.ref }}
   cancel-in-progress: true
@@ -21,12 +24,40 @@ jobs:
     name: Test and build Quantara Android
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: Preview
     defaults:
       run:
         working-directory: src/client/quantara_app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Provision persistent Preview signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          keystore="$RUNNER_TEMP/quantara-preview.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          keytool -list -v -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > preview-keystore.txt
+          actual="$(grep -m1 'SHA256:' preview-keystore.txt | sed 's/.*SHA256: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test "$actual" = "$PREVIEW_CERT_SHA256"
+          {
+            echo "QUANTARA_PREVIEW_RELEASE=true"
+            echo "QUANTARA_ANDROID_KEYSTORE_PATH=$keystore"
+            echo "QUANTARA_ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "QUANTARA_ANDROID_KEY_ALIAS=$KEY_ALIAS"
+            echo "QUANTARA_ANDROID_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -49,10 +80,25 @@ jobs:
       - name: Build Android release APK
         run: flutter build apk --release
 
+      - name: Verify Preview signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          apksigner_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner_path"
+          "$apksigner_path" verify --verbose --print-certs "$apk" | tee preview-signing.txt
+          actual="$(grep -m1 'certificate SHA-256 digest:' preview-signing.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
+          test "$actual" = "$PREVIEW_CERT_SHA256"
+          sha256sum "$apk" | tee SHA256SUMS.txt
+
       - name: Upload Quantara Android preview
         uses: actions/upload-artifact@v4
         with:
           name: quantara-0.9.0-strategy-validation-preview
-          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+            src/client/quantara_app/preview-signing.txt
+            src/client/quantara_app/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14

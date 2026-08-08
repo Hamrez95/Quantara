@@ -51,7 +51,7 @@ void main() {
     });
 
     test(
-      'Nima active scalper can select 15m without expanding concurrency',
+      'Nima active scalper can select 15m without silently expanding slots',
       () {
         final config = configuration(
           symbols: const ['BTCUSDT', 'XRPUSDT'],
@@ -63,10 +63,13 @@ void main() {
       },
     );
 
-    test('Sara risk manager blocks excessive risk and concurrency', () {
+    test('Sara risk manager caps risk and concurrency at supported bounds', () {
       expect(() => configuration(risk: 2.01).validate(), throwsFormatException);
+      for (final positions in [1, 2, 3]) {
+        expect(configuration(positions: positions).validate, returnsNormally);
+      }
       expect(
-        () => configuration(positions: 2).validate(),
+        () => configuration(positions: 4).validate(),
         throwsFormatException,
       );
     });
@@ -188,6 +191,7 @@ void main() {
           strategy: AnalysisStrategy.trendPullback,
           cadence: SignalCadence.active,
           timeframes: const ['15m', '1h', '4h'],
+          positions: 2,
         );
         final restored = LocalLiveTradeConfiguration.fromJson(
           original.toJson(),
@@ -195,11 +199,12 @@ void main() {
         expect(restored.strategy, AnalysisStrategy.trendPullback);
         expect(restored.cadence, SignalCadence.active);
         expect(restored.timeframes, const ['15m', '1h', '4h']);
+        expect(restored.maximumConcurrentPositions, 2);
       },
     );
 
     test(
-      'Omid execution auditor blocks forbidden authority and verifies full protection gates',
+      'Omid execution auditor verifies portfolio slots and full protection gates',
       () {
         final clientSource = File(
           'lib/features/auto_trade/data/bitunix_local_live_api_client.dart',
@@ -219,8 +224,17 @@ void main() {
           serviceSource,
           contains('The complete SL/TP ladder was not confirmed'),
         );
-        expect(serviceSource, contains('_managed.isEmpty'));
-        expect(serviceSource, contains('positions.isEmpty'));
+        expect(
+          serviceSource,
+          contains('LocalLivePortfolioAdmission.hasExecutionSlot'),
+        );
+        expect(serviceSource, contains('portfolioGuard.reserve('));
+        expect(serviceSource, contains('portfolioGuard.confirmReduction('));
+        expect(serviceSource, contains('occupiedSymbols'));
+        expect(
+          serviceSource,
+          isNot(contains('_managed.isEmpty &&\n          positions.isEmpty')),
+        );
         expect(manifest, contains('FOREGROUND_SERVICE_SPECIAL_USE'));
       },
     );

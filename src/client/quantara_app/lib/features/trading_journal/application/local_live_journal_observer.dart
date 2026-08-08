@@ -74,6 +74,7 @@ final class LocalLiveJournalObserver {
       positionId: managed.positionId,
       entryOrderId: managed.entryOrderId,
       clientId: managed.clientId,
+      indicatorSnapshot: idea.indicatorSnapshot,
     );
     if (!await _appendPlan(plan)) return;
 
@@ -96,6 +97,7 @@ final class LocalLiveJournalObserver {
           'confidencePercent': idea.confidencePercent,
           'regime': idea.marketRegime.name,
           'strategy': idea.strategy.name,
+          'indicatorSnapshot': idea.indicatorSnapshot,
         },
       ),
     );
@@ -145,6 +147,8 @@ final class LocalLiveJournalObserver {
     }
     for (var index = 0; index < managed.targetOrderIds.length; index++) {
       final orderId = managed.targetOrderIds[index];
+      final quantity = managed.targetQuantities[index];
+      if (orderId.trim().isEmpty || quantity <= 0) continue;
       await _append(
         TradingJournalEvent(
           eventId: 'tp-confirmed:$orderId',
@@ -160,12 +164,179 @@ final class LocalLiveJournalObserver {
           exchangeEventId: 'tp-order:$orderId',
           positionId: managed.positionId,
           orderId: orderId,
-          quantity: managed.targetQuantities[index],
+          quantity: quantity,
           price: managed.targets[index],
           details: {'targetIndex': index + 1},
         ),
       );
     }
+  }
+
+  Future<bool> recordRecoveredPosition({
+    required LocalLiveManagedPosition managed,
+    required AutoTradeAccountSnapshot account,
+  }) async {
+    final id = journalTradeId(managed.positionId);
+    final riskPerUnit = (managed.entryPrice - managed.originalStopLoss).abs();
+    final expectedR = managed.targets
+        .map(
+          (target) => riskPerUnit <= 0
+              ? 0.0
+              : (target - managed.entryPrice).abs() / riskPerUnit,
+        )
+        .toList(growable: false);
+    final riskBudget =
+        riskPerUnit * managed.initialQuantity +
+        managed.entryPrice * managed.initialQuantity * 0.0017;
+    final riskPercent = account.estimatedEquity <= 0
+        ? 0.0
+        : riskBudget / account.estimatedEquity * 100;
+    final plan = TradingJournalPlan(
+      journalTradeId: id,
+      setupId: managed.setupId,
+      analysisVersion: 'exchange-recovery-v1',
+      symbol: managed.symbol,
+      market: 'USDT_PERPETUAL',
+      timeframe: managed.timeframe,
+      direction: _direction(managed.direction),
+      strategy: 'recovered-local-live',
+      cadence: 'recovered-after-reinstall',
+      source: TradingJournalSource.localLive,
+      decidedAt: managed.openedAt.toUtc(),
+      decisionPrice: managed.entryPrice,
+      entryLower: managed.entryPrice,
+      entryUpper: managed.entryPrice,
+      plannedEntry: managed.entryPrice,
+      originalStopLoss: managed.originalStopLoss,
+      targets: List.unmodifiable(managed.targets),
+      expectedRMultiples: List.unmodifiable(expectedR),
+      confidencePercent: 0,
+      confluence: const [
+        'verified-q-local-entry-order',
+        'verified-open-position-id',
+        'confirmed-full-stop',
+        'confirmed-three-target-ladder',
+      ],
+      regime: 'recovered-exchange-truth',
+      rationale:
+          'Recovered from verified Bitunix position, fill and protection facts after device-local state was removed.',
+      invalidation:
+          'Original signal metadata was unavailable after reinstall; no value was fabricated.',
+      accountEquity: account.estimatedEquity,
+      riskPercent: riskPercent,
+      riskBudget: riskBudget,
+      leverage: managed.leverage,
+      expectedMargin:
+          managed.initialQuantity * managed.entryPrice / managed.leverage,
+      passedGates: const [
+        'isolated-margin',
+        'verified-q-local-entry-order',
+        'confirmed-full-stop',
+        'confirmed-three-target-ladder',
+        'no-confirmed-partial-exit',
+      ],
+      blockedGates: const [],
+      appVersion: '1.2.0-rc.2+121',
+      strategyRulesVersion: 'exchange-recovery-v1',
+      positionId: managed.positionId,
+      entryOrderId: managed.entryOrderId,
+      clientId: managed.clientId,
+      notes:
+          'Recovered after app reinstall. Original signal confidence and timeframe were not reconstructed.',
+    );
+    if (!await _appendPlan(plan)) return false;
+
+    final now = DateTime.now().toUtc();
+    await _append(
+      TradingJournalEvent(
+        eventId: 'recovered-entry:${managed.entryOrderId}',
+        journalTradeId: id,
+        type: TradingJournalEventType.entryFilled,
+        occurredAt: managed.openedAt.toUtc(),
+        recordedAt: now,
+        source: TradingJournalFactSource.exchange,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: account.marginCoin,
+        asOf: account.syncedAt.toUtc(),
+        exchangeEventId: 'entry-order:${managed.entryOrderId}',
+        positionId: managed.positionId,
+        orderId: managed.entryOrderId,
+        clientId: managed.clientId,
+        quantity: managed.initialQuantity,
+        price: managed.entryPrice,
+        remainingQuantity: managed.initialQuantity,
+        details: const {
+          'marginMode': 'ISOLATION',
+          'recoveredAfterReinstall': true,
+        },
+      ),
+    );
+    await _append(
+      TradingJournalEvent(
+        eventId: 'recovered-stop:${managed.stopOrderId}',
+        journalTradeId: id,
+        type: TradingJournalEventType.stopConfirmed,
+        occurredAt: now,
+        recordedAt: now,
+        source: TradingJournalFactSource.exchange,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: account.marginCoin,
+        asOf: account.syncedAt.toUtc(),
+        exchangeEventId: 'stop-order:${managed.stopOrderId}',
+        positionId: managed.positionId,
+        orderId: managed.stopOrderId,
+        quantity: managed.initialQuantity,
+        price: managed.originalStopLoss,
+      ),
+    );
+    for (var index = 0; index < managed.targetOrderIds.length; index++) {
+      final orderId = managed.targetOrderIds[index];
+      final quantity = managed.targetQuantities[index];
+      if (orderId.trim().isEmpty || quantity <= 0) continue;
+      await _append(
+        TradingJournalEvent(
+          eventId: 'recovered-tp:$orderId',
+          journalTradeId: id,
+          type: TradingJournalEventType.takeProfitConfirmed,
+          occurredAt: now,
+          recordedAt: now,
+          source: TradingJournalFactSource.exchange,
+          quality: TradingJournalFactQuality.confirmed,
+          scope: TradingJournalScope.position,
+          currency: account.marginCoin,
+          asOf: account.syncedAt.toUtc(),
+          exchangeEventId: 'tp-order:$orderId',
+          positionId: managed.positionId,
+          orderId: orderId,
+          quantity: quantity,
+          price: managed.targets[index],
+          details: {'targetIndex': index + 1},
+        ),
+      );
+    }
+    await _append(
+      TradingJournalEvent(
+        eventId: 'recovered:${managed.positionId}',
+        journalTradeId: id,
+        type: TradingJournalEventType.reconciliationRecovered,
+        occurredAt: now,
+        recordedAt: now,
+        source: TradingJournalFactSource.quantara,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: account.marginCoin,
+        asOf: account.syncedAt.toUtc(),
+        exchangeEventId: 'recovered-position:${managed.positionId}',
+        positionId: managed.positionId,
+        details: const {
+          'message':
+              'Device-local ownership was reconstructed from verified exchange truth after reinstall.',
+        },
+      ),
+    );
+    return true;
   }
 
   Future<void> reconcilePosition({
@@ -200,16 +371,19 @@ final class LocalLiveJournalObserver {
     }
     final fills = [...positionPnl.fills]
       ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
-    final exitFills = fills.where((fill) => fill.reduceOnly).toList();
+    final exitFills = fills
+        .where((fill) => _isExitFill(managed: managed, fill: fill))
+        .toList();
     final finalExitTradeId = positionClosed && exitFills.isNotEmpty
         ? exitFills.last.tradeId
         : null;
     var cumulativeExitQuantity = 0.0;
     for (final fill in fills) {
-      if (fill.reduceOnly) cumulativeExitQuantity += fill.quantity;
+      final isExit = _isExitFill(managed: managed, fill: fill);
+      if (isExit) cumulativeExitQuantity += fill.quantity;
       final targetIndex = managed.targetOrderIds.indexOf(fill.orderId);
       final isTarget = targetIndex >= 0;
-      final isFinalExit = fill.reduceOnly && fill.tradeId == finalExitTradeId;
+      final isFinalExit = isExit && fill.tradeId == finalExitTradeId;
       final remaining = math
           .max(0, managed.initialQuantity - cumulativeExitQuantity)
           .toDouble();
@@ -217,7 +391,7 @@ final class LocalLiveJournalObserver {
         TradingJournalEvent(
           eventId: 'fill:${fill.tradeId}',
           journalTradeId: id,
-          type: !fill.reduceOnly
+          type: !isExit
               ? TradingJournalEventType.entryPartiallyFilled
               : isTarget
               ? TradingJournalEventType.takeProfitFilled
@@ -244,11 +418,10 @@ final class LocalLiveJournalObserver {
           details: {
             if (isTarget) 'targetIndex': targetIndex + 1,
             if (!isTarget)
-              'closeReason': fill.orderId == managed.stopOrderId
-                  ? TradingJournalCloseReason.stop.name
-                  : fill.clientId.endsWith('-emergency-close')
-                  ? TradingJournalCloseReason.emergency.name
-                  : TradingJournalCloseReason.exchange.name,
+              'closeReason': _closeReasonForFill(
+                managed: managed,
+                fill: fill,
+              ).name,
           },
         ),
       );
@@ -420,6 +593,79 @@ final class LocalLiveJournalObserver {
       // The journal is observer-only. A persistence failure must never change
       // exchange order management or trigger a compensating trade action.
     }
+  }
+
+  static bool _isExitFill({
+    required LocalLiveManagedPosition managed,
+    required ExchangePnlFill fill,
+  }) {
+    if (fill.reduceOnly) return true;
+    if (managed.targetOrderIds.contains(fill.orderId)) return true;
+    if (managed.stopOrderId != null && fill.orderId == managed.stopOrderId) {
+      return true;
+    }
+    final side = fill.side.trim().toUpperCase();
+    return switch (managed.direction) {
+      TradeDirection.long => side == 'SELL',
+      TradeDirection.short => side == 'BUY',
+      TradeDirection.wait => false,
+    };
+  }
+
+  Future<void> recordExchangeClosureObserved({
+    required LocalLiveManagedPosition managed,
+    required bool closedHistoryAvailable,
+    DateTime? observedAt,
+  }) {
+    final at = (observedAt ?? DateTime.now()).toUtc();
+    return _append(
+      TradingJournalEvent(
+        eventId: 'exchange-close-observed:${managed.positionId}',
+        journalTradeId: journalTradeId(managed.positionId),
+        type: TradingJournalEventType.positionClosed,
+        occurredAt: at,
+        recordedAt: at,
+        source: TradingJournalFactSource.exchange,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: 'USDT',
+        asOf: at,
+        exchangeEventId: 'exchange-close-observed:${managed.positionId}',
+        positionId: managed.positionId,
+        remainingQuantity: 0,
+        details: {
+          'closeReason': TradingJournalCloseReason.unknown.name,
+          'economicsPending': true,
+          'closedHistoryAvailable': closedHistoryAvailable,
+          'message':
+              'Bitunix no longer reports this position as open. Final fill-level economics and close classification are being reconciled.',
+        },
+      ),
+    );
+  }
+
+  static TradingJournalCloseReason _closeReasonForFill({
+    required LocalLiveManagedPosition managed,
+    required ExchangePnlFill fill,
+  }) {
+    if (fill.clientId.endsWith('-emergency-close')) {
+      return TradingJournalCloseReason.emergency;
+    }
+    if (fill.orderId == managed.stopOrderId) {
+      return TradingJournalCloseReason.stop;
+    }
+    final stop = managed.originalStopLoss;
+    final price = fill.price;
+    if (stop.isFinite && stop > 0 && price.isFinite && price > 0) {
+      final tolerance = stop.abs() * 0.003;
+      final stopLike = switch (managed.direction) {
+        TradeDirection.long => price <= stop + tolerance,
+        TradeDirection.short => price >= stop - tolerance,
+        TradeDirection.wait => false,
+      };
+      if (stopLike) return TradingJournalCloseReason.stop;
+    }
+    return TradingJournalCloseReason.exchange;
   }
 
   static TradingJournalDirection _direction(TradeDirection direction) =>
