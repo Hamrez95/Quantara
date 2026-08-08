@@ -5,6 +5,7 @@ on:
     branches:
       - feat/163-portfolio-budgeted-local-live
     paths:
+      - .github/scripts/issue_172_test_fix.py
       - .github/workflows/temporary-issue-172-physical-qa.yml
 
 permissions:
@@ -27,6 +28,9 @@ jobs:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
+      - name: Apply test-only correction
+        working-directory: .
+        run: python3 .github/scripts/issue_172_test_fix.py
       - name: Restore packages
         run: flutter pub get
       - name: Normalize format
@@ -51,15 +55,15 @@ jobs:
         run: flutter test
       - name: PWA compile validation
         run: flutter build web --release
-      - name: Commit formatter-only normalization if needed
+      - name: Commit verified test normalization
         working-directory: .
         run: |
           git config user.name "Quantara CI"
           git config user.email "actions@users.noreply.github.com"
-          git add src/client/quantara_app/lib src/client/quantara_app/test
+          git add src/client/quantara_app/test
           if git diff --cached --quiet; then
-            echo "No formatter normalization required"
+            echo "No test normalization required"
             exit 0
           fi
-          git commit -m "style: normalize issue 172 physical QA tests"
+          git commit -m "test: finalize issue 172 sync regression coverage"
           git push origin HEAD:feat/163-portfolio-budgeted-local-live
