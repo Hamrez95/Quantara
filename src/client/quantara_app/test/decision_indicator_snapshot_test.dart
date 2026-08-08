@@ -40,21 +40,40 @@ void main() {
         'ema20': 100.2,
         'ema50': 99.8,
         'ema200': 95.0,
+        'ema20SlopeAtr': 0.22,
+        'ema50SlopeAtr': 0.13,
         'atr14': 1.1,
         'atrPercent': 1.1,
+        'atrExpansionRatio': 1.08,
         'rsi14': 58.0,
         'adx14': 27.0,
         'plusDi14': 31.0,
         'minusDi14': 14.0,
         'relativeVolume20': 1.25,
+        'volumeZScore20': 0.85,
+        'previousDonchianHigh20': 101.4,
+        'previousDonchianLow20': 96.2,
+        'bollingerMiddle20': 99.5,
+        'bollingerUpper20': 102.1,
+        'bollingerLower20': 96.9,
+        'bollingerBandwidthPercent': 5.22,
         'trendEfficiency20': 0.62,
+        'recentSwingHigh': 101.8,
+        'recentSwingLow': 97.4,
       },
     );
 
     final restored = TradingJournalPlan.fromJson(plan.toJson());
     expect(restored.indicatorSnapshot, plan.indicatorSnapshot);
+    expect(restored.indicatorSnapshot, hasLength(23));
+    expect(restored.indicatorSnapshot['ema200'], 95.0);
+    expect(restored.indicatorSnapshot['atrExpansionRatio'], 1.08);
     expect(restored.indicatorSnapshot['adx14'], 27.0);
+    expect(restored.indicatorSnapshot['plusDi14'], 31.0);
+    expect(restored.indicatorSnapshot['minusDi14'], 14.0);
     expect(restored.indicatorSnapshot['relativeVolume20'], 1.25);
+    expect(restored.indicatorSnapshot['bollingerBandwidthPercent'], 5.22);
+    expect(restored.indicatorSnapshot['trendEfficiency20'], 0.62);
   });
 
   test('legacy plan without indicators remains explicitly empty', () {
