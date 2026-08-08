@@ -14,6 +14,8 @@ permissions:
 env:
   SOURCE_RUN_ID: '31249144853'
   FINAL_ARTIFACT: quantara-final-persistent-preview
+  ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+  ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
 
 jobs:
   android-launch:
@@ -44,7 +46,7 @@ jobs:
           test -n "$apk_path"
           test -f "$apk_path"
           echo "FINAL_APK_PATH=$apk_path" >> "$GITHUB_ENV"
-          sha256sum "$apk_path"
+          sha256sum "$apk_path" | grep -Fq '57c02526e946d87af5827c6d2994575558cec7b4187d971f1b2cb52b710339d0'
 
       - name: Enable KVM group permissions
         run: |
