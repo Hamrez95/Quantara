@@ -14,6 +14,8 @@ void main() {
       expect(source, contains('What to review?'));
       expect(source, contains('Data quality'));
       expect(source, contains('_formatHoldingDuration'));
+      expect(source, contains('ATR/EMA/ADX/DMI'));
+      expect(source, contains('no values are fabricated'));
     },
   );
 }
