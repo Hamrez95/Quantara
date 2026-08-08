@@ -39,9 +39,10 @@ flutter:
       fonts:
         - asset: assets/fonts/Vazirmatn-Regular.ttf
           weight: 400
-        - asset: assets/fonts/Vazirmatn-Medium.ttf
-          weight: 500
         - asset: assets/fonts/Vazirmatn-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/Vazirmatn-Bold.ttf
           weight: 700
+    - family: CryptocurrencyIcons
+      fonts:
+        - asset: assets/fonts/cryptocurrency-icons.ttf
