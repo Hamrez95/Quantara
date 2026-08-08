@@ -731,6 +731,11 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
           },
           'auditEvents': events.map((item) => item.toJson()).toList(),
           'tradingJournal': journalLedger.toJson(),
+          'tradeEvidencePackets': TradingJournalEvidencePacketBuilder.buildAll(
+            journalLedger,
+          ),
+          'supportSessionFoundation':
+              ReadOnlySupportSessionManager.architectureDescriptor(),
           'persistedLocalServiceState': persisted,
         },
       );
