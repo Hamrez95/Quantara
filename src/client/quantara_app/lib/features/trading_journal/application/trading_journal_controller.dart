@@ -82,11 +82,12 @@ final class TradingJournalController extends ChangeNotifier {
         openPositionIds: openPositionIds,
         recordedAt: now,
       );
-      final recovery = TradingJournalExchangeHistoryRecovery.recoverVerifiedHistory(
-        ledger: backfill.ledger,
-        pnlProjection: pnlProjection,
-        recordedAt: now,
-      );
+      final recovery =
+          TradingJournalExchangeHistoryRecovery.recoverVerifiedHistory(
+            ledger: backfill.ledger,
+            pnlProjection: pnlProjection,
+            recordedAt: now,
+          );
       if (!backfill.changed && !recovery.changed) return 0;
       await store.replace(recovery.ledger);
       _ledger = await store.load();

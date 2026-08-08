@@ -36,7 +36,8 @@ abstract final class TradingJournalExchangeHistoryRecovery {
       for (final plan in ledger.plans)
         if ((plan.positionId ?? '').trim().isNotEmpty) plan.positionId!.trim(),
       for (final event in ledger.events)
-        if ((event.positionId ?? '').trim().isNotEmpty) event.positionId!.trim(),
+        if ((event.positionId ?? '').trim().isNotEmpty)
+          event.positionId!.trim(),
     };
 
     for (final position in pnlProjection.positions) {
@@ -60,10 +61,11 @@ abstract final class TradingJournalExchangeHistoryRecovery {
           .toSet();
       if (exactEntryClientIds.length != 1) continue;
       final entryClientId = exactEntryClientIds.single;
-      final entryFills = position.fills
-          .where((fill) => fill.clientId.trim() == entryClientId)
-          .toList(growable: false)
-        ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+      final entryFills =
+          position.fills
+              .where((fill) => fill.clientId.trim() == entryClientId)
+              .toList(growable: false)
+            ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
       if (entryFills.isEmpty || !_verifiedFillSet(entryFills, positionId)) {
         continue;
       }
@@ -81,17 +83,21 @@ abstract final class TradingJournalExchangeHistoryRecovery {
         continue;
       }
 
-      final exitSide = direction == TradingJournalDirection.long ? 'SELL' : 'BUY';
+      final exitSide = direction == TradingJournalDirection.long
+          ? 'SELL'
+          : 'BUY';
       final firstEntryAt = entryFills.first.occurredAt.toUtc();
-      final exitFills = position.fills
-          .where(
-            (fill) =>
-                !fill.occurredAt.toUtc().isBefore(firstEntryAt) &&
-                (fill.reduceOnly || fill.side.trim().toUpperCase() == exitSide),
-          )
-          .where((fill) => fill.clientId.trim() != entryClientId)
-          .toList(growable: false)
-        ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+      final exitFills =
+          position.fills
+              .where(
+                (fill) =>
+                    !fill.occurredAt.toUtc().isBefore(firstEntryAt) &&
+                    (fill.reduceOnly ||
+                        fill.side.trim().toUpperCase() == exitSide),
+              )
+              .where((fill) => fill.clientId.trim() != entryClientId)
+              .toList(growable: false)
+            ..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
       if (exitFills.isEmpty || !_verifiedFillSet(exitFills, positionId)) {
         continue;
       }
@@ -214,9 +220,10 @@ abstract final class TradingJournalExchangeHistoryRecovery {
         },
       );
 
-      final candidate = next.appendPlan(plan).appendEvent(entryEvent).appendEvent(
-        closeEvent,
-      );
+      final candidate = next
+          .appendPlan(plan)
+          .appendEvent(entryEvent)
+          .appendEvent(closeEvent);
       if (candidate.integrity == TradingJournalIntegrity.unverified ||
           candidate.warnings.length > next.warnings.length) {
         continue;
@@ -246,10 +253,8 @@ abstract final class TradingJournalExchangeHistoryRecovery {
         fill.price > 0,
   );
 
-  static double _totalQuantity(List<ExchangePnlFill> fills) => fills.fold<double>(
-    0,
-    (sum, fill) => sum + fill.quantity.abs(),
-  );
+  static double _totalQuantity(List<ExchangePnlFill> fills) =>
+      fills.fold<double>(0, (sum, fill) => sum + fill.quantity.abs());
 
   static double? _weightedPrice(List<ExchangePnlFill> fills) {
     final quantity = _totalQuantity(fills);
