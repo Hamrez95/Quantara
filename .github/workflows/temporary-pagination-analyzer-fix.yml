@@ -1,0 +1,39 @@
+name: Temporary pagination analyzer fix
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - '.github/workflows/temporary-pagination-analyzer-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+      - name: Apply analyzer-safe pagination expression
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='src/client/quantara_app/lib/features/auto_trade/data/bitunix_private_api_client.dart'
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/client/quantara_app/lib/features/auto_trade/data/bitunix_private_api_client.dart')
+          s = p.read_text()
+          old = 'final reachedReportedTotal = total != null && skip >= total!;'
+          assert s.count(old) == 1
+          p.write_text(s.replace(old, 'final reachedReportedTotal = total != null && skip >= total;', 1))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$file"
+          git commit -m 'fix: remove redundant history pagination assertion (#171)'
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
