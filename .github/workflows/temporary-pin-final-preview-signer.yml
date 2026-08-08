@@ -1,0 +1,46 @@
+name: Temporary pin final Preview signer
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - '.github/workflows/temporary-pin-final-preview-signer.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+      - name: Pin final certificate fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          old = 'b90fc29c804534987316d5fda134de2940243715338fc79a561791f1a9593c72'
+          new = 'c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984'
+          paths = [
+              Path('.github/workflows/flutter-ci.yml'),
+              Path('.github/workflows/android-alpha.yml'),
+              Path('src/client/quantara_app/test/android_preview_signing_source_test.dart'),
+          ]
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{path}: expected one old fingerprint, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/flutter-ci.yml .github/workflows/android-alpha.yml src/client/quantara_app/test/android_preview_signing_source_test.dart
+          git commit -m 'ci: pin persistent Preview certificate c1f8cbed (#171)'
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
