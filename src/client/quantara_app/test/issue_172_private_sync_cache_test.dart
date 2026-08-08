@@ -111,8 +111,11 @@ Map<String, Object?> _positionHistoryRow(int index) {
 }
 
 Map<String, Object?> _tradeHistoryRow(int index) {
-  final occurredAt = DateTime.utc(2026, 7, 1)
-      .add(Duration(hours: index * 2, minutes: 30));
+  final occurredAt = DateTime.utc(
+    2026,
+    7,
+    1,
+  ).add(Duration(hours: index * 2, minutes: 30));
   return {
     'tradeId': 'trade-$index',
     'orderId': 'order-$index',

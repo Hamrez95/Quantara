@@ -46,78 +46,72 @@ void main() {
     },
   );
 
-  test(
-    'overlapping closed intervals are quarantined instead of guessed',
-    () {
-      final occurredAt = DateTime.utc(2026, 8, 3, 12);
-      final result = BitunixPnlMapper.fills(
-        {
-          'tradeList': [
-            {
-              'tradeId': 'ambiguous-fill',
-              'orderId': 'ambiguous-order',
-              'symbol': 'XRPUSDT',
-              'qty': '1',
-              'price': '1.0603',
-              'realizedPNL': '0.010',
-              'fee': '0.001',
-              'reduceOnly': true,
-              'ctime': occurredAt.millisecondsSinceEpoch,
-            },
-          ],
-        },
-        openPositions: const [
-          ExchangeUnrealizedPnl(
-            positionId: 'current-open-xrp',
-            symbol: 'XRPUSDT',
-            value: 0,
-          ),
+  test('overlapping closed intervals are quarantined instead of guessed', () {
+    final occurredAt = DateTime.utc(2026, 8, 3, 12);
+    final result = BitunixPnlMapper.fills(
+      {
+        'tradeList': [
+          {
+            'tradeId': 'ambiguous-fill',
+            'orderId': 'ambiguous-order',
+            'symbol': 'XRPUSDT',
+            'qty': '1',
+            'price': '1.0603',
+            'realizedPNL': '0.010',
+            'fee': '0.001',
+            'reduceOnly': true,
+            'ctime': occurredAt.millisecondsSinceEpoch,
+          },
         ],
-        settlements: [
-          ExchangePositionSettlement(
-            positionId: 'closed-xrp-a',
-            symbol: 'XRPUSDT',
-            funding: 0,
-            openedAt: DateTime.utc(2026, 8, 3, 11),
-            closedAt: DateTime.utc(2026, 8, 3, 12, 30),
-          ),
-          ExchangePositionSettlement(
-            positionId: 'closed-xrp-b',
-            symbol: 'XRPUSDT',
-            funding: 0,
-            openedAt: DateTime.utc(2026, 8, 3, 11, 30),
-            closedAt: DateTime.utc(2026, 8, 3, 12, 15),
-          ),
-        ],
-      );
+      },
+      openPositions: const [
+        ExchangeUnrealizedPnl(
+          positionId: 'current-open-xrp',
+          symbol: 'XRPUSDT',
+          value: 0,
+        ),
+      ],
+      settlements: [
+        ExchangePositionSettlement(
+          positionId: 'closed-xrp-a',
+          symbol: 'XRPUSDT',
+          funding: 0,
+          openedAt: DateTime.utc(2026, 8, 3, 11),
+          closedAt: DateTime.utc(2026, 8, 3, 12, 30),
+        ),
+        ExchangePositionSettlement(
+          positionId: 'closed-xrp-b',
+          symbol: 'XRPUSDT',
+          funding: 0,
+          openedAt: DateTime.utc(2026, 8, 3, 11, 30),
+          closedAt: DateTime.utc(2026, 8, 3, 12, 15),
+        ),
+      ],
+    );
 
-      expect(result.verified, isTrue);
-      expect(
-        result.values.single.positionId,
-        'unassigned-trade:ambiguous-fill',
-      );
-      expect(result.warning, contains('ambiguous-fill'));
+    expect(result.verified, isTrue);
+    expect(result.values.single.positionId, 'unassigned-trade:ambiguous-fill');
+    expect(result.warning, contains('ambiguous-fill'));
 
-      final projection = TradingPnlProjection.reconcile(
-        currency: 'USDT',
-        asOf: occurredAt.add(const Duration(seconds: 1)),
-        unrealizedByPosition: const {
-          'current-open-xrp': ExchangeUnrealizedPnl(
-            positionId: 'current-open-xrp',
-            symbol: 'XRPUSDT',
-            value: 0,
-          ),
-        },
-        fills: result.values,
-        settlements: const [],
-        sourceVerified: result.verified,
-      );
-      expect(projection.isVerified, isFalse);
-      expect(projection.isReadyForRiskGates, isFalse);
-      expect(
-        projection.forPositionId('unassigned-trade:ambiguous-fill')?.isVerified,
-        isFalse,
-      );
-    },
-  );
+    final projection = TradingPnlProjection.reconcile(
+      currency: 'USDT',
+      asOf: occurredAt.add(const Duration(seconds: 1)),
+      unrealizedByPosition: const {
+        'current-open-xrp': ExchangeUnrealizedPnl(
+          positionId: 'current-open-xrp',
+          symbol: 'XRPUSDT',
+          value: 0,
+        ),
+      },
+      fills: result.values,
+      settlements: const [],
+      sourceVerified: result.verified,
+    );
+    expect(projection.isVerified, isFalse);
+    expect(projection.isReadyForRiskGates, isFalse);
+    expect(
+      projection.forPositionId('unassigned-trade:ambiguous-fill')?.isVerified,
+      isFalse,
+    );
+  });
 }
