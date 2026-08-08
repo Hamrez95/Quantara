@@ -9,6 +9,7 @@ import '../domain/trading_journal_models.dart';
 import '../domain/trading_journal_projection.dart';
 import '../domain/trading_journal_statistics.dart';
 import 'trading_journal_exchange_backfill.dart';
+import 'trading_journal_exchange_history_recovery.dart';
 
 final class TradingJournalController extends ChangeNotifier {
   TradingJournalController({required this.store});
@@ -74,21 +75,28 @@ final class TradingJournalController extends ChangeNotifier {
   }) async {
     try {
       final current = await store.load();
-      final result = TradingJournalExchangeBackfill.reconcileVerifiedClosures(
+      final now = (recordedAt ?? DateTime.now()).toUtc();
+      final backfill = TradingJournalExchangeBackfill.reconcileVerifiedClosures(
         ledger: current,
         pnlProjection: pnlProjection,
         openPositionIds: openPositionIds,
-        recordedAt: (recordedAt ?? DateTime.now()).toUtc(),
+        recordedAt: now,
       );
-      if (!result.changed) return 0;
-      await store.replace(result.ledger);
+      final recovery = TradingJournalExchangeHistoryRecovery.recoverVerifiedHistory(
+        ledger: backfill.ledger,
+        pnlProjection: pnlProjection,
+        recordedAt: now,
+      );
+      if (!backfill.changed && !recovery.changed) return 0;
+      await store.replace(recovery.ledger);
       _ledger = await store.load();
       _error = null;
       _rebuild();
       notifyListeners();
-      return result.closedTradeIds.length;
+      return backfill.closedTradeIds.length + recovery.recoveredTradeIds.length;
     } on Object {
-      _error = 'Verified exchange history could not repair the journal safely.';
+      _error =
+          'Verified exchange history could not repair or recover the journal safely.';
       notifyListeners();
       return 0;
     }
