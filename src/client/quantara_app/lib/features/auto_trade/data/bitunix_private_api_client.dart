@@ -233,7 +233,7 @@ final class BitunixPrivateApiClient {
       }
 
       skip += pageRows.length;
-      final reachedReportedTotal = total != null && skip >= total!;
+      final reachedReportedTotal = total != null && skip >= total;
       if (pageRows.isEmpty ||
           pageRows.length < _historyPageSize ||
           reachedReportedTotal) {
