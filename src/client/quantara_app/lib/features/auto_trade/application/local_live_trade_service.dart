@@ -1155,11 +1155,16 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             symbol: managed.symbol,
           );
         }
-        if (!journalReconciled &&
-            !_pendingJournalClosures.any(
-              (item) => item.positionId == managed.positionId,
-            )) {
-          _pendingJournalClosures.add(managed);
+        if (!journalReconciled) {
+          await _journalObserver.recordExchangeClosureObserved(
+            managed: managed,
+            closedHistoryAvailable: closedHistoryAvailable,
+          );
+          if (!_pendingJournalClosures.any(
+            (item) => item.positionId == managed.positionId,
+          )) {
+            _pendingJournalClosures.add(managed);
+          }
         }
         if (!closedHistoryAvailable || !journalReconciled) {
           _auditEvent(

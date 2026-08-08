@@ -11,8 +11,7 @@ TradingJournalLedger mergeTradingJournalLedgers(
   TradingJournalLedger foregroundMirror, {
   DateTime? newerThan,
 }) {
-  if (durable.integrity == TradingJournalIntegrity.unverified ||
-      foregroundMirror.integrity == TradingJournalIntegrity.unverified) {
+  if (durable.integrity == TradingJournalIntegrity.unverified) {
     return durable;
   }
   var merged = durable;
@@ -24,7 +23,10 @@ TradingJournalLedger mergeTradingJournalLedgers(
         !isNewer(plan.decidedAt)) {
       continue;
     }
-    merged = merged.appendPlan(plan);
+    final candidate = merged.appendPlan(plan);
+    if (candidate.integrity != TradingJournalIntegrity.unverified) {
+      merged = candidate;
+    }
   }
   final knownTradeIds = merged.plans.map((plan) => plan.journalTradeId).toSet();
   for (final event in foregroundMirror.events) {
@@ -32,7 +34,10 @@ TradingJournalLedger mergeTradingJournalLedgers(
         !isNewer(event.recordedAt)) {
       continue;
     }
-    merged = merged.appendEvent(event);
+    final candidate = merged.appendEvent(event);
+    if (candidate.integrity != TradingJournalIntegrity.unverified) {
+      merged = candidate;
+    }
   }
   return merged;
 }

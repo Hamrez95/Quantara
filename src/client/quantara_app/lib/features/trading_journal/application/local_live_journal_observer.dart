@@ -369,16 +369,19 @@ final class LocalLiveJournalObserver {
     }
     final fills = [...positionPnl.fills]
       ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
-    final exitFills = fills.where((fill) => fill.reduceOnly).toList();
+    final exitFills = fills
+        .where((fill) => _isExitFill(managed: managed, fill: fill))
+        .toList();
     final finalExitTradeId = positionClosed && exitFills.isNotEmpty
         ? exitFills.last.tradeId
         : null;
     var cumulativeExitQuantity = 0.0;
     for (final fill in fills) {
-      if (fill.reduceOnly) cumulativeExitQuantity += fill.quantity;
+      final isExit = _isExitFill(managed: managed, fill: fill);
+      if (isExit) cumulativeExitQuantity += fill.quantity;
       final targetIndex = managed.targetOrderIds.indexOf(fill.orderId);
       final isTarget = targetIndex >= 0;
-      final isFinalExit = fill.reduceOnly && fill.tradeId == finalExitTradeId;
+      final isFinalExit = isExit && fill.tradeId == finalExitTradeId;
       final remaining = math
           .max(0, managed.initialQuantity - cumulativeExitQuantity)
           .toDouble();
@@ -386,7 +389,7 @@ final class LocalLiveJournalObserver {
         TradingJournalEvent(
           eventId: 'fill:${fill.tradeId}',
           journalTradeId: id,
-          type: !fill.reduceOnly
+          type: !isExit
               ? TradingJournalEventType.entryPartiallyFilled
               : isTarget
               ? TradingJournalEventType.takeProfitFilled
@@ -588,6 +591,55 @@ final class LocalLiveJournalObserver {
       // The journal is observer-only. A persistence failure must never change
       // exchange order management or trigger a compensating trade action.
     }
+  }
+
+  static bool _isExitFill({
+    required LocalLiveManagedPosition managed,
+    required ExchangePnlFill fill,
+  }) {
+    if (fill.reduceOnly) return true;
+    if (managed.targetOrderIds.contains(fill.orderId)) return true;
+    if (managed.stopOrderId != null && fill.orderId == managed.stopOrderId) {
+      return true;
+    }
+    final side = fill.side.trim().toUpperCase();
+    return switch (managed.direction) {
+      TradeDirection.long => side == 'SELL',
+      TradeDirection.short => side == 'BUY',
+      TradeDirection.wait => false,
+    };
+  }
+
+  Future<void> recordExchangeClosureObserved({
+    required LocalLiveManagedPosition managed,
+    required bool closedHistoryAvailable,
+    DateTime? observedAt,
+  }) {
+    final at = (observedAt ?? DateTime.now()).toUtc();
+    return _append(
+      TradingJournalEvent(
+        eventId: 'exchange-close-observed:${managed.positionId}',
+        journalTradeId: journalTradeId(managed.positionId),
+        type: TradingJournalEventType.positionClosed,
+        occurredAt: at,
+        recordedAt: at,
+        source: TradingJournalFactSource.exchange,
+        quality: TradingJournalFactQuality.confirmed,
+        scope: TradingJournalScope.position,
+        currency: 'USDT',
+        asOf: at,
+        exchangeEventId: 'exchange-close-observed:${managed.positionId}',
+        positionId: managed.positionId,
+        remainingQuantity: 0,
+        details: {
+          'closeReason': TradingJournalCloseReason.unknown.name,
+          'economicsPending': true,
+          'closedHistoryAvailable': closedHistoryAvailable,
+          'message':
+              'Bitunix no longer reports this position as open. Final fill-level economics and close classification are being reconciled.',
+        },
+      ),
+    );
   }
 
   static TradingJournalCloseReason _closeReasonForFill({

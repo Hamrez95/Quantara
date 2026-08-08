@@ -490,7 +490,10 @@ final class TradingPnlProjection {
                 item == 'settlement:$key' ||
                 item == 'missing tradeId',
           );
-      final verified = !positionConflict && sourceVerified;
+      final closedEvidenceCanStandAlone =
+          settlement != null && positionFills.isNotEmpty && !positionConflict;
+      final verified =
+          !positionConflict && (sourceVerified || closedEvidenceCanStandAlone);
 
       final realizedValue = fillsAvailable
           ? positionFills.fold<double>(0, (sum, item) => sum + item.realizedPnl)

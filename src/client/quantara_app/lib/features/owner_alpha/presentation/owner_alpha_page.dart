@@ -35,6 +35,7 @@ import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../trading_journal/application/trading_journal_controller.dart';
 import '../../trading_journal/data/database_trading_journal_store.dart';
+import '../../trading_journal/data/trading_journal_store.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
