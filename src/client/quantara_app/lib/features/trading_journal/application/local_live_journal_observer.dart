@@ -74,6 +74,7 @@ final class LocalLiveJournalObserver {
       positionId: managed.positionId,
       entryOrderId: managed.entryOrderId,
       clientId: managed.clientId,
+      indicatorSnapshot: idea.indicatorSnapshot,
     );
     if (!await _appendPlan(plan)) return;
 
@@ -96,6 +97,7 @@ final class LocalLiveJournalObserver {
           'confidencePercent': idea.confidencePercent,
           'regime': idea.marketRegime.name,
           'strategy': idea.strategy.name,
+          'indicatorSnapshot': idea.indicatorSnapshot,
         },
       ),
     );

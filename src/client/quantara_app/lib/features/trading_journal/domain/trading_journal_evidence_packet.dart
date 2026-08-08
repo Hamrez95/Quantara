@@ -69,10 +69,11 @@ abstract final class TradingJournalEvidencePacketBuilder {
         'invalidation': plan.invalidation,
       },
       'indicatorSnapshot': {
-        'captured': false,
-        'values': <String, Object?>{},
-        'note':
-            'Indicator values were not persisted at this journal boundary; no values were fabricated.',
+        'captured': plan.indicatorSnapshot.isNotEmpty,
+        'values': plan.indicatorSnapshot,
+        'note': plan.indicatorSnapshot.isEmpty
+            ? 'Indicator values were not persisted at this journal boundary; no values were fabricated.'
+            : 'Technical indicators captured from the closed-candle decision snapshot.',
       },
       'executionPlan': {
         'decisionPrice': plan.decisionPrice,

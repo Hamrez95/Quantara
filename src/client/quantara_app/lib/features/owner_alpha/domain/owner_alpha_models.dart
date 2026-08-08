@@ -96,6 +96,7 @@ final class TradeIdea {
     this.strategy = AnalysisStrategy.structureZones,
     this.strategyVersion = '1.1',
     this.marketRegime = MarketRegime.transition,
+    this.indicatorSnapshot = const {},
   });
 
   final String symbol;
@@ -123,6 +124,7 @@ final class TradeIdea {
   final AnalysisStrategy strategy;
   final String strategyVersion;
   final MarketRegime marketRegime;
+  final Map<String, double> indicatorSnapshot;
 
   DateTime get createdAt => candleClosedAt;
 

@@ -124,6 +124,7 @@ final class TradingJournalPlan {
     this.entryOrderId,
     this.clientId,
     this.notes,
+    this.indicatorSnapshot = const {},
   });
 
   final String journalTradeId;
@@ -162,6 +163,7 @@ final class TradingJournalPlan {
   final String? entryOrderId;
   final String? clientId;
   final String? notes;
+  final Map<String, double> indicatorSnapshot;
 
   Map<String, Object?> toJson() => {
     'journalTradeId': journalTradeId,
@@ -200,6 +202,7 @@ final class TradingJournalPlan {
     'entryOrderId': entryOrderId,
     'clientId': clientId,
     'notes': notes,
+    'indicatorSnapshot': indicatorSnapshot,
   };
 
   factory TradingJournalPlan.fromJson(Map<String, Object?> json) =>
@@ -250,6 +253,7 @@ final class TradingJournalPlan {
         entryOrderId: _nullableString(json['entryOrderId']),
         clientId: _nullableString(json['clientId']),
         notes: _nullableString(json['notes']),
+        indicatorSnapshot: _doubleMap(json['indicatorSnapshot']),
       );
 }
 
@@ -682,6 +686,16 @@ List<double> _doubleList(Object? value) => value is List<Object?>
 List<String> _stringList(Object? value) => value is List<Object?>
     ? value.map((item) => item.toString()).toList(growable: false)
     : const [];
+
+Map<String, double> _doubleMap(Object? value) {
+  if (value is! Map<Object?, Object?>) return const {};
+  final result = <String, double>{};
+  for (final entry in value.entries) {
+    final parsed = _nullableDouble(entry.value);
+    if (parsed != null) result[entry.key.toString()] = parsed;
+  }
+  return Map.unmodifiable(result);
+}
 
 Map<String, Object?> _objectMap(Object? value) {
   if (value is Map<String, Object?>) return Map.unmodifiable(value);
