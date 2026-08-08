@@ -1,0 +1,74 @@
+name: Temporary unsigned Preview build
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - '.github/workflows/temporary-unsigned-preview-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      QUANTARA_UNSIGNED_CANDIDATE: 'true'
+      ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Build unsigned universal and ABI APKs
+        run: |
+          flutter build apk --release
+          flutter build apk --release --split-per-abi
+      - name: Verify unsigned identity and 16KB alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          universal='build/app/outputs/flutter-apk/app-release-unsigned.apk'
+          arm64='build/app/outputs/flutter-apk/app-arm64-v8a-release-unsigned.apk'
+          if [ ! -f "$universal" ]; then universal='build/app/outputs/flutter-apk/app-release.apk'; fi
+          if [ ! -f "$arm64" ]; then arm64='build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'; fi
+          test -f "$universal"
+          test -f "$arm64"
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          apksigner_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          "$apkanalyzer_path" manifest application-id "$universal" | grep -Fxq "$ANDROID_PACKAGE"
+          if "$apksigner_path" verify "$universal" >/dev/null 2>&1; then
+            echo 'Unsigned candidate unexpectedly contains a valid signature.' >&2
+            exit 1
+          fi
+          if "$apksigner_path" verify "$arm64" >/dev/null 2>&1; then
+            echo 'Unsigned arm64 candidate unexpectedly contains a valid signature.' >&2
+            exit 1
+          fi
+          "$zipalign_path" -c -P 16 -v 4 "$universal"
+          "$zipalign_path" -c -P 16 -v 4 "$arm64"
+          cp "$universal" Quantara-preview-universal-unsigned.apk
+          cp "$arm64" Quantara-preview-arm64-v8a-unsigned.apk
+          sha256sum Quantara-preview-*-unsigned.apk > UNSIGNED-SHA256SUMS.txt
+      - name: Upload unsigned transport artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-complete-preview-unsigned
+          path: |
+            src/client/quantara_app/Quantara-preview-universal-unsigned.apk
+            src/client/quantara_app/Quantara-preview-arm64-v8a-unsigned.apk
+            src/client/quantara_app/UNSIGNED-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 1
