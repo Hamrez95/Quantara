@@ -2,7 +2,7 @@ name: quantara_app
 description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
 # Quantara 1.2.0 release candidate. Stable publication remains gated by physical-device, upgrade and permanent-signing validation.
-version: 1.2.0-rc.2+121
+version: 1.2.0-rc.2+122
 
 environment:
   sdk: ^3.12.2
@@ -39,10 +39,9 @@ flutter:
       fonts:
         - asset: assets/fonts/Vazirmatn-Regular.ttf
           weight: 400
+        - asset: assets/fonts/Vazirmatn-Medium.ttf
+          weight: 500
         - asset: assets/fonts/Vazirmatn-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/Vazirmatn-Bold.ttf
           weight: 700
-    - family: CryptocurrencyIcons
-      fonts:
-        - asset: assets/fonts/cryptocurrency-icons.ttf
