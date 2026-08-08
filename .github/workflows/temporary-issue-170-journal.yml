@@ -45,7 +45,20 @@ jobs:
 
       - name: Run issue 170 and journal regressions
         working-directory: src/client/quantara_app
-        run: flutter test test/issue_170_journal_closure_test.dart test/trading_journal_test.dart test/eth_stop_hotfix_regression_test.dart
+        run: >-
+          flutter test
+          test/issue_170_journal_closure_test.dart
+          test/eth_stop_hotfix_regression_test.dart
+          test/trading_journal_exchange_backfill_test.dart
+          test/trading_journal_exchange_truth_regression_test.dart
+          test/trading_journal_foreground_merge_test.dart
+          test/trading_journal_ledger_test.dart
+          test/trading_journal_store_test.dart
+          test/trading_pnl_projection_test.dart
+          test/bitunix_pnl_reconciliation_test.dart
+          test/bitunix_pnl_position_identity_test.dart
+          test/local_live_multi_position_service_source_test.dart
+          test/local_live_diagnostic_bundle_test.dart
 
       - name: Commit implementation
         run: |
