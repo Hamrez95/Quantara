@@ -1,0 +1,255 @@
+name: Final persistent Preview signing
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - '.github/workflows/temporary-final-persistent-preview-sign.yml'
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.44.8'
+  ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+  ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
+  FINAL_ARTIFACT: quantara-final-persistent-preview
+
+jobs:
+  build-sign:
+    name: Build and sign persistent Preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout final branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 1
+
+      - name: Generate owner-transferable persistent Preview key
+        id: signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/quantara-preview-v1.jks"
+          store_pass="$(openssl rand -hex 32)"
+          key_pass="$(openssl rand -hex 32)"
+          alias='quantara-preview-v1'
+          echo "::add-mask::$store_pass"
+          echo "::add-mask::$key_pass"
+          keytool -genkeypair -noprompt \
+            -storetype JKS \
+            -keystore "$keystore" \
+            -storepass "$store_pass" \
+            -keypass "$key_pass" \
+            -alias "$alias" \
+            -keyalg RSA \
+            -keysize 4096 \
+            -validity 36500 \
+            -dname 'CN=Quantara Preview, OU=Release Engineering, O=Quantara, L=Berlin, C=DE'
+          keytool -list -v -keystore "$keystore" -storepass "$store_pass" -alias "$alias" > preview-keytool-report.txt
+          fingerprint="$(grep -m1 'SHA256:' preview-keytool-report.txt | sed 's/.*SHA256: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test -n "$fingerprint"
+          printf '%s\n' "$fingerprint" > PREVIEW-CERT-SHA256.txt
+          {
+            echo 'QUANTARA_PREVIEW_RELEASE=true'
+            echo "QUANTARA_ANDROID_KEYSTORE_PATH=$keystore"
+            echo "QUANTARA_ANDROID_KEYSTORE_PASSWORD=$store_pass"
+            echo "QUANTARA_ANDROID_KEY_ALIAS=$alias"
+            echo "QUANTARA_ANDROID_KEY_PASSWORD=$key_pass"
+          } >> "$GITHUB_ENV"
+          {
+            echo "fingerprint=$fingerprint"
+            echo "alias=$alias"
+          } >> "$GITHUB_OUTPUT"
+          printf '%s' "$store_pass" > "$RUNNER_TEMP/preview-store-pass"
+          printf '%s' "$key_pass" > "$RUNNER_TEMP/preview-key-pass"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        run: flutter pub get
+
+      - name: Recheck source format and analyzer before binary build
+        run: |
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --fatal-infos
+
+      - name: Build signed universal and ABI Preview APKs
+        run: |
+          flutter build apk --release
+          flutter build apk --release --split-per-abi
+
+      - name: Verify identity, signer, manifest and 16KB alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          universal='build/app/outputs/flutter-apk/app-release.apk'
+          arm64='build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          apksigner_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          test -x "$apkanalyzer_path"
+          test -x "$apksigner_path"
+          test -x "$zipalign_path"
+          "$apkanalyzer_path" manifest application-id "$universal" | grep -Fxq "$ANDROID_PACKAGE"
+          "$apkanalyzer_path" manifest print "$universal" > merged-manifest.xml
+          grep -Fq 'com.pravera.flutter_foreground_task.service.ForegroundService' merged-manifest.xml
+          grep -Fq 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' merged-manifest.xml
+          ! grep -Fq 'android.permission.RECEIVE_BOOT_COMPLETED' merged-manifest.xml
+          "$apksigner_path" verify --verbose --print-certs "$universal" | tee preview-signing-universal.txt
+          "$apksigner_path" verify --verbose --print-certs "$arm64" | tee preview-signing-arm64.txt
+          universal_fingerprint="$(grep -m1 'certificate SHA-256 digest:' preview-signing-universal.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
+          arm64_fingerprint="$(grep -m1 'certificate SHA-256 digest:' preview-signing-arm64.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
+          expected='${{ steps.signer.outputs.fingerprint }}'
+          test "$universal_fingerprint" = "$expected"
+          test "$arm64_fingerprint" = "$expected"
+          "$zipalign_path" -c -P 16 -v 4 "$universal"
+          "$zipalign_path" -c -P 16 -v 4 "$arm64"
+          sha256sum "$universal" "$arm64" | tee SHA256SUMS.txt
+          git rev-parse HEAD | tee BUILD-SOURCE-SHA.txt
+
+      - name: Encrypt persistent signing material for owner handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_dir="$RUNNER_TEMP/quantara-preview-private"
+          mkdir -p "$private_dir"
+          cp "$QUANTARA_ANDROID_KEYSTORE_PATH" "$private_dir/quantara-preview-v1.jks"
+          store_pass="$(cat "$RUNNER_TEMP/preview-store-pass")"
+          key_pass="$(cat "$RUNNER_TEMP/preview-key-pass")"
+          alias='${{ steps.signer.outputs.alias }}'
+          fingerprint='${{ steps.signer.outputs.fingerprint }}'
+          keystore_b64="$(base64 -w0 "$QUANTARA_ANDROID_KEYSTORE_PATH")"
+          cat > "$private_dir/PREVIEW-SECRETS.env" <<EOF
+          QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64=$keystore_b64
+          QUANTARA_PREVIEW_ANDROID_KEYSTORE_PASSWORD=$store_pass
+          QUANTARA_PREVIEW_ANDROID_KEY_ALIAS=$alias
+          QUANTARA_PREVIEW_ANDROID_KEY_PASSWORD=$key_pass
+          PREVIEW_CERT_SHA256=$fingerprint
+          EOF
+          cat > "$private_dir/README.txt" <<'EOF'
+          This is the persistent Quantara Preview/RC Android signing key.
+          Keep it private and backed up. Never commit the JKS or passwords to Git.
+          Provision the four QUANTARA_PREVIEW_* values in the GitHub Preview environment.
+          Every future Preview APK must use this same key to remain update-compatible.
+          EOF
+          tar -C "$private_dir" -czf "$RUNNER_TEMP/Quantara-Persistent-Preview-Signing-Setup.tar.gz" .
+          aes_pass="$(openssl rand -hex 32)"
+          echo "::add-mask::$aes_pass"
+          printf '%s' "$aes_pass" > "$RUNNER_TEMP/signing-bundle.pass"
+          cat > "$RUNNER_TEMP/transport-public.pem" <<'EOF'
+          -----BEGIN PUBLIC KEY-----
+          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAj8IdP/I9Ia774A4V9GHr
+          l+ke6IpGYz/dlrn0TcA07/3Yl8YNNDzzo9ASbWG1R+87JRwjHjOnc98rVX3yZulh
+          jOp/wR3tOVFIp0iyeqB1VoADv28+CNnfTV7Mu5l+9HQMQYuCWGZWjHzw9CMviF14
+          aBARPG5hH6ACwqwiDiWNzt2AjpItnrDRKnAMlemVyYp/oTGvYxoh+QymvQxVDBn9
+          KJbfztWskrb8CSnYvGZQCdchBJDriQvxLBCRgBs226Ae5zsFn/XbanciyB3ptRqb
+          5F/VuBnZ4xCJTZq9u35ltkgoaCmz2vYZjq+8QdOVoboOchYnDsDU2q3Yulf8aR2W
+          S7Jm4sKeqLLeQwcc1IkldQzfyvffHUJoaAjZq5Qxz2t6bzvsA6NNzq+FnOxNliKV
+          4A22TmS65bCwLFFgWDuQjhiMa+Hf3W6yzmr7bhouc4me21xEISXh5PE9JtoXZpXK
+          dDnJFKMovFxazpRV0JaPMaM9CWYiQEPUU8GfE7nHr7+lERWjhxGmLtiCKoOGJU6s
+          z/aiquVMA/cfyQn7RQnMvzf3lBhTccpfKdmUAkVQRZyapcfcRDS9BgSZOeQFbCK+
+          OwnGJjKhUSEwKQFS24TXjpNKJ+xSXdcpzFh6Qz85T2hgsfAwd5IEr7KLHJYzOyKU
+          YQ63I8RNkfAQywZyvBOxf38CAwEAAQ==
+          -----END PUBLIC KEY-----
+          EOF
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 250000 \
+            -in "$RUNNER_TEMP/Quantara-Persistent-Preview-Signing-Setup.tar.gz" \
+            -out Quantara-Persistent-Preview-Signing-Setup.tar.gz.aes256 \
+            -pass file:"$RUNNER_TEMP/signing-bundle.pass"
+          openssl pkeyutl -encrypt -pubin \
+            -inkey "$RUNNER_TEMP/transport-public.pem" \
+            -in "$RUNNER_TEMP/signing-bundle.pass" \
+            -out Quantara-Persistent-Preview-Signing-Setup.aespass.rsa \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256
+          sha256sum Quantara-Persistent-Preview-Signing-Setup.tar.gz.aes256 Quantara-Persistent-Preview-Signing-Setup.aespass.rsa > ENCRYPTED-SIGNING-SHA256SUMS.txt
+          rm -rf "$private_dir"
+          shred -u "$RUNNER_TEMP/Quantara-Persistent-Preview-Signing-Setup.tar.gz" "$RUNNER_TEMP/signing-bundle.pass" "$RUNNER_TEMP/preview-store-pass" "$RUNNER_TEMP/preview-key-pass" || true
+
+      - name: Upload final signed Android candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.FINAL_ARTIFACT }}
+          path: |
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            src/client/quantara_app/preview-signing-universal.txt
+            src/client/quantara_app/preview-signing-arm64.txt
+            src/client/quantara_app/PREVIEW-CERT-SHA256.txt
+            src/client/quantara_app/SHA256SUMS.txt
+            src/client/quantara_app/BUILD-SOURCE-SHA.txt
+            src/client/quantara_app/merged-manifest.xml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload encrypted owner signing handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-preview-signing-encrypted-handoff
+          path: |
+            src/client/quantara_app/Quantara-Persistent-Preview-Signing-Setup.tar.gz.aes256
+            src/client/quantara_app/Quantara-Persistent-Preview-Signing-Setup.aespass.rsa
+            src/client/quantara_app/ENCRYPTED-SIGNING-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  android-launch:
+    name: Final signed Android ${{ matrix.api-level }} cold-start
+    needs: build-sign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [34, 35, 36]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download final signed Android candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.FINAL_ARTIFACT }}
+          path: apk
+
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Boot emulator and verify final signed cold start
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
+          script: bash scripts/android-cold-start-smoke.sh apk/app-release.apk
+
+      - name: Upload final launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-signed-android-api-${{ matrix.api-level }}-launch-diagnostics
+          path: |
+            android-start.txt
+            android-pid.txt
+            android-pid-after-settle.txt
+            android-logcat.txt
+            android-jobscheduler.txt
+          if-no-files-found: ignore
+          retention-days: 14
