@@ -36,7 +36,7 @@ env:
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
   RC_VERSION: 1.2.0-rc.2
   ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.2
-  PREVIEW_CERT_SHA256: b90fc29c804534987316d5fda134de2940243715338fc79a561791f1a9593c72
+  PREVIEW_CERT_SHA256: c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984
 
 jobs:
   flutter:
@@ -238,6 +238,15 @@ jobs:
           name: ${{ env.ANDROID_RC_ARTIFACT }}
           path: apk
 
+      - name: Resolve Android release candidate path
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_path="$(find apk -type f -name 'app-release.apk' -print -quit)"
+          test -n "$apk_path"
+          test -f "$apk_path"
+          echo "ANDROID_RC_APK_PATH=$apk_path" >> "$GITHUB_ENV"
+
       - name: Enable KVM group permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -252,7 +261,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: bash scripts/android-cold-start-smoke.sh apk/app-release.apk
+          script: bash scripts/android-cold-start-smoke.sh "$ANDROID_RC_APK_PATH"
 
       - name: Upload Android launch diagnostics
         if: always()
