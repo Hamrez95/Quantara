@@ -6,6 +6,7 @@ on:
       - feat/163-portfolio-budgeted-local-live
     paths:
       - .github/scripts/issue_172_physical_qa.py
+      - .github/workflows/temporary-issue-172-physical-qa.yml
 
 permissions:
   contents: write
@@ -24,7 +25,7 @@ jobs:
           fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.35.1'
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
       - name: Apply root-cause patch
