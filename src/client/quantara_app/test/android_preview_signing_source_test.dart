@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const fingerprint =
-      'b90fc29c804534987316d5fda134de2940243715338fc79a561791f1a9593c72';
+      'c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984';
 
   test('release Gradle is fail-closed without persistent signing', () {
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
@@ -28,6 +28,8 @@ void main() {
     expect(workflow, contains('apksigner'));
     expect(workflow, contains('preview-signing.txt'));
     expect(workflow, contains('SHA256SUMS.txt'));
+    expect(workflow, contains('Resolve Android release candidate path'));
+    expect(workflow, contains('ANDROID_RC_APK_PATH'));
   });
 
   test('alpha preview workflow uses the same persistent signer', () {
