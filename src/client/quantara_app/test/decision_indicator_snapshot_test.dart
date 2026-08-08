@@ -72,8 +72,11 @@ void main() {
     expect(restored.indicatorSnapshot['plusDi14'], 31.0);
     expect(restored.indicatorSnapshot['minusDi14'], 14.0);
     expect(restored.indicatorSnapshot['relativeVolume20'], 1.25);
+    expect(restored.indicatorSnapshot['volumeZScore20'], 0.85);
     expect(restored.indicatorSnapshot['bollingerBandwidthPercent'], 5.22);
     expect(restored.indicatorSnapshot['trendEfficiency20'], 0.62);
+    expect(restored.indicatorSnapshot['recentSwingHigh'], 101.8);
+    expect(restored.indicatorSnapshot['recentSwingLow'], 97.4);
   });
 
   test('legacy plan without indicators remains explicitly empty', () {
