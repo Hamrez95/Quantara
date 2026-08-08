@@ -8,82 +8,87 @@ import 'package:quantara_app/features/auto_trade/data/bitunix_private_api_client
 import 'package:quantara_app/features/auto_trade/domain/auto_trade_models.dart';
 
 void main() {
-  test('second private refresh validates page zero instead of replaying full history', () async {
-    final positionRows = List<Map<String, Object?>>.generate(
-      101,
-      (index) => _positionHistoryRow(index),
-    );
-    final tradeRows = List<Map<String, Object?>>.generate(
-      101,
-      (index) => _tradeHistoryRow(index),
-    );
-    var positionHistoryRequests = 0;
-    var tradeHistoryRequests = 0;
+  test(
+    'second private refresh validates page zero instead of replaying full history',
+    () async {
+      final positionRows = List<Map<String, Object?>>.generate(
+        101,
+        (index) => _positionHistoryRow(index),
+      );
+      final tradeRows = List<Map<String, Object?>>.generate(
+        101,
+        (index) => _tradeHistoryRow(index),
+      );
+      var positionHistoryRequests = 0;
+      var tradeHistoryRequests = 0;
 
-    final client = MockClient((request) async {
-      final path = request.url.path;
-      if (path == '/api/v1/futures/position/get_history_positions') {
-        positionHistoryRequests += 1;
-        return _historyResponse(
-          request: request,
-          listKey: 'positionList',
-          rows: positionRows,
-        );
-      }
-      if (path == '/api/v1/futures/trade/get_history_trades') {
-        tradeHistoryRequests += 1;
-        return _historyResponse(
-          request: request,
-          listKey: 'tradeList',
-          rows: tradeRows,
-        );
-      }
-      return switch (path) {
-        '/api/v1/futures/account' => _ok({
-          'marginCoin': 'USDT',
-          'available': '30',
-          'frozen': '0',
-          'margin': '0',
-          'crossUnrealizedPNL': '0',
-          'isolationUnrealizedPNL': '0',
-          'positionMode': 'HEDGE',
-        }),
-        '/api/v1/futures/position/get_pending_positions' => _ok(<Object>[]),
-        '/api/v1/futures/trade/get_pending_orders' => _ok({
-          'orderList': <Object>[],
-        }),
-        '/api/v1/futures/tpsl/get_pending_orders' => _ok({
-          'orderList': <Object>[],
-        }),
-        _ => throw StateError('Unexpected Bitunix path: $path'),
-      };
-    });
-    final api = BitunixPrivateApiClient(
-      client: client,
-      utcNow: () => DateTime.utc(2026, 8, 8, 13),
-    );
-    addTearDown(client.close);
+      final client = MockClient((request) async {
+        final path = request.url.path;
+        if (path == '/api/v1/futures/position/get_history_positions') {
+          positionHistoryRequests += 1;
+          return _historyResponse(
+            request: request,
+            listKey: 'positionList',
+            rows: positionRows,
+          );
+        }
+        if (path == '/api/v1/futures/trade/get_history_trades') {
+          tradeHistoryRequests += 1;
+          return _historyResponse(
+            request: request,
+            listKey: 'tradeList',
+            rows: tradeRows,
+          );
+        }
+        return switch (path) {
+          '/api/v1/futures/account' => _ok({
+            'marginCoin': 'USDT',
+            'available': '30',
+            'frozen': '0',
+            'margin': '0',
+            'crossUnrealizedPNL': '0',
+            'isolationUnrealizedPNL': '0',
+            'positionMode': 'HEDGE',
+          }),
+          '/api/v1/futures/position/get_pending_positions' => _ok(<Object>[]),
+          '/api/v1/futures/trade/get_pending_orders' => _ok({
+            'orderList': <Object>[],
+          }),
+          '/api/v1/futures/tpsl/get_pending_orders' => _ok({
+            'orderList': <Object>[],
+          }),
+          _ => throw StateError('Unexpected Bitunix path: $path'),
+        };
+      });
+      final api = BitunixPrivateApiClient(
+        client: client,
+        utcNow: () => DateTime.utc(2026, 8, 8, 13),
+      );
+      addTearDown(client.close);
 
-    final first = await api.fetchAccountSnapshot(_credentials);
-    expect(first.pnlProjection.isVerified, isTrue);
-    expect(first.pnlProjection.positions, hasLength(101));
-    expect(positionHistoryRequests, 2);
-    expect(tradeHistoryRequests, 2);
+      final first = await api.fetchAccountSnapshot(_credentials);
+      expect(first.pnlProjection, isNotNull);
+      expect(first.pnlProjection!.isVerified, isTrue);
+      expect(first.pnlProjection!.positions, hasLength(101));
+      expect(positionHistoryRequests, 2);
+      expect(tradeHistoryRequests, 2);
 
-    final second = await api.fetchAccountSnapshot(_credentials);
-    expect(second.pnlProjection.isVerified, isTrue);
-    expect(second.pnlProjection.positions, hasLength(101));
-    expect(
-      positionHistoryRequests,
-      3,
-      reason: 'cached refresh should add only one page-zero position request',
-    );
-    expect(
-      tradeHistoryRequests,
-      3,
-      reason: 'cached refresh should add only one page-zero trade request',
-    );
-  });
+      final second = await api.fetchAccountSnapshot(_credentials);
+      expect(second.pnlProjection, isNotNull);
+      expect(second.pnlProjection!.isVerified, isTrue);
+      expect(second.pnlProjection!.positions, hasLength(101));
+      expect(
+        positionHistoryRequests,
+        3,
+        reason: 'cached refresh should add only one page-zero position request',
+      );
+      expect(
+        tradeHistoryRequests,
+        3,
+        reason: 'cached refresh should add only one page-zero trade request',
+      );
+    },
+  );
 }
 
 const _credentials = BitunixApiCredentials(
