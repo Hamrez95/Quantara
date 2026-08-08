@@ -79,10 +79,15 @@ void main() {
       expect(plan.confidencePercent, 0);
       expect(plan.notes, contains('were not fabricated'));
 
+      final closeEvent = result.ledger.events.singleWhere(
+        (event) => event.type == TradingJournalEventType.positionClosed,
+      );
+      expect(closeEvent.price, closeTo(73.62, 0.0000001));
+      expect(closeEvent.details['recoveredAfterInstall'], isTrue);
+
       final projection = TradingJournalProjector.projectAll(result.ledger).single;
       expect(projection.state, TradingJournalTradeState.closed);
       expect(projection.entryPrice, closeTo(74.00, 0.0000001));
-      expect(projection.closePrice, closeTo(73.62, 0.0000001));
       expect(projection.grossPnl, closeTo(-0.0874, 0.0000001));
       expect(projection.fees, closeTo(0.02037156, 0.00000001));
       expect(projection.funding, closeTo(0, 0.0000001));
