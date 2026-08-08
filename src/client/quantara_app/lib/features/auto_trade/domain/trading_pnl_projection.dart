@@ -252,6 +252,7 @@ final class ExchangeUnrealizedPnl {
     this.realizedPnl,
     this.fee,
     this.funding,
+    this.openedAt,
   });
 
   final String positionId;
@@ -260,6 +261,7 @@ final class ExchangeUnrealizedPnl {
   final double? realizedPnl;
   final double? fee;
   final double? funding;
+  final DateTime? openedAt;
 
   Map<String, Object?> toJson() => {
     'positionId': positionId,
@@ -268,6 +270,7 @@ final class ExchangeUnrealizedPnl {
     'realizedPnl': realizedPnl,
     'fee': fee,
     'funding': funding,
+    'openedAt': openedAt?.toUtc().toIso8601String(),
   };
 
   factory ExchangeUnrealizedPnl.fromJson(Map<String, Object?> json) =>
@@ -278,6 +281,9 @@ final class ExchangeUnrealizedPnl {
         realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
         fee: (json['fee'] as num?)?.toDouble(),
         funding: (json['funding'] as num?)?.toDouble(),
+        openedAt: DateTime.tryParse(
+          json['openedAt']?.toString() ?? '',
+        )?.toUtc(),
       );
 }
 
@@ -461,6 +467,7 @@ final class TradingPnlProjection {
       ...settlementsByKey.keys,
     };
     final positions = <PositionPnlProjection>[];
+    final accountBlockingPositionKeys = <String>{};
     for (final key in keys) {
       final open = unrealizedByPosition[key];
       final positionFills =
@@ -482,14 +489,27 @@ final class TradingPnlProjection {
               ? positionFills.first.positionId
               : settlement?.positionId ?? key);
       final unassignedAttribution = key.startsWith('unassigned-trade:');
-      final positionConflict =
-          unassignedAttribution ||
-          conflicts.any(
-            (item) =>
-                positionFills.any((fill) => fill.tradeId == item) ||
-                item == 'settlement:$key' ||
-                item == 'missing tradeId',
-          );
+      final attributionCouldAffectOpenPosition =
+          unassignedAttribution &&
+          positionFills.any((fill) {
+            final matchingOpen = unrealizedByPosition.values.where(
+              (candidate) =>
+                  candidate.symbol.trim().toUpperCase() ==
+                  fill.symbol.trim().toUpperCase(),
+            );
+            return matchingOpen.any((candidate) {
+              final openedAt = candidate.openedAt;
+              return openedAt == null ||
+                  !fill.occurredAt.toUtc().isBefore(openedAt.toUtc());
+            });
+          });
+      final identityConflict = conflicts.any(
+        (item) =>
+            positionFills.any((fill) => fill.tradeId == item) ||
+            item == 'settlement:$key' ||
+            item == 'missing tradeId',
+      );
+      final positionConflict = unassignedAttribution || identityConflict;
       final closedEvidenceCanStandAlone =
           settlement != null && positionFills.isNotEmpty && !positionConflict;
       final verified =
@@ -526,6 +546,11 @@ final class TradingPnlProjection {
           pendingRealizedMismatch ||
           pendingFeeMismatch;
       final positionVerified = verified && !totalsMismatch;
+      if (identityConflict ||
+          attributionCouldAffectOpenPosition ||
+          totalsMismatch) {
+        accountBlockingPositionKeys.add(key);
+      }
       final positionWarning = unassignedAttribution
           ? 'A valid exchange trade remains quarantined because it could not be assigned to one position.'
           : totalsMismatch
@@ -633,7 +658,7 @@ final class TradingPnlProjection {
     final componentsVerified =
         conflicts.isEmpty &&
         sourceVerified &&
-        positions.every((item) => item.isVerified);
+        accountBlockingPositionKeys.isEmpty;
     final projectionVerified =
         componentsVerified && fillsAvailable && settlementsAvailable;
     final projectionWarning = conflicts.isEmpty
@@ -933,7 +958,10 @@ TradingPnlMetric _aggregateMetric(
   required String? warning,
 }) {
   final values = metrics.toList(growable: false);
-  if (values.any((item) => !item.isAvailable)) {
+  final hasUnavailableComponent = verified
+      ? values.any((item) => item.value == null)
+      : values.any((item) => !item.isAvailable);
+  if (hasUnavailableComponent) {
     return TradingPnlMetric.unavailable(
       currency: currency,
       source: source,

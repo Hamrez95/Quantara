@@ -24,23 +24,28 @@ final class BitunixPrivateApiClient {
   final http.Client _client;
   final DateTime Function() _utcNow;
   final Random _random;
+  final Map<String, Map<String, Object?>> _positionHistoryCache = {};
+  final Map<String, Map<String, Object?>> _tradeHistoryCache = {};
 
   Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
-    final accountResponse = await _signedGet('/api/v1/futures/account', const {
-      'marginCoin': 'USDT',
-    }, credentials);
-    final positionsResponse = await _signedGet(
-      '/api/v1/futures/position/get_pending_positions',
-      const {},
-      credentials,
-    );
-    final ordersResponse = await _signedGet(
-      '/api/v1/futures/trade/get_pending_orders',
-      const {'limit': '100'},
-      credentials,
-    );
+    final baseResponses = await Future.wait<Map<String, Object?>>([
+      _signedGet('/api/v1/futures/account', const {
+        'marginCoin': 'USDT',
+      }, credentials),
+      _signedGet(
+        '/api/v1/futures/position/get_pending_positions',
+        const {},
+        credentials,
+      ),
+      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
+        'limit': '100',
+      }, credentials),
+    ]);
+    final accountResponse = baseResponses[0];
+    final positionsResponse = baseResponses[1];
+    final ordersResponse = baseResponses[2];
 
     final account = _firstMap(accountResponse['data']);
     if (account == null) {
@@ -68,6 +73,7 @@ final class BitunixPrivateApiClient {
           realizedPnl: position.realizedPnl,
           fee: position.fee,
           funding: position.funding,
+          openedAt: position.openedAt,
         ),
     };
 
@@ -129,40 +135,59 @@ final class BitunixPrivateApiClient {
     final pnlWarnings = <String>[];
     List<ExchangePositionSettlement> settlements = const [];
     List<ExchangePnlFill> fills = const [];
-    try {
-      final data = await _signedGetCompleteHistory(
-        path: '/api/v1/futures/position/get_history_positions',
-        listKey: 'positionList',
-        identityKey: 'positionId',
-        credentials: credentials,
-      );
-      final parsed = BitunixPnlMapper.settlements(data);
+    Future<({Map<String, Object?>? data, AutoTradeSafeException? error})>
+    guardedHistory(Future<Map<String, Object?>> Function() request) async {
+      try {
+        return (data: await request(), error: null);
+      } on AutoTradeSafeException catch (error) {
+        return (data: null, error: error);
+      }
+    }
+
+    final historyResults = await Future.wait([
+      guardedHistory(
+        () => _signedGetCachedCompleteHistory(
+          path: '/api/v1/futures/position/get_history_positions',
+          listKey: 'positionList',
+          identityKey: 'positionId',
+          credentials: credentials,
+          cache: _positionHistoryCache,
+        ),
+      ),
+      guardedHistory(
+        () => _signedGetCachedCompleteHistory(
+          path: '/api/v1/futures/trade/get_history_trades',
+          listKey: 'tradeList',
+          identityKey: 'tradeId',
+          credentials: credentials,
+          cache: _tradeHistoryCache,
+        ),
+      ),
+    ]);
+    final settlementResult = historyResults[0];
+    if (settlementResult.error != null) {
+      settlementsAvailable = false;
+      pnlWarnings.add(settlementResult.error!.message);
+    } else {
+      final parsed = BitunixPnlMapper.settlements(settlementResult.data);
       settlements = parsed.values;
       sourceVerified = sourceVerified && parsed.verified;
       if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
-    } on AutoTradeSafeException catch (error) {
-      settlementsAvailable = false;
-      pnlWarnings.add(error.message);
     }
-    try {
-      final data = await _signedGetCompleteHistory(
-        path: '/api/v1/futures/trade/get_history_trades',
-        listKey: 'tradeList',
-        identityKey: 'tradeId',
-        credentials: credentials,
-      );
+    final fillResult = historyResults[1];
+    if (fillResult.error != null) {
+      fillsAvailable = false;
+      sourceVerified = false;
+      pnlWarnings.add(fillResult.error!.message);
+    } else {
       final parsed = BitunixPnlMapper.fills(
-        data,
+        fillResult.data,
         openPositions: unrealizedByPosition.values,
         settlements: settlements,
       );
       fills = parsed.values;
       sourceVerified = sourceVerified && parsed.verified;
       if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
-    } on AutoTradeSafeException catch (error) {
-      fillsAvailable = false;
-      sourceVerified = false;
-      pnlWarnings.add(error.message);
     }
     final pnlAsOf = _utcNow().toUtc();
     final pnlProjection = TradingPnlProjection.reconcile(
@@ -192,6 +217,57 @@ final class BitunixPrivateApiClient {
       pnlProjection: pnlProjection,
       syncedAt: pnlAsOf,
     );
+  }
+
+  Future<Map<String, Object?>> _signedGetCachedCompleteHistory({
+    required String path,
+    required String listKey,
+    required String identityKey,
+    required BitunixApiCredentials credentials,
+    required Map<String, Map<String, Object?>> cache,
+  }) async {
+    Future<Map<String, Object?>> reload() async {
+      final full = await _signedGetCompleteHistory(
+        path: path,
+        listKey: listKey,
+        identityKey: identityKey,
+        credentials: credentials,
+      );
+      final dataRows = _mapList(full[listKey]);
+      cache
+        ..clear()
+        ..addEntries(
+          dataRows.map((row) => MapEntry(_string(row[identityKey]), row)),
+        );
+      return full;
+    }
+
+    if (cache.isEmpty) return reload();
+    final response = await _signedGet(path, {
+      'limit': '$_historyPageSize',
+      'skip': '0',
+    }, credentials);
+    final data = _map(response['data']);
+    if (data == null) return reload();
+    final rows = _mapList(data[listKey]);
+    final total = _optionalInteger(data['total']);
+    if (total == null ||
+        total < 0 ||
+        rows.any((row) => _string(row[identityKey]).isEmpty)) {
+      return reload();
+    }
+    final merged = Map<String, Map<String, Object?>>.of(cache);
+    for (final row in rows) {
+      merged[_string(row[identityKey])] = row;
+    }
+    if (merged.length != total) return reload();
+    cache
+      ..clear()
+      ..addAll(merged);
+    return <String, Object?>{
+      listKey: List.unmodifiable(cache.values),
+      'total': total,
+    };
   }
 
   Future<Map<String, Object?>> _signedGetCompleteHistory({

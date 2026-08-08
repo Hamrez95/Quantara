@@ -94,21 +94,15 @@ final class BitunixPnlMapper {
             );
       final resolved = resolution.positionId;
       if (resolved == null) {
-        final warning =
-            'Trade $tradeId could not be assigned to one exchange position.';
-        if (resolution.ambiguous) {
-          warnings.add(warning);
-        } else {
-          attributionWarnings.add(warning);
-        }
+        attributionWarnings.add(
+          'Trade $tradeId could not be assigned to one exchange position.',
+        );
       }
       values.add(
         ExchangePnlFill(
           tradeId: tradeId,
           orderId: orderId,
-          positionId:
-              resolved ??
-              (resolution.ambiguous ? '' : '$unassignedPositionPrefix$tradeId'),
+          positionId: resolved ?? '$unassignedPositionPrefix$tradeId',
           symbol: symbol,
           quantity: quantity.abs(),
           price: price,
@@ -197,7 +191,11 @@ final class BitunixPnlMapper {
     }
 
     final openMatches = openPositions
-        .where((item) => item.symbol.toUpperCase() == symbol)
+        .where((item) {
+          if (item.symbol.toUpperCase() != symbol) return false;
+          final openedAt = item.openedAt;
+          return openedAt == null || !at.isBefore(openedAt.toUtc());
+        })
         .map((item) => item.positionId)
         .where((item) => item.trim().isNotEmpty)
         .toSet();

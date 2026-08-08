@@ -644,6 +644,67 @@ class _OwnerAlphaBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final initialMarketLoading =
+        controller.snapshot == null &&
+        destination != 5 &&
+        destination != 6 &&
+        destination != 7;
+    if (initialMarketLoading) {
+      final horizontal = wide ? 28.0 : 16.0;
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: CustomScrollView(
+          key: PageStorageKey('owner-alpha-$destination'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(horizontal, 14, horizontal, 0),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1280),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (showTopBar) ...[
+                          _AlphaTopBar(
+                            controller: controller,
+                            themeMode: themeMode,
+                            onToggleTheme: onToggleTheme,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
+                        if (controller.error != null) ...[
+                          const SizedBox(height: 12),
+                          _AlphaErrorStrip(
+                            message: controller.error!,
+                            stale: controller.hasStaleSnapshot,
+                            onRetry: controller.refresh,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 32),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: _InitialLoading(controller: controller),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(

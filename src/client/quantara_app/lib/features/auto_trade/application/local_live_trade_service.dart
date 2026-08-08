@@ -251,7 +251,25 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     _cycleRunning = true;
     try {
       final account = await exchange.fetchAccountSnapshot(credentials);
-      final positions = await exchange.fetchPositions(credentials);
+      final positions = account.positions
+          .map(
+            (position) => BitunixLivePosition(
+              positionId: position.positionId,
+              symbol: position.symbol,
+              quantity: position.quantity.abs(),
+              side: position.side,
+              marginMode: position.marginMode,
+              positionMode: position.positionMode,
+              leverage: position.leverage,
+              averageOpenPrice: position.averageOpenPrice,
+              realizedPnl: position.realizedPnl ?? 0,
+              unrealizedPnl: position.unrealizedPnl,
+              fee: position.fee ?? 0,
+              funding: position.funding ?? 0,
+              openedAt: position.openedAt,
+            ),
+          )
+          .toList(growable: false);
       final openExchangePositions = positions
           .where((position) => position.quantity > 0)
           .toList(growable: false);
