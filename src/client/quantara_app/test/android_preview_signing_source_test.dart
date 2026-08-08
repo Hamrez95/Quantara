@@ -6,15 +6,14 @@ void main() {
   const fingerprint =
       'b90fc29c804534987316d5fda134de2940243715338fc79a561791f1a9593c72';
 
-  test('release Gradle is fail-closed without explicit signing mode', () {
+  test('release Gradle is fail-closed without persistent signing', () {
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
 
     expect(gradle, contains('QUANTARA_PREVIEW_RELEASE'));
-    expect(gradle, contains('QUANTARA_UNSIGNED_CANDIDATE'));
     expect(gradle, contains('quantaraPreview'));
     expect(gradle, contains('Runner-local debug signing is forbidden'));
-    expect(gradle, contains('signingConfig = null'));
-    expect(gradle, contains('must never be distributed until it is'));
+    expect(gradle, isNot(contains('QUANTARA_UNSIGNED_CANDIDATE')));
+    expect(gradle, isNot(contains('signingConfig = null')));
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
   });
 
