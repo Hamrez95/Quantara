@@ -39,13 +39,9 @@ jobs:
         working-directory: src/client/quantara_app
         run: >-
           dart format
-          lib/features/trading_journal/application/trading_journal_exchange_backfill.dart
+          lib/features/trading_journal/domain/trading_journal_models.dart
           lib/features/trading_journal/domain/trading_journal_projection.dart
-          lib/features/auto_trade/application/local_live_diagnostic_bundle.dart
-          lib/features/owner_alpha/presentation/owner_alpha_page.dart
-          lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart
-          test/issue_170_legacy_backfill_regression_test.dart
-          test/issue_170_diagnostic_sanitizer_regression_test.dart
+          test/issue_170_pending_close_reconciliation_test.dart
 
       - name: Analyze
         working-directory: src/client/quantara_app
@@ -58,6 +54,7 @@ jobs:
           test/issue_170_journal_closure_test.dart
           test/issue_170_legacy_backfill_regression_test.dart
           test/issue_170_diagnostic_sanitizer_regression_test.dart
+          test/issue_170_pending_close_reconciliation_test.dart
           test/eth_stop_hotfix_regression_test.dart
           test/trading_journal_exchange_backfill_test.dart
           test/trading_journal_exchange_truth_regression_test.dart
@@ -74,12 +71,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/client/quantara_app/lib/features/trading_journal/application/trading_journal_exchange_backfill.dart \
+          git add src/client/quantara_app/lib/features/trading_journal/domain/trading_journal_models.dart \
                   src/client/quantara_app/lib/features/trading_journal/domain/trading_journal_projection.dart \
-                  src/client/quantara_app/lib/features/auto_trade/application/local_live_diagnostic_bundle.dart \
-                  src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
-                  src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart \
-                  src/client/quantara_app/test/issue_170_legacy_backfill_regression_test.dart \
-                  src/client/quantara_app/test/issue_170_diagnostic_sanitizer_regression_test.dart
-          git commit -m "fix: harden journal backfill and diagnostics (#170)"
+                  src/client/quantara_app/test/issue_170_pending_close_reconciliation_test.dart
+          git commit -m "fix: make exchange-closed journal reconciliation idempotent (#170)"
           git push origin HEAD:feat/163-portfolio-budgeted-local-live
