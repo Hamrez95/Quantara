@@ -37,7 +37,7 @@ abstract final class RemainingTargetProtectionPolicy {
           filled > planned + quantityTolerance) {
         return false;
       }
-      if (planned <= quantityTolerance) {
+      if (planned == 0) {
         if (id.isNotEmpty || filled > quantityTolerance) return false;
         continue;
       }

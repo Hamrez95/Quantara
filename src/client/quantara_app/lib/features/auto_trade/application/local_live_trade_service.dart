@@ -1681,7 +1681,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     for (var index = 0; index < 3; index++) {
       final id = targetOrderIds[index].trim();
       final planned = targetQuantities[index];
-      if (planned <= quantityTolerance) continue;
+      if (planned <= 0) continue;
       final matching = protection.where(
         (item) =>
             item.orderId.trim() == id &&

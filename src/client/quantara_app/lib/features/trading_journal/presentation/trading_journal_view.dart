@@ -218,10 +218,29 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
 
   Widget _buildDetail(BuildContext context) {
     final projection = _selected!;
-    final liveKey =
-        '${projection.symbol.trim().toUpperCase()}|${projection.timeframe.trim()}';
-    final liveAnalysis = widget.liveAnalyses[liveKey];
-    final liveIdea = widget.liveIdeas[liveKey];
+    final symbolKey = projection.symbol.trim().toUpperCase();
+    final requestedTimeframe = projection.timeframe.trim();
+    final requestedKey = '$symbolKey|$requestedTimeframe';
+    var liveAnalysis = widget.liveAnalyses[requestedKey];
+    var liveIdea = widget.liveIdeas[requestedKey];
+    if (liveAnalysis == null) {
+      for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h']) {
+        final fallbackKey = '$symbolKey|$fallbackTimeframe';
+        final fallbackAnalysis = widget.liveAnalyses[fallbackKey];
+        if (fallbackAnalysis == null) continue;
+        liveAnalysis = fallbackAnalysis;
+        liveIdea = widget.liveIdeas[fallbackKey];
+        break;
+      }
+    }
+    if (liveAnalysis == null) {
+      for (final entry in widget.liveAnalyses.entries) {
+        if (!entry.key.startsWith('$symbolKey|')) continue;
+        liveAnalysis = entry.value;
+        liveIdea = widget.liveIdeas[entry.key];
+        break;
+      }
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1685,19 +1704,21 @@ class _JournalLivePositionChart extends StatelessWidget {
         actionableCurrent &&
         ((currentIdea!.direction == TradeDirection.long && frozenShort) ||
             (currentIdea!.direction == TradeDirection.short && frozenLong));
+    final activeTargets = plan.targets
+        .where((target) => target.isFinite && target > 0)
+        .toList(growable: false);
     final validOverlay =
         (frozenLong || frozenShort) &&
         plan.originalStopLoss.isFinite &&
         plan.originalStopLoss > 0 &&
         (projection.entryPrice ?? plan.plannedEntry).isFinite &&
         (projection.entryPrice ?? plan.plannedEntry) > 0 &&
-        plan.targets.isNotEmpty &&
-        plan.targets.every((target) => target.isFinite && target > 0);
+        activeTargets.isNotEmpty;
     final overlay = validOverlay
         ? ChartTradeOverlay(
             entry: projection.entryPrice ?? plan.plannedEntry,
             stop: plan.originalStopLoss,
-            targets: plan.targets,
+            targets: activeTargets,
             isLong: frozenLong,
           )
         : null;
@@ -1755,6 +1776,15 @@ class _JournalLivePositionChart extends StatelessWidget {
                       : 'Frozen entry: ${plan.direction.name.toUpperCase()} · ${projection.timeframe}',
                 ),
               ),
+              if (live.timeframe.trim() != projection.timeframe.trim())
+                Chip(
+                  avatar: const Icon(Icons.swap_horiz_rounded, size: 17),
+                  label: Text(
+                    persian
+                        ? 'کانتکست زنده: ${live.timeframe} · پلن تاریخی بازنویسی نشده'
+                        : 'Live context: ${live.timeframe} · historical plan unchanged',
+                  ),
+                ),
               if (currentIdea != null)
                 Chip(
                   avatar: const Icon(Icons.radar_rounded, size: 17),
