@@ -49,7 +49,8 @@ final class TradingLabController extends ChangeNotifier {
   String? get error => _error;
   bool get hasRunningExperiment => _run?.isRunning == true;
   TradingLabAccountContext get accountContext =>
-      _accountContextProvider?.call() ?? TradingLabAccountContext.disconnected();
+      _accountContextProvider?.call() ??
+      TradingLabAccountContext.disconnected();
 
   Future<void> initialize() async {
     if (_initialized) return;

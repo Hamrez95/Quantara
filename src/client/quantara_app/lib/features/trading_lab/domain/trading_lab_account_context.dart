@@ -18,13 +18,14 @@ final class TradingLabAccountContext {
     this.warning,
   });
 
-  factory TradingLabAccountContext.disconnected() => const TradingLabAccountContext(
-    connected: false,
-    reconciliationHealth: 'unavailable',
-    refreshing: false,
-    blocksNewEntries: true,
-    canManageExistingPositions: false,
-  );
+  factory TradingLabAccountContext.disconnected() =>
+      const TradingLabAccountContext(
+        connected: false,
+        reconciliationHealth: 'unavailable',
+        refreshing: false,
+        blocksNewEntries: true,
+        canManageExistingPositions: false,
+      );
 
   final bool connected;
   final String reconciliationHealth;

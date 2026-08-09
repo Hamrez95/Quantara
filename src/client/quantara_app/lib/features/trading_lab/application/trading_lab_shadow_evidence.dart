@@ -9,15 +9,16 @@ Map<String, Object?> buildTradingLabShadowEvidence(
   TradingLabRun run,
   Iterable<SignalJournalEntry> signalJournal,
 ) {
-  final entries = signalJournal
-      .where(
-        (entry) =>
-            !entry.createdAt.toUtc().isBefore(run.manifest.startedAtUtc) &&
-            run.manifest.symbols.contains(entry.symbol.toUpperCase()) &&
-            run.manifest.timeframes.contains(entry.timeframe),
-      )
-      .toList(growable: false)
-    ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+  final entries =
+      signalJournal
+          .where(
+            (entry) =>
+                !entry.createdAt.toUtc().isBefore(run.manifest.startedAtUtc) &&
+                run.manifest.symbols.contains(entry.symbol.toUpperCase()) &&
+                run.manifest.timeframes.contains(entry.timeframe),
+          )
+          .toList(growable: false)
+        ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
 
   final outcomeCounts = <String, int>{};
   final strategyBuckets = <String, _ShadowAccumulator>{};
