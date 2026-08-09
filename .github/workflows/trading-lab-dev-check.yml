@@ -9,7 +9,7 @@ on:
       - '.github/workflows/trading-lab-dev-check.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: trading-lab-dev-${{ github.ref }}
@@ -25,8 +25,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: feat/176-bot-trading-lab
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -38,42 +36,8 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Apply final analyzer finding
-        shell: python
-        run: |
-          from pathlib import Path
-          broker = Path('lib/features/trading_lab/application/trading_lab_paper_broker.dart')
-          text = broker.read_text()
-          old = """    final drawdown = run.peakEquity <= 0
-                  ? 0
-                  : (run.peakEquity - run.currentEquity) / run.peakEquity * 100;
-          """
-          new = """    final drawdown = (run.peakEquity <= 0
-                  ? 0
-                  : (run.peakEquity - run.currentEquity) / run.peakEquity * 100)
-              .toDouble();
-          """
-          if old not in text:
-            raise SystemExit('drawdown pattern not found')
-          broker.write_text(text.replace(old, new, 1))
-
-      - name: Format branch sources
-        run: dart format lib test
-
-      - name: Persist validation fix
-        working-directory: .
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- src/client/quantara_app/lib src/client/quantara_app/test; then
-            echo 'No source changes.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/client/quantara_app/lib src/client/quantara_app/test
-          git commit -m 'fix(lab): make drawdown accounting strongly typed'
-          git push origin HEAD:feat/176-bot-trading-lab
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         run: flutter analyze --fatal-infos
