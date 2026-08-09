@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../market_analysis/application/live_trade_context_registry.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../domain/owner_alpha_models.dart';
 import 'professional_strategy_engine.dart';
@@ -28,7 +29,7 @@ abstract final class TradeIdeaFactory {
       cadence: cadence,
       context: professionalContext,
     );
-    if (!idea.isActionable) return idea;
+    if (!idea.isActionable) return _publish(analysis, idea);
 
     final requiredMargin = idea.requiredMargin;
     final marginCap = capital * targetMarginFraction;
@@ -36,25 +37,39 @@ abstract final class TradeIdeaFactory {
         !requiredMargin.isFinite ||
         requiredMargin <= 0 ||
         requiredMargin > marginCap) {
-      return _blockedIdea(
-        idea: idea,
-        maximumLoss: capital * riskPercent / 100,
-        languageCode: languageCode,
-        fa: 'مارجین موردنیاز از سقف محافظه‌کارانه هر پوزیشن بیشتر است.',
-        en: 'Required margin exceeds the conservative per-position cap.',
+      return _publish(
+        analysis,
+        _blockedIdea(
+          idea: idea,
+          maximumLoss: capital * riskPercent / 100,
+          languageCode: languageCode,
+          fa: 'مارجین موردنیاز از سقف محافظه‌کارانه هر پوزیشن بیشتر است.',
+          en: 'Required margin exceeds the conservative per-position cap.',
+        ),
       );
     }
 
     if (idea.strategyVersion == 'rangeReversal/1.0' &&
         !_hasCorrectSideRangeBoundary(analysis: analysis, idea: idea)) {
-      return _blockedIdea(
-        idea: idea,
-        maximumLoss: capital * riskPercent / 100,
-        languageCode: languageCode,
-        fa: 'مرز ساختاری رنج در سمت صحیح قیمت قرار ندارد.',
-        en: 'The structural range boundary is not on the correct price side.',
+      return _publish(
+        analysis,
+        _blockedIdea(
+          idea: idea,
+          maximumLoss: capital * riskPercent / 100,
+          languageCode: languageCode,
+          fa: 'مرز ساختاری رنج در سمت صحیح قیمت قرار ندارد.',
+          en: 'The structural range boundary is not on the correct price side.',
+        ),
       );
     }
+    return _publish(analysis, idea);
+  }
+
+  static TradeIdea _publish(
+    TimeframeChartAnalysis analysis,
+    TradeIdea idea,
+  ) {
+    LiveTradeContextRegistry.publish(analysis: analysis, idea: idea);
     return idea;
   }
 
