@@ -36,6 +36,7 @@ jobs:
           set -euo pipefail
           python3 <<'PY'
           from pathlib import Path
+          import base64
 
           def replace_once(path: str, old: str, new: str) -> None:
               p = Path(path)
@@ -144,58 +145,7 @@ jobs:
           )
 
           regression = Path('src/client/quantara_app/test/issue_173_post_reinstall_regression_test.dart')
-          regression.write_text(r'''import 'dart:io';
-
-import 'package:flutter_test/flutter_test.dart';
-import 'package:quantara_app/features/auto_trade/domain/remaining_target_protection_policy.dart';
-
-void main() {
-  test('one exchange lot TP remains active when quantity equals tolerance', () {
-    expect(
-      RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
-        targetOrderIds: const ['tp-1', '', ''],
-        targetQuantities: const [0.1, 0, 0],
-        filledQuantities: const [0, 0, 0],
-        pendingProtection: const [
-          PendingTargetProtectionEvidence(
-            orderId: 'tp-1',
-            triggerPrice: 88.8,
-            quantity: 0.1,
-          ),
-        ],
-        quantityTolerance: 0.1,
-      ),
-      isTrue,
-    );
-  });
-
-  test('recovered journal uses live context without rewriting frozen plan', () {
-    final source = File(
-      'lib/features/trading_journal/presentation/trading_journal_view.dart',
-    ).readAsStringSync();
-
-    expect(
-      source,
-      contains("for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h'])"),
-    );
-    expect(source, contains('activeTargets'));
-    expect(source, contains('targets: activeTargets'));
-    expect(source, contains('پلن تاریخی بازنویسی نشده'));
-  });
-
-  test('initial target confirmation treats an exact lot as active', () {
-    final source = File(
-      'lib/features/auto_trade/application/local_live_trade_service.dart',
-    ).readAsStringSync();
-
-    expect(source, contains('if (planned <= 0) continue;'));
-    expect(
-      source,
-      isNot(contains('if (planned <= quantityTolerance) continue;')),
-    );
-  });
-}
-''')
+          regression.write_bytes(base64.b64decode('aW1wb3J0ICdkYXJ0OmlvJzsKCmltcG9ydCAncGFja2FnZTpmbHV0dGVyX3Rlc3QvZmx1dHRlcl90ZXN0LmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6cXVhbnRhcmFfYXBwL2ZlYXR1cmVzL2F1dG9fdHJhZGUvZG9tYWluL3JlbWFpbmluZ190YXJnZXRfcHJvdGVjdGlvbl9wb2xpY3kuZGFydCc7Cgp2b2lkIG1haW4oKSB7CiAgdGVzdCgnb25lIGV4Y2hhbmdlIGxvdCBUUCByZW1haW5zIGFjdGl2ZSB3aGVuIHF1YW50aXR5IGVxdWFscyB0b2xlcmFuY2UnLCAoKSB7CiAgICBleHBlY3QoCiAgICAgIFJlbWFpbmluZ1RhcmdldFByb3RlY3Rpb25Qb2xpY3kuYWxsUmVtYWluaW5nVGFyZ2V0c1Byb3RlY3RlZCgKICAgICAgICB0YXJnZXRPcmRlcklkczogY29uc3QgWyd0cC0xJywgJycsICcnXSwKICAgICAgICB0YXJnZXRRdWFudGl0aWVzOiBjb25zdCBbMC4xLCAwLCAwXSwKICAgICAgICBmaWxsZWRRdWFudGl0aWVzOiBjb25zdCBbMCwgMCwgMF0sCiAgICAgICAgcGVuZGluZ1Byb3RlY3Rpb246IGNvbnN0IFsKICAgICAgICAgIFBlbmRpbmdUYXJnZXRQcm90ZWN0aW9uRXZpZGVuY2UoCiAgICAgICAgICAgIG9yZGVySWQ6ICd0cC0xJywKICAgICAgICAgICAgdHJpZ2dlclByaWNlOiA4OC44LAogICAgICAgICAgICBxdWFudGl0eTogMC4xLAogICAgICAgICAgKSwKICAgICAgICBdLAogICAgICAgIHF1YW50aXR5VG9sZXJhbmNlOiAwLjEsCiAgICAgICksCiAgICAgIGlzVHJ1ZSwKICAgICk7CiAgfSk7CgogIHRlc3QoJ3JlY292ZXJlZCBqb3VybmFsIHVzZXMgbGl2ZSBjb250ZXh0IHdpdGhvdXQgcmV3cml0aW5nIGZyb3plbiBwbGFuJywgKCkgewogICAgZmluYWwgc291cmNlID0gRmlsZSgKICAgICAgJ2xpYi9mZWF0dXJlcy90cmFkaW5nX2pvdXJuYWwvcHJlc2VudGF0aW9uL3RyYWRpbmdfam91cm5hbF92aWV3LmRhcnQnLAogICAgKS5yZWFkQXNTdHJpbmdTeW5jKCk7CgogICAgZXhwZWN0KAogICAgICBzb3VyY2UsCiAgICAgIGNvbnRhaW5zKCJmb3IgKGZpbmFsIGZhbGxiYWNrVGltZWZyYW1lIGluIGNvbnN0IFsnMWgnLCAnMTVtJywgJzVtJywgJzRoJ10pIiksCiAgICApOwogICAgZXhwZWN0KHNvdXJjZSwgY29udGFpbnMoJ2FjdGl2ZVRhcmdldHMnKSk7CiAgICBleHBlY3Qoc291cmNlLCBjb250YWlucygndGFyZ2V0czogYWN0aXZlVGFyZ2V0cycpKTsKICAgIGV4cGVjdChzb3VyY2UsIGNvbnRhaW5zKCfZvtmE2YYg2KrYp9ix24zYrtuMINio2KfYstmG2YjbjNiz24wg2YbYtNiv2YcnKSk7CiAgfSk7CgogIHRlc3QoJ2luaXRpYWwgdGFyZ2V0IGNvbmZpcm1hdGlvbiB0cmVhdHMgYW4gZXhhY3QgbG90IGFzIGFjdGl2ZScsICgpIHsKICAgIGZpbmFsIHNvdXJjZSA9IEZpbGUoCiAgICAgICdsaWIvZmVhdHVyZXMvYXV0b190cmFkZS9hcHBsaWNhdGlvbi9sb2NhbF9saXZlX3RyYWRlX3NlcnZpY2UuZGFydCcsCiAgICApLnJlYWRBc1N0cmluZ1N5bmMoKTsKCiAgICBleHBlY3Qoc291cmNlLCBjb250YWlucygnaWYgKHBsYW5uZWQgPD0gMCkgY29udGludWU7JykpOwogICAgZXhwZWN0KAogICAgICBzb3VyY2UsCiAgICAgIGlzTm90KGNvbnRhaW5zKCdpZiAocGxhbm5lZCA8PSBxdWFudGl0eVRvbGVyYW5jZSkgY29udGludWU7JykpLAogICAgKTsKICB9KTsKfQo='))
           PY
 
       - name: Format changed Dart sources
