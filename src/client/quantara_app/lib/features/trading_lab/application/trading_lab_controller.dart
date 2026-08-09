@@ -6,7 +6,7 @@ import '../../owner_alpha/application/owner_alpha_controller.dart';
 import '../data/database_trading_lab_store.dart';
 import '../domain/trading_lab_models.dart';
 import 'trading_lab_paper_broker.dart';
-import 'trading_lab_review_bundle.dart';
+import 'trading_lab_shadow_evidence.dart';
 
 final class TradingLabController extends ChangeNotifier {
   factory TradingLabController({
@@ -148,7 +148,10 @@ final class TradingLabController extends ChangeNotifier {
     if (current == null) {
       throw StateError('No Trading Lab experiment is available to export.');
     }
-    return buildTradingLabAiReviewJson(current);
+    return buildTradingLabAiReviewJsonWithShadows(
+      current,
+      _marketController.signalJournal,
+    );
   }
 
   String suggestedExportFileName() {
