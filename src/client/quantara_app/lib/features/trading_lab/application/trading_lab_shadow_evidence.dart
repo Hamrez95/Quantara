@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../owner_alpha/domain/owner_alpha_models.dart';
+import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
 import 'trading_lab_review_bundle.dart';
 
@@ -8,16 +9,15 @@ Map<String, Object?> buildTradingLabShadowEvidence(
   TradingLabRun run,
   Iterable<SignalJournalEntry> signalJournal,
 ) {
-  final entries =
-      signalJournal
-          .where(
-            (entry) =>
-                !entry.createdAt.toUtc().isBefore(run.manifest.startedAtUtc) &&
-                run.manifest.symbols.contains(entry.symbol.toUpperCase()) &&
-                run.manifest.timeframes.contains(entry.timeframe),
-          )
-          .toList(growable: false)
-        ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+  final entries = signalJournal
+      .where(
+        (entry) =>
+            !entry.createdAt.toUtc().isBefore(run.manifest.startedAtUtc) &&
+            run.manifest.symbols.contains(entry.symbol.toUpperCase()) &&
+            run.manifest.timeframes.contains(entry.timeframe),
+      )
+      .toList(growable: false)
+    ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
 
   final outcomeCounts = <String, int>{};
   final strategyBuckets = <String, _ShadowAccumulator>{};
@@ -110,10 +110,13 @@ Map<String, Object?> buildTradingLabShadowEvidence(
 
 String buildTradingLabAiReviewJsonWithShadows(
   TradingLabRun run,
-  Iterable<SignalJournalEntry> signalJournal,
-) {
+  Iterable<SignalJournalEntry> signalJournal, {
+  TradingLabAccountContext? accountContext,
+}) {
   final bundle = buildTradingLabAiReviewBundle(run);
   bundle['shadowEvidence'] = buildTradingLabShadowEvidence(run, signalJournal);
+  bundle['realAccountContext'] =
+      (accountContext ?? TradingLabAccountContext.disconnected()).toJson();
   return const JsonEncoder.withIndent('  ').convert(bundle);
 }
 
