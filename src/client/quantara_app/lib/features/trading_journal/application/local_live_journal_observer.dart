@@ -26,7 +26,7 @@ final class LocalLiveJournalObserver {
     final riskPerUnit = (managed.entryPrice - managed.originalStopLoss).abs();
     final expectedR = managed.targets
         .map(
-          (target) => riskPerUnit <= 0
+          (target) => target <= 0 || riskPerUnit <= 0
               ? 0.0
               : (target - managed.entryPrice).abs() / riskPerUnit,
         )
@@ -66,10 +66,10 @@ final class LocalLiveJournalObserver {
         'fresh-account-projection',
         'confirmed-entry-fill',
         'confirmed-full-stop',
-        'confirmed-three-target-ladder',
+        'confirmed-active-target-ladder',
       ],
       blockedGates: const [],
-      appVersion: '1.2.0-rc.2+121',
+      appVersion: '1.2.0-rc.2+124',
       strategyRulesVersion: idea.strategyVersion,
       positionId: managed.positionId,
       entryOrderId: managed.entryOrderId,
@@ -180,7 +180,7 @@ final class LocalLiveJournalObserver {
     final riskPerUnit = (managed.entryPrice - managed.originalStopLoss).abs();
     final expectedR = managed.targets
         .map(
-          (target) => riskPerUnit <= 0
+          (target) => target <= 0 || riskPerUnit <= 0
               ? 0.0
               : (target - managed.entryPrice).abs() / riskPerUnit,
         )
@@ -215,7 +215,7 @@ final class LocalLiveJournalObserver {
         'verified-q-local-entry-order',
         'verified-open-position-id',
         'confirmed-full-stop',
-        'confirmed-three-target-ladder',
+        'confirmed-active-target-ladder',
       ],
       regime: 'recovered-exchange-truth',
       rationale:
@@ -232,11 +232,11 @@ final class LocalLiveJournalObserver {
         'isolated-margin',
         'verified-q-local-entry-order',
         'confirmed-full-stop',
-        'confirmed-three-target-ladder',
+        'confirmed-active-target-ladder',
         'no-confirmed-partial-exit',
       ],
       blockedGates: const [],
-      appVersion: '1.2.0-rc.2+121',
+      appVersion: '1.2.0-rc.2+124',
       strategyRulesVersion: 'exchange-recovery-v1',
       positionId: managed.positionId,
       entryOrderId: managed.entryOrderId,

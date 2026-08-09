@@ -25,6 +25,7 @@ abstract final class RemainingTargetProtectionPolicy {
         quantityTolerance < 0) {
       return false;
     }
+    final comparisonTolerance = quantityTolerance / 2;
     final pending = pendingProtection.toList(growable: false);
     for (var index = 0; index < 3; index++) {
       final id = targetOrderIds[index].trim();
@@ -34,23 +35,24 @@ abstract final class RemainingTargetProtectionPolicy {
           planned < 0 ||
           !filled.isFinite ||
           filled < 0 ||
-          filled > planned + quantityTolerance) {
+          filled > planned + comparisonTolerance) {
         return false;
       }
       if (planned == 0) {
-        if (id.isNotEmpty || filled > quantityTolerance) return false;
+        if (id.isNotEmpty || filled > comparisonTolerance) return false;
         continue;
       }
       if (id.isEmpty) return false;
       final remaining = (planned - filled).clamp(0, planned).toDouble();
-      if (remaining <= quantityTolerance) continue;
+      if (remaining <= comparisonTolerance) continue;
       final confirmed = pending.any(
         (item) =>
             item.orderId.trim() == id &&
             item.triggerPrice.isFinite &&
             item.triggerPrice > 0 &&
             item.quantity.isFinite &&
-            item.quantity + quantityTolerance >= remaining,
+            item.quantity > 0 &&
+            item.quantity + comparisonTolerance >= remaining,
       );
       if (!confirmed) return false;
     }

@@ -1678,6 +1678,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     )) {
       return false;
     }
+    final comparisonTolerance = quantityTolerance / 2;
     for (var index = 0; index < 3; index++) {
       final id = targetOrderIds[index].trim();
       final planned = targetQuantities[index];
@@ -1686,8 +1687,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         (item) =>
             item.orderId.trim() == id &&
             item.takeProfitPrice > 0 &&
-            item.takeProfitQuantity + quantityTolerance >=
-                targetQuantities[index],
+            item.takeProfitQuantity.isFinite &&
+            item.takeProfitQuantity > 0 &&
+            item.takeProfitQuantity + comparisonTolerance >= planned,
       );
       if (matching.isEmpty) return false;
     }

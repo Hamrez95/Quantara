@@ -23,6 +23,38 @@ void main() {
     );
   });
 
+  test(
+    'one exchange lot TP still requires actual positive exchange evidence',
+    () {
+      expect(
+        RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
+          targetOrderIds: const ['tp-1', '', ''],
+          targetQuantities: const [0.1, 0, 0],
+          filledQuantities: const [0, 0, 0],
+          pendingProtection: const [],
+          quantityTolerance: 0.1,
+        ),
+        isFalse,
+      );
+      expect(
+        RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
+          targetOrderIds: const ['tp-1', '', ''],
+          targetQuantities: const [0.1, 0, 0],
+          filledQuantities: const [0, 0, 0],
+          pendingProtection: const [
+            PendingTargetProtectionEvidence(
+              orderId: 'tp-1',
+              triggerPrice: 88.8,
+              quantity: 0,
+            ),
+          ],
+          quantityTolerance: 0.1,
+        ),
+        isFalse,
+      );
+    },
+  );
+
   test('recovered journal uses live context without rewriting frozen plan', () {
     final source = File(
       'lib/features/trading_journal/presentation/trading_journal_view.dart',
@@ -47,7 +79,21 @@ void main() {
     expect(source, contains('if (planned <= 0) continue;'));
     expect(
       source,
+      contains('final comparisonTolerance = quantityTolerance / 2;'),
+    );
+    expect(source, contains('item.takeProfitQuantity > 0'));
+    expect(
+      source,
       isNot(contains('if (planned <= quantityTolerance) continue;')),
     );
+  });
+
+  test('recovered evidence ignores inactive target R values', () {
+    final source = File(
+      'lib/features/trading_journal/application/local_live_journal_observer.dart',
+    ).readAsStringSync();
+    expect(source, contains('target <= 0 || riskPerUnit <= 0'));
+    expect(source, contains('confirmed-active-target-ladder'));
+    expect(source, contains("appVersion: '1.2.0-rc.2+124'"));
   });
 }
