@@ -38,77 +38,29 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Apply analyzer findings
+      - name: Apply final analyzer finding
         shell: python
         run: |
           from pathlib import Path
-
-          page = Path('lib/features/owner_alpha/presentation/owner_alpha_page.dart')
-          text = page.read_text()
-          text = text.replace("import 'dart:typed_data';\n", '')
-          page.write_text(text)
-
-          controller = Path('lib/features/trading_lab/application/trading_lab_controller.dart')
-          text = controller.read_text()
-          text = text.replace("import '../../owner_alpha/domain/owner_alpha_models.dart';\n", '')
-          old = """final class TradingLabController extends ChangeNotifier {
-            TradingLabController({
-              required OwnerAlphaController marketController,
-              required TradingLabRunStore store,
-              TradingLabPaperBroker broker = const TradingLabPaperBroker(),
-            }) : _marketController = marketController,
-                 _store = store,
-                 _broker = broker;
-          """
-          new = """final class TradingLabController extends ChangeNotifier {
-            factory TradingLabController({
-              required OwnerAlphaController marketController,
-              required TradingLabRunStore store,
-              TradingLabPaperBroker broker = const TradingLabPaperBroker(),
-            }) => TradingLabController._(marketController, store, broker);
-
-            TradingLabController._(this._marketController, this._store, this._broker);
-          """
-          if old not in text:
-            raise SystemExit('controller constructor pattern not found')
-          controller.write_text(text.replace(old, new))
-
           broker = Path('lib/features/trading_lab/application/trading_lab_paper_broker.dart')
           text = broker.read_text()
-          text = text.replace(
-              "      if (!run.manifest.symbols.contains(radar.quote.symbol.toUpperCase()))\n        continue;",
-              "      if (!run.manifest.symbols.contains(radar.quote.symbol.toUpperCase())) {\n        continue;\n      }",
-          )
-          text = text.replace(
-              "    final availableMargin = math.max(\n",
-              "    final availableMargin = math.max(\n",
-          ).replace(
-              "          ),\n    );\n    if (margin > availableMargin + 0.0000001)",
-              "          ),\n    ).toDouble();\n    if (margin > availableMargin + 0.0000001)",
-              1,
-          )
-          text = text.replace(
-              "      if (!position.isOpen || position.filledTargetIndexes.contains(index))\n        continue;",
-              "      if (!position.isOpen || position.filledTargetIndexes.contains(index)) {\n        continue;\n      }",
-          )
-          text = text.replace(
-              "    run.currentEquity = math.max(0, run.balance + unrealized);",
-              "    run.currentEquity = math.max(0, run.balance + unrealized).toDouble();",
-          )
-          text = text.replace(
-              "    if (drawdown > run.maximumDrawdownPercent)\n      run.maximumDrawdownPercent = drawdown;",
-              "    if (drawdown > run.maximumDrawdownPercent) {\n      run.maximumDrawdownPercent = drawdown;\n    }",
-          )
-          text = text.replace(
-              "but portfolio slots are currently full.",
-              "but portfolio capacity is full (all slots occupied).",
-          )
-          broker.write_text(text)
+          old = """    final drawdown = run.peakEquity <= 0
+                  ? 0
+                  : (run.peakEquity - run.currentEquity) / run.peakEquity * 100;
+          """
+          new = """    final drawdown = (run.peakEquity <= 0
+                  ? 0
+                  : (run.peakEquity - run.currentEquity) / run.peakEquity * 100)
+              .toDouble();
+          """
+          if old not in text:
+            raise SystemExit('drawdown pattern not found')
+          broker.write_text(text.replace(old, new, 1))
 
       - name: Format branch sources
         run: dart format lib test
 
-      - name: Persist validation fixes
+      - name: Persist validation fix
         working-directory: .
         shell: bash
         run: |
@@ -120,7 +72,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/client/quantara_app/lib src/client/quantara_app/test
-          git commit -m 'fix(lab): resolve analyzer findings'
+          git commit -m 'fix(lab): make drawdown accounting strongly typed'
           git push origin HEAD:feat/176-bot-trading-lab
 
       - name: Analyze
