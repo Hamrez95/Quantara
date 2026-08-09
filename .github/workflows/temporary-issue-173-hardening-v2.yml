@@ -17,11 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout current PR source
+      - name: Checkout helper branch
         uses: actions/checkout@v4
         with:
-          ref: feat/163-portfolio-budgeted-local-live
           fetch-depth: 0
+
+      - name: Preserve helper and switch to PR source
+        shell: bash
+        run: |
+          cp tools/issue173_harden.py "$RUNNER_TEMP/issue173_harden.py"
+          git fetch origin feat/163-portfolio-budgeted-local-live
+          git checkout -B feat/163-portfolio-budgeted-local-live origin/feat/163-portfolio-budgeted-local-live
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -31,114 +37,7 @@ jobs:
           cache: true
 
       - name: Apply safety hardening
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-          import re
-
-          def sub1(path, pattern, replacement, flags=0):
-              p = Path(path)
-              text = p.read_text()
-              new, count = re.subn(pattern, replacement, text, count=1, flags=flags)
-              if count != 1:
-                  raise SystemExit(f'Expected one regex match in {path}; got {count}: {pattern}')
-              p.write_text(new)
-
-          policy = 'src/client/quantara_app/lib/features/auto_trade/domain/remaining_target_protection_policy.dart'
-          sub1(policy, r'(\n\s*)final pending = pendingProtection\.toList\(growable: false\);', r'\1final comparisonTolerance = quantityTolerance / 2;\1final pending = pendingProtection.toList(growable: false);')
-          sub1(policy, r'filled > planned \+ quantityTolerance', 'filled > planned + comparisonTolerance')
-          sub1(policy, r'filled > quantityTolerance', 'filled > comparisonTolerance')
-          sub1(policy, r'if \(remaining <= quantityTolerance\) continue;', 'if (remaining <= comparisonTolerance) continue;')
-          sub1(policy, r'item\.quantity\.isFinite\s*&&\s*item\.quantity \+ quantityTolerance >= remaining,', 'item.quantity.isFinite &&\n            item.quantity > 0 &&\n            item.quantity + comparisonTolerance >= remaining,')
-
-          service = 'src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart'
-          sub1(service, r'(if \(!_targetIdentityLayoutValid\([\s\S]*?\)\) \{\s*return false;\s*\}\s*)(for \(var index = 0; index < 3; index\+\+\) \{\s*final id = targetOrderIds\[index\]\.trim\(\);\s*final planned = targetQuantities\[index\];\s*if \(planned <= 0\) continue;)', r'\1final comparisonTolerance = quantityTolerance / 2;\n    \2')
-          sub1(service, r'item\.takeProfitPrice > 0\s*&&\s*item\.takeProfitQuantity \+ quantityTolerance >=\s*targetQuantities\[index\],', 'item.takeProfitPrice > 0 &&\n            item.takeProfitQuantity.isFinite &&\n            item.takeProfitQuantity > 0 &&\n            item.takeProfitQuantity + comparisonTolerance >= planned,')
-
-          observer = 'src/client/quantara_app/lib/features/trading_journal/application/local_live_journal_observer.dart'
-          p = Path(observer)
-          text = p.read_text()
-          count = text.count('(target) => riskPerUnit <= 0')
-          if count != 2:
-              raise SystemExit(f'Expected 2 expected-R lambdas, got {count}')
-          text = text.replace('(target) => riskPerUnit <= 0', '(target) => target <= 0 || riskPerUnit <= 0')
-          if 'confirmed-three-target-ladder' not in text:
-              raise SystemExit('Missing legacy target ladder label')
-          text = text.replace('confirmed-three-target-ladder', 'confirmed-active-target-ladder')
-          if "1.2.0-rc.2+121" not in text:
-              raise SystemExit('Missing legacy journal observer version')
-          text = text.replace('1.2.0-rc.2+121', '1.2.0-rc.2+124')
-          p.write_text(text)
-
-          test_path = Path('src/client/quantara_app/test/issue_173_post_reinstall_regression_test.dart')
-          test_text = test_path.read_text()
-          anchor = "  test('recovered journal uses live context without rewriting frozen plan', () {"
-          insertion = r'''  test('one exchange lot TP still requires actual positive exchange evidence', () {
-            expect(
-              RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
-                targetOrderIds: const ['tp-1', '', ''],
-                targetQuantities: const [0.1, 0, 0],
-                filledQuantities: const [0, 0, 0],
-                pendingProtection: const [],
-                quantityTolerance: 0.1,
-              ),
-              isFalse,
-            );
-            expect(
-              RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
-                targetOrderIds: const ['tp-1', '', ''],
-                targetQuantities: const [0.1, 0, 0],
-                filledQuantities: const [0, 0, 0],
-                pendingProtection: const [
-                  PendingTargetProtectionEvidence(
-                    orderId: 'tp-1',
-                    triggerPrice: 88.8,
-                    quantity: 0,
-                  ),
-                ],
-                quantityTolerance: 0.1,
-              ),
-              isFalse,
-            );
-          });
-
-'''
-          if anchor not in test_text:
-              raise SystemExit('Missing test insertion anchor')
-          test_text = test_text.replace(anchor, insertion + anchor, 1)
-          old_tail = """    expect(source, contains('if (planned <= 0) continue;'));
-            expect(
-              source,
-              isNot(contains('if (planned <= quantityTolerance) continue;')),
-            );
-          });
-        }
-"""
-          new_tail = """    expect(source, contains('if (planned <= 0) continue;'));
-            expect(source, contains('final comparisonTolerance = quantityTolerance / 2;'));
-            expect(source, contains('item.takeProfitQuantity > 0'));
-            expect(
-              source,
-              isNot(contains('if (planned <= quantityTolerance) continue;')),
-            );
-          });
-
-          test('recovered evidence ignores inactive target R values', () {
-            final source = File(
-              'lib/features/trading_journal/application/local_live_journal_observer.dart',
-            ).readAsStringSync();
-            expect(source, contains('target <= 0 || riskPerUnit <= 0'));
-            expect(source, contains('confirmed-active-target-ladder'));
-            expect(source, contains(\"appVersion: '1.2.0-rc.2+124'\"));
-          });
-        }
-"""
-          if old_tail not in test_text:
-              raise SystemExit('Missing test tail anchor')
-          test_path.write_text(test_text.replace(old_tail, new_tail, 1))
-          PY
+        run: python3 "$RUNNER_TEMP/issue173_harden.py"
 
       - name: Format changed Dart
         working-directory: src/client/quantara_app
