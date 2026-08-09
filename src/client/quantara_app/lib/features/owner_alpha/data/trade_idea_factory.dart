@@ -65,10 +65,7 @@ abstract final class TradeIdeaFactory {
     return _publish(analysis, idea);
   }
 
-  static TradeIdea _publish(
-    TimeframeChartAnalysis analysis,
-    TradeIdea idea,
-  ) {
+  static TradeIdea _publish(TimeframeChartAnalysis analysis, TradeIdea idea) {
     LiveTradeContextRegistry.publish(analysis: analysis, idea: idea);
     return idea;
   }

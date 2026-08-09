@@ -27,8 +27,7 @@ abstract final class LiveTradeContextRegistry {
     required String symbol,
     required String timeframe,
     required AnalysisStrategy strategy,
-  }) =>
-      '${symbol.trim().toUpperCase()}|${timeframe.trim()}|${strategy.name}';
+  }) => '${symbol.trim().toUpperCase()}|${timeframe.trim()}|${strategy.name}';
 
   static LiveTradeContext? find({
     required String symbol,
@@ -50,7 +49,8 @@ abstract final class LiveTradeContextRegistry {
     required TimeframeChartAnalysis analysis,
     required TradeIdea idea,
   }) {
-    if (analysis.symbol.trim().toUpperCase() != idea.symbol.trim().toUpperCase() ||
+    if (analysis.symbol.trim().toUpperCase() !=
+            idea.symbol.trim().toUpperCase() ||
         analysis.timeframe.trim() != idea.timeframe.trim()) {
       return;
     }

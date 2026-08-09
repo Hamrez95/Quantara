@@ -15,7 +15,8 @@ bool tradingJournalDirectionsOppose(
   TradingJournalDirection frozen,
   TradeDirection current,
 ) =>
-    (frozen == TradingJournalDirection.long && current == TradeDirection.short) ||
+    (frozen == TradingJournalDirection.long &&
+        current == TradeDirection.short) ||
     (frozen == TradingJournalDirection.short && current == TradeDirection.long);
 
 class TradingJournalLivePositionsPanel extends StatelessWidget {
@@ -47,7 +48,9 @@ class TradingJournalLivePositionsPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SectionHeading(
-            title: persian ? 'پوزیشن‌های زنده در ژورنال' : 'Live journal positions',
+            title: persian
+                ? 'پوزیشن‌های زنده در ژورنال'
+                : 'Live journal positions',
             subtitle: persian
                 ? 'پلن فریز‌شده زمان ورود روی داده فعلی بازار؛ بدون تغییر خودکار پوزیشن'
                 : 'The frozen entry-time plan over current market data; no automatic position reversal',
@@ -128,8 +131,12 @@ class _LivePositionCard extends StatelessWidget {
               entryPrice *
               100 *
               (projection.direction == TradingJournalDirection.short ? -1 : 1);
-    final opposite = currentIdea.isActionable &&
-        tradingJournalDirectionsOppose(projection.direction, currentIdea.direction);
+    final opposite =
+        currentIdea.isActionable &&
+        tradingJournalDirectionsOppose(
+          projection.direction,
+          currentIdea.direction,
+        );
     final scheme = Theme.of(context).colorScheme;
     final currentDirectionColor = switch (currentIdea.direction) {
       TradeDirection.long => QuantaraColors.success,
@@ -271,9 +278,9 @@ class _LivePositionCard extends StatelessWidget {
             persian
                 ? 'ناحیه‌های حمایت/مقاومت روی چارت از تحلیل زنده فعلی هستند. Entry، SL و TP از پلن فریز‌شده ژورنال می‌آیند. سطوح مرجع زمان تصمیم جداگانه در پایین نمایش داده می‌شوند تا داده تاریخی با تحلیل جدید قاطی نشود.'
                 : 'Support/resistance zones on the chart are from current live analysis. Entry, SL and TP come from the frozen Journal plan. Decision-time reference levels are listed separately below so historical evidence is not mixed with new analysis.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 14),
           LayoutBuilder(
@@ -331,10 +338,12 @@ class _LivePositionCard extends StatelessWidget {
           if (referenceLevels.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
-              persian ? 'سطوح مرجع زمان تصمیم' : 'Decision-time reference levels',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+              persian
+                  ? 'سطوح مرجع زمان تصمیم'
+                  : 'Decision-time reference levels',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -354,9 +363,9 @@ class _LivePositionCard extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             persian ? 'چرا این پوزیشن باز شد؟' : 'Why this position was opened',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 7),
           if (plan.rationale.trim().isNotEmpty) Text(plan.rationale),
@@ -371,9 +380,9 @@ class _LivePositionCard extends StatelessWidget {
           Text(
             '${persian ? 'آخرین دیتای چارت' : 'Chart data as of'}: ${_formatLiveTime(live.observedAt)}',
             textDirection: TextDirection.ltr,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ),
