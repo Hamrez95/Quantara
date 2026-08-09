@@ -3,7 +3,7 @@ name: Temporary Issue 173 source formatter
 on:
   push:
     branches:
-      - feat/163-portfolio-budgeted-local-live
+      - fix/173-journal-live-context
     paths:
       - src/client/quantara_app/lib/features/market_analysis/application/live_trade_context_registry.dart
       - src/client/quantara_app/lib/features/owner_alpha/data/trade_idea_factory.dart
@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feat/163-portfolio-budgeted-local-live
+          ref: fix/173-journal-live-context
           fetch-depth: 0
       - uses: subosito/flutter-action@v2
         with:
@@ -52,4 +52,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/client/quantara_app
           git commit -m 'style: format issue 173 journal live context'
-          git push origin HEAD:feat/163-portfolio-budgeted-local-live
+          git push origin HEAD:fix/173-journal-live-context
