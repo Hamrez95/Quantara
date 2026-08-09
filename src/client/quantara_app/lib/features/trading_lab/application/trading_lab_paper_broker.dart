@@ -74,8 +74,14 @@ final class TradingLabPaperBroker {
         final analysis = radar.analysesByTimeframe[timeframe];
         if (analysis == null) continue;
         final signalCandle = analysis.latestCandle;
-        final decisionKey =
-            '${analysis.fingerprint}|${idea.setupId}|${signalCandle.openTime.toUtc().toIso8601String()}';
+        final decisionKey = [
+          idea.symbol.toUpperCase(),
+          timeframe,
+          idea.strategy.name,
+          idea.strategyVersion,
+          idea.setupId,
+          idea.candleClosedAt.toUtc().toIso8601String(),
+        ].join('|');
         if (run.processedDecisionKeys.contains(decisionKey)) continue;
         run.rememberDecision(decisionKey);
 
