@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -38,6 +39,9 @@ import '../../trading_journal/application/trading_journal_controller.dart';
 import '../../trading_journal/data/database_trading_journal_store.dart';
 import '../../trading_journal/domain/trading_journal_evidence_packet.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
+import '../../trading_lab/application/trading_lab_controller.dart';
+import '../../trading_lab/data/database_trading_lab_store.dart';
+import '../../trading_lab/domain/trading_lab_models.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
 import '../data/owner_alpha_settings_transfer.dart';
@@ -58,6 +62,7 @@ part 'owner_alpha_auto_trade_support.dart';
 part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
+part 'owner_alpha_trading_lab.dart';
 
 typedef _OpenAnalysis =
     void Function(String symbol, [String? timeframe, String? setupId]);
@@ -117,6 +122,10 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     backgroundScanGateway: widget.backgroundScanGateway,
     languageCode: widget.locale.languageCode,
   );
+  late final TradingLabController _tradingLabController = TradingLabController(
+    marketController: _controller,
+    store: DatabaseTradingLabRunStore(),
+  );
   final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
       GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
@@ -125,6 +134,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   void initState() {
     super.initState();
     unawaited(_controller.initialize());
+    unawaited(_tradingLabController.initialize());
     unawaited(_autoTradeController.initialize());
     unawaited(_unattendedAutoTradeController.initialize());
     unawaited(_journalController.initialize());
@@ -132,6 +142,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
 
   @override
   void dispose() {
+    _tradingLabController.dispose();
     _controller.dispose();
     _autoTradeController.dispose();
     _unattendedAutoTradeController.dispose();
@@ -253,6 +264,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             autoTradeController: _autoTradeController,
             unattendedAutoTradeController: _unattendedAutoTradeController,
             journalController: _journalController,
+            tradingLabController: _tradingLabController,
             destination: _destination,
             themeMode: widget.themeMode,
             locale: widget.locale,
@@ -263,7 +275,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
             onNavigate: (value) {
               setState(() => _destination = value);
-              if (value == 5 || value == 6) {
+              if (value == 4 || value == 5 || value == 6) {
                 unawaited(_refreshCurrentDestination());
               }
             },
@@ -578,18 +590,19 @@ const _destinations = [
     Icons.candlestick_chart_rounded,
   ),
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
-  _Destination(Icons.home_outlined, Icons.home_rounded),
+  _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
   _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];
-const _mobileDestinationIndexes = [0, 1, 5, 7];
+const _desktopDestinationIndexes = [0, 1, 2, 3, 4, 5, 6, 7];
+const _mobileDestinationIndexes = [0, 1, 4, 5, 7];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
   2 => strings.analysis,
   3 => strings.watchlist,
+  4 => strings.isPersian ? 'آزمایشگاه بات' : 'Bot Lab',
   5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',
   6 => strings.isPersian ? 'ژورنال' : 'Journal',
   7 => strings.profile,
@@ -609,6 +622,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.autoTradeController,
     required this.unattendedAutoTradeController,
     required this.journalController,
+    required this.tradingLabController,
     required this.destination,
     required this.themeMode,
     required this.locale,
@@ -628,6 +642,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   final AutoTradeController autoTradeController;
   final UnattendedAutoTradeController unattendedAutoTradeController;
   final TradingJournalController journalController;
+  final TradingLabController tradingLabController;
   final int destination;
   final ThemeMode themeMode;
   final Locale locale;
@@ -660,6 +675,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     };
     final initialMarketLoading =
         controller.snapshot == null &&
+        destination != 4 &&
         destination != 5 &&
         destination != 6 &&
         destination != 7;
@@ -778,6 +794,11 @@ class _OwnerAlphaBody extends StatelessWidget {
                       controller: autoTradeController,
                       unattendedController: unattendedAutoTradeController,
                       analysisController: controller,
+                    )
+                  else if (destination == 4)
+                    _TradingLabView(
+                      controller: tradingLabController,
+                      marketController: controller,
                     )
                   else if (controller.snapshot == null)
                     _InitialLoading(controller: controller)
