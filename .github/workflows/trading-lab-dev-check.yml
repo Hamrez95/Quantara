@@ -73,44 +73,43 @@ jobs:
               raise SystemExit('Trading Lab import anchor not found')
             text = text.replace(import_anchor, account_import + import_anchor, 1)
 
-          old_controller = """  late final TradingLabController _tradingLabController = TradingLabController(
-            marketController: _controller,
-            store: DatabaseTradingLabRunStore(),
-          );
+          if 'accountContextProvider: () {' not in text:
+            declaration = '  late final TradingLabController _tradingLabController = TradingLabController('
+            next_declaration = '  final GlobalKey<_AutoTradeViewState> _autoTradeViewKey ='
+            start = text.find(declaration)
+            end = text.find(next_declaration, start)
+            if start < 0 or end < 0:
+              raise SystemExit('Trading Lab controller structural anchors not found')
+            new_controller = """  late final TradingLabController _tradingLabController = TradingLabController(
+              marketController: _controller,
+              store: DatabaseTradingLabRunStore(),
+              accountContextProvider: () {
+                final reconciliation = _autoTradeController.reconciliation;
+                final snapshot = _autoTradeController.snapshot;
+                return TradingLabAccountContext(
+                  connected: _autoTradeController.isConnected,
+                  reconciliationHealth: reconciliation.health.name,
+                  refreshing: reconciliation.refreshing,
+                  blocksNewEntries: reconciliation.blocksNewEntries,
+                  canManageExistingPositions:
+                      reconciliation.allowsExistingPositionManagement,
+                  syncedAtUtc: snapshot?.syncedAt.toUtc(),
+                  marginCoin: snapshot?.marginCoin,
+                  available: snapshot?.available,
+                  frozen: snapshot?.frozen,
+                  positionMargin: snapshot?.positionMargin,
+                  unrealizedPnl: snapshot?.totalUnrealizedPnl,
+                  estimatedEquity: snapshot?.estimatedEquity,
+                  openPositionCount: snapshot?.positions.length,
+                  pendingOrderCount: snapshot?.totalPendingOrderCount,
+                  allOpenPositionsFullyProtected:
+                      snapshot?.allOpenPositionsFullyProtected,
+                  warning: reconciliation.warning,
+                );
+              },
+            );
           """
-          new_controller = """  late final TradingLabController _tradingLabController = TradingLabController(
-            marketController: _controller,
-            store: DatabaseTradingLabRunStore(),
-            accountContextProvider: () {
-              final reconciliation = _autoTradeController.reconciliation;
-              final snapshot = _autoTradeController.snapshot;
-              return TradingLabAccountContext(
-                connected: _autoTradeController.isConnected,
-                reconciliationHealth: reconciliation.health.name,
-                refreshing: reconciliation.refreshing,
-                blocksNewEntries: reconciliation.blocksNewEntries,
-                canManageExistingPositions:
-                    reconciliation.allowsExistingPositionManagement,
-                syncedAtUtc: snapshot?.syncedAt.toUtc(),
-                marginCoin: snapshot?.marginCoin,
-                available: snapshot?.available,
-                frozen: snapshot?.frozen,
-                positionMargin: snapshot?.positionMargin,
-                unrealizedPnl: snapshot?.totalUnrealizedPnl,
-                estimatedEquity: snapshot?.estimatedEquity,
-                openPositionCount: snapshot?.positions.length,
-                pendingOrderCount: snapshot?.totalPendingOrderCount,
-                allOpenPositionsFullyProtected:
-                    snapshot?.allOpenPositionsFullyProtected,
-                warning: reconciliation.warning,
-              );
-            },
-          );
-          """
-          if old_controller in text:
-            text = text.replace(old_controller, new_controller, 1)
-          elif 'accountContextProvider: () {' not in text:
-            raise SystemExit('Trading Lab controller wiring anchor not found')
+            text = text[:start] + new_controller + text[end:]
           page.write_text(text)
 
       - name: Format branch sources
