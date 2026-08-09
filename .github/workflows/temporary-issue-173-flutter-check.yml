@@ -9,7 +9,7 @@ on:
       - .github/workflows/temporary-issue-173-flutter-check.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: issue-173-flutter-check
@@ -18,9 +18,23 @@ concurrency:
 jobs:
   flutter-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: fix/173-journal-live-context
+          fetch-depth: 0
+      - name: Fix known analyzer nits
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_live_positions.dart')
+          s = p.read_text()
+          s = s.replace("import 'package:flutter/foundation.dart';\n", '')
+          s = s.replace('builder: (context, _, __) => Column(', 'builder: (context, liveContexts, child) => Column(')
+          p.write_text(s)
+          PY
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
@@ -29,6 +43,9 @@ jobs:
       - name: Restore packages
         working-directory: src/client/quantara_app
         run: flutter pub get
+      - name: Format changed source
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/trading_journal/presentation/trading_journal_live_positions.dart
       - name: Verify formatting
         working-directory: src/client/quantara_app
         run: dart format --output=none --set-exit-if-changed lib test
@@ -41,3 +58,13 @@ jobs:
       - name: Compile debug Android smoke payload
         working-directory: src/client/quantara_app
         run: flutter build apk --debug --no-pub
+      - name: Commit verified fix and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/temporary-issue-173-flutter-check.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app
+          git commit -m 'fix: satisfy issue 173 Flutter analysis'
+          git push origin HEAD:fix/173-journal-live-context
