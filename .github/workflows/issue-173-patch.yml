@@ -6,6 +6,7 @@ on:
       - feat/163-portfolio-budgeted-local-live
     paths:
       - '.github/scripts/issue_173_patch.py'
+      - '.github/scripts/issue_173_followup.py'
       - '.github/workflows/issue-173-patch.yml'
   workflow_dispatch:
 
@@ -28,10 +29,12 @@ jobs:
           fetch-depth: 0
 
       - name: Apply fail-closed Issue 173 patch
-        run: python3 .github/scripts/issue_173_patch.py
+        run: |
+          python3 .github/scripts/issue_173_patch.py
+          python3 .github/scripts/issue_173_followup.py
 
       - name: Remove one-shot patch machinery
-        run: rm -f .github/scripts/issue_173_patch.py .github/workflows/issue-173-patch.yml
+        run: rm -f .github/scripts/issue_173_patch.py .github/scripts/issue_173_followup.py .github/workflows/issue-173-patch.yml
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
