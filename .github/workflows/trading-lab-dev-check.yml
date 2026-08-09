@@ -1,0 +1,63 @@
+name: Trading Lab development check
+
+on:
+  push:
+    branches:
+      - feat/176-bot-trading-lab
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/trading-lab-dev-check.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: trading-lab-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/176-bot-trading-lab
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        run: flutter pub get
+
+      - name: Format branch sources
+        run: dart format lib test
+
+      - name: Persist formatter output
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/client/quantara_app/lib src/client/quantara_app/test; then
+            echo 'No formatter changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app/lib src/client/quantara_app/test
+          git commit -m 'chore(lab): format Flutter sources'
+          git push origin HEAD:feat/176-bot-trading-lab
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Run widget and safety tests
+        run: flutter test --reporter expanded
