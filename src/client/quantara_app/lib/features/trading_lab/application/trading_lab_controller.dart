@@ -3,20 +3,19 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../owner_alpha/application/owner_alpha_controller.dart';
-import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../data/database_trading_lab_store.dart';
 import '../domain/trading_lab_models.dart';
 import 'trading_lab_paper_broker.dart';
 import 'trading_lab_review_bundle.dart';
 
 final class TradingLabController extends ChangeNotifier {
-  TradingLabController({
+  factory TradingLabController({
     required OwnerAlphaController marketController,
     required TradingLabRunStore store,
     TradingLabPaperBroker broker = const TradingLabPaperBroker(),
-  }) : _marketController = marketController,
-       _store = store,
-       _broker = broker;
+  }) => TradingLabController._(marketController, store, broker);
+
+  TradingLabController._(this._marketController, this._store, this._broker);
 
   final OwnerAlphaController _marketController;
   final TradingLabRunStore _store;

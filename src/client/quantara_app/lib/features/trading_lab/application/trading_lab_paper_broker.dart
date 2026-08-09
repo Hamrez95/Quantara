@@ -64,8 +64,9 @@ final class TradingLabPaperBroker {
 
   void _discoverCandidates(TradingLabRun run, OwnerAlphaSnapshot snapshot) {
     for (final radar in snapshot.radar) {
-      if (!run.manifest.symbols.contains(radar.quote.symbol.toUpperCase()))
+      if (!run.manifest.symbols.contains(radar.quote.symbol.toUpperCase())) {
         continue;
+      }
       for (final entry in radar.ideasByTimeframe.entries) {
         final timeframe = entry.key;
         final idea = entry.value;
@@ -234,14 +235,16 @@ final class TradingLabPaperBroker {
     final leverage = math.min(run.manifest.leverage, maxSafe);
     final notional = entry * quantity;
     final margin = notional / leverage;
-    final availableMargin = math.max(
-      0,
-      run.currentEquity -
-          run.openPositions.fold<double>(
-            0,
-            (sum, item) => sum + item.marginReserved,
-          ),
-    );
+    final availableMargin = math
+        .max(
+          0,
+          run.currentEquity -
+              run.openPositions.fold<double>(
+                0,
+                (sum, item) => sum + item.marginReserved,
+              ),
+        )
+        .toDouble();
     if (margin > availableMargin + 0.0000001) {
       _event(
         run,
@@ -374,8 +377,9 @@ final class TradingLabPaperBroker {
     }
 
     for (var index = 0; index < position.targets.length; index++) {
-      if (!position.isOpen || position.filledTargetIndexes.contains(index))
+      if (!position.isOpen || position.filledTargetIndexes.contains(index)) {
         continue;
+      }
       final target = position.targets[index];
       if (!_targetHit(position, target, candle)) continue;
       final isLast = index == position.targets.length - 1;
@@ -545,13 +549,14 @@ final class TradingLabPaperBroker {
           ? (mark - position.entryPrice) * position.remainingQuantity
           : (position.entryPrice - mark) * position.remainingQuantity;
     }
-    run.currentEquity = math.max(0, run.balance + unrealized);
+    run.currentEquity = math.max(0, run.balance + unrealized).toDouble();
     if (run.currentEquity > run.peakEquity) run.peakEquity = run.currentEquity;
     final drawdown = run.peakEquity <= 0
         ? 0
         : (run.peakEquity - run.currentEquity) / run.peakEquity * 100;
-    if (drawdown > run.maximumDrawdownPercent)
+    if (drawdown > run.maximumDrawdownPercent) {
       run.maximumDrawdownPercent = drawdown;
+    }
   }
 
   String? _entryBlockReason(
@@ -700,7 +705,7 @@ final class TradingLabPaperBroker {
   ) {
     final candidate = run.pendingCandidates.first;
     if (run.openPositions.length >= run.manifest.maximumConcurrentPositions) {
-      return 'Scanner active; ${run.pendingCandidates.length} candidate(s) pending, but portfolio slots are currently full.';
+      return 'Scanner active; ${run.pendingCandidates.length} candidate(s) pending, but portfolio capacity is full (all slots occupied).';
     }
     final analysis = _analysisFor(
       snapshot,
