@@ -1,0 +1,248 @@
+name: Temporary Issue 173 Post-Reinstall Physical Fix
+
+on:
+  push:
+    branches:
+      - automation/issue-173-post-reinstall-fix
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-173-post-reinstall-source-fix
+  cancel-in-progress: true
+
+jobs:
+  patch-validate-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PR source branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/163-portfolio-budgeted-local-live
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Apply physical QA fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, found {count}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          policy = 'src/client/quantara_app/lib/features/auto_trade/domain/remaining_target_protection_policy.dart'
+          replace_once(
+              policy,
+              '      if (planned <= quantityTolerance) {',
+              '      if (planned == 0) {',
+          )
+
+          service = 'src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart'
+          replace_once(
+              service,
+              '      if (planned <= quantityTolerance) continue;',
+              '      if (planned <= 0) continue;',
+          )
+
+          journal = 'src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart'
+          replace_once(
+              journal,
+              """    final liveKey =
+                  '${projection.symbol.trim().toUpperCase()}|${projection.timeframe.trim()}';
+              final liveAnalysis = widget.liveAnalyses[liveKey];
+              final liveIdea = widget.liveIdeas[liveKey];
+          """,
+              """    final symbolKey = projection.symbol.trim().toUpperCase();
+              final requestedTimeframe = projection.timeframe.trim();
+              final requestedKey = '$symbolKey|$requestedTimeframe';
+              var liveAnalysis = widget.liveAnalyses[requestedKey];
+              var liveIdea = widget.liveIdeas[requestedKey];
+              if (liveAnalysis == null) {
+                for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h']) {
+                  final fallbackKey = '$symbolKey|$fallbackTimeframe';
+                  final fallbackAnalysis = widget.liveAnalyses[fallbackKey];
+                  if (fallbackAnalysis == null) continue;
+                  liveAnalysis = fallbackAnalysis;
+                  liveIdea = widget.liveIdeas[fallbackKey];
+                  break;
+                }
+              }
+              if (liveAnalysis == null) {
+                for (final entry in widget.liveAnalyses.entries) {
+                  if (!entry.key.startsWith('$symbolKey|')) continue;
+                  liveAnalysis = entry.value;
+                  liveIdea = widget.liveIdeas[entry.key];
+                  break;
+                }
+              }
+          """,
+          )
+          replace_once(
+              journal,
+              """    final validOverlay =
+                  (frozenLong || frozenShort) &&
+                  plan.originalStopLoss.isFinite &&
+                  plan.originalStopLoss > 0 &&
+                  (projection.entryPrice ?? plan.plannedEntry).isFinite &&
+                  (projection.entryPrice ?? plan.plannedEntry) > 0 &&
+                  plan.targets.isNotEmpty &&
+                  plan.targets.every((target) => target.isFinite && target > 0);
+          """,
+              """    final activeTargets = plan.targets
+                  .where((target) => target.isFinite && target > 0)
+                  .toList(growable: false);
+              final validOverlay =
+                  (frozenLong || frozenShort) &&
+                  plan.originalStopLoss.isFinite &&
+                  plan.originalStopLoss > 0 &&
+                  (projection.entryPrice ?? plan.plannedEntry).isFinite &&
+                  (projection.entryPrice ?? plan.plannedEntry) > 0 &&
+                  activeTargets.isNotEmpty;
+          """,
+          )
+          replace_once(journal, '            targets: plan.targets,', '            targets: activeTargets,')
+          replace_once(
+              journal,
+              '              if (currentIdea != null)\n                Chip(',
+              """              if (live.timeframe.trim() != projection.timeframe.trim())
+                Chip(
+                  avatar: const Icon(Icons.swap_horiz_rounded, size: 17),
+                  label: Text(
+                    persian
+                        ? 'کانتکست زنده: ${live.timeframe} · پلن تاریخی بازنویسی نشده'
+                        : 'Live context: ${live.timeframe} · historical plan unchanged',
+                  ),
+                ),
+              if (currentIdea != null)
+                Chip(""",
+          )
+
+          replace_once(
+              'src/client/quantara_app/pubspec.yaml',
+              'version: 1.2.0-rc.2+123',
+              'version: 1.2.0-rc.2+124',
+          )
+          replace_once(
+              'src/client/quantara_app/test/release_1_2_0_rc_2_source_test.dart',
+              "expect(pubspec, contains('version: 1.2.0-rc.2+123'));",
+              "expect(pubspec, contains('version: 1.2.0-rc.2+124'));",
+          )
+
+          regression = Path('src/client/quantara_app/test/issue_173_post_reinstall_regression_test.dart')
+          regression.write_text(r'''import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quantara_app/features/auto_trade/domain/remaining_target_protection_policy.dart';
+
+void main() {
+  test('one exchange lot TP remains active when quantity equals tolerance', () {
+    expect(
+      RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
+        targetOrderIds: const ['tp-1', '', ''],
+        targetQuantities: const [0.1, 0, 0],
+        filledQuantities: const [0, 0, 0],
+        pendingProtection: const [
+          PendingTargetProtectionEvidence(
+            orderId: 'tp-1',
+            triggerPrice: 88.8,
+            quantity: 0.1,
+          ),
+        ],
+        quantityTolerance: 0.1,
+      ),
+      isTrue,
+    );
+  });
+
+  test('recovered journal uses live context without rewriting frozen plan', () {
+    final source = File(
+      'lib/features/trading_journal/presentation/trading_journal_view.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains("for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h'])"),
+    );
+    expect(source, contains('activeTargets'));
+    expect(source, contains('targets: activeTargets'));
+    expect(source, contains('پلن تاریخی بازنویسی نشده'));
+  });
+
+  test('initial target confirmation treats an exact lot as active', () {
+    final source = File(
+      'lib/features/auto_trade/application/local_live_trade_service.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('if (planned <= 0) continue;'));
+    expect(
+      source,
+      isNot(contains('if (planned <= quantityTolerance) continue;')),
+    );
+  });
+}
+''')
+          PY
+
+      - name: Format changed Dart sources
+        working-directory: src/client/quantara_app
+        run: |
+          dart format \
+            lib/features/auto_trade/domain/remaining_target_protection_policy.dart \
+            lib/features/auto_trade/application/local_live_trade_service.dart \
+            lib/features/trading_journal/presentation/trading_journal_view.dart \
+            test/issue_173_post_reinstall_regression_test.dart \
+            test/release_1_2_0_rc_2_source_test.dart
+
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --no-pub
+
+      - name: Run Issue 173 post-reinstall regressions
+        working-directory: src/client/quantara_app
+        run: |
+          flutter test --no-pub \
+            test/issue_173_post_reinstall_regression_test.dart \
+            test/issue_173_physical_qa_regression_test.dart \
+            test/remaining_target_protection_policy_test.dart \
+            test/trading_journal_view_test.dart \
+            test/release_1_2_0_rc_2_source_test.dart
+
+      - name: Run full Flutter suite
+        working-directory: src/client/quantara_app
+        run: flutter test --no-pub
+
+      - name: Commit validated fix to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Hamidreza Pakpour"
+          git config user.email "136631329+Hamrez95@users.noreply.github.com"
+          git add \
+            src/client/quantara_app/lib/features/auto_trade/domain/remaining_target_protection_policy.dart \
+            src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
+            src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart \
+            src/client/quantara_app/pubspec.yaml \
+            src/client/quantara_app/test/release_1_2_0_rc_2_source_test.dart \
+            src/client/quantara_app/test/issue_173_post_reinstall_regression_test.dart
+          git diff --cached --check
+          git commit -m "fix: recover live journal context after reinstall"
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
