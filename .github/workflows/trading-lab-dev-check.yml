@@ -9,7 +9,7 @@ on:
       - '.github/workflows/trading-lab-dev-check.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: trading-lab-dev-${{ github.ref }}
@@ -25,8 +25,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: feat/176-bot-trading-lab
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -38,118 +36,25 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Apply branch validation source fixes
-        shell: python
-        run: |
-          from pathlib import Path
-
-          broker = Path('lib/features/trading_lab/application/trading_lab_paper_broker.dart')
-          text = broker.read_text()
-          old = """        final signalCandle = analysis.latestCandle;
-                  final decisionKey =
-                      '${analysis.fingerprint}|${idea.setupId}|${signalCandle.openTime.toUtc().toIso8601String()}';
-          """
-          new = """        final signalCandle = analysis.latestCandle;
-                  final decisionKey = [
-                    idea.symbol.toUpperCase(),
-                    timeframe,
-                    idea.strategy.name,
-                    idea.strategyVersion,
-                    idea.setupId,
-                    idea.candleClosedAt.toUtc().toIso8601String(),
-                  ].join('|');
-          """
-          if old in text:
-            broker.write_text(text.replace(old, new, 1))
-          elif "idea.candleClosedAt.toUtc().toIso8601String()" not in text:
-            raise SystemExit('stable candidate identity pattern not found')
-
-          page = Path('lib/features/owner_alpha/presentation/owner_alpha_page.dart')
-          text = page.read_text()
-          import_anchor = "import '../../trading_lab/domain/trading_lab_models.dart';\n"
-          account_import = "import '../../trading_lab/domain/trading_lab_account_context.dart';\n"
-          if account_import not in text:
-            if import_anchor not in text:
-              raise SystemExit('Trading Lab import anchor not found')
-            text = text.replace(import_anchor, account_import + import_anchor, 1)
-
-          if 'accountContextProvider: () {' not in text:
-            declaration = '  late final TradingLabController _tradingLabController = TradingLabController('
-            next_declaration = '  final GlobalKey<_AutoTradeViewState> _autoTradeViewKey ='
-            start = text.find(declaration)
-            end = text.find(next_declaration, start)
-            if start < 0 or end < 0:
-              raise SystemExit('Trading Lab controller structural anchors not found')
-            new_controller = """  late final TradingLabController _tradingLabController = TradingLabController(
-              marketController: _controller,
-              store: DatabaseTradingLabRunStore(),
-              accountContextProvider: () {
-                final reconciliation = _autoTradeController.reconciliation;
-                final snapshot = _autoTradeController.snapshot;
-                return TradingLabAccountContext(
-                  connected: _autoTradeController.isConnected,
-                  reconciliationHealth: reconciliation.health.name,
-                  refreshing: reconciliation.refreshing,
-                  blocksNewEntries: reconciliation.blocksNewEntries,
-                  canManageExistingPositions:
-                      reconciliation.allowsExistingPositionManagement,
-                  syncedAtUtc: snapshot?.syncedAt.toUtc(),
-                  marginCoin: snapshot?.marginCoin,
-                  available: snapshot?.available,
-                  frozen: snapshot?.frozen,
-                  positionMargin: snapshot?.positionMargin,
-                  unrealizedPnl: snapshot?.totalUnrealizedPnl,
-                  estimatedEquity: snapshot?.estimatedEquity,
-                  openPositionCount: snapshot?.positions.length,
-                  pendingOrderCount: snapshot?.totalPendingOrderCount,
-                  allOpenPositionsFullyProtected:
-                      snapshot?.allOpenPositionsFullyProtected,
-                  warning: reconciliation.warning,
-                );
-              },
-            );
-          """
-            text = text[:start] + new_controller + text[end:]
-          page.write_text(text)
-
-      - name: Format branch sources
-        run: dart format lib test
-
-      - name: Persist source fixes
-        working-directory: .
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- src/client/quantara_app/lib src/client/quantara_app/test; then
-            echo 'No source changes.'
-          else
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add src/client/quantara_app/lib src/client/quantara_app/test
-            git commit -m 'feat(lab): wire sanitized account truth context'
-            git push origin HEAD:feat/176-bot-trading-lab
-          fi
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         run: flutter analyze --fatal-infos
 
-      - name: Test Lab paper broker
-        run: flutter test test/trading_lab_paper_broker_test.dart --reporter expanded
-
-      - name: Test Lab no-real-order safety
-        run: flutter test test/trading_lab_no_real_order_source_test.dart --reporter expanded
-
-      - name: Test Lab persistence schema
-        run: flutter test test/trading_lab_model_roundtrip_test.dart --reporter expanded
-
-      - name: Test Lab AI review scorecards
-        run: flutter test test/trading_lab_review_scorecard_test.dart --reporter expanded
-
-      - name: Test Lab shadow evidence
-        run: flutter test test/trading_lab_shadow_evidence_test.dart --reporter expanded
-
-      - name: Run full Flutter test suite
-        run: flutter test --reporter expanded
+      - name: Diagnose first failing test file
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r test_file; do
+            echo "::group::TEST_FILE ${test_file}"
+            if ! flutter test "${test_file}" --reporter compact; then
+              echo "FIRST_FAILING_TEST_FILE=${test_file}"
+              echo "::endgroup::"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done < <(find test -type f -name '*_test.dart' | sort)
 
       - name: Build Android debug APK
         run: flutter build apk --debug
