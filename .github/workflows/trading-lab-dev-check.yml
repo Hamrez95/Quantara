@@ -59,5 +59,17 @@ jobs:
       - name: Analyze
         run: flutter analyze --fatal-infos
 
-      - name: Run widget and safety tests
+      - name: Test Lab paper broker
+        run: flutter test test/trading_lab_paper_broker_test.dart --reporter expanded
+
+      - name: Test Lab no-real-order safety
+        run: flutter test test/trading_lab_no_real_order_source_test.dart --reporter expanded
+
+      - name: Test Lab persistence schema
+        run: flutter test test/trading_lab_model_roundtrip_test.dart --reporter expanded
+
+      - name: Test Lab AI review scorecards
+        run: flutter test test/trading_lab_review_scorecard_test.dart --reporter expanded
+
+      - name: Run full Flutter test suite
         run: flutter test --reporter expanded
