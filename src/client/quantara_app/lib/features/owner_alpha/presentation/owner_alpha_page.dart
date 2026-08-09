@@ -40,6 +40,7 @@ import '../../trading_journal/domain/trading_journal_evidence_packet.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../../trading_lab/application/trading_lab_controller.dart';
 import '../../trading_lab/data/database_trading_lab_store.dart';
+import '../../trading_lab/domain/trading_lab_account_context.dart';
 import '../../trading_lab/domain/trading_lab_models.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
@@ -124,6 +125,30 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   late final TradingLabController _tradingLabController = TradingLabController(
     marketController: _controller,
     store: DatabaseTradingLabRunStore(),
+    accountContextProvider: () {
+      final reconciliation = _autoTradeController.reconciliation;
+      final snapshot = _autoTradeController.snapshot;
+      return TradingLabAccountContext(
+        connected: _autoTradeController.isConnected,
+        reconciliationHealth: reconciliation.health.name,
+        refreshing: reconciliation.refreshing,
+        blocksNewEntries: reconciliation.blocksNewEntries,
+        canManageExistingPositions:
+            reconciliation.allowsExistingPositionManagement,
+        syncedAtUtc: snapshot?.syncedAt.toUtc(),
+        marginCoin: snapshot?.marginCoin,
+        available: snapshot?.available,
+        frozen: snapshot?.frozen,
+        positionMargin: snapshot?.positionMargin,
+        unrealizedPnl: snapshot?.totalUnrealizedPnl,
+        estimatedEquity: snapshot?.estimatedEquity,
+        openPositionCount: snapshot?.positions.length,
+        pendingOrderCount: snapshot?.totalPendingOrderCount,
+        allOpenPositionsFullyProtected:
+            snapshot?.allOpenPositionsFullyProtected,
+        warning: reconciliation.warning,
+      );
+    },
   );
   final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
       GlobalKey<_AutoTradeViewState>();
