@@ -49,51 +49,31 @@ jobs:
           policy = 'src/client/quantara_app/lib/features/auto_trade/domain/remaining_target_protection_policy.dart'
           replace_once(
               policy,
-              """        quantityTolerance < 0) {
-              return false;
-            }
-            final pending = pendingProtection.toList(growable: false);
-          """,
-              """        quantityTolerance < 0) {
-              return false;
-            }
-            final comparisonTolerance = quantityTolerance / 2;
-            final pending = pendingProtection.toList(growable: false);
-          """,
+              '    final pending = pendingProtection.toList(growable: false);',
+              '    final comparisonTolerance = quantityTolerance / 2;\n    final pending = pendingProtection.toList(growable: false);',
           )
           replace_once(policy, 'filled > planned + quantityTolerance', 'filled > planned + comparisonTolerance')
           replace_once(policy, 'filled > quantityTolerance', 'filled > comparisonTolerance')
           replace_once(policy, 'if (remaining <= quantityTolerance) continue;', 'if (remaining <= comparisonTolerance) continue;')
           replace_once(
               policy,
-              """            item.quantity.isFinite &&
-                  item.quantity + quantityTolerance >= remaining,
-          """,
-              """            item.quantity.isFinite &&
-                  item.quantity > 0 &&
-                  item.quantity + comparisonTolerance >= remaining,
-          """,
+              '            item.quantity.isFinite &&\n            item.quantity + quantityTolerance >= remaining,',
+              '            item.quantity.isFinite &&\n            item.quantity > 0 &&\n            item.quantity + comparisonTolerance >= remaining,',
           )
 
           service = 'src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart'
           replace_once(
               service,
-              """    if (!_targetIdentityLayoutValid(
-                targetOrderIds: targetOrderIds,
-                targetQuantities: targetQuantities,
-              )) {
-                return false;
-              }
-              for (var index = 0; index < 3; index++) {
+              """    for (var index = 0; index < 3; index++) {
+                final id = targetOrderIds[index].trim();
+                final planned = targetQuantities[index];
+                if (planned <= 0) continue;
           """,
-              """    if (!_targetIdentityLayoutValid(
-                targetOrderIds: targetOrderIds,
-                targetQuantities: targetQuantities,
-              )) {
-                return false;
-              }
-              final comparisonTolerance = quantityTolerance / 2;
+              """    final comparisonTolerance = quantityTolerance / 2;
               for (var index = 0; index < 3; index++) {
+                final id = targetOrderIds[index].trim();
+                final planned = targetQuantities[index];
+                if (planned <= 0) continue;
           """,
           )
           replace_once(
