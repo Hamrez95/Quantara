@@ -1,0 +1,110 @@
+name: Temporary Issue 173 Build124 Ephemeral QA APK
+
+on:
+  push:
+    branches:
+      - alpha/issue-173-ephemeral-qa
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-173-build124-ephemeral-qa
+  cancel-in-progress: true
+
+jobs:
+  build-ephemeral-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout validated source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --no-pub
+
+      - name: Run focused Issue 173 regressions
+        working-directory: src/client/quantara_app
+        run: |
+          flutter test --no-pub \
+            test/issue_173_post_reinstall_regression_test.dart \
+            test/issue_173_physical_qa_regression_test.dart \
+            test/remaining_target_protection_policy_test.dart \
+            test/trading_journal_view_test.dart
+
+      - name: Run full Flutter suite
+        working-directory: src/client/quantara_app
+        run: flutter test --no-pub
+
+      - name: Generate disposable QA signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/quantara-build124-ephemeral.jks"
+          PASS="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt \
+            -keystore "$KEYSTORE" \
+            -storepass "$PASS" \
+            -keypass "$PASS" \
+            -alias quantara-qa \
+            -keyalg RSA \
+            -keysize 3072 \
+            -validity 7 \
+            -dname "CN=Quantara Build124 Ephemeral QA,OU=Physical QA,O=Quantara,C=DE"
+          echo "QUANTARA_PREVIEW_RELEASE=true" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEYSTORE_PATH=$KEYSTORE" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEYSTORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEY_ALIAS=quantara-qa" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEY_PASSWORD=$PASS" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        working-directory: src/client/quantara_app
+        run: flutter build apk --release --no-pub
+
+      - name: Prepare QA package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk \
+            dist/Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA.apk
+          sha256sum dist/Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA.apk \
+            > dist/Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA
+          path: |
+            dist/Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA.apk
+            dist/Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish temporary GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="qa-issue-173-build124-ephemeral"
+          gh release delete "$TAG" --cleanup-tag --yes >/dev/null 2>&1 || true
+          gh release create "$TAG" \
+            dist/Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA.apk \
+            dist/Quantara-1.2.0-rc.2-build124-EPHEMERAL-QA.apk.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "Quantara 1.2.0-rc.2+124 — Ephemeral QA" \
+            --notes "Disposable-signer physical QA build for Issue #173 post-reinstall fixes: recovered Journal uses same-symbol live chart context without rewriting historical facts; 100/0/0 exact-lot TP protection is verified using positive exchange evidence and no longer misclassified at the quantity step boundary. Uninstall the previous ephemeral QA app before installing this APK." \
+            --prerelease
