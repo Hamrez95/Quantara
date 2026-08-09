@@ -163,10 +163,8 @@ List<Map<String, Object?>> _strategyScorecards(
       0,
       (sum, item) => sum + item.netRealizedPnl,
     );
-    final averageR = trades.fold<double>(
-          0,
-          (sum, item) => sum + item.realizedR,
-        ) /
+    final averageR =
+        trades.fold<double>(0, (sum, item) => sum + item.realizedR) /
         trades.length;
     scorecards.add({
       'strategyVersion': parts[0],
@@ -193,9 +191,13 @@ List<Map<String, Object?>> _strategyScorecards(
       right['strategyVersion'] as String,
     );
     if (strategy != 0) return strategy;
-    final symbol = (left['symbol'] as String).compareTo(right['symbol'] as String);
+    final symbol = (left['symbol'] as String).compareTo(
+      right['symbol'] as String,
+    );
     if (symbol != 0) return symbol;
-    return (left['timeframe'] as String).compareTo(right['timeframe'] as String);
+    return (left['timeframe'] as String).compareTo(
+      right['timeframe'] as String,
+    );
   });
   return List.unmodifiable(scorecards);
 }

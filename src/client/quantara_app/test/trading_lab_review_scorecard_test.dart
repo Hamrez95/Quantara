@@ -15,21 +15,24 @@ void main() {
     expect(first['strategyScorecards'], second['strategyScorecards']);
   });
 
-  test('AI review includes segmented strategy scorecard with sample warning', () {
-    final run = _runWithClosedTrade();
-    final bundle = buildTradingLabAiReviewBundle(run);
-    final scorecards = bundle['strategyScorecards']! as List<Object?>;
+  test(
+    'AI review includes segmented strategy scorecard with sample warning',
+    () {
+      final run = _runWithClosedTrade();
+      final bundle = buildTradingLabAiReviewBundle(run);
+      final scorecards = bundle['strategyScorecards']! as List<Object?>;
 
-    expect(scorecards, hasLength(1));
-    final scorecard = scorecards.single! as Map<String, Object?>;
-    expect(scorecard['strategyVersion'], 'trendPullback@v-test');
-    expect(scorecard['symbol'], 'BTCUSDT');
-    expect(scorecard['timeframe'], '1h');
-    expect(scorecard['direction'], 'long');
-    expect(scorecard['confidenceBucket'], '80-89');
-    expect(scorecard['sampleSize'], 1);
-    expect(scorecard['insufficientSample'], isTrue);
-  });
+      expect(scorecards, hasLength(1));
+      final scorecard = scorecards.single! as Map<String, Object?>;
+      expect(scorecard['strategyVersion'], 'trendPullback@v-test');
+      expect(scorecard['symbol'], 'BTCUSDT');
+      expect(scorecard['timeframe'], '1h');
+      expect(scorecard['direction'], 'long');
+      expect(scorecard['confidenceBucket'], '80-89');
+      expect(scorecard['sampleSize'], 1);
+      expect(scorecard['insufficientSample'], isTrue);
+    },
+  );
 }
 
 TradingLabRun _runWithClosedTrade() {
