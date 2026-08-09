@@ -40,7 +40,10 @@ void main() {
     expect(restored.peakEquity, 510);
     expect(restored.maximumDrawdownPercent, 2.4);
     expect(restored.cycleId, 42);
-    expect(restored.processedDecisionKeys, containsAll(['decision-1', 'decision-2']));
+    expect(
+      restored.processedDecisionKeys,
+      containsAll(['decision-1', 'decision-2']),
+    );
     expect(restored.lastWhyNoTrade, contains('Scanner active'));
   });
 
