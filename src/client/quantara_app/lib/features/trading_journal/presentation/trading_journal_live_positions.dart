@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/formatting/number_formatters.dart';
@@ -44,7 +43,7 @@ class TradingJournalLivePositionsPanel extends StatelessWidget {
 
     return ValueListenableBuilder<Map<String, LiveTradeContext>>(
       valueListenable: LiveTradeContextRegistry.listenable,
-      builder: (context, _, __) => Column(
+      builder: (context, liveContexts, child) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SectionHeading(
@@ -259,7 +258,7 @@ class _LivePositionCard extends StatelessWidget {
                 child: QuantaraCandlestickChart(
                   analysis: analysis,
                   tradeOverlay: ChartTradeOverlay(
-                    entry: plan.plannedEntry,
+                    entry: entryPrice,
                     stop: plan.originalStopLoss,
                     targets: plan.targets
                         .where((value) => value.isFinite && value > 0)

@@ -18,7 +18,7 @@ void main() {
       'lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart',
     ).readAsStringSync();
 
-    expect(pubspec, contains('version: 1.2.0-rc.2+121'));
+    expect(pubspec, contains('version: 1.2.0-rc.2+123'));
     expect(flutterWorkflow, contains('RC_VERSION: 1.2.0-rc.2'));
     expect(
       flutterWorkflow,

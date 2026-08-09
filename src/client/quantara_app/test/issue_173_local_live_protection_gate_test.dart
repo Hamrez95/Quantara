@@ -23,49 +23,49 @@ void main() {
     averageOpenPrice: 91.26,
   );
 
-  AutoTradeAccountSnapshot account({required List<AutoTradeProtectionOrder> protection}) =>
-      AutoTradeAccountSnapshot(
-        marginCoin: 'USDT',
-        available: 28.65,
-        frozen: 0,
-        positionMargin: 0.9192,
-        crossUnrealizedPnl: 0,
-        isolatedUnrealizedPnl: 0.006,
-        positionMode: 'HEDGE',
-        positions: [aavePosition()],
-        orders: const [],
-        protectionOrders: protection,
-        protectionVerifications: {
-          '3518418297103901915': AutoTradeProtectionVerification.verified(
-            asOf: asOf,
-          ),
-        },
-        syncedAt: asOf,
-      );
+  AutoTradeAccountSnapshot account({
+    required List<AutoTradeProtectionOrder> protection,
+  }) => AutoTradeAccountSnapshot(
+    marginCoin: 'USDT',
+    available: 28.65,
+    frozen: 0,
+    positionMargin: 0.9192,
+    crossUnrealizedPnl: 0,
+    isolatedUnrealizedPnl: 0.006,
+    positionMode: 'HEDGE',
+    positions: [aavePosition()],
+    orders: const [],
+    protectionOrders: protection,
+    protectionVerifications: {
+      '3518418297103901915': AutoTradeProtectionVerification.verified(
+        asOf: asOf,
+      ),
+    },
+    syncedAt: asOf,
+  );
 
   LocalLiveManagedPosition managed(
     ProfitProtectionTargetAllocation allocation, {
     String? warning,
-  }) =>
-      LocalLiveManagedPosition(
-        setupId: 'aave-short-1h',
-        symbol: 'AAVEUSDT',
-        timeframe: '1h',
-        direction: TradeDirection.short,
-        positionId: '3518418297103901915',
-        entryOrderId: '2086128842343002112',
-        clientId: 'q-local-test',
-        initialQuantity: 0.1,
-        entryPrice: 91.26,
-        originalStopLoss: 92.36,
-        targets: const [88.8, 87.35, 85.9],
-        leverage: 10,
-        openedAt: DateTime.utc(2026, 8, 8, 16, 34, 9),
-        targetAllocation: allocation,
-        targetQuantities: const [0.1, 0, 0],
-        targetOrderIds: const ['tp-1', '', ''],
-        profitLockProgress: ProfitLockProgress(warning: warning),
-      );
+  }) => LocalLiveManagedPosition(
+    setupId: 'aave-short-1h',
+    symbol: 'AAVEUSDT',
+    timeframe: '1h',
+    direction: TradeDirection.short,
+    positionId: '3518418297103901915',
+    entryOrderId: '2086128842343002112',
+    clientId: 'q-local-test',
+    initialQuantity: 0.1,
+    entryPrice: 91.26,
+    originalStopLoss: 92.36,
+    targets: const [88.8, 87.35, 85.9],
+    leverage: 10,
+    openedAt: DateTime.utc(2026, 8, 8, 16, 34, 9),
+    targetAllocation: allocation,
+    targetQuantities: const [0.1, 0, 0],
+    targetOrderIds: const ['tp-1', '', ''],
+    profitLockProgress: ProfitLockProgress(warning: warning),
+  );
 
   final completeOneTargetProtection = <AutoTradeProtectionOrder>[
     const AutoTradeProtectionOrder.takeProfit(
@@ -84,26 +84,29 @@ void main() {
     ),
   ];
 
-  test('100/0/0 full TP plus full SL is fully protected despite PnL warning', () {
-    final allocation = ProfitProtectionTargetAllocation.checked(
-      tp1Fraction: 1,
-      tp2Fraction: 0,
-      tp3Fraction: 0,
-    );
+  test(
+    '100/0/0 full TP plus full SL is fully protected despite PnL warning',
+    () {
+      final allocation = ProfitProtectionTargetAllocation.checked(
+        tp1Fraction: 1,
+        tp2Fraction: 0,
+        tp3Fraction: 0,
+      );
 
-    expect(
-      LocalLiveProtectionGate.allManagedPositionsFullyProtected(
-        account: account(protection: completeOneTargetProtection),
-        managed: [
-          managed(
-            allocation,
-            warning: 'Trade-history attribution is temporarily unverified.',
-          ),
-        ],
-      ),
-      isTrue,
-    );
-  });
+      expect(
+        LocalLiveProtectionGate.allManagedPositionsFullyProtected(
+          account: account(protection: completeOneTargetProtection),
+          managed: [
+            managed(
+              allocation,
+              warning: 'Trade-history attribution is temporarily unverified.',
+            ),
+          ],
+        ),
+        isTrue,
+      );
+    },
+  );
 
   test('three-target plan still fails closed when only TP1 exists', () {
     expect(

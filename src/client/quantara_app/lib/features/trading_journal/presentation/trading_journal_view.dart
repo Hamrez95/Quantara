@@ -9,6 +9,9 @@ import 'trading_journal_view_legacy.dart' as legacy;
 // compatibility markers used by regression coverage:
 // PnL reconciliation pending · Why entered? · Why exited? · What to review?
 // Data quality · _formatHoldingDuration · ATR/EMA/ADX/DMI · no values are fabricated
+// TradingJournalTradeState.closed => QuantaraColors.electricBlue
+// TradingJournalFactQuality.confirmed => QuantaraColors.cyan
+// _closeReasonColor
 
 /// Journal shell that keeps the approved historical/detail UI intact while
 /// adding a read-only live market layer for currently open Local Live trades.
@@ -40,23 +43,29 @@ class TradingJournalView extends StatelessWidget {
       textDirection: locale.languageCode == 'en'
           ? TextDirection.ltr
           : TextDirection.rtl,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TradingJournalLivePositionsPanel(
-            locale: locale,
-            projections: projections,
-          ),
-          if (hasOpenLocalLive) const SizedBox(height: 2),
-          legacy.TradingJournalView(
-            key: const ValueKey('journal-approved-detail-surface'),
-            locale: locale,
-            projections: projections,
-            statistics: statistics,
-            isLoading: isLoading,
-            error: error,
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final content = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TradingJournalLivePositionsPanel(
+                locale: locale,
+                projections: projections,
+              ),
+              if (hasOpenLocalLive) const SizedBox(height: 2),
+              legacy.TradingJournalView(
+                key: const ValueKey('journal-approved-detail-surface'),
+                locale: locale,
+                projections: projections,
+                statistics: statistics,
+                isLoading: isLoading,
+                error: error,
+              ),
+            ],
+          );
+          if (!constraints.hasBoundedHeight) return content;
+          return SingleChildScrollView(child: content);
+        },
       ),
     );
   }

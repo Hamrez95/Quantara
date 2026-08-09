@@ -16,6 +16,7 @@ import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_portfolio_admission.dart';
+import '../domain/local_live_protection_gate.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/remaining_target_protection_policy.dart';
@@ -370,9 +371,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         try {
           final now = DateTime.now().toUtc();
           final allOpenPositionsProtected =
-              _managed.length ==
-                  positions.where((item) => item.quantity > 0).length &&
-              _managed.every((item) => item.profitLockProgress.warning == null);
+              LocalLiveProtectionGate.allManagedPositionsFullyProtected(
+                account: account,
+                managed: _managed,
+              );
           await _portfolioGuard!.reconcileRestartAndClosedPositions(
             managed: _managed,
             exchangePositions: positions,
@@ -657,9 +659,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           continue;
         }
         final existingExposureProtected =
-            _managed.length ==
-                exchangePositions.where((item) => item.quantity > 0).length &&
-            _managed.every((item) => item.profitLockProgress.warning == null);
+            LocalLiveProtectionGate.allManagedPositionsFullyProtected(
+              account: account,
+              managed: _managed,
+            );
         final reservation = await portfolioGuard.reserve(
           idea: idea,
           plannedQuantity: quantity,
