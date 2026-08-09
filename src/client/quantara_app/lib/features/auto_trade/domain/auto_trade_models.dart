@@ -118,6 +118,10 @@ final class AutoTradeAccountSnapshot {
       position: position,
       orders: protectionOrders,
       asOf: verification.asOf,
+      // This projection answers whether the whole exchange position has a
+      // full stop plus complete active TP quantity coverage. Local Live keeps
+      // enforcing the exact persisted 1-3 tranche identities separately.
+      expectedTakeProfitCount: 1,
     );
   }
 

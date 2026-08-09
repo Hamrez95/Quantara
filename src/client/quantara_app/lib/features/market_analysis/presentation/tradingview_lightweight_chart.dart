@@ -78,34 +78,42 @@ abstract final class ChartSignalOverlayPolicy {
 class TradingViewLightweightChart extends StatelessWidget {
   const TradingViewLightweightChart({
     required this.analysis,
-    required this.idea,
+    this.idea,
     this.frozenSignal,
+    this.tradeOverlay,
     this.height = 390,
     super.key,
   });
 
   final TimeframeChartAnalysis analysis;
-  final TradeIdea idea;
+  final TradeIdea? idea;
   final SignalJournalEntry? frozenSignal;
+  final ChartTradeOverlay? tradeOverlay;
   final double height;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppStrings.of(context);
     final frozen = frozenSignal;
-    final overlay = frozen != null
-        ? ChartSignalOverlayPolicy.create(analysis: analysis, signal: frozen)
-        : idea.isActionable
-        ? ChartTradeOverlay(
-            entry: (idea.entryLower! + idea.entryUpper!) / 2,
-            stop: idea.stopLoss!,
-            targets: idea.targets,
-            isLong: idea.direction == TradeDirection.long,
-          )
-        : null;
+    final currentIdea = idea;
+    final overlay =
+        tradeOverlay ??
+        (frozen != null
+            ? ChartSignalOverlayPolicy.create(
+                analysis: analysis,
+                signal: frozen,
+              )
+            : currentIdea?.isActionable == true
+            ? ChartTradeOverlay(
+                entry: (currentIdea!.entryLower! + currentIdea.entryUpper!) / 2,
+                stop: currentIdea.stopLoss!,
+                targets: currentIdea.targets,
+                isLong: currentIdea.direction == TradeDirection.long,
+              )
+            : null);
     final chart = RepaintBoundary(
       key: ValueKey(
-        'quantara-chart-${analysis.fingerprint}-${frozen?.setupId ?? idea.setupId}',
+        'quantara-chart-${analysis.fingerprint}-${frozen?.setupId ?? currentIdea?.setupId ?? 'explicit-overlay'}',
       ),
       child: QuantaraCandlestickChart(
         analysis: analysis,

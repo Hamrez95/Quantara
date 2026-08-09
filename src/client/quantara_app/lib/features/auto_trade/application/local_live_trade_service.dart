@@ -1380,6 +1380,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             ...managed.profitLockProgress.processedTradeIds,
             ...fillProgress.newTradeIds,
           },
+          clearWarning: true,
         ),
       );
 

@@ -532,14 +532,37 @@ final class TradingPnlProjection {
           fillsAvailable &&
           settlement?.fee != null &&
           (feeValue! - settlement!.fee!).abs() > tolerance;
-      final pendingRealizedMismatch =
-          fillsAvailable &&
-          open?.realizedPnl != null &&
-          (realizedValue! - open!.realizedPnl!).abs() > tolerance;
+      // Bitunix pending positions expose realizedPNL as the position net
+      // economic result (gross realized - fee expense + funding). Trade history
+      // exposes gross realized PnL, while the pending-position fee is signed.
+      // Compare like-for-like values so a healthy open position is not marked
+      // unverified merely because of representation/sign differences.
+      final pendingFeeExpense = open?.fee?.abs();
       final pendingFeeMismatch =
           fillsAvailable &&
-          open?.fee != null &&
-          (feeValue! - open!.fee!).abs() > tolerance;
+          pendingFeeExpense != null &&
+          feeValue != null &&
+          (feeValue - pendingFeeExpense).abs() > tolerance;
+      final pendingNetFromHistory =
+          fillsAvailable &&
+              realizedValue != null &&
+              feeValue != null &&
+              open?.funding != null
+          ? realizedValue - feeValue + open!.funding!
+          : null;
+      final pendingRealizedMatchesGross =
+          fillsAvailable &&
+          open?.realizedPnl != null &&
+          realizedValue != null &&
+          (realizedValue - open!.realizedPnl!).abs() <= tolerance;
+      final pendingRealizedMatchesNet =
+          open?.realizedPnl != null &&
+          pendingNetFromHistory != null &&
+          (pendingNetFromHistory - open!.realizedPnl!).abs() <= tolerance;
+      final pendingRealizedMismatch =
+          open?.realizedPnl != null &&
+          !pendingRealizedMatchesGross &&
+          !pendingRealizedMatchesNet;
       final totalsMismatch =
           realizedMismatch ||
           feeMismatch ||
@@ -557,7 +580,9 @@ final class TradingPnlProjection {
           ? 'Trade-history totals diverge from the Bitunix position totals.'
           : positionConflict
           ? 'Conflicting exchange event identity for $key.'
-          : warning;
+          : !sourceVerified
+          ? (warning ?? 'Exchange PnL source could not be verified.')
+          : null;
 
       final realized = _metric(
         value: realizedValue,
@@ -627,7 +652,8 @@ final class TradingPnlProjection {
               source: TradingPnlSource.bitunixTradeHistory,
               scope: TradingPnlScope.position,
               asOf: normalizedAsOf,
-              warning: warning ?? 'Fee or funding history is incomplete.',
+              warning:
+                  positionWarning ?? 'Fee or funding history is incomplete.',
             );
 
       positions.add(

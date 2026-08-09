@@ -207,6 +207,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
         await _reconcileJournalFromAccount();
         return;
       case 6:
+        await _controller.refresh();
         if (_autoTradeController.isConnected) {
           await _autoTradeController.reconcile(
             reason: PrivateAccountRefreshReason.manual,
@@ -644,6 +645,19 @@ class _OwnerAlphaBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final marketSnapshot = controller.snapshot;
+    final journalLiveAnalyses = <String, TimeframeChartAnalysis>{
+      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+        for (final entry in radar.analysesByTimeframe.entries)
+          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+              entry.value,
+    };
+    final journalLiveIdeas = <String, TradeIdea>{
+      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+        for (final entry in radar.ideasByTimeframe.entries)
+          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+              entry.value,
+    };
     final initialMarketLoading =
         controller.snapshot == null &&
         destination != 5 &&
@@ -752,6 +766,8 @@ class _OwnerAlphaBody extends StatelessWidget {
                         locale: locale,
                         projections: journalController.projections,
                         statistics: journalController.statistics,
+                        liveAnalyses: journalLiveAnalyses,
+                        liveIdeas: journalLiveIdeas,
                         isLoading: journalController.isLoading,
                         error: journalController.error,
                       ),

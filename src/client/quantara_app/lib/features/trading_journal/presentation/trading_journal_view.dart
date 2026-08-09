@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../core/formatting/number_formatters.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
+import '../../market_analysis/domain/market_chart_models.dart';
+import '../../market_analysis/presentation/quantara_candlestick_chart.dart';
+import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
+import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../domain/trading_journal_models.dart';
 import '../domain/trading_journal_projection.dart';
 import '../domain/trading_journal_statistics.dart';
@@ -14,6 +18,8 @@ final class TradingJournalView extends StatefulWidget {
     required this.locale,
     required this.projections,
     this.statistics,
+    this.liveAnalyses = const {},
+    this.liveIdeas = const {},
     this.isLoading = false,
     this.error,
     super.key,
@@ -22,6 +28,8 @@ final class TradingJournalView extends StatefulWidget {
   final Locale locale;
   final List<TradingJournalProjection> projections;
   final TradingJournalStatistics? statistics;
+  final Map<String, TimeframeChartAnalysis> liveAnalyses;
+  final Map<String, TradeIdea> liveIdeas;
   final bool isLoading;
   final String? error;
 
@@ -34,6 +42,19 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
   TradingJournalProjection? _selected;
 
   bool get _persian => widget.locale.languageCode != 'en';
+
+  @override
+  void didUpdateWidget(covariant TradingJournalView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final selected = _selected;
+    if (selected == null) return;
+    for (final projection in widget.projections) {
+      if (projection.journalTradeId == selected.journalTradeId) {
+        _selected = projection;
+        return;
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +218,10 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
 
   Widget _buildDetail(BuildContext context) {
     final projection = _selected!;
+    final liveKey =
+        '${projection.symbol.trim().toUpperCase()}|${projection.timeframe.trim()}';
+    final liveAnalysis = widget.liveAnalyses[liveKey];
+    final liveIdea = widget.liveIdeas[liveKey];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -214,6 +239,13 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
         _JournalDetailHero(projection: projection, persian: _persian),
         const SizedBox(height: 16),
         _ProjectionSummary(projection: projection, persian: _persian),
+        const SizedBox(height: 16),
+        _JournalLivePositionChart(
+          projection: projection,
+          analysis: liveAnalysis,
+          currentIdea: liveIdea,
+          persian: _persian,
+        ),
         const SizedBox(height: 16),
         _TradeEvidencePanel(projection: projection, persian: _persian),
         const SizedBox(height: 16),
@@ -1593,4 +1625,288 @@ String _formatDate(DateTime value) {
   final local = value.toLocal();
   String two(int number) => number.toString().padLeft(2, '0');
   return '${local.year}/${two(local.month)}/${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+}
+
+class _JournalLivePositionChart extends StatelessWidget {
+  const _JournalLivePositionChart({
+    required this.projection,
+    required this.analysis,
+    required this.currentIdea,
+    required this.persian,
+  });
+
+  final TradingJournalProjection projection;
+  final TimeframeChartAnalysis? analysis;
+  final TradeIdea? currentIdea;
+  final bool persian;
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = projection.plan;
+    if (plan == null) {
+      return SectionCard(
+        accentColor: QuantaraColors.warning,
+        child: Text(
+          persian
+              ? 'برای این رکورد پلن تصمیم‌گیری قابل اتکا ثبت نشده است؛ نمودار زنده چیزی را حدس نمی‌زند.'
+              : 'No attributable decision plan is stored for this record; the live chart will not invent one.',
+        ),
+      );
+    }
+
+    final live = analysis;
+    if (live == null) {
+      return SectionCard(
+        accentColor: QuantaraColors.warning,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeading(
+              title: persian ? 'نمودار پوزیشن' : 'Position chart',
+              subtitle: persian
+                  ? 'پلن ورود ثابت مانده؛ داده زنده این نماد/تایم‌فریم فعلاً در اسنپ‌شات بازار موجود نیست.'
+                  : 'The entry plan remains frozen; live market data for this symbol/timeframe is not currently available.',
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${persian ? 'ورود' : 'Entry'} ${QuantaraNumberFormat.marketValue(projection.entryPrice ?? plan.plannedEntry)}  ·  '
+              'SL ${QuantaraNumberFormat.marketValue(plan.originalStopLoss)}',
+              textDirection: TextDirection.ltr,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final frozenLong = plan.direction == TradingJournalDirection.long;
+    final frozenShort = plan.direction == TradingJournalDirection.short;
+    final actionableCurrent = currentIdea?.isActionable == true;
+    final directionFlipped =
+        actionableCurrent &&
+        ((currentIdea!.direction == TradeDirection.long && frozenShort) ||
+            (currentIdea!.direction == TradeDirection.short && frozenLong));
+    final validOverlay =
+        (frozenLong || frozenShort) &&
+        plan.originalStopLoss.isFinite &&
+        plan.originalStopLoss > 0 &&
+        (projection.entryPrice ?? plan.plannedEntry).isFinite &&
+        (projection.entryPrice ?? plan.plannedEntry) > 0 &&
+        plan.targets.isNotEmpty &&
+        plan.targets.every((target) => target.isFinite && target > 0);
+    final overlay = validOverlay
+        ? ChartTradeOverlay(
+            entry: projection.entryPrice ?? plan.plannedEntry,
+            stop: plan.originalStopLoss,
+            targets: plan.targets,
+            isLong: frozenLong,
+          )
+        : null;
+    final scheme = Theme.of(context).colorScheme;
+    final currentPrice = live.latestCandle.close;
+    final referenceLevels = <({String label, double value})>[
+      for (final item in const [
+        ('Donchian H20', 'previousDonchianHigh20'),
+        ('Donchian L20', 'previousDonchianLow20'),
+        ('Swing H', 'recentSwingHigh'),
+        ('Swing L', 'recentSwingLow'),
+        ('BB Upper', 'bollingerUpper20'),
+        ('BB Lower', 'bollingerLower20'),
+        ('EMA20', 'ema20'),
+        ('EMA50', 'ema50'),
+        ('EMA200', 'ema200'),
+      ])
+        if (plan.indicatorSnapshot[item.$2] case final value?)
+          (label: item.$1, value: value),
+    ];
+
+    String zoneRole(ChartZoneRole role) => switch (role) {
+      ChartZoneRole.support => persian ? 'حمایت زنده' : 'Live support',
+      ChartZoneRole.resistance => persian ? 'مقاومت زنده' : 'Live resistance',
+      ChartZoneRole.pivot => persian ? 'پیوت زنده' : 'Live pivot',
+    };
+
+    return SectionCard(
+      accentColor: QuantaraColors.cyan,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeading(
+            title: persian ? 'نمودار زنده پوزیشن' : 'Live position chart',
+            subtitle: persian
+                ? 'کندل‌ها و نواحی، زنده‌اند؛ Entry / SL / TP از پلن تغییرناپذیر لحظه ورود می‌آیند.'
+                : 'Candles and zones are live; Entry / SL / TP come from the immutable decision-time plan.',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Chip(
+                avatar: const Icon(Icons.show_chart_rounded, size: 17),
+                label: Text(
+                  '${persian ? 'قیمت فعلی' : 'Current'} ${QuantaraNumberFormat.marketValue(currentPrice)}',
+                ),
+              ),
+              Chip(
+                avatar: const Icon(Icons.lock_clock_rounded, size: 17),
+                label: Text(
+                  persian
+                      ? 'پلن ورود: ${plan.direction.name.toUpperCase()} · ${projection.timeframe}'
+                      : 'Frozen entry: ${plan.direction.name.toUpperCase()} · ${projection.timeframe}',
+                ),
+              ),
+              if (currentIdea != null)
+                Chip(
+                  avatar: const Icon(Icons.radar_rounded, size: 17),
+                  label: Text(
+                    persian
+                        ? 'تحلیل فعلی: ${currentIdea!.direction.name.toUpperCase()}'
+                        : 'Current setup: ${currentIdea!.direction.name.toUpperCase()}',
+                  ),
+                ),
+            ],
+          ),
+          if (directionFlipped) ...[
+            const SizedBox(height: 12),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: QuantaraColors.warning.withValues(alpha: 0.10),
+                border: Border.all(
+                  color: QuantaraColors.warning.withValues(alpha: 0.45),
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.compare_arrows_rounded,
+                      color: QuantaraColors.warning,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        persian
+                            ? 'تحلیل بازار از زمان ورود تغییر جهت داده است. این پوزیشن متعلق به پلن ثابت ${plan.direction.name.toUpperCase()} زمان ورود است و با SL/TP صرافی مدیریت می‌شود؛ سیگنال جدید به‌تنهایی باعث معکوس‌کردن پوزیشن نمی‌شود.'
+                            : 'Market analysis has changed direction since entry. This position still belongs to the frozen ${plan.direction.name.toUpperCase()} entry plan and remains managed by its exchange SL/TP; a newer signal does not auto-reverse it.',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest.withValues(alpha: 0.18),
+              ),
+              child: TradingViewLightweightChart(
+                analysis: live,
+                idea: currentIdea,
+                tradeOverlay: overlay,
+                height: 360,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            persian ? 'نواحی فعلی بازار' : 'Current market zones',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final zone in live.strongestZones)
+                Chip(
+                  label: Text(
+                    '${zoneRole(zone.role)}  '
+                    '${QuantaraNumberFormat.marketValue(zone.lower)}–${QuantaraNumberFormat.marketValue(zone.upper)}',
+                  ),
+                ),
+            ],
+          ),
+          if (referenceLevels.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              persian
+                  ? 'سطوح ثبت‌شده در لحظه تصمیم (فریز شده)'
+                  : 'Captured decision-time levels (frozen)',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final level in referenceLevels)
+                  Chip(
+                    avatar: const Icon(
+                      Icons.history_toggle_off_rounded,
+                      size: 16,
+                    ),
+                    label: Text(
+                      '${level.label} ${QuantaraNumberFormat.marketValue(level.value)}',
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (plan.confluence.isNotEmpty ||
+              plan.rationale.trim().isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              persian ? 'چرا این پوزیشن باز شد؟' : 'Why was this trade opened?',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            if (plan.rationale.trim().isNotEmpty) Text(plan.rationale),
+            if (plan.confluence.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              for (final reason in plan.confluence)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 5),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 3),
+                        child: Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 16,
+                          color: QuantaraColors.success,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(child: Text(reason)),
+                    ],
+                  ),
+                ),
+            ],
+            if (plan.invalidation.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '${persian ? 'ابطال پلن' : 'Invalidation'}: ${plan.invalidation}',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
 }
