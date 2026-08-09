@@ -8,106 +8,147 @@ import 'package:quantara_app/features/trading_lab/domain/trading_lab_models.dart
 
 void main() {
   group('TradingLabPaperBroker', () {
-    test('never fills on the signal candle and opens on a future entry touch', () {
-      const broker = TradingLabPaperBroker();
-      final run = _run(slots: 3);
-      final first = _snapshot(candleCount: 20, generatedMinute: 20);
+    test(
+      'never fills on the signal candle and opens on a future entry touch',
+      () {
+        const broker = TradingLabPaperBroker();
+        final run = _run(slots: 3);
+        final first = _snapshot(candleCount: 20, generatedMinute: 20);
 
-      broker.processSnapshot(run, first);
+        broker.processSnapshot(run, first);
 
-      expect(run.openPositions, isEmpty);
-      expect(run.pendingCandidates, hasLength(1));
-      expect(
-        run.events.where((event) => event.kind == TradingLabEventKind.candidatePending),
-        hasLength(1),
-      );
+        expect(run.openPositions, isEmpty);
+        expect(run.pendingCandidates, hasLength(1));
+        expect(
+          run.events.where(
+            (event) => event.kind == TradingLabEventKind.candidatePending,
+          ),
+          hasLength(1),
+        );
 
-      broker.processSnapshot(
-        run,
-        _snapshot(
-          candleCount: 21,
-          generatedMinute: 21,
-          lastCandle: _candle(20, open: 102, high: 103, low: 100.25, close: 102),
-        ),
-      );
+        broker.processSnapshot(
+          run,
+          _snapshot(
+            candleCount: 21,
+            generatedMinute: 21,
+            lastCandle: _candle(
+              20,
+              open: 102,
+              high: 103,
+              low: 100.25,
+              close: 102,
+            ),
+          ),
+        );
 
-      expect(run.pendingCandidates, isEmpty);
-      expect(run.openPositions, hasLength(1));
-      expect(run.openPositions.single.symbol, 'BTCUSDT');
-      expect(run.lastWhyNoTrade, contains('valid paper entry'));
-    });
+        expect(run.pendingCandidates, isEmpty);
+        expect(run.openPositions, hasLength(1));
+        expect(run.openPositions.single.symbol, 'BTCUSDT');
+        expect(run.lastWhyNoTrade, contains('valid paper entry'));
+      },
+    );
 
-    test('uses a conservative stop-first policy when OHLC touches stop and target', () {
-      const broker = TradingLabPaperBroker();
-      final run = _run(slots: 2);
-      broker.processSnapshot(run, _snapshot(candleCount: 20, generatedMinute: 20));
-      broker.processSnapshot(
-        run,
-        _snapshot(
-          candleCount: 21,
-          generatedMinute: 21,
-          lastCandle: _candle(20, open: 102, high: 103, low: 100.25, close: 102),
-        ),
-      );
-      expect(run.openPositions, hasLength(1));
+    test(
+      'uses a conservative stop-first policy when OHLC touches stop and target',
+      () {
+        const broker = TradingLabPaperBroker();
+        final run = _run(slots: 2);
+        broker.processSnapshot(
+          run,
+          _snapshot(candleCount: 20, generatedMinute: 20),
+        );
+        broker.processSnapshot(
+          run,
+          _snapshot(
+            candleCount: 21,
+            generatedMinute: 21,
+            lastCandle: _candle(
+              20,
+              open: 102,
+              high: 103,
+              low: 100.25,
+              close: 102,
+            ),
+          ),
+        );
+        expect(run.openPositions, hasLength(1));
 
-      broker.processSnapshot(
-        run,
-        _snapshot(
-          candleCount: 22,
-          generatedMinute: 22,
-          lastCandle: _candle(21, open: 101, high: 107, low: 94, close: 100),
-        ),
-      );
+        broker.processSnapshot(
+          run,
+          _snapshot(
+            candleCount: 22,
+            generatedMinute: 22,
+            lastCandle: _candle(21, open: 101, high: 107, low: 94, close: 100),
+          ),
+        );
 
-      expect(run.openPositions, isEmpty);
-      expect(run.closedPositions, hasLength(1));
-      expect(run.closedPositions.single.netRealizedPnl, lessThan(0));
-      expect(run.closedPositions.single.closeReason, contains('Conservative OHLC collision'));
-    });
+        expect(run.openPositions, isEmpty);
+        expect(run.closedPositions, hasLength(1));
+        expect(run.closedPositions.single.netRealizedPnl, lessThan(0));
+        expect(
+          run.closedPositions.single.closeReason,
+          contains('Conservative OHLC collision'),
+        );
+      },
+    );
 
-    test('keeps scanning and explains slot capacity while a paper position is open', () {
-      const broker = TradingLabPaperBroker();
-      final run = _run(slots: 1);
-      broker.processSnapshot(run, _snapshot(candleCount: 20, generatedMinute: 20));
-      broker.processSnapshot(
-        run,
-        _snapshot(
-          candleCount: 21,
-          generatedMinute: 21,
-          lastCandle: _candle(20, open: 102, high: 103, low: 100.25, close: 102),
-        ),
-      );
-      expect(run.openPositions, hasLength(1));
+    test(
+      'keeps scanning and explains slot capacity while a paper position is open',
+      () {
+        const broker = TradingLabPaperBroker();
+        final run = _run(slots: 1);
+        broker.processSnapshot(
+          run,
+          _snapshot(candleCount: 20, generatedMinute: 20),
+        );
+        broker.processSnapshot(
+          run,
+          _snapshot(
+            candleCount: 21,
+            generatedMinute: 21,
+            lastCandle: _candle(
+              20,
+              open: 102,
+              high: 103,
+              low: 100.25,
+              close: 102,
+            ),
+          ),
+        );
+        expect(run.openPositions, hasLength(1));
 
-      broker.processSnapshot(
-        run,
-        _snapshot(
-          candleCount: 22,
-          generatedMinute: 22,
-          ideaId: 'btc-second-setup',
-          lastCandle: _candle(21, open: 102, high: 103, low: 101, close: 102),
-        ),
-      );
+        broker.processSnapshot(
+          run,
+          _snapshot(
+            candleCount: 22,
+            generatedMinute: 22,
+            ideaId: 'btc-second-setup',
+            lastCandle: _candle(21, open: 102, high: 103, low: 101, close: 102),
+          ),
+        );
 
-      expect(
-        run.events.where((event) => event.kind == TradingLabEventKind.candidateObserved).length,
-        greaterThanOrEqualTo(2),
-      );
-      expect(run.lastWhyNoTrade.toLowerCase(), contains('capacity'));
-    });
+        expect(
+          run.events
+              .where(
+                (event) => event.kind == TradingLabEventKind.candidateObserved,
+              )
+              .length,
+          greaterThanOrEqualTo(2),
+        );
+        expect(run.lastWhyNoTrade.toLowerCase(), contains('capacity'));
+      },
+    );
   });
 
   group('Trading Lab AI review', () {
     test('redacts credential-shaped keys recursively', () {
-      final sanitized = sanitizeTradingLabExport({
-        'safe': 'ok',
-        'apiKey': 'must-not-leak',
-        'nested': {
-          'Authorization': 'Bearer secret',
-          'metric': 42,
-        },
-      }) as Map<String, Object?>;
+      final sanitized =
+          sanitizeTradingLabExport({
+                'safe': 'ok',
+                'apiKey': 'must-not-leak',
+                'nested': {'Authorization': 'Bearer secret', 'metric': 42},
+              })
+              as Map<String, Object?>;
 
       expect(sanitized['safe'], 'ok');
       expect(sanitized['apiKey'], '[REDACTED]');

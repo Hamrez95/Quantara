@@ -24,18 +24,25 @@ final class TradingLabPaperBroker {
     _evaluatePendingCandidates(run, snapshot);
     _markToMarket(run, snapshot);
 
-    final openedThisCycle = math.max(0, run.openPositions.length - openedBefore) +
+    final openedThisCycle =
+        math.max(0, run.openPositions.length - openedBefore) +
         math.max(0, run.closedPositions.length - closedBefore);
     if (openedThisCycle > 0) {
-      run.lastWhyNoTrade = 'A valid paper entry was admitted during cycle $cycle.';
+      run.lastWhyNoTrade =
+          'A valid paper entry was admitted during cycle $cycle.';
     } else if (run.pendingCandidates.isNotEmpty) {
       run.lastWhyNoTrade = _pendingDiagnostic(run, snapshot);
-    } else if (run.openPositions.length >= run.manifest.maximumConcurrentPositions) {
+    } else if (run.openPositions.length >=
+        run.manifest.maximumConcurrentPositions) {
       run.lastWhyNoTrade =
           'Portfolio capacity is full (${run.openPositions.length}/${run.manifest.maximumConcurrentPositions}). Scanner is still recording candidates.';
     } else {
-      final latestRejection = run.events.reversed.where((event) => event.kind == TradingLabEventKind.candidateRejected).firstOrNull;
-      run.lastWhyNoTrade = latestRejection?.reason ?? 'No actionable candidate was produced by the current market scan.';
+      final latestRejection = run.events.reversed
+          .where((event) => event.kind == TradingLabEventKind.candidateRejected)
+          .firstOrNull;
+      run.lastWhyNoTrade =
+          latestRejection?.reason ??
+          'No actionable candidate was produced by the current market scan.';
     }
 
     run.lastSnapshotAtUtc = snapshot.generatedAt;
@@ -57,7 +64,8 @@ final class TradingLabPaperBroker {
 
   void _discoverCandidates(TradingLabRun run, OwnerAlphaSnapshot snapshot) {
     for (final radar in snapshot.radar) {
-      if (!run.manifest.symbols.contains(radar.quote.symbol.toUpperCase())) continue;
+      if (!run.manifest.symbols.contains(radar.quote.symbol.toUpperCase()))
+        continue;
       for (final entry in radar.ideasByTimeframe.entries) {
         final timeframe = entry.key;
         final idea = entry.value;
@@ -65,7 +73,8 @@ final class TradingLabPaperBroker {
         final analysis = radar.analysesByTimeframe[timeframe];
         if (analysis == null) continue;
         final signalCandle = analysis.latestCandle;
-        final decisionKey = '${analysis.fingerprint}|${idea.setupId}|${signalCandle.openTime.toUtc().toIso8601String()}';
+        final decisionKey =
+            '${analysis.fingerprint}|${idea.setupId}|${signalCandle.openTime.toUtc().toIso8601String()}';
         if (run.processedDecisionKeys.contains(decisionKey)) continue;
         run.rememberDecision(decisionKey);
 
@@ -141,9 +150,14 @@ final class TradingLabPaperBroker {
     }
   }
 
-  void _evaluatePendingCandidates(TradingLabRun run, OwnerAlphaSnapshot snapshot) {
+  void _evaluatePendingCandidates(
+    TradingLabRun run,
+    OwnerAlphaSnapshot snapshot,
+  ) {
     final remove = <TradingLabPendingCandidate>[];
-    for (final candidate in List<TradingLabPendingCandidate>.of(run.pendingCandidates)) {
+    for (final candidate in List<TradingLabPendingCandidate>.of(
+      run.pendingCandidates,
+    )) {
       if (!snapshot.generatedAt.isBefore(candidate.validUntilUtc)) {
         remove.add(candidate);
         _event(
@@ -156,10 +170,17 @@ final class TradingLabPaperBroker {
         );
         continue;
       }
-      final analysis = _analysisFor(snapshot, candidate.symbol, candidate.timeframe);
+      final analysis = _analysisFor(
+        snapshot,
+        candidate.symbol,
+        candidate.timeframe,
+      );
       if (analysis == null) continue;
       final entryCandle = analysis.candles
-          .where((candle) => candle.openTime.isAfter(candidate.signalCandleOpenTimeUtc))
+          .where(
+            (candle) =>
+                candle.openTime.isAfter(candidate.signalCandleOpenTimeUtc),
+          )
           .where((candle) => _touchesEntry(candidate, candle))
           .firstOrNull;
       if (entryCandle == null) continue;
@@ -177,7 +198,12 @@ final class TradingLabPaperBroker {
         continue;
       }
 
-      final opened = _openPosition(run, candidate, entryCandle, snapshot.generatedAt);
+      final opened = _openPosition(
+        run,
+        candidate,
+        entryCandle,
+        snapshot.generatedAt,
+      );
       if (opened) {
         remove.add(candidate);
       }
@@ -210,7 +236,11 @@ final class TradingLabPaperBroker {
     final margin = notional / leverage;
     final availableMargin = math.max(
       0,
-      run.currentEquity - run.openPositions.fold<double>(0, (sum, item) => sum + item.marginReserved),
+      run.currentEquity -
+          run.openPositions.fold<double>(
+            0,
+            (sum, item) => sum + item.marginReserved,
+          ),
     );
     if (margin > availableMargin + 0.0000001) {
       _event(
@@ -230,7 +260,8 @@ final class TradingLabPaperBroker {
     final slippageCost = (entry - referenceEntry).abs() * quantity;
     run.balance -= entryFee;
     final position = TradingLabPosition(
-      positionId: '${run.manifest.runId}-p${run.closedPositions.length + run.openPositions.length + 1}',
+      positionId:
+          '${run.manifest.runId}-p${run.closedPositions.length + run.openPositions.length + 1}',
       decisionKey: candidate.decisionKey,
       setupId: candidate.setupId,
       symbol: candidate.symbol,
@@ -275,17 +306,26 @@ final class TradingLabPaperBroker {
         'entryFee': entryFee,
         'slippageCost': slippageCost,
       },
-      attributes: {'executionModel': 'future-candle-touch/conservative-collision'},
+      attributes: {
+        'executionModel': 'future-candle-touch/conservative-collision',
+      },
     );
     return true;
   }
 
   void _manageOpenPositions(TradingLabRun run, OwnerAlphaSnapshot snapshot) {
     for (final position in List<TradingLabPosition>.of(run.openPositions)) {
-      final analysis = _analysisFor(snapshot, position.symbol, position.timeframe);
+      final analysis = _analysisFor(
+        snapshot,
+        position.symbol,
+        position.timeframe,
+      );
       if (analysis == null) continue;
       final newCandles = analysis.candles
-          .where((candle) => candle.openTime.isAfter(position.lastEvaluatedCandleAtUtc))
+          .where(
+            (candle) =>
+                candle.openTime.isAfter(position.lastEvaluatedCandleAtUtc),
+          )
           .toList(growable: false);
       for (final candle in newCandles) {
         if (!position.isOpen) break;
@@ -305,9 +345,12 @@ final class TradingLabPaperBroker {
     ChartCandle candle,
   ) {
     final stopHit = _stopHit(position, candle);
-    final anyTargetHit = List.generate(position.targets.length, (index) => index)
-        .where((index) => !position.filledTargetIndexes.contains(index))
-        .any((index) => _targetHit(position, position.targets[index], candle));
+    final anyTargetHit =
+        List.generate(position.targets.length, (index) => index)
+            .where((index) => !position.filledTargetIndexes.contains(index))
+            .any(
+              (index) => _targetHit(position, position.targets[index], candle),
+            );
 
     // Deliberately pessimistic when OHLC cannot prove intrabar ordering.
     if (stopHit && anyTargetHit) {
@@ -315,7 +358,8 @@ final class TradingLabPaperBroker {
         run,
         position,
         candle.openTime.toUtc(),
-        reason: 'Conservative OHLC collision: stop and target were both touched; stop assumed first.',
+        reason:
+            'Conservative OHLC collision: stop and target were both touched; stop assumed first.',
       );
       return;
     }
@@ -330,11 +374,13 @@ final class TradingLabPaperBroker {
     }
 
     for (var index = 0; index < position.targets.length; index++) {
-      if (!position.isOpen || position.filledTargetIndexes.contains(index)) continue;
+      if (!position.isOpen || position.filledTargetIndexes.contains(index))
+        continue;
       final target = position.targets[index];
       if (!_targetHit(position, target, candle)) continue;
       final isLast = index == position.targets.length - 1;
-      final planned = position.initialQuantity * position.targetFractions[index];
+      final planned =
+          position.initialQuantity * position.targetFractions[index];
       final quantity = isLast
           ? position.remainingQuantity
           : math.min(position.remainingQuantity, planned);
@@ -363,7 +409,12 @@ final class TradingLabPaperBroker {
       );
       _promoteStopAfterTarget(run, position, index, candle.openTime.toUtc());
       if (position.remainingQuantity <= 0.0000000001) {
-        _finalizeClosed(run, position, candle.openTime.toUtc(), 'All active paper targets filled.');
+        _finalizeClosed(
+          run,
+          position,
+          candle.openTime.toUtc(),
+          'All active paper targets filled.',
+        );
         return;
       }
     }
@@ -446,7 +497,10 @@ final class TradingLabPaperBroker {
     final exitFee = _fee(exit * quantity, run.manifest.feeRateBps);
     position.realizedGrossPnl += gross;
     position.exitFees += exitFee;
-    position.remainingQuantity = math.max(0, position.remainingQuantity - quantity);
+    position.remainingQuantity = math.max(
+      0,
+      position.remainingQuantity - quantity,
+    );
     run.balance += gross - exitFee;
   }
 
@@ -481,7 +535,10 @@ final class TradingLabPaperBroker {
   void _markToMarket(TradingLabRun run, OwnerAlphaSnapshot snapshot) {
     var unrealized = 0.0;
     for (final position in run.openPositions) {
-      final quote = snapshot.radar.where((item) => item.quote.symbol == position.symbol).firstOrNull?.quote;
+      final quote = snapshot.radar
+          .where((item) => item.quote.symbol == position.symbol)
+          .firstOrNull
+          ?.quote;
       if (quote == null) continue;
       final mark = quote.lastPrice;
       unrealized += position.direction == TradeDirection.long
@@ -490,15 +547,23 @@ final class TradingLabPaperBroker {
     }
     run.currentEquity = math.max(0, run.balance + unrealized);
     if (run.currentEquity > run.peakEquity) run.peakEquity = run.currentEquity;
-    final drawdown = run.peakEquity <= 0 ? 0 : (run.peakEquity - run.currentEquity) / run.peakEquity * 100;
-    if (drawdown > run.maximumDrawdownPercent) run.maximumDrawdownPercent = drawdown;
+    final drawdown = run.peakEquity <= 0
+        ? 0
+        : (run.peakEquity - run.currentEquity) / run.peakEquity * 100;
+    if (drawdown > run.maximumDrawdownPercent)
+      run.maximumDrawdownPercent = drawdown;
   }
 
-  String? _entryBlockReason(TradingLabRun run, TradingLabPendingCandidate candidate) {
+  String? _entryBlockReason(
+    TradingLabRun run,
+    TradingLabPendingCandidate candidate,
+  ) {
     if (run.openPositions.length >= run.manifest.maximumConcurrentPositions) {
       return 'Paper entry blocked: portfolio slots are full.';
     }
-    if (run.openPositions.any((position) => position.symbol == candidate.symbol)) {
+    if (run.openPositions.any(
+      (position) => position.symbol == candidate.symbol,
+    )) {
       return 'Paper entry blocked: same-symbol exposure already exists.';
     }
     final entry = (candidate.entryLower + candidate.entryUpper) / 2;
@@ -508,7 +573,10 @@ final class TradingLabPaperBroker {
     final riskCap = candidateRisk * run.manifest.maximumConcurrentPositions;
     final openRisk = run.openPositions.fold<double>(
       0,
-      (sum, position) => sum + position.initialRisk * (position.remainingQuantity / position.initialQuantity),
+      (sum, position) =>
+          sum +
+          position.initialRisk *
+              (position.remainingQuantity / position.initialQuantity),
     );
     if (openRisk + candidateRisk > riskCap + 0.0000001) {
       return 'Paper entry blocked: portfolio risk budget is exhausted.';
@@ -517,7 +585,12 @@ final class TradingLabPaperBroker {
   }
 
   static bool _isValidActionablePlan(TradeIdea idea) {
-    if (!idea.isActionable || idea.entryLower == null || idea.entryUpper == null || idea.stopLoss == null || idea.riskReward == null || idea.targets.isEmpty) {
+    if (!idea.isActionable ||
+        idea.entryLower == null ||
+        idea.entryUpper == null ||
+        idea.stopLoss == null ||
+        idea.riskReward == null ||
+        idea.targets.isEmpty) {
       return false;
     }
     final entry = (idea.entryLower! + idea.entryUpper!) / 2;
@@ -526,36 +599,67 @@ final class TradingLabPaperBroker {
         : idea.stopLoss! > entry;
   }
 
-  static bool _touchesEntry(TradingLabPendingCandidate candidate, ChartCandle candle) =>
+  static bool _touchesEntry(
+    TradingLabPendingCandidate candidate,
+    ChartCandle candle,
+  ) =>
       candle.high >= candidate.entryLower && candle.low <= candidate.entryUpper;
 
   static bool _stopHit(TradingLabPosition position, ChartCandle candle) =>
       position.direction == TradeDirection.long
-          ? candle.low <= position.currentStopLoss
-          : candle.high >= position.currentStopLoss;
+      ? candle.low <= position.currentStopLoss
+      : candle.high >= position.currentStopLoss;
 
-  static bool _targetHit(TradingLabPosition position, double target, ChartCandle candle) =>
-      position.direction == TradeDirection.long ? candle.high >= target : candle.low <= target;
+  static bool _targetHit(
+    TradingLabPosition position,
+    double target,
+    ChartCandle candle,
+  ) => position.direction == TradeDirection.long
+      ? candle.high >= target
+      : candle.low <= target;
 
-  static void _updateExcursions(TradingLabPosition position, ChartCandle candle) {
+  static void _updateExcursions(
+    TradingLabPosition position,
+    ChartCandle candle,
+  ) {
     if (position.direction == TradeDirection.long) {
-      position.maximumFavorablePrice = math.max(position.maximumFavorablePrice ?? position.entryPrice, candle.high);
-      position.maximumAdversePrice = math.min(position.maximumAdversePrice ?? position.entryPrice, candle.low);
+      position.maximumFavorablePrice = math.max(
+        position.maximumFavorablePrice ?? position.entryPrice,
+        candle.high,
+      );
+      position.maximumAdversePrice = math.min(
+        position.maximumAdversePrice ?? position.entryPrice,
+        candle.low,
+      );
     } else {
-      position.maximumFavorablePrice = math.min(position.maximumFavorablePrice ?? position.entryPrice, candle.low);
-      position.maximumAdversePrice = math.max(position.maximumAdversePrice ?? position.entryPrice, candle.high);
+      position.maximumFavorablePrice = math.min(
+        position.maximumFavorablePrice ?? position.entryPrice,
+        candle.low,
+      );
+      position.maximumAdversePrice = math.max(
+        position.maximumAdversePrice ?? position.entryPrice,
+        candle.high,
+      );
     }
   }
 
-  static TimeframeChartAnalysis? _analysisFor(OwnerAlphaSnapshot snapshot, String symbol, String timeframe) {
-    final radar = snapshot.radar.where((item) => item.quote.symbol == symbol).firstOrNull;
+  static TimeframeChartAnalysis? _analysisFor(
+    OwnerAlphaSnapshot snapshot,
+    String symbol,
+    String timeframe,
+  ) {
+    final radar = snapshot.radar
+        .where((item) => item.quote.symbol == symbol)
+        .firstOrNull;
     return radar?.analysesByTimeframe[timeframe];
   }
 
   static List<double> _fractionsForTargets(int count) {
     if (count <= 0) return const [];
     final standard = ProfitProtectionTargetAllocation.standard.fractions;
-    final raw = standard.take(math.min(count, standard.length)).toList(growable: false);
+    final raw = standard
+        .take(math.min(count, standard.length))
+        .toList(growable: false);
     if (count > standard.length) {
       final equal = 1 / count;
       return List<double>.filled(count, equal, growable: false);
@@ -564,7 +668,8 @@ final class TradingLabPaperBroker {
     return raw.map((item) => item / total).toList(growable: false);
   }
 
-  static double _fee(double notional, double bps) => notional.abs() * bps / 10000;
+  static double _fee(double notional, double bps) =>
+      notional.abs() * bps / 10000;
 
   static double _applyAdverseSlippage(
     double price, {
@@ -573,7 +678,9 @@ final class TradingLabPaperBroker {
     required double bps,
   }) {
     final rate = bps / 10000;
-    final buying = opening ? direction == TradeDirection.long : direction == TradeDirection.short;
+    final buying = opening
+        ? direction == TradeDirection.long
+        : direction == TradeDirection.short;
     return price * (buying ? 1 + rate : 1 - rate);
   }
 
@@ -587,12 +694,19 @@ final class TradingLabPaperBroker {
     return 'paper_admission_blocked';
   }
 
-  static String _pendingDiagnostic(TradingLabRun run, OwnerAlphaSnapshot snapshot) {
+  static String _pendingDiagnostic(
+    TradingLabRun run,
+    OwnerAlphaSnapshot snapshot,
+  ) {
     final candidate = run.pendingCandidates.first;
     if (run.openPositions.length >= run.manifest.maximumConcurrentPositions) {
       return 'Scanner active; ${run.pendingCandidates.length} candidate(s) pending, but portfolio slots are currently full.';
     }
-    final analysis = _analysisFor(snapshot, candidate.symbol, candidate.timeframe);
+    final analysis = _analysisFor(
+      snapshot,
+      candidate.symbol,
+      candidate.timeframe,
+    );
     if (analysis == null) {
       return 'Scanner active; pending candidate exists but its chart context is not present in the latest snapshot.';
     }
@@ -612,16 +726,22 @@ final class TradingLabPaperBroker {
   }) {
     run.appendEvent(
       TradingLabEvent(
-        eventId: '${run.manifest.runId}:${run.cycleId}:${run.events.length + 1}',
+        eventId:
+            '${run.manifest.runId}:${run.cycleId}:${run.events.length + 1}',
         atUtc: at.toUtc(),
         kind: kind,
         cycleId: run.cycleId,
         reason: reason,
         setupId: position?.setupId ?? candidate?.setupId ?? idea?.setupId,
         symbol: position?.symbol ?? candidate?.symbol ?? idea?.symbol,
-        timeframe: position?.timeframe ?? candidate?.timeframe ?? idea?.timeframe,
-        strategy: position?.strategy ?? candidate?.strategy ?? idea?.strategy.name,
-        strategyVersion: position?.strategyVersion ?? candidate?.strategyVersion ?? idea?.strategyVersion,
+        timeframe:
+            position?.timeframe ?? candidate?.timeframe ?? idea?.timeframe,
+        strategy:
+            position?.strategy ?? candidate?.strategy ?? idea?.strategy.name,
+        strategyVersion:
+            position?.strategyVersion ??
+            candidate?.strategyVersion ??
+            idea?.strategyVersion,
         metrics: metrics,
         attributes: attributes,
       ),

@@ -65,7 +65,9 @@ final class TradingLabController extends ChangeNotifier {
     String notes = '',
   }) async {
     if (_run?.isRunning == true) {
-      throw StateError('Stop the active Trading Lab experiment before starting a new one.');
+      throw StateError(
+        'Stop the active Trading Lab experiment before starting a new one.',
+      );
     }
     final now = DateTime.now().toUtc();
     final snapshot = _marketController.snapshot;
@@ -89,7 +91,9 @@ final class TradingLabController extends ChangeNotifier {
         maximumConcurrentPositions: maximumConcurrentPositions,
         leverage: leverage,
         symbols: _marketController.symbols,
-        timeframes: OwnerAlphaController.timeframes.where((item) => item != '1D'),
+        timeframes: OwnerAlphaController.timeframes.where(
+          (item) => item != '1D',
+        ),
         strategies: strategyVersions,
         feeRateBps: feeRateBps,
         slippageBps: slippageBps,

@@ -41,10 +41,16 @@ final class TradingLabRunManifest {
              .toSet(),
        ),
        timeframes = List.unmodifiable(
-         timeframes.map((item) => item.trim()).where((item) => item.isNotEmpty).toSet(),
+         timeframes
+             .map((item) => item.trim())
+             .where((item) => item.isNotEmpty)
+             .toSet(),
        ),
        strategies = List.unmodifiable(
-         strategies.map((item) => item.trim()).where((item) => item.isNotEmpty).toSet(),
+         strategies
+             .map((item) => item.trim())
+             .where((item) => item.isNotEmpty)
+             .toSet(),
        ) {
     validate();
   }
@@ -65,28 +71,51 @@ final class TradingLabRunManifest {
 
   void validate() {
     if (runId.trim().isEmpty || !startedAtUtc.isUtc) {
-      throw const FormatException('Trading Lab run id and UTC start time are required.');
+      throw const FormatException(
+        'Trading Lab run id and UTC start time are required.',
+      );
     }
     if (!startingEquity.isFinite || startingEquity < 50) {
-      throw const FormatException('Trading Lab starting equity must be at least 50 USDT.');
+      throw const FormatException(
+        'Trading Lab starting equity must be at least 50 USDT.',
+      );
     }
     if (!riskPercent.isFinite || riskPercent < 0.05 || riskPercent > 2) {
-      throw const FormatException('Trading Lab risk must be between 0.05% and 2%.');
+      throw const FormatException(
+        'Trading Lab risk must be between 0.05% and 2%.',
+      );
     }
     if (maximumConcurrentPositions < 1 || maximumConcurrentPositions > 3) {
-      throw const FormatException('Trading Lab supports one to three concurrent positions.');
+      throw const FormatException(
+        'Trading Lab supports one to three concurrent positions.',
+      );
     }
     if (leverage < 1 || leverage > TradeIdea.maximumManualLeverage) {
-      throw const FormatException('Trading Lab leverage must be between 1x and 125x.');
+      throw const FormatException(
+        'Trading Lab leverage must be between 1x and 125x.',
+      );
     }
-    if (symbols.isEmpty || symbols.length > 30 || timeframes.isEmpty || strategies.isEmpty) {
-      throw const FormatException('Trading Lab requires symbols, timeframes and strategy versions.');
+    if (symbols.isEmpty ||
+        symbols.length > 30 ||
+        timeframes.isEmpty ||
+        strategies.isEmpty) {
+      throw const FormatException(
+        'Trading Lab requires symbols, timeframes and strategy versions.',
+      );
     }
-    if ([feeRateBps, slippageBps].any((value) => !value.isFinite || value < 0 || value > 200)) {
-      throw const FormatException('Trading Lab execution costs are outside the supported range.');
+    if ([
+      feeRateBps,
+      slippageBps,
+    ].any((value) => !value.isFinite || value < 0 || value > 200)) {
+      throw const FormatException(
+        'Trading Lab execution costs are outside the supported range.',
+      );
     }
-    if (!fundingRatePerEightHours.isFinite || fundingRatePerEightHours.abs() > 0.05) {
-      throw const FormatException('Trading Lab funding model is outside the supported range.');
+    if (!fundingRatePerEightHours.isFinite ||
+        fundingRatePerEightHours.abs() > 0.05) {
+      throw const FormatException(
+        'Trading Lab funding model is outside the supported range.',
+      );
     }
   }
 
@@ -107,21 +136,22 @@ final class TradingLabRunManifest {
     'notes': notes,
   };
 
-  factory TradingLabRunManifest.fromJson(Map<String, Object?> json) => TradingLabRunManifest(
-    runId: json['runId']?.toString() ?? '',
-    startedAtUtc: _date(json['startedAtUtc']),
-    startingEquity: _double(json['startingEquity']),
-    riskPercent: _double(json['riskPercent']),
-    maximumConcurrentPositions: _int(json['maximumConcurrentPositions']),
-    leverage: _int(json['leverage']),
-    symbols: _strings(json['symbols']),
-    timeframes: _strings(json['timeframes']),
-    strategies: _strings(json['strategies']),
-    feeRateBps: _double(json['feeRateBps'], fallback: 6),
-    slippageBps: _double(json['slippageBps'], fallback: 2),
-    fundingRatePerEightHours: _double(json['fundingRatePerEightHours']),
-    notes: json['notes']?.toString() ?? '',
-  );
+  factory TradingLabRunManifest.fromJson(Map<String, Object?> json) =>
+      TradingLabRunManifest(
+        runId: json['runId']?.toString() ?? '',
+        startedAtUtc: _date(json['startedAtUtc']),
+        startingEquity: _double(json['startingEquity']),
+        riskPercent: _double(json['riskPercent']),
+        maximumConcurrentPositions: _int(json['maximumConcurrentPositions']),
+        leverage: _int(json['leverage']),
+        symbols: _strings(json['symbols']),
+        timeframes: _strings(json['timeframes']),
+        strategies: _strings(json['strategies']),
+        feeRateBps: _double(json['feeRateBps'], fallback: 6),
+        slippageBps: _double(json['slippageBps'], fallback: 2),
+        fundingRatePerEightHours: _double(json['fundingRatePerEightHours']),
+        notes: json['notes']?.toString() ?? '',
+      );
 }
 
 final class TradingLabEvent {
@@ -140,7 +170,10 @@ final class TradingLabEvent {
     Map<String, String> attributes = const {},
   }) : metrics = Map.unmodifiable(metrics),
        attributes = Map.unmodifiable(attributes) {
-    if (eventId.trim().isEmpty || !atUtc.isUtc || cycleId < 0 || reason.trim().isEmpty) {
+    if (eventId.trim().isEmpty ||
+        !atUtc.isUtc ||
+        cycleId < 0 ||
+        reason.trim().isEmpty) {
       throw const FormatException('Invalid Trading Lab event.');
     }
   }
@@ -173,23 +206,24 @@ final class TradingLabEvent {
     'attributes': attributes,
   };
 
-  factory TradingLabEvent.fromJson(Map<String, Object?> json) => TradingLabEvent(
-    eventId: json['eventId']?.toString() ?? '',
-    atUtc: _date(json['atUtc']),
-    kind: TradingLabEventKind.values.firstWhere(
-      (item) => item.name == json['kind'],
-      orElse: () => TradingLabEventKind.anomaly,
-    ),
-    cycleId: _int(json['cycleId']),
-    reason: json['reason']?.toString() ?? 'unknown',
-    setupId: _nullableString(json['setupId']),
-    symbol: _nullableString(json['symbol']),
-    timeframe: _nullableString(json['timeframe']),
-    strategy: _nullableString(json['strategy']),
-    strategyVersion: _nullableString(json['strategyVersion']),
-    metrics: _doubleMap(json['metrics']),
-    attributes: _stringMap(json['attributes']),
-  );
+  factory TradingLabEvent.fromJson(Map<String, Object?> json) =>
+      TradingLabEvent(
+        eventId: json['eventId']?.toString() ?? '',
+        atUtc: _date(json['atUtc']),
+        kind: TradingLabEventKind.values.firstWhere(
+          (item) => item.name == json['kind'],
+          orElse: () => TradingLabEventKind.anomaly,
+        ),
+        cycleId: _int(json['cycleId']),
+        reason: json['reason']?.toString() ?? 'unknown',
+        setupId: _nullableString(json['setupId']),
+        symbol: _nullableString(json['symbol']),
+        timeframe: _nullableString(json['timeframe']),
+        strategy: _nullableString(json['strategy']),
+        strategyVersion: _nullableString(json['strategyVersion']),
+        metrics: _doubleMap(json['metrics']),
+        attributes: _stringMap(json['attributes']),
+      );
 }
 
 final class TradingLabPendingCandidate {
@@ -216,11 +250,18 @@ final class TradingLabPendingCandidate {
     required Map<String, double> indicatorSnapshot,
   }) : targets = List.unmodifiable(targets),
        indicatorSnapshot = Map.unmodifiable(indicatorSnapshot) {
-    if (decisionKey.trim().isEmpty || setupId.trim().isEmpty || symbol.trim().isEmpty || timeframe.trim().isEmpty) {
+    if (decisionKey.trim().isEmpty ||
+        setupId.trim().isEmpty ||
+        symbol.trim().isEmpty ||
+        timeframe.trim().isEmpty) {
       throw const FormatException('Invalid Trading Lab candidate identity.');
     }
-    if (!observedAtUtc.isUtc || !validUntilUtc.isUtc || !signalCandleOpenTimeUtc.isUtc) {
-      throw const FormatException('Trading Lab candidate timestamps must be UTC.');
+    if (!observedAtUtc.isUtc ||
+        !validUntilUtc.isUtc ||
+        !signalCandleOpenTimeUtc.isUtc) {
+      throw const FormatException(
+        'Trading Lab candidate timestamps must be UTC.',
+      );
     }
     if (direction == TradeDirection.wait ||
         entryLower <= 0 ||
@@ -276,31 +317,32 @@ final class TradingLabPendingCandidate {
     'indicatorSnapshot': indicatorSnapshot,
   };
 
-  factory TradingLabPendingCandidate.fromJson(Map<String, Object?> json) => TradingLabPendingCandidate(
-    decisionKey: json['decisionKey']?.toString() ?? '',
-    setupId: json['setupId']?.toString() ?? '',
-    symbol: json['symbol']?.toString() ?? '',
-    timeframe: json['timeframe']?.toString() ?? '',
-    direction: TradeDirection.values.firstWhere(
-      (item) => item.name == json['direction'],
-      orElse: () => TradeDirection.wait,
-    ),
-    strategy: json['strategy']?.toString() ?? '',
-    strategyVersion: json['strategyVersion']?.toString() ?? '',
-    marketRegime: json['marketRegime']?.toString() ?? 'transition',
-    confidencePercent: _int(json['confidencePercent']),
-    riskReward: _double(json['riskReward']),
-    entryLower: _double(json['entryLower']),
-    entryUpper: _double(json['entryUpper']),
-    stopLoss: _double(json['stopLoss']),
-    targets: _doubles(json['targets']),
-    recommendedLeverage: _int(json['recommendedLeverage'], fallback: 1),
-    maximumSafeLeverage: _int(json['maximumSafeLeverage'], fallback: 1),
-    observedAtUtc: _date(json['observedAtUtc']),
-    validUntilUtc: _date(json['validUntilUtc']),
-    signalCandleOpenTimeUtc: _date(json['signalCandleOpenTimeUtc']),
-    indicatorSnapshot: _doubleMap(json['indicatorSnapshot']),
-  );
+  factory TradingLabPendingCandidate.fromJson(Map<String, Object?> json) =>
+      TradingLabPendingCandidate(
+        decisionKey: json['decisionKey']?.toString() ?? '',
+        setupId: json['setupId']?.toString() ?? '',
+        symbol: json['symbol']?.toString() ?? '',
+        timeframe: json['timeframe']?.toString() ?? '',
+        direction: TradeDirection.values.firstWhere(
+          (item) => item.name == json['direction'],
+          orElse: () => TradeDirection.wait,
+        ),
+        strategy: json['strategy']?.toString() ?? '',
+        strategyVersion: json['strategyVersion']?.toString() ?? '',
+        marketRegime: json['marketRegime']?.toString() ?? 'transition',
+        confidencePercent: _int(json['confidencePercent']),
+        riskReward: _double(json['riskReward']),
+        entryLower: _double(json['entryLower']),
+        entryUpper: _double(json['entryUpper']),
+        stopLoss: _double(json['stopLoss']),
+        targets: _doubles(json['targets']),
+        recommendedLeverage: _int(json['recommendedLeverage'], fallback: 1),
+        maximumSafeLeverage: _int(json['maximumSafeLeverage'], fallback: 1),
+        observedAtUtc: _date(json['observedAtUtc']),
+        validUntilUtc: _date(json['validUntilUtc']),
+        signalCandleOpenTimeUtc: _date(json['signalCandleOpenTimeUtc']),
+        indicatorSnapshot: _doubleMap(json['indicatorSnapshot']),
+      );
 }
 
 final class TradingLabPosition {
@@ -340,11 +382,18 @@ final class TradingLabPosition {
   }) : targets = List.unmodifiable(targets),
        targetFractions = List.unmodifiable(targetFractions),
        filledTargetIndexes = Set.of(filledTargetIndexes) {
-    if (positionId.trim().isEmpty || initialQuantity <= 0 || remainingQuantity < 0 || remainingQuantity > initialQuantity) {
+    if (positionId.trim().isEmpty ||
+        initialQuantity <= 0 ||
+        remainingQuantity < 0 ||
+        remainingQuantity > initialQuantity) {
       throw const FormatException('Invalid Trading Lab paper position.');
     }
-    if (!openedAtUtc.isUtc || !lastEvaluatedCandleAtUtc.isUtc || (closedAtUtc != null && !closedAtUtc!.isUtc)) {
-      throw const FormatException('Trading Lab position timestamps must be UTC.');
+    if (!openedAtUtc.isUtc ||
+        !lastEvaluatedCandleAtUtc.isUtc ||
+        (closedAtUtc != null && !closedAtUtc!.isUtc)) {
+      throw const FormatException(
+        'Trading Lab position timestamps must be UTC.',
+      );
     }
   }
 
@@ -383,7 +432,8 @@ final class TradingLabPosition {
 
   bool get isOpen => closedAtUtc == null && remainingQuantity > 0;
   double get netRealizedPnl => realizedGrossPnl - entryFee - exitFees - funding;
-  double get initialRisk => (entryPrice - originalStopLoss).abs() * initialQuantity;
+  double get initialRisk =>
+      (entryPrice - originalStopLoss).abs() * initialQuantity;
   double get realizedR => initialRisk <= 0 ? 0 : netRealizedPnl / initialRisk;
 
   Map<String, Object?> toJson() => {
@@ -421,43 +471,47 @@ final class TradingLabPosition {
     'closeReason': closeReason,
   };
 
-  factory TradingLabPosition.fromJson(Map<String, Object?> json) => TradingLabPosition(
-    positionId: json['positionId']?.toString() ?? '',
-    decisionKey: json['decisionKey']?.toString() ?? '',
-    setupId: json['setupId']?.toString() ?? '',
-    symbol: json['symbol']?.toString() ?? '',
-    timeframe: json['timeframe']?.toString() ?? '',
-    direction: TradeDirection.values.firstWhere(
-      (item) => item.name == json['direction'],
-      orElse: () => TradeDirection.wait,
-    ),
-    strategy: json['strategy']?.toString() ?? '',
-    strategyVersion: json['strategyVersion']?.toString() ?? '',
-    marketRegime: json['marketRegime']?.toString() ?? 'transition',
-    confidencePercent: _int(json['confidencePercent']),
-    riskReward: _double(json['riskReward']),
-    entryPrice: _double(json['entryPrice']),
-    originalStopLoss: _double(json['originalStopLoss']),
-    currentStopLoss: _double(json['currentStopLoss']),
-    targets: _doubles(json['targets']),
-    targetFractions: _doubles(json['targetFractions']),
-    initialQuantity: _double(json['initialQuantity']),
-    remainingQuantity: _double(json['remainingQuantity']),
-    leverage: _int(json['leverage'], fallback: 1),
-    openedAtUtc: _date(json['openedAtUtc']),
-    lastEvaluatedCandleAtUtc: _date(json['lastEvaluatedCandleAtUtc']),
-    marginReserved: _double(json['marginReserved']),
-    entryFee: _double(json['entryFee']),
-    realizedGrossPnl: _double(json['realizedGrossPnl']),
-    exitFees: _double(json['exitFees']),
-    funding: _double(json['funding']),
-    slippageCost: _double(json['slippageCost']),
-    maximumFavorablePrice: _nullableDouble(json['maximumFavorablePrice']),
-    maximumAdversePrice: _nullableDouble(json['maximumAdversePrice']),
-    filledTargetIndexes: (json['filledTargetIndexes'] as List<Object?>? ?? const []).whereType<num>().map((item) => item.toInt()),
-    closedAtUtc: _nullableDate(json['closedAtUtc']),
-    closeReason: _nullableString(json['closeReason']),
-  );
+  factory TradingLabPosition.fromJson(Map<String, Object?> json) =>
+      TradingLabPosition(
+        positionId: json['positionId']?.toString() ?? '',
+        decisionKey: json['decisionKey']?.toString() ?? '',
+        setupId: json['setupId']?.toString() ?? '',
+        symbol: json['symbol']?.toString() ?? '',
+        timeframe: json['timeframe']?.toString() ?? '',
+        direction: TradeDirection.values.firstWhere(
+          (item) => item.name == json['direction'],
+          orElse: () => TradeDirection.wait,
+        ),
+        strategy: json['strategy']?.toString() ?? '',
+        strategyVersion: json['strategyVersion']?.toString() ?? '',
+        marketRegime: json['marketRegime']?.toString() ?? 'transition',
+        confidencePercent: _int(json['confidencePercent']),
+        riskReward: _double(json['riskReward']),
+        entryPrice: _double(json['entryPrice']),
+        originalStopLoss: _double(json['originalStopLoss']),
+        currentStopLoss: _double(json['currentStopLoss']),
+        targets: _doubles(json['targets']),
+        targetFractions: _doubles(json['targetFractions']),
+        initialQuantity: _double(json['initialQuantity']),
+        remainingQuantity: _double(json['remainingQuantity']),
+        leverage: _int(json['leverage'], fallback: 1),
+        openedAtUtc: _date(json['openedAtUtc']),
+        lastEvaluatedCandleAtUtc: _date(json['lastEvaluatedCandleAtUtc']),
+        marginReserved: _double(json['marginReserved']),
+        entryFee: _double(json['entryFee']),
+        realizedGrossPnl: _double(json['realizedGrossPnl']),
+        exitFees: _double(json['exitFees']),
+        funding: _double(json['funding']),
+        slippageCost: _double(json['slippageCost']),
+        maximumFavorablePrice: _nullableDouble(json['maximumFavorablePrice']),
+        maximumAdversePrice: _nullableDouble(json['maximumAdversePrice']),
+        filledTargetIndexes:
+            (json['filledTargetIndexes'] as List<Object?>? ?? const [])
+                .whereType<num>()
+                .map((item) => item.toInt()),
+        closedAtUtc: _nullableDate(json['closedAtUtc']),
+        closeReason: _nullableString(json['closeReason']),
+      );
 }
 
 final class TradingLabRun {
@@ -484,7 +538,10 @@ final class TradingLabRun {
        closedPositions = List.of(closedPositions),
        events = List.of(events),
        processedDecisionKeys = Set.of(processedDecisionKeys) {
-    if (this.balance < 0 || this.currentEquity < 0 || this.peakEquity <= 0 || cycleId < 0) {
+    if (this.balance < 0 ||
+        this.currentEquity < 0 ||
+        this.peakEquity <= 0 ||
+        cycleId < 0) {
       throw const FormatException('Invalid Trading Lab run accounting.');
     }
   }
@@ -506,15 +563,33 @@ final class TradingLabRun {
 
   bool get isRunning => status == TradingLabRunStatus.running;
   int get tradeCount => closedPositions.length;
-  int get wins => closedPositions.where((item) => item.netRealizedPnl > 0).length;
-  int get losses => closedPositions.where((item) => item.netRealizedPnl < 0).length;
-  double get netRealizedPnl => closedPositions.fold<double>(0, (sum, item) => sum + item.netRealizedPnl) + openPositions.fold<double>(0, (sum, item) => sum - item.entryFee);
-  double get returnPercent => manifest.startingEquity <= 0 ? 0 : (currentEquity / manifest.startingEquity - 1) * 100;
+  int get wins =>
+      closedPositions.where((item) => item.netRealizedPnl > 0).length;
+  int get losses =>
+      closedPositions.where((item) => item.netRealizedPnl < 0).length;
+  double get netRealizedPnl =>
+      closedPositions.fold<double>(
+        0,
+        (sum, item) => sum + item.netRealizedPnl,
+      ) +
+      openPositions.fold<double>(0, (sum, item) => sum - item.entryFee);
+  double get returnPercent => manifest.startingEquity <= 0
+      ? 0
+      : (currentEquity / manifest.startingEquity - 1) * 100;
   double get winRatePercent => tradeCount == 0 ? 0 : wins / tradeCount * 100;
-  double get averageR => tradeCount == 0 ? 0 : closedPositions.fold<double>(0, (sum, item) => sum + item.realizedR) / tradeCount;
-  double get grossProfit => closedPositions.where((item) => item.netRealizedPnl > 0).fold<double>(0, (sum, item) => sum + item.netRealizedPnl);
-  double get grossLoss => closedPositions.where((item) => item.netRealizedPnl < 0).fold<double>(0, (sum, item) => sum + item.netRealizedPnl.abs());
-  double? get profitFactor => grossLoss <= 0 ? (grossProfit > 0 ? double.infinity : null) : grossProfit / grossLoss;
+  double get averageR => tradeCount == 0
+      ? 0
+      : closedPositions.fold<double>(0, (sum, item) => sum + item.realizedR) /
+            tradeCount;
+  double get grossProfit => closedPositions
+      .where((item) => item.netRealizedPnl > 0)
+      .fold<double>(0, (sum, item) => sum + item.netRealizedPnl);
+  double get grossLoss => closedPositions
+      .where((item) => item.netRealizedPnl < 0)
+      .fold<double>(0, (sum, item) => sum + item.netRealizedPnl.abs());
+  double? get profitFactor => grossLoss <= 0
+      ? (grossProfit > 0 ? double.infinity : null)
+      : grossProfit / grossLoss;
 
   void appendEvent(TradingLabEvent event) {
     events.add(event);
@@ -526,8 +601,11 @@ final class TradingLabRun {
   void rememberDecision(String key) {
     processedDecisionKeys.add(key);
     if (processedDecisionKeys.length > tradingLabMaximumProcessedDecisions) {
-      final overflow = processedDecisionKeys.length - tradingLabMaximumProcessedDecisions;
-      processedDecisionKeys.removeAll(processedDecisionKeys.take(overflow).toList(growable: false));
+      final overflow =
+          processedDecisionKeys.length - tradingLabMaximumProcessedDecisions;
+      processedDecisionKeys.removeAll(
+        processedDecisionKeys.take(overflow).toList(growable: false),
+      );
     }
   }
 
@@ -539,7 +617,9 @@ final class TradingLabRun {
     'currentEquity': currentEquity,
     'peakEquity': peakEquity,
     'maximumDrawdownPercent': maximumDrawdownPercent,
-    'pendingCandidates': pendingCandidates.map((item) => item.toJson()).toList(),
+    'pendingCandidates': pendingCandidates
+        .map((item) => item.toJson())
+        .toList(),
     'openPositions': openPositions.map((item) => item.toJson()).toList(),
     'closedPositions': closedPositions.map((item) => item.toJson()).toList(),
     'events': events.map((item) => item.toJson()).toList(),
@@ -561,14 +641,22 @@ final class TradingLabRun {
       currentEquity: _double(json['currentEquity']),
       peakEquity: _double(json['peakEquity']),
       maximumDrawdownPercent: _double(json['maximumDrawdownPercent']),
-      pendingCandidates: _objectList(json['pendingCandidates']).map(TradingLabPendingCandidate.fromJson),
-      openPositions: _objectList(json['openPositions']).map(TradingLabPosition.fromJson),
-      closedPositions: _objectList(json['closedPositions']).map(TradingLabPosition.fromJson),
+      pendingCandidates: _objectList(
+        json['pendingCandidates'],
+      ).map(TradingLabPendingCandidate.fromJson),
+      openPositions: _objectList(
+        json['openPositions'],
+      ).map(TradingLabPosition.fromJson),
+      closedPositions: _objectList(
+        json['closedPositions'],
+      ).map(TradingLabPosition.fromJson),
       events: _objectList(json['events']).map(TradingLabEvent.fromJson),
       processedDecisionKeys: _strings(json['processedDecisionKeys']),
       lastSnapshotAtUtc: _nullableDate(json['lastSnapshotAtUtc']),
       cycleId: _int(json['cycleId']),
-      lastWhyNoTrade: json['lastWhyNoTrade']?.toString() ?? 'No diagnostic is available yet.',
+      lastWhyNoTrade:
+          json['lastWhyNoTrade']?.toString() ??
+          'No diagnostic is available yet.',
     );
   }
 }
@@ -580,23 +668,41 @@ Map<String, Object?> _objectMap(Object? value) {
   return const {};
 }
 
-List<Map<String, Object?>> _objectList(Object? value) => (value as List<Object?>? ?? const [])
-    .whereType<Map<Object?, Object?>>()
-    .map((item) => item.map((key, value) => MapEntry(key.toString(), value)))
-    .toList(growable: false);
+List<Map<String, Object?>> _objectList(Object? value) =>
+    (value as List<Object?>? ?? const [])
+        .whereType<Map<Object?, Object?>>()
+        .map(
+          (item) => item.map((key, value) => MapEntry(key.toString(), value)),
+        )
+        .toList(growable: false);
 
-List<String> _strings(Object? value) => (value as List<Object?>? ?? const []).map((item) => item.toString()).where((item) => item.trim().isNotEmpty).toList(growable: false);
-List<double> _doubles(Object? value) => (value as List<Object?>? ?? const []).whereType<num>().map((item) => item.toDouble()).toList(growable: false);
-Map<String, double> _doubleMap(Object? value) => _objectMap(value).map((key, item) => MapEntry(key, (item as num?)?.toDouble() ?? 0));
-Map<String, String> _stringMap(Object? value) => _objectMap(value).map((key, item) => MapEntry(key, item?.toString() ?? ''));
-int _int(Object? value, {int fallback = 0}) => (value as num?)?.toInt() ?? fallback;
-double _double(Object? value, {double fallback = 0}) => (value as num?)?.toDouble() ?? fallback;
-double? _nullableDouble(Object? value) => value is num ? value.toDouble() : null;
+List<String> _strings(Object? value) => (value as List<Object?>? ?? const [])
+    .map((item) => item.toString())
+    .where((item) => item.trim().isNotEmpty)
+    .toList(growable: false);
+List<double> _doubles(Object? value) => (value as List<Object?>? ?? const [])
+    .whereType<num>()
+    .map((item) => item.toDouble())
+    .toList(growable: false);
+Map<String, double> _doubleMap(Object? value) => _objectMap(
+  value,
+).map((key, item) => MapEntry(key, (item as num?)?.toDouble() ?? 0));
+Map<String, String> _stringMap(Object? value) =>
+    _objectMap(value).map((key, item) => MapEntry(key, item?.toString() ?? ''));
+int _int(Object? value, {int fallback = 0}) =>
+    (value as num?)?.toInt() ?? fallback;
+double _double(Object? value, {double fallback = 0}) =>
+    (value as num?)?.toDouble() ?? fallback;
+double? _nullableDouble(Object? value) =>
+    value is num ? value.toDouble() : null;
 String? _nullableString(Object? value) {
   final result = value?.toString();
   return result == null || result.trim().isEmpty ? null : result;
 }
-DateTime _date(Object? value) => DateTime.tryParse(value?.toString() ?? '')?.toUtc() ?? (throw const FormatException('Invalid Trading Lab UTC timestamp.'));
+
+DateTime _date(Object? value) =>
+    DateTime.tryParse(value?.toString() ?? '')?.toUtc() ??
+    (throw const FormatException('Invalid Trading Lab UTC timestamp.'));
 DateTime? _nullableDate(Object? value) {
   final raw = value?.toString();
   if (raw == null || raw.isEmpty) return null;

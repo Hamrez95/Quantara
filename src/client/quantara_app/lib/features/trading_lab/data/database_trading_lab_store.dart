@@ -12,7 +12,8 @@ abstract interface class TradingLabRunStore {
 final class DatabaseTradingLabRunStore implements TradingLabRunStore {
   DatabaseTradingLabRunStore({
     Future<QuantaraDurableDatabase> Function()? databaseFactory,
-  }) : _databaseFactory = databaseFactory ?? (() => QuantaraDatabaseProvider.instance);
+  }) : _databaseFactory =
+           databaseFactory ?? (() => QuantaraDatabaseProvider.instance);
 
   static const _activeKey = 'trading-lab:active:v1';
   static const _historyPrefix = 'trading-lab:run:v1:';
@@ -22,7 +23,10 @@ final class DatabaseTradingLabRunStore implements TradingLabRunStore {
   @override
   Future<TradingLabRun?> loadActive() async {
     final database = await _databaseFactory();
-    final record = await database.read(QuantaraDurableCategory.audit, _activeKey);
+    final record = await database.read(
+      QuantaraDurableCategory.audit,
+      _activeKey,
+    );
     if (record == null) return null;
     return TradingLabRun.fromJson(record.payload);
   }
@@ -40,7 +44,9 @@ final class DatabaseTradingLabRunStore implements TradingLabRunStore {
       throw ArgumentError.value(limit, 'limit');
     }
     final database = await _databaseFactory();
-    final records = await database.list(categories: {QuantaraDurableCategory.audit});
+    final records = await database.list(
+      categories: {QuantaraDurableCategory.audit},
+    );
     final runs = <TradingLabRun>[];
     for (final record in records) {
       if (!record.key.startsWith(_historyPrefix)) continue;
@@ -50,7 +56,10 @@ final class DatabaseTradingLabRunStore implements TradingLabRunStore {
         // One damaged historical experiment must not hide healthy runs.
       }
     }
-    runs.sort((left, right) => right.manifest.startedAtUtc.compareTo(left.manifest.startedAtUtc));
+    runs.sort(
+      (left, right) =>
+          right.manifest.startedAtUtc.compareTo(left.manifest.startedAtUtc),
+    );
     return List.unmodifiable(runs.take(limit));
   }
 
