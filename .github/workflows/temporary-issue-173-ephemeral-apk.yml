@@ -1,0 +1,106 @@
+name: Temporary Issue 173 Ephemeral QA APK
+
+on:
+  push:
+    branches:
+      - alpha/issue-173-ephemeral-qa
+
+permissions:
+  contents: write
+
+concurrency:
+  group: issue-173-ephemeral-qa-apk
+  cancel-in-progress: true
+
+jobs:
+  build-ephemeral-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout validated physical QA source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --no-pub
+
+      - name: Run physical QA regressions
+        working-directory: src/client/quantara_app
+        run: |
+          flutter test --no-pub \
+            test/issue_172_physical_qa_regression_test.dart \
+            test/issue_173_journal_live_context_test.dart \
+            test/issue_173_local_live_protection_gate_test.dart \
+            test/trading_journal_view_test.dart
+
+      - name: Generate disposable QA signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/quantara-issue-173-ephemeral.jks"
+          PASS="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt \
+            -keystore "$KEYSTORE" \
+            -storepass "$PASS" \
+            -keypass "$PASS" \
+            -alias quantara-qa \
+            -keyalg RSA \
+            -keysize 3072 \
+            -validity 7 \
+            -dname "CN=Quantara Ephemeral QA,OU=Physical QA,O=Quantara,C=DE"
+          echo "QUANTARA_PREVIEW_RELEASE=true" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEYSTORE_PATH=$KEYSTORE" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEYSTORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEY_ALIAS=quantara-qa" >> "$GITHUB_ENV"
+          echo "QUANTARA_ANDROID_KEY_PASSWORD=$PASS" >> "$GITHUB_ENV"
+
+      - name: Build release APK with disposable signer
+        working-directory: src/client/quantara_app
+        run: flutter build apk --release --no-pub
+
+      - name: Prepare QA package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk \
+            dist/Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA.apk
+          sha256sum dist/Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA.apk \
+            > dist/Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA
+          path: |
+            dist/Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA.apk
+            dist/Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish temporary GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="qa-issue-173-build123-ephemeral"
+          gh release delete "$TAG" --cleanup-tag --yes >/dev/null 2>&1 || true
+          gh release create "$TAG" \
+            dist/Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA.apk \
+            dist/Quantara-1.2.0-rc.2-build123-EPHEMERAL-QA.apk.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "Quantara 1.2.0-rc.2+123 — Ephemeral QA" \
+            --notes "Disposable-signer physical QA build for Issue #173. Uninstall the previously installed Quantara Preview before installing this APK. Do not use this artifact for future in-place upgrade/signing continuity tests. Source is the validated PR #164 candidate." \
+            --prerelease
