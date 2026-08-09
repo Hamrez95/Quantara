@@ -38,21 +38,47 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
+      - name: Apply stable candidate identity fix
+        shell: python
+        run: |
+          from pathlib import Path
+
+          broker = Path('lib/features/trading_lab/application/trading_lab_paper_broker.dart')
+          text = broker.read_text()
+          old = """        final signalCandle = analysis.latestCandle;
+                  final decisionKey =
+                      '${analysis.fingerprint}|${idea.setupId}|${signalCandle.openTime.toUtc().toIso8601String()}';
+          """
+          new = """        final signalCandle = analysis.latestCandle;
+                  final decisionKey = [
+                    idea.symbol.toUpperCase(),
+                    timeframe,
+                    idea.strategy.name,
+                    idea.strategyVersion,
+                    idea.setupId,
+                    idea.candleClosedAt.toUtc().toIso8601String(),
+                  ].join('|');
+          """
+          if old in text:
+            broker.write_text(text.replace(old, new, 1))
+          elif "idea.candleClosedAt.toUtc().toIso8601String()" not in text:
+            raise SystemExit('stable candidate identity pattern not found')
+
       - name: Format branch sources
         run: dart format lib test
 
-      - name: Persist formatter output
+      - name: Persist source fixes
         working-directory: .
         shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet -- src/client/quantara_app/lib src/client/quantara_app/test; then
-            echo 'No formatter changes.'
+            echo 'No source changes.'
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add src/client/quantara_app/lib src/client/quantara_app/test
-            git commit -m 'chore(lab): format validation sources'
+            git commit -m 'fix(lab): prevent duplicate setup replay'
             git push origin HEAD:feat/176-bot-trading-lab
           fi
 
