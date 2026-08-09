@@ -20,6 +20,7 @@ const _sensitiveKeyFragments = <String>{
 
 Map<String, Object?> buildTradingLabAiReviewBundle(TradingLabRun run) {
   final closed = run.closedPositions;
+  final evidenceAt = run.lastSnapshotAtUtc ?? run.manifest.startedAtUtc;
   final totalFees = [
     ...run.openPositions,
     ...closed,
@@ -33,16 +34,18 @@ Map<String, Object?> buildTradingLabAiReviewBundle(TradingLabRun run) {
     ...closed,
   ].fold<double>(0, (sum, item) => sum + item.slippageCost);
   final rejectionCounts = <String, int>{};
-  for (final event in run.events.where(
-    (item) => item.kind == TradingLabEventKind.candidateRejected,
-  )) {
-    final code = event.attributes['rejectionReason'] ?? event.reason;
-    rejectionCounts[code] = (rejectionCounts[code] ?? 0) + 1;
+  final eventCounts = <String, int>{};
+  for (final event in run.events) {
+    eventCounts[event.kind.name] = (eventCounts[event.kind.name] ?? 0) + 1;
+    if (event.kind == TradingLabEventKind.candidateRejected) {
+      final code = event.attributes['rejectionReason'] ?? event.reason;
+      rejectionCounts[code] = (rejectionCounts[code] ?? 0) + 1;
+    }
   }
 
   final raw = <String, Object?>{
     'schema': 'quantara.trading_lab.ai_review.v1',
-    'generatedAtUtc': DateTime.now().toUtc().toIso8601String(),
+    'evidenceAtUtc': evidenceAt.toUtc().toIso8601String(),
     'manifest': run.manifest.toJson(),
     'summary': {
       'status': run.status.name,
@@ -67,6 +70,7 @@ Map<String, Object?> buildTradingLabAiReviewBundle(TradingLabRun run) {
       'totalFunding': totalFunding,
       'totalSlippage': totalSlippage,
       'eventCount': run.events.length,
+      'eventsByKind': eventCounts,
       'processedDecisionCount': run.processedDecisionKeys.length,
       'lastSnapshotAtUtc': run.lastSnapshotAtUtc?.toIso8601String(),
       'whyNoTrade': run.lastWhyNoTrade,
@@ -75,10 +79,13 @@ Map<String, Object?> buildTradingLabAiReviewBundle(TradingLabRun run) {
           ? 'Small sample: do not promote or rank a strategy from this run alone.'
           : null,
     },
+    'strategyScorecards': _strategyScorecards(closed),
     'openPositions': run.openPositions
-        .map(_positionEvidence)
+        .map((item) => _positionEvidence(item, evidenceAt: evidenceAt))
         .toList(growable: false),
-    'closedTrades': closed.map(_positionEvidence).toList(growable: false),
+    'closedTrades': closed
+        .map((item) => _positionEvidence(item, evidenceAt: evidenceAt))
+        .toList(growable: false),
     'pendingCandidates': run.pendingCandidates
         .map((item) => item.toJson())
         .toList(growable: false),
@@ -117,7 +124,86 @@ Object? sanitizeTradingLabExport(Object? value) {
   return value;
 }
 
-Map<String, Object?> _positionEvidence(TradingLabPosition position) {
+List<Map<String, Object?>> _strategyScorecards(
+  List<TradingLabPosition> closed,
+) {
+  final groups = <String, List<TradingLabPosition>>{};
+  for (final position in closed) {
+    final confidenceBucket = switch (position.confidencePercent) {
+      < 60 => '<60',
+      < 70 => '60-69',
+      < 80 => '70-79',
+      < 90 => '80-89',
+      _ => '90-100',
+    };
+    final key = [
+      '${position.strategy}@${position.strategyVersion}',
+      position.symbol,
+      position.timeframe,
+      position.marketRegime,
+      position.direction.name,
+      confidenceBucket,
+    ].join('|');
+    (groups[key] ??= <TradingLabPosition>[]).add(position);
+  }
+
+  final scorecards = <Map<String, Object?>>[];
+  for (final entry in groups.entries) {
+    final parts = entry.key.split('|');
+    final trades = entry.value;
+    final wins = trades.where((item) => item.netRealizedPnl > 0).length;
+    final losses = trades.where((item) => item.netRealizedPnl < 0).length;
+    final grossProfit = trades
+        .where((item) => item.netRealizedPnl > 0)
+        .fold<double>(0, (sum, item) => sum + item.netRealizedPnl);
+    final grossLoss = trades
+        .where((item) => item.netRealizedPnl < 0)
+        .fold<double>(0, (sum, item) => sum + item.netRealizedPnl.abs());
+    final netPnl = trades.fold<double>(
+      0,
+      (sum, item) => sum + item.netRealizedPnl,
+    );
+    final averageR = trades.fold<double>(
+          0,
+          (sum, item) => sum + item.realizedR,
+        ) /
+        trades.length;
+    scorecards.add({
+      'strategyVersion': parts[0],
+      'symbol': parts[1],
+      'timeframe': parts[2],
+      'marketRegime': parts[3],
+      'direction': parts[4],
+      'confidenceBucket': parts[5],
+      'sampleSize': trades.length,
+      'wins': wins,
+      'losses': losses,
+      'winRatePercent': wins / trades.length * 100,
+      'netPnl': netPnl,
+      'expectancyUsdt': netPnl / trades.length,
+      'averageR': averageR,
+      'profitFactor': grossLoss <= 0
+          ? (grossProfit > 0 ? null : 0)
+          : grossProfit / grossLoss,
+      'insufficientSample': trades.length < 30,
+    });
+  }
+  scorecards.sort((left, right) {
+    final strategy = (left['strategyVersion'] as String).compareTo(
+      right['strategyVersion'] as String,
+    );
+    if (strategy != 0) return strategy;
+    final symbol = (left['symbol'] as String).compareTo(right['symbol'] as String);
+    if (symbol != 0) return symbol;
+    return (left['timeframe'] as String).compareTo(right['timeframe'] as String);
+  });
+  return List.unmodifiable(scorecards);
+}
+
+Map<String, Object?> _positionEvidence(
+  TradingLabPosition position, {
+  required DateTime evidenceAt,
+}) {
   final favorableMove = switch (position.direction) {
     TradeDirection.long =>
       (position.maximumFavorablePrice ?? position.entryPrice) -
@@ -139,14 +225,15 @@ Map<String, Object?> _positionEvidence(TradingLabPosition position) {
   final initialRisk = position.initialRisk;
   final mfePnl = favorableMove * position.initialQuantity;
   final maePnl = adverseMove * position.initialQuantity;
+  final effectiveEnd = position.closedAtUtc ?? evidenceAt;
   return {
     ...position.toJson(),
     'mfePnl': mfePnl,
     'maePnl': maePnl,
     'mfeR': initialRisk <= 0 ? 0 : mfePnl / initialRisk,
     'maeR': initialRisk <= 0 ? 0 : maePnl / initialRisk,
-    'holdingSeconds': (position.closedAtUtc ?? DateTime.now().toUtc())
-        .difference(position.openedAtUtc)
-        .inSeconds,
+    'holdingSeconds': effectiveEnd.isBefore(position.openedAtUtc)
+        ? 0
+        : effectiveEnd.difference(position.openedAtUtc).inSeconds,
   };
 }
