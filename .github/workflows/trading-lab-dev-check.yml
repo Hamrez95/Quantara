@@ -18,7 +18,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: src/client/quantara_app
@@ -38,7 +38,7 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Apply stable candidate identity fix
+      - name: Apply branch validation source fixes
         shell: python
         run: |
           from pathlib import Path
@@ -64,6 +64,55 @@ jobs:
           elif "idea.candleClosedAt.toUtc().toIso8601String()" not in text:
             raise SystemExit('stable candidate identity pattern not found')
 
+          page = Path('lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          text = page.read_text()
+          import_anchor = "import '../../trading_lab/domain/trading_lab_models.dart';\n"
+          account_import = "import '../../trading_lab/domain/trading_lab_account_context.dart';\n"
+          if account_import not in text:
+            if import_anchor not in text:
+              raise SystemExit('Trading Lab import anchor not found')
+            text = text.replace(import_anchor, account_import + import_anchor, 1)
+
+          old_controller = """  late final TradingLabController _tradingLabController = TradingLabController(
+            marketController: _controller,
+            store: DatabaseTradingLabRunStore(),
+          );
+          """
+          new_controller = """  late final TradingLabController _tradingLabController = TradingLabController(
+            marketController: _controller,
+            store: DatabaseTradingLabRunStore(),
+            accountContextProvider: () {
+              final reconciliation = _autoTradeController.reconciliation;
+              final snapshot = _autoTradeController.snapshot;
+              return TradingLabAccountContext(
+                connected: _autoTradeController.isConnected,
+                reconciliationHealth: reconciliation.health.name,
+                refreshing: reconciliation.refreshing,
+                blocksNewEntries: reconciliation.blocksNewEntries,
+                canManageExistingPositions:
+                    reconciliation.allowsExistingPositionManagement,
+                syncedAtUtc: snapshot?.syncedAt.toUtc(),
+                marginCoin: snapshot?.marginCoin,
+                available: snapshot?.available,
+                frozen: snapshot?.frozen,
+                positionMargin: snapshot?.positionMargin,
+                unrealizedPnl: snapshot?.totalUnrealizedPnl,
+                estimatedEquity: snapshot?.estimatedEquity,
+                openPositionCount: snapshot?.positions.length,
+                pendingOrderCount: snapshot?.totalPendingOrderCount,
+                allOpenPositionsFullyProtected:
+                    snapshot?.allOpenPositionsFullyProtected,
+                warning: reconciliation.warning,
+              );
+            },
+          );
+          """
+          if old_controller in text:
+            text = text.replace(old_controller, new_controller, 1)
+          elif 'accountContextProvider: () {' not in text:
+            raise SystemExit('Trading Lab controller wiring anchor not found')
+          page.write_text(text)
+
       - name: Format branch sources
         run: dart format lib test
 
@@ -78,7 +127,7 @@ jobs:
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add src/client/quantara_app/lib src/client/quantara_app/test
-            git commit -m 'fix(lab): prevent duplicate setup replay'
+            git commit -m 'feat(lab): wire sanitized account truth context'
             git push origin HEAD:feat/176-bot-trading-lab
           fi
 
@@ -97,5 +146,19 @@ jobs:
       - name: Test Lab AI review scorecards
         run: flutter test test/trading_lab_review_scorecard_test.dart --reporter expanded
 
+      - name: Test Lab shadow evidence
+        run: flutter test test/trading_lab_shadow_evidence_test.dart --reporter expanded
+
       - name: Run full Flutter test suite
         run: flutter test --reporter expanded
+
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-bot-trading-lab-debug
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
