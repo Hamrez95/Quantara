@@ -1,4 +1,4 @@
-name: Temporary Issue 173 Post-Reinstall Physical Fix
+name: Temporary Issue 173 Exact-Lot Protection Hardening
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Apply physical QA fixes
+      - name: Harden exact-lot protection and recovered journal evidence
         shell: bash
         run: |
           set -euo pipefail
@@ -49,103 +49,82 @@ jobs:
           policy = 'src/client/quantara_app/lib/features/auto_trade/domain/remaining_target_protection_policy.dart'
           replace_once(
               policy,
-              '      if (planned <= quantityTolerance) {',
-              '      if (planned == 0) {',
+              """        quantityTolerance < 0) {
+              return false;
+            }
+            final pending = pendingProtection.toList(growable: false);
+          """,
+              """        quantityTolerance < 0) {
+              return false;
+            }
+            final comparisonTolerance = quantityTolerance / 2;
+            final pending = pendingProtection.toList(growable: false);
+          """,
+          )
+          replace_once(policy, 'filled > planned + quantityTolerance', 'filled > planned + comparisonTolerance')
+          replace_once(policy, 'filled > quantityTolerance', 'filled > comparisonTolerance')
+          replace_once(policy, 'if (remaining <= quantityTolerance) continue;', 'if (remaining <= comparisonTolerance) continue;')
+          replace_once(
+              policy,
+              """            item.quantity.isFinite &&
+                  item.quantity + quantityTolerance >= remaining,
+          """,
+              """            item.quantity.isFinite &&
+                  item.quantity > 0 &&
+                  item.quantity + comparisonTolerance >= remaining,
+          """,
           )
 
           service = 'src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart'
           replace_once(
               service,
-              '      if (planned <= quantityTolerance) continue;',
-              '      if (planned <= 0) continue;',
+              """    if (!_targetIdentityLayoutValid(
+                targetOrderIds: targetOrderIds,
+                targetQuantities: targetQuantities,
+              )) {
+                return false;
+              }
+              for (var index = 0; index < 3; index++) {
+          """,
+              """    if (!_targetIdentityLayoutValid(
+                targetOrderIds: targetOrderIds,
+                targetQuantities: targetQuantities,
+              )) {
+                return false;
+              }
+              final comparisonTolerance = quantityTolerance / 2;
+              for (var index = 0; index < 3; index++) {
+          """,
+          )
+          replace_once(
+              service,
+              """            item.takeProfitPrice > 0 &&
+                  item.takeProfitQuantity + quantityTolerance >=
+                      targetQuantities[index],
+          """,
+              """            item.takeProfitPrice > 0 &&
+                  item.takeProfitQuantity.isFinite &&
+                  item.takeProfitQuantity > 0 &&
+                  item.takeProfitQuantity + comparisonTolerance >= planned,
+          """,
           )
 
-          journal = 'src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart'
-          replace_once(
-              journal,
-              """    final liveKey =
-                  '${projection.symbol.trim().toUpperCase()}|${projection.timeframe.trim()}';
-              final liveAnalysis = widget.liveAnalyses[liveKey];
-              final liveIdea = widget.liveIdeas[liveKey];
-          """,
-              """    final symbolKey = projection.symbol.trim().toUpperCase();
-              final requestedTimeframe = projection.timeframe.trim();
-              final requestedKey = '$symbolKey|$requestedTimeframe';
-              var liveAnalysis = widget.liveAnalyses[requestedKey];
-              var liveIdea = widget.liveIdeas[requestedKey];
-              if (liveAnalysis == null) {
-                for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h']) {
-                  final fallbackKey = '$symbolKey|$fallbackTimeframe';
-                  final fallbackAnalysis = widget.liveAnalyses[fallbackKey];
-                  if (fallbackAnalysis == null) continue;
-                  liveAnalysis = fallbackAnalysis;
-                  liveIdea = widget.liveIdeas[fallbackKey];
-                  break;
-                }
-              }
-              if (liveAnalysis == null) {
-                for (final entry in widget.liveAnalyses.entries) {
-                  if (!entry.key.startsWith('$symbolKey|')) continue;
-                  liveAnalysis = entry.value;
-                  liveIdea = widget.liveIdeas[entry.key];
-                  break;
-                }
-              }
-          """,
-          )
-          replace_once(
-              journal,
-              """    final validOverlay =
-                  (frozenLong || frozenShort) &&
-                  plan.originalStopLoss.isFinite &&
-                  plan.originalStopLoss > 0 &&
-                  (projection.entryPrice ?? plan.plannedEntry).isFinite &&
-                  (projection.entryPrice ?? plan.plannedEntry) > 0 &&
-                  plan.targets.isNotEmpty &&
-                  plan.targets.every((target) => target.isFinite && target > 0);
-          """,
-              """    final activeTargets = plan.targets
-                  .where((target) => target.isFinite && target > 0)
-                  .toList(growable: false);
-              final validOverlay =
-                  (frozenLong || frozenShort) &&
-                  plan.originalStopLoss.isFinite &&
-                  plan.originalStopLoss > 0 &&
-                  (projection.entryPrice ?? plan.plannedEntry).isFinite &&
-                  (projection.entryPrice ?? plan.plannedEntry) > 0 &&
-                  activeTargets.isNotEmpty;
-          """,
-          )
-          replace_once(journal, '            targets: plan.targets,', '            targets: activeTargets,')
-          replace_once(
-              journal,
-              '              if (currentIdea != null)\n                Chip(',
-              """              if (live.timeframe.trim() != projection.timeframe.trim())
-                Chip(
-                  avatar: const Icon(Icons.swap_horiz_rounded, size: 17),
-                  label: Text(
-                    persian
-                        ? 'کانتکست زنده: ${live.timeframe} · پلن تاریخی بازنویسی نشده'
-                        : 'Live context: ${live.timeframe} · historical plan unchanged',
-                  ),
-                ),
-              if (currentIdea != null)
-                Chip(""",
-          )
-
-          replace_once(
-              'src/client/quantara_app/pubspec.yaml',
-              'version: 1.2.0-rc.2+123',
-              'version: 1.2.0-rc.2+124',
-          )
-          replace_once(
-              'src/client/quantara_app/test/release_1_2_0_rc_2_source_test.dart',
-              "expect(pubspec, contains('version: 1.2.0-rc.2+123'));",
-              "expect(pubspec, contains('version: 1.2.0-rc.2+124'));",
-          )
+          observer_path = Path('src/client/quantara_app/lib/features/trading_journal/application/local_live_journal_observer.dart')
+          observer = observer_path.read_text()
+          old_r = '(target) => riskPerUnit <= 0'
+          if observer.count(old_r) != 2:
+              raise SystemExit(f'Expected two expected-R lambdas, found {observer.count(old_r)}')
+          observer = observer.replace(old_r, '(target) => target <= 0 || riskPerUnit <= 0')
+          if 'confirmed-three-target-ladder' not in observer:
+              raise SystemExit('Expected legacy target-ladder evidence label')
+          observer = observer.replace('confirmed-three-target-ladder', 'confirmed-active-target-ladder')
+          if "1.2.0-rc.2+121" not in observer:
+              raise SystemExit('Expected legacy observer app version')
+          observer = observer.replace('1.2.0-rc.2+121', '1.2.0-rc.2+124')
+          observer_path.write_text(observer)
 
           regression = Path('src/client/quantara_app/test/issue_173_post_reinstall_regression_test.dart')
-          regression.write_bytes(base64.b64decode('aW1wb3J0ICdkYXJ0OmlvJzsKCmltcG9ydCAncGFja2FnZTpmbHV0dGVyX3Rlc3QvZmx1dHRlcl90ZXN0LmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6cXVhbnRhcmFfYXBwL2ZlYXR1cmVzL2F1dG9fdHJhZGUvZG9tYWluL3JlbWFpbmluZ190YXJnZXRfcHJvdGVjdGlvbl9wb2xpY3kuZGFydCc7Cgp2b2lkIG1haW4oKSB7CiAgdGVzdCgnb25lIGV4Y2hhbmdlIGxvdCBUUCByZW1haW5zIGFjdGl2ZSB3aGVuIHF1YW50aXR5IGVxdWFscyB0b2xlcmFuY2UnLCAoKSB7CiAgICBleHBlY3QoCiAgICAgIFJlbWFpbmluZ1RhcmdldFByb3RlY3Rpb25Qb2xpY3kuYWxsUmVtYWluaW5nVGFyZ2V0c1Byb3RlY3RlZCgKICAgICAgICB0YXJnZXRPcmRlcklkczogY29uc3QgWyd0cC0xJywgJycsICcnXSwKICAgICAgICB0YXJnZXRRdWFudGl0aWVzOiBjb25zdCBbMC4xLCAwLCAwXSwKICAgICAgICBmaWxsZWRRdWFudGl0aWVzOiBjb25zdCBbMCwgMCwgMF0sCiAgICAgICAgcGVuZGluZ1Byb3RlY3Rpb246IGNvbnN0IFsKICAgICAgICAgIFBlbmRpbmdUYXJnZXRQcm90ZWN0aW9uRXZpZGVuY2UoCiAgICAgICAgICAgIG9yZGVySWQ6ICd0cC0xJywKICAgICAgICAgICAgdHJpZ2dlclByaWNlOiA4OC44LAogICAgICAgICAgICBxdWFudGl0eTogMC4xLAogICAgICAgICAgKSwKICAgICAgICBdLAogICAgICAgIHF1YW50aXR5VG9sZXJhbmNlOiAwLjEsCiAgICAgICksCiAgICAgIGlzVHJ1ZSwKICAgICk7CiAgfSk7CgogIHRlc3QoJ3JlY292ZXJlZCBqb3VybmFsIHVzZXMgbGl2ZSBjb250ZXh0IHdpdGhvdXQgcmV3cml0aW5nIGZyb3plbiBwbGFuJywgKCkgewogICAgZmluYWwgc291cmNlID0gRmlsZSgKICAgICAgJ2xpYi9mZWF0dXJlcy90cmFkaW5nX2pvdXJuYWwvcHJlc2VudGF0aW9uL3RyYWRpbmdfam91cm5hbF92aWV3LmRhcnQnLAogICAgKS5yZWFkQXNTdHJpbmdTeW5jKCk7CgogICAgZXhwZWN0KAogICAgICBzb3VyY2UsCiAgICAgIGNvbnRhaW5zKCJmb3IgKGZpbmFsIGZhbGxiYWNrVGltZWZyYW1lIGluIGNvbnN0IFsnMWgnLCAnMTVtJywgJzVtJywgJzRoJ10pIiksCiAgICApOwogICAgZXhwZWN0KHNvdXJjZSwgY29udGFpbnMoJ2FjdGl2ZVRhcmdldHMnKSk7CiAgICBleHBlY3Qoc291cmNlLCBjb250YWlucygndGFyZ2V0czogYWN0aXZlVGFyZ2V0cycpKTsKICAgIGV4cGVjdChzb3VyY2UsIGNvbnRhaW5zKCfZvtmE2YYg2KrYp9ix24zYrtuMINio2KfYstmG2YjbjNiz24wg2YbYtNiv2YcnKSk7CiAgfSk7CgogIHRlc3QoJ2luaXRpYWwgdGFyZ2V0IGNvbmZpcm1hdGlvbiB0cmVhdHMgYW4gZXhhY3QgbG90IGFzIGFjdGl2ZScsICgpIHsKICAgIGZpbmFsIHNvdXJjZSA9IEZpbGUoCiAgICAgICdsaWIvZmVhdHVyZXMvYXV0b190cmFkZS9hcHBsaWNhdGlvbi9sb2NhbF9saXZlX3RyYWRlX3NlcnZpY2UuZGFydCcsCiAgICApLnJlYWRBc1N0cmluZ1N5bmMoKTsKCiAgICBleHBlY3Qoc291cmNlLCBjb250YWlucygnaWYgKHBsYW5uZWQgPD0gMCkgY29udGludWU7JykpOwogICAgZXhwZWN0KAogICAgICBzb3VyY2UsCiAgICAgIGlzTm90KGNvbnRhaW5zKCdpZiAocGxhbm5lZCA8PSBxdWFudGl0eVRvbGVyYW5jZSkgY29udGludWU7JykpLAogICAgKTsKICB9KTsKfQo='))
+          regression.write_bytes(base64.b64decode('aW1wb3J0ICdkYXJ0OmlvJzsKCmltcG9ydCAncGFja2FnZTpmbHV0dGVyX3Rlc3QvZmx1dHRlcl90ZXN0LmRhcnQnOwppbXBvcnQgJ3BhY2thZ2U6cXVhbnRhcmFfYXBwL2ZlYXR1cmVzL2F1dG9fdHJhZGUvZG9tYWluL3JlbWFpbmluZ190YXJnZXRfcHJvdGVjdGlvbl9wb2xpY3kuZGFydCc7Cgp2b2lkIG1haW4oKSB7CiAgdGVzdCgnb25lIGV4Y2hhbmdlIGxvdCBUUCByZW1haW5zIGFjdGl2ZSB3aGVuIHF1YW50aXR5IGVxdWFscyB0b2xlcmFuY2UnLCAoKSB7CiAgICBleHBlY3QoCiAgICAgIFJlbWFpbmluZ1RhcmdldFByb3RlY3Rpb25Qb2xpY3kuYWxsUmVtYWluaW5nVGFyZ2V0c1Byb3RlY3RlZCgKICAgICAgICB0YXJnZXRPcmRlcklkczogY29uc3QgWyd0cC0xJywgJycsICcnXSwKICAgICAgICB0YXJnZXRRdWFudGl0aWVzOiBjb25zdCBbMC4xLCAwLCAwXSwKICAgICAgICBmaWxsZWRRdWFudGl0aWVzOiBjb25zdCBbMCwgMCwgMF0sCiAgICAgICAgcGVuZGluZ1Byb3RlY3Rpb246IGNvbnN0IFsKICAgICAgICAgIFBlbmRpbmdUYXJnZXRQcm90ZWN0aW9uRXZpZGVuY2UoCiAgICAgICAgICAgIG9yZGVySWQ6ICd0cC0xJywKICAgICAgICAgICAgdHJpZ2dlclByaWNlOiA4OC44LAogICAgICAgICAgICBxdWFudGl0eTogMC4xLAogICAgICAgICAgKSwKICAgICAgICBdLAogICAgICAgIHF1YW50aXR5VG9sZXJhbmNlOiAwLjEsCiAgICAgICksCiAgICAgIGlzVHJ1ZSwKICAgICk7CiAgfSk7CgogIHRlc3QoJ29uZSBleGNoYW5nZSBsb3QgVFAgc3RpbGwgcmVxdWlyZXMgYWN0dWFsIGV4Y2hhbmdlIGV2aWRlbmNlJywgKCkgewogICAgZXhwZWN0KAogICAgICBSZW1haW5pbmdUYXJnZXRQcm90ZWN0aW9uUG9saWN5LmFsbFJlbWFpbmluZ1RhcmdldHNQcm90ZWN0ZWQoCiAgICAgICAgdGFyZ2V0T3JkZXJJZHM6IGNvbnN0IFsndHAtMScsICcnLCAnJ10sCiAgICAgICAgdGFyZ2V0UXVhbnRpdGllczogY29uc3QgWzAuMSwgMCwgMF0sCiAgICAgICAgZmlsbGVkUXVhbnRpdGllczogY29uc3QgWzAsIDAsIDBdLAogICAgICAgIHBlbmRpbmdQcm90ZWN0aW9uOiBjb25zdCBbXSwKICAgICAgICBxdWFudGl0eVRvbGVyYW5jZTogMC4xLAogICAgICApLAogICAgICBpc0ZhbHNlLAogICAgKTsKICAgIGV4cGVjdCgKICAgICAgUmVtYWluaW5nVGFyZ2V0UHJvdGVjdGlvblBvbGljeS5hbGxSZW1haW5pbmdUYXJnZXRzUHJvdGVjdGVkKAogICAgICAgIHRhcmdldE9yZGVySWRzOiBjb25zdCBbJ3RwLTEnLCAnJywgJyddLAogICAgICAgIHRhcmdldFF1YW50aXRpZXM6IGNvbnN0IFswLjEsIDAsIDBdLAogICAgICAgIGZpbGxlZFF1YW50aXRpZXM6IGNvbnN0IFswLCAwLCAwXSwKICAgICAgICBwZW5kaW5nUHJvdGVjdGlvbjogY29uc3QgWwogICAgICAgICAgUGVuZGluZ1RhcmdldFByb3RlY3Rpb25FdmlkZW5jZSgKICAgICAgICAgICAgb3JkZXJJZDogJ3RwLTEnLAogICAgICAgICAgICB0cmlnZ2VyUHJpY2U6IDg4LjgsCiAgICAgICAgICAgIHF1YW50aXR5OiAwLAogICAgICAgICAgKSwKICAgICAgICBdLAogICAgICAgIHF1YW50aXR5VG9sZXJhbmNlOiAwLjEsCiAgICAgICksCiAgICAgIGlzRmFsc2UsCiAgICApOwogIH0pOwoKICB0ZXN0KCdyZWNvdmVyZWQgam91cm5hbCB1c2VzIGxpdmUgY29udGV4dCB3aXRob3V0IHJld3JpdGluZyBmcm96ZW4gcGxhbicsICgpIHsKICAgIGZpbmFsIHNvdXJjZSA9IEZpbGUoCiAgICAgICdsaWIvZmVhdHVyZXMvdHJhZGluZ19qb3VybmFsL3ByZXNlbnRhdGlvbi90cmFkaW5nX2pvdXJuYWxfdmlldy5kYXJ0JywKICAgICkucmVhZEFzU3RyaW5nU3luYygpOwoKICAgIGV4cGVjdCgKICAgICAgc291cmNlLAogICAgICBjb250YWlucygiZm9yIChmaW5hbCBmYWxsYmFja1RpbWVmcmFtZSBpbiBjb25zdCBbJzFoJywgJzE1bScsICc1bScsICc0aCddKSIpLAogICAgKTsKICAgIGV4cGVjdChzb3VyY2UsIGNvbnRhaW5zKCdhY3RpdmVUYXJnZXRzJykpOwogICAgZXhwZWN0KHNvdXJjZSwgY29udGFpbnMoJ3RhcmdldHM6IGFjdGl2ZVRhcmdldHMnKSk7CiAgICBleHBlY3Qoc291cmNlLCBjb250YWlucygn2b7ZhNmGINiq2KfYsduM2K7bjCDYqNin2LLZhtmI24zYs9uMINmG2LTYr9mHJykpOwogIH0pOwoKICB0ZXN0KCd0YXJnZXQgdmVyaWZpY2F0aW9uIHVzZXMgc3ViLXN0ZXAgdG9sZXJhbmNlIGFuZCBleGFjdC1sb3QgdGFyZ2V0cyBzdGF5IGFjdGl2ZScsICgpIHsKICAgIGZpbmFsIHNlcnZpY2VTb3VyY2UgPSBGaWxlKAogICAgICAnbGliL2ZlYXR1cmVzL2F1dG9fdHJhZGUvYXBwbGljYXRpb24vbG9jYWxfbGl2ZV90cmFkZV9zZXJ2aWNlLmRhcnQnLAogICAgKS5yZWFkQXNTdHJpbmdTeW5jKCk7CiAgICBmaW5hbCBwb2xpY3lTb3VyY2UgPSBGaWxlKAogICAgICAnbGliL2ZlYXR1cmVzL2F1dG9fdHJhZGUvZG9tYWluL3JlbWFpbmluZ190YXJnZXRfcHJvdGVjdGlvbl9wb2xpY3kuZGFydCcsCiAgICApLnJlYWRBc1N0cmluZ1N5bmMoKTsKCiAgICBleHBlY3Qoc2VydmljZVNvdXJjZSwgY29udGFpbnMoJ2ZpbmFsIGNvbXBhcmlzb25Ub2xlcmFuY2UgPSBxdWFudGl0eVRvbGVyYW5jZSAvIDI7JykpOwogICAgZXhwZWN0KHNlcnZpY2VTb3VyY2UsIGNvbnRhaW5zKCdpZiAocGxhbm5lZCA8PSAwKSBjb250aW51ZTsnKSk7CiAgICBleHBlY3QoCiAgICAgIHNlcnZpY2VTb3VyY2UsCiAgICAgIGlzTm90KGNvbnRhaW5zKCdpZiAocGxhbm5lZCA8PSBxdWFudGl0eVRvbGVyYW5jZSkgY29udGludWU7JykpLAogICAgKTsKICAgIGV4cGVjdChwb2xpY3lTb3VyY2UsIGNvbnRhaW5zKCdmaW5hbCBjb21wYXJpc29uVG9sZXJhbmNlID0gcXVhbnRpdHlUb2xlcmFuY2UgLyAyOycpKTsKICAgIGV4cGVjdChwb2xpY3lTb3VyY2UsIGNvbnRhaW5zKCdpdGVtLnF1YW50aXR5ID4gMCcpKTsKICB9KTsKCiAgdGVzdCgncmVjb3ZlcmVkIGpvdXJuYWwgZG9lcyBub3QgZmFicmljYXRlIFIgZm9yIGluYWN0aXZlIHRhcmdldHMnLCAoKSB7CiAgICBmaW5hbCBzb3VyY2UgPSBGaWxlKAogICAgICAnbGliL2ZlYXR1cmVzL3RyYWRpbmdfam91cm5hbC9hcHBsaWNhdGlvbi9sb2NhbF9saXZlX2pvdXJuYWxfb2JzZXJ2ZXIuZGFydCcsCiAgICApLnJlYWRBc1N0cmluZ1N5bmMoKTsKCiAgICBleHBlY3Qoc291cmNlLCBjb250YWlucygndGFyZ2V0IDw9IDAgfHwgcmlza1BlclVuaXQgPD0gMCcpKTsKICAgIGV4cGVjdChzb3VyY2UsIGNvbnRhaW5zKCdjb25maXJtZWQtYWN0aXZlLXRhcmdldC1sYWRkZXInKSk7CiAgICBleHBlY3Qoc291cmNlLCBjb250YWlucygiYXBwVmVyc2lvbjogJzEuMi4wLXJjLjIrMTI0JyIpKTsKICB9KTsKfQo='))
           PY
 
       - name: Format changed Dart sources
@@ -154,9 +133,8 @@ jobs:
           dart format \
             lib/features/auto_trade/domain/remaining_target_protection_policy.dart \
             lib/features/auto_trade/application/local_live_trade_service.dart \
-            lib/features/trading_journal/presentation/trading_journal_view.dart \
-            test/issue_173_post_reinstall_regression_test.dart \
-            test/release_1_2_0_rc_2_source_test.dart
+            lib/features/trading_journal/application/local_live_journal_observer.dart \
+            test/issue_173_post_reinstall_regression_test.dart
 
       - name: Restore packages
         working-directory: src/client/quantara_app
@@ -166,7 +144,7 @@ jobs:
         working-directory: src/client/quantara_app
         run: flutter analyze --no-pub
 
-      - name: Run Issue 173 post-reinstall regressions
+      - name: Run Issue 173 exact-lot regressions
         working-directory: src/client/quantara_app
         run: |
           flutter test --no-pub \
@@ -180,7 +158,7 @@ jobs:
         working-directory: src/client/quantara_app
         run: flutter test --no-pub
 
-      - name: Commit validated fix to PR branch
+      - name: Commit validated hardening to PR branch
         shell: bash
         run: |
           set -euo pipefail
@@ -189,10 +167,8 @@ jobs:
           git add \
             src/client/quantara_app/lib/features/auto_trade/domain/remaining_target_protection_policy.dart \
             src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
-            src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart \
-            src/client/quantara_app/pubspec.yaml \
-            src/client/quantara_app/test/release_1_2_0_rc_2_source_test.dart \
+            src/client/quantara_app/lib/features/trading_journal/application/local_live_journal_observer.dart \
             src/client/quantara_app/test/issue_173_post_reinstall_regression_test.dart
           git diff --cached --check
-          git commit -m "fix: recover live journal context after reinstall"
+          git commit -m "fix: verify exact-lot TP protection safely"
           git push origin HEAD:feat/163-portfolio-budgeted-local-live
