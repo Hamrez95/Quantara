@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../owner_alpha/application/owner_alpha_controller.dart';
 import '../data/database_trading_lab_store.dart';
+import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
 import 'trading_lab_paper_broker.dart';
 import 'trading_lab_shadow_evidence.dart';
@@ -13,13 +14,25 @@ final class TradingLabController extends ChangeNotifier {
     required OwnerAlphaController marketController,
     required TradingLabRunStore store,
     TradingLabPaperBroker broker = const TradingLabPaperBroker(),
-  }) => TradingLabController._(marketController, store, broker);
+    TradingLabAccountContext Function()? accountContextProvider,
+  }) => TradingLabController._(
+    marketController,
+    store,
+    broker,
+    accountContextProvider,
+  );
 
-  TradingLabController._(this._marketController, this._store, this._broker);
+  TradingLabController._(
+    this._marketController,
+    this._store,
+    this._broker,
+    this._accountContextProvider,
+  );
 
   final OwnerAlphaController _marketController;
   final TradingLabRunStore _store;
   final TradingLabPaperBroker _broker;
+  final TradingLabAccountContext Function()? _accountContextProvider;
 
   TradingLabRun? _run;
   List<TradingLabRun> _history = const [];
@@ -35,6 +48,8 @@ final class TradingLabController extends ChangeNotifier {
   bool get isProcessing => _processing;
   String? get error => _error;
   bool get hasRunningExperiment => _run?.isRunning == true;
+  TradingLabAccountContext get accountContext =>
+      _accountContextProvider?.call() ?? TradingLabAccountContext.disconnected();
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -151,6 +166,7 @@ final class TradingLabController extends ChangeNotifier {
     return buildTradingLabAiReviewJsonWithShadows(
       current,
       _marketController.signalJournal,
+      accountContext: accountContext,
     );
   }
 
