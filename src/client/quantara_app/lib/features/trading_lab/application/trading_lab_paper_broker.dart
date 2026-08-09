@@ -551,9 +551,11 @@ final class TradingLabPaperBroker {
     }
     run.currentEquity = math.max(0, run.balance + unrealized).toDouble();
     if (run.currentEquity > run.peakEquity) run.peakEquity = run.currentEquity;
-    final drawdown = run.peakEquity <= 0
-        ? 0
-        : (run.peakEquity - run.currentEquity) / run.peakEquity * 100;
+    final drawdown =
+        (run.peakEquity <= 0
+                ? 0
+                : (run.peakEquity - run.currentEquity) / run.peakEquity * 100)
+            .toDouble();
     if (drawdown > run.maximumDrawdownPercent) {
       run.maximumDrawdownPercent = drawdown;
     }
