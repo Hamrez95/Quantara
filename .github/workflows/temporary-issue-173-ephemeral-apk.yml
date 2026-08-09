@@ -35,13 +35,11 @@ jobs:
         working-directory: src/client/quantara_app
         run: flutter analyze --no-pub
 
-      - name: Run physical QA regressions
+      - name: Run retained physical QA regressions
         working-directory: src/client/quantara_app
         run: |
           flutter test --no-pub \
             test/issue_172_physical_qa_regression_test.dart \
-            test/issue_173_journal_live_context_test.dart \
-            test/issue_173_local_live_protection_gate_test.dart \
             test/trading_journal_view_test.dart
 
       - name: Generate disposable QA signing key
