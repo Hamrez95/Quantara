@@ -198,7 +198,7 @@ OwnerAlphaSnapshot _snapshot({
     reasons: const ['test'],
     strategy: AnalysisStrategy.trendPullback,
     strategyVersion: 'test',
-    marketRegime: MarketRegime.trending,
+    marketRegime: MarketRegime.directionalTrend,
     indicatorSnapshot: const {'atr': 1.2, 'trendScore': 0.8},
   );
   final quote = AlphaMarketQuote(
@@ -235,7 +235,7 @@ ChartCandle _candle(
   required double low,
   required double close,
 }) => ChartCandle(
-  openTime: DateTime.utc(2026, 8, 9, 0, minute),
+  openTime: DateTime.utc(2026, 8, 10, 0, minute),
   open: open,
   high: high,
   low: low,
