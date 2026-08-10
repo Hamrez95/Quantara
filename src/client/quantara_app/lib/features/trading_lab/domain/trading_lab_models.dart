@@ -485,7 +485,7 @@ final class TradingLabPosition {
     }
     if (!openedAtUtc.isUtc ||
         !lastEvaluatedCandleAtUtc.isUtc ||
-        !lastFundingAccrualAtUtc.isUtc ||
+        !this.lastFundingAccrualAtUtc.isUtc ||
         (closedAtUtc != null && !closedAtUtc!.isUtc)) {
       throw const FormatException(
         'Trading Lab position timestamps must be UTC.',

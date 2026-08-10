@@ -268,8 +268,9 @@ TradingLabMetrics calculateTradingLabMetrics(
   var tp3 = 0;
   var partialExitTrades = 0;
   for (final position in closed) {
-    if ((position.closeReason ?? '').toLowerCase().contains('stop'))
+    if ((position.closeReason ?? '').toLowerCase().contains('stop')) {
       stopOuts += 1;
+    }
     final filled = position.filledTargetIndexes.length;
     if (filled >= 1) tp1OrBetter += 1;
     if (filled >= 2) tp2OrBetter += 1;
