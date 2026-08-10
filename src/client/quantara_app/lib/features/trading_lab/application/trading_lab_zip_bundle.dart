@@ -11,10 +11,7 @@ const _maximumBundleBytes = 32 * 1024 * 1024;
 const _maximumBundleFiles = 32;
 
 final class TradingLabZipBundle {
-  const TradingLabZipBundle({
-    required this.bytes,
-    required this.fileName,
-  });
+  const TradingLabZipBundle({required this.bytes, required this.fileName});
 
   final Uint8List bytes;
   final String fileName;
@@ -97,7 +94,9 @@ final class TradingLabZipBundleCodec {
     }
     final files = _StoredZipCodec.decode(bytes);
     if (files.length > _maximumBundleFiles) {
-      throw const FormatException('Trading Lab ZIP bundle contains too many files.');
+      throw const FormatException(
+        'Trading Lab ZIP bundle contains too many files.',
+      );
     }
     const required = <String>{
       'bundle_manifest.json',
@@ -119,7 +118,9 @@ final class TradingLabZipBundleCodec {
     if (bundleManifest['bundleType'] != 'bot-trading-lab-evidence' ||
         bundleManifest['paperOnly'] != true ||
         bundleManifest['containsCredentials'] != false) {
-      throw const FormatException('Trading Lab bundle safety metadata is invalid.');
+      throw const FormatException(
+        'Trading Lab bundle safety metadata is invalid.',
+      );
     }
 
     final checksumJson = bundleManifest['checksumsSha256'];
@@ -163,7 +164,8 @@ final class TradingLabZipBundleCodec {
     );
   }
 
-  static Uint8List _utf8(String value) => Uint8List.fromList(utf8.encode(value));
+  static Uint8List _utf8(String value) =>
+      Uint8List.fromList(utf8.encode(value));
 
   static Map<String, Object?> _jsonObject(Uint8List bytes) {
     final decoded = jsonDecode(utf8.decode(bytes));
@@ -184,7 +186,10 @@ final class TradingLabZipBundleCodec {
     if (value is Map) {
       for (final entry in value.entries) {
         final key = entry.key.toString();
-        final normalized = key.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+        final normalized = key.toLowerCase().replaceAll(
+          RegExp(r'[^a-z0-9]'),
+          '',
+        );
         const forbidden = <String>{
           'apikey',
           'apisecret',
@@ -198,7 +203,9 @@ final class TradingLabZipBundleCodec {
           'refreshtoken',
         };
         if (forbidden.contains(normalized)) {
-          throw FormatException('Sensitive field is not allowed in Lab export: $path.$key');
+          throw FormatException(
+            'Sensitive field is not allowed in Lab export: $path.$key',
+          );
         }
         _assertNoSensitiveKeys(entry.value, '$path.$key');
       }
@@ -213,7 +220,8 @@ final class TradingLabZipBundleCodec {
     }
   }
 
-  static String _readme(TradingLabRun run) => '''Quantara Bot Trading Lab evidence bundle
+  static String _readme(TradingLabRun run) =>
+      '''Quantara Bot Trading Lab evidence bundle
 
 Run: ${run.manifest.runId}
 Started (UTC): ${run.manifest.startedAtUtc.toIso8601String()}
@@ -316,7 +324,8 @@ final class _StoredZipCodec {
     final count = _readU16(bytes, eocd + 10);
     final centralSize = _readU32(bytes, eocd + 12);
     final centralOffset = _readU32(bytes, eocd + 16);
-    if (count < 1 || count > _maximumBundleFiles ||
+    if (count < 1 ||
+        count > _maximumBundleFiles ||
         centralOffset + centralSize > eocd) {
       throw const FormatException('Invalid Trading Lab ZIP central directory.');
     }
@@ -335,9 +344,12 @@ final class _StoredZipCodec {
       final extraLength = _readU16(bytes, cursor + 30);
       final commentLength = _readU16(bytes, cursor + 32);
       final localOffset = _readU32(bytes, cursor + 42);
-      if ((flags & 0x0001) != 0 || compression != 0 ||
+      if ((flags & 0x0001) != 0 ||
+          compression != 0 ||
           compressedSize != uncompressedSize) {
-        throw const FormatException('Only unencrypted stored ZIP entries are supported.');
+        throw const FormatException(
+          'Only unencrypted stored ZIP entries are supported.',
+        );
       }
       final nameStart = cursor + 46;
       final nameEnd = nameStart + nameLength;
@@ -359,7 +371,9 @@ final class _StoredZipCodec {
         bytes.sublist(dataStart, dataStart + uncompressedSize),
       );
       if (_crc32(data) != crc) {
-        throw FormatException('CRC32 mismatch for Trading Lab ZIP entry: $name');
+        throw FormatException(
+          'CRC32 mismatch for Trading Lab ZIP entry: $name',
+        );
       }
       result[name] = data;
       cursor = nameEnd + extraLength + commentLength;
@@ -409,14 +423,20 @@ final class _StoredZipCodec {
 
   static int _readU16(Uint8List bytes, int offset) {
     _bounds(bytes, offset, 2);
-    return ByteData.sublistView(bytes, offset, offset + 2)
-        .getUint16(0, Endian.little);
+    return ByteData.sublistView(
+      bytes,
+      offset,
+      offset + 2,
+    ).getUint16(0, Endian.little);
   }
 
   static int _readU32(Uint8List bytes, int offset) {
     _bounds(bytes, offset, 4);
-    return ByteData.sublistView(bytes, offset, offset + 4)
-        .getUint32(0, Endian.little);
+    return ByteData.sublistView(
+      bytes,
+      offset,
+      offset + 4,
+    ).getUint32(0, Endian.little);
   }
 
   static int _crc32(Uint8List bytes) {

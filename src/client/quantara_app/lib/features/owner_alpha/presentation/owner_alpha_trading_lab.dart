@@ -87,16 +87,15 @@ class _TradingLabViewState extends State<_TradingLabView> {
 
   Future<void> _shareReview() async {
     try {
-      final json = widget.controller.exportAiReviewJson();
-      final bytes = Uint8List.fromList(utf8.encode(json));
+      final bundle = widget.controller.exportFullEvidenceZip();
       await SharePlus.instance.share(
         ShareParams(
           title: 'Quantara Bot Trading Lab',
           text: _fa
-              ? 'بسته بررسی آزمایش بات Quantara — بدون کلید API و اطلاعات محرمانه.'
-              : 'Quantara Bot Trading Lab AI review bundle — no API credentials included.',
-          files: [XFile.fromData(bytes, mimeType: 'application/json')],
-          fileNameOverrides: [widget.controller.suggestedExportFileName()],
+              ? 'بسته کامل شواهد آزمایش بات Quantara — شامل Run، AI Review، Shadow Evidence، Account Context پاک‌سازی‌شده و checksum؛ بدون کلید API.'
+              : 'Complete Quantara Bot Trading Lab evidence bundle — run, AI review, shadow evidence, sanitized account context and checksums; no API credentials.',
+          files: [XFile.fromData(bundle.bytes, mimeType: 'application/zip')],
+          fileNameOverrides: [bundle.fileName],
         ),
       );
     } on Object catch (error) {
@@ -104,7 +103,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _fa ? 'خروجی ساخته نشد: $error' : 'Export failed: $error',
+            _fa ? 'خروجی ZIP ساخته نشد: $error' : 'ZIP export failed: $error',
           ),
         ),
       );
@@ -307,7 +306,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
           FilledButton.tonalIcon(
             onPressed: _shareReview,
             icon: const Icon(Icons.ios_share_rounded),
-            label: Text(_fa ? 'خروجی برای بررسی AI' : 'Export AI review'),
+            label: Text(_fa ? 'خروجی کامل ZIP' : 'Export full ZIP'),
           ),
           if (run.isRunning)
             FilledButton.icon(
