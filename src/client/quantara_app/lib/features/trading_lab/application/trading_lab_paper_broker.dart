@@ -870,6 +870,7 @@ final class TradingLabPaperBroker {
     if (value.contains('slots')) return 'portfolio_slots_full';
     if (value.contains('same-symbol')) return 'same_symbol_exposure';
     if (value.contains('symbol heat')) return 'symbol_heat_exhausted';
+    if (value.contains('symbol heat')) return 'symbol_heat_exhausted';
     if (value.contains('risk budget')) return 'portfolio_risk_exhausted';
     if (value.contains('margin')) return 'insufficient_virtual_margin';
     if (value.contains('stop')) return 'invalid_stop';
