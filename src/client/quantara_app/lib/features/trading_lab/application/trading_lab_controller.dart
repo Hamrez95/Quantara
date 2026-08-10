@@ -78,6 +78,16 @@ final class TradingLabController extends ChangeNotifier {
     double feeRateBps = 6,
     double slippageBps = 2,
     double fundingRatePerEightHours = 0,
+    double spreadBps = 1,
+    double portfolioRiskPercent = 3,
+    double symbolHeatPercent = 1,
+    int scannerIntervalSeconds = 15,
+    int minimumConfidencePercent = 65,
+    double minimumRiskReward = 1.5,
+    TradingLabMarginMode marginMode = TradingLabMarginMode.isolated,
+    TradingLabExecutionModel executionModel =
+        TradingLabExecutionModel.conservativeCandlePath,
+    String experimentTag = '',
     String notes = '',
   }) async {
     if (_run?.isRunning == true) {
@@ -114,6 +124,15 @@ final class TradingLabController extends ChangeNotifier {
         feeRateBps: feeRateBps,
         slippageBps: slippageBps,
         fundingRatePerEightHours: fundingRatePerEightHours,
+        spreadBps: spreadBps,
+        portfolioRiskPercent: portfolioRiskPercent,
+        symbolHeatPercent: symbolHeatPercent,
+        scannerIntervalSeconds: scannerIntervalSeconds,
+        minimumConfidencePercent: minimumConfidencePercent,
+        minimumRiskReward: minimumRiskReward,
+        marginMode: marginMode,
+        executionModel: executionModel,
+        experimentTag: experimentTag,
         notes: notes,
       ),
     );

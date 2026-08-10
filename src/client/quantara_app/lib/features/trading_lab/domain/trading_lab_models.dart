@@ -1,10 +1,14 @@
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 
-const tradingLabSchemaVersion = 1;
+const tradingLabSchemaVersion = 2;
 const tradingLabMaximumEvents = 20000;
 const tradingLabMaximumProcessedDecisions = 50000;
 
 enum TradingLabRunStatus { running, stopped }
+
+enum TradingLabMarginMode { isolated }
+
+enum TradingLabExecutionModel { touch, conservativeCandlePath }
 
 enum TradingLabEventKind {
   heartbeat,
@@ -33,6 +37,16 @@ final class TradingLabRunManifest {
     this.feeRateBps = 6,
     this.slippageBps = 2,
     this.fundingRatePerEightHours = 0,
+    this.spreadBps = 1,
+    this.portfolioRiskPercent = 3,
+    this.symbolHeatPercent = 1,
+    this.scannerIntervalSeconds = 15,
+    this.minimumConfidencePercent = 65,
+    this.minimumRiskReward = 1.5,
+    this.marginMode = TradingLabMarginMode.isolated,
+    this.executionModel = TradingLabExecutionModel.conservativeCandlePath,
+    this.experimentTag = '',
+    this.engineVersion = 'trading-lab-v2',
     this.notes = '',
   }) : symbols = List.unmodifiable(
          symbols
@@ -67,6 +81,16 @@ final class TradingLabRunManifest {
   final double feeRateBps;
   final double slippageBps;
   final double fundingRatePerEightHours;
+  final double spreadBps;
+  final double portfolioRiskPercent;
+  final double symbolHeatPercent;
+  final int scannerIntervalSeconds;
+  final int minimumConfidencePercent;
+  final double minimumRiskReward;
+  final TradingLabMarginMode marginMode;
+  final TradingLabExecutionModel executionModel;
+  final String experimentTag;
+  final String engineVersion;
   final String notes;
 
   void validate() {
@@ -117,6 +141,43 @@ final class TradingLabRunManifest {
         'Trading Lab funding model is outside the supported range.',
       );
     }
+    if (!spreadBps.isFinite || spreadBps < 0 || spreadBps > 200) {
+      throw const FormatException(
+        'Trading Lab spread must be between 0 and 200 bps.',
+      );
+    }
+    if (!portfolioRiskPercent.isFinite ||
+        portfolioRiskPercent < 0.1 ||
+        portfolioRiskPercent > 10) {
+      throw const FormatException(
+        'Trading Lab portfolio risk budget must be between 0.1% and 10%.',
+      );
+    }
+    if (!symbolHeatPercent.isFinite ||
+        symbolHeatPercent < 0.05 ||
+        symbolHeatPercent > portfolioRiskPercent) {
+      throw const FormatException(
+        'Trading Lab symbol heat must be positive and not exceed portfolio risk.',
+      );
+    }
+    if (scannerIntervalSeconds < 5 || scannerIntervalSeconds > 300) {
+      throw const FormatException(
+        'Trading Lab scanner interval must be between 5 and 300 seconds.',
+      );
+    }
+    if (minimumConfidencePercent < 0 || minimumConfidencePercent > 100) {
+      throw const FormatException('Trading Lab confidence gate is invalid.');
+    }
+    if (!minimumRiskReward.isFinite ||
+        minimumRiskReward < 0 ||
+        minimumRiskReward > 20) {
+      throw const FormatException('Trading Lab RR gate is invalid.');
+    }
+    if (experimentTag.length > 80 || engineVersion.trim().isEmpty) {
+      throw const FormatException(
+        'Trading Lab experiment identity is invalid.',
+      );
+    }
   }
 
   Map<String, Object?> toJson() => {
@@ -133,25 +194,55 @@ final class TradingLabRunManifest {
     'feeRateBps': feeRateBps,
     'slippageBps': slippageBps,
     'fundingRatePerEightHours': fundingRatePerEightHours,
+    'spreadBps': spreadBps,
+    'portfolioRiskPercent': portfolioRiskPercent,
+    'symbolHeatPercent': symbolHeatPercent,
+    'scannerIntervalSeconds': scannerIntervalSeconds,
+    'minimumConfidencePercent': minimumConfidencePercent,
+    'minimumRiskReward': minimumRiskReward,
+    'marginMode': marginMode.name,
+    'executionModel': executionModel.name,
+    'experimentTag': experimentTag,
+    'engineVersion': engineVersion,
     'notes': notes,
   };
 
-  factory TradingLabRunManifest.fromJson(Map<String, Object?> json) =>
-      TradingLabRunManifest(
-        runId: json['runId']?.toString() ?? '',
-        startedAtUtc: _date(json['startedAtUtc']),
-        startingEquity: _double(json['startingEquity']),
-        riskPercent: _double(json['riskPercent']),
-        maximumConcurrentPositions: _int(json['maximumConcurrentPositions']),
-        leverage: _int(json['leverage']),
-        symbols: _strings(json['symbols']),
-        timeframes: _strings(json['timeframes']),
-        strategies: _strings(json['strategies']),
-        feeRateBps: _double(json['feeRateBps'], fallback: 6),
-        slippageBps: _double(json['slippageBps'], fallback: 2),
-        fundingRatePerEightHours: _double(json['fundingRatePerEightHours']),
-        notes: json['notes']?.toString() ?? '',
-      );
+  factory TradingLabRunManifest.fromJson(
+    Map<String, Object?> json,
+  ) => TradingLabRunManifest(
+    runId: json['runId']?.toString() ?? '',
+    startedAtUtc: _date(json['startedAtUtc']),
+    startingEquity: _double(json['startingEquity']),
+    riskPercent: _double(json['riskPercent']),
+    maximumConcurrentPositions: _int(json['maximumConcurrentPositions']),
+    leverage: _int(json['leverage']),
+    symbols: _strings(json['symbols']),
+    timeframes: _strings(json['timeframes']),
+    strategies: _strings(json['strategies']),
+    feeRateBps: _double(json['feeRateBps'], fallback: 6),
+    slippageBps: _double(json['slippageBps'], fallback: 2),
+    fundingRatePerEightHours: _double(json['fundingRatePerEightHours']),
+    spreadBps: _double(json['spreadBps'], fallback: 1),
+    portfolioRiskPercent: _double(json['portfolioRiskPercent'], fallback: 3),
+    symbolHeatPercent: _double(json['symbolHeatPercent'], fallback: 1),
+    scannerIntervalSeconds: _int(json['scannerIntervalSeconds'], fallback: 15),
+    minimumConfidencePercent: _int(
+      json['minimumConfidencePercent'],
+      fallback: 65,
+    ),
+    minimumRiskReward: _double(json['minimumRiskReward'], fallback: 1.5),
+    marginMode: TradingLabMarginMode.values.firstWhere(
+      (item) => item.name == json['marginMode'],
+      orElse: () => TradingLabMarginMode.isolated,
+    ),
+    executionModel: TradingLabExecutionModel.values.firstWhere(
+      (item) => item.name == json['executionModel'],
+      orElse: () => TradingLabExecutionModel.conservativeCandlePath,
+    ),
+    experimentTag: json['experimentTag']?.toString() ?? '',
+    engineVersion: json['engineVersion']?.toString() ?? 'trading-lab-v2',
+    notes: json['notes']?.toString() ?? '',
+  );
 }
 
 final class TradingLabEvent {
@@ -374,6 +465,8 @@ final class TradingLabPosition {
     this.exitFees = 0,
     this.funding = 0,
     this.slippageCost = 0,
+    this.spreadCost = 0,
+    DateTime? lastFundingAccrualAtUtc,
     this.maximumFavorablePrice,
     this.maximumAdversePrice,
     Iterable<int> filledTargetIndexes = const [],
@@ -381,7 +474,8 @@ final class TradingLabPosition {
     this.closeReason,
   }) : targets = List.unmodifiable(targets),
        targetFractions = List.unmodifiable(targetFractions),
-       filledTargetIndexes = Set.of(filledTargetIndexes) {
+       filledTargetIndexes = Set.of(filledTargetIndexes),
+       lastFundingAccrualAtUtc = lastFundingAccrualAtUtc ?? openedAtUtc {
     if (positionId.trim().isEmpty ||
         initialQuantity <= 0 ||
         remainingQuantity < 0 ||
@@ -390,6 +484,7 @@ final class TradingLabPosition {
     }
     if (!openedAtUtc.isUtc ||
         !lastEvaluatedCandleAtUtc.isUtc ||
+        !lastFundingAccrualAtUtc.isUtc ||
         (closedAtUtc != null && !closedAtUtc!.isUtc)) {
       throw const FormatException(
         'Trading Lab position timestamps must be UTC.',
@@ -424,6 +519,8 @@ final class TradingLabPosition {
   double exitFees;
   double funding;
   double slippageCost;
+  double spreadCost;
+  DateTime lastFundingAccrualAtUtc;
   double? maximumFavorablePrice;
   double? maximumAdversePrice;
   final Set<int> filledTargetIndexes;
@@ -464,6 +561,8 @@ final class TradingLabPosition {
     'exitFees': exitFees,
     'funding': funding,
     'slippageCost': slippageCost,
+    'spreadCost': spreadCost,
+    'lastFundingAccrualAtUtc': lastFundingAccrualAtUtc.toIso8601String(),
     'maximumFavorablePrice': maximumFavorablePrice,
     'maximumAdversePrice': maximumAdversePrice,
     'filledTargetIndexes': filledTargetIndexes.toList()..sort(),
@@ -503,6 +602,10 @@ final class TradingLabPosition {
         exitFees: _double(json['exitFees']),
         funding: _double(json['funding']),
         slippageCost: _double(json['slippageCost']),
+        spreadCost: _double(json['spreadCost']),
+        lastFundingAccrualAtUtc:
+            _nullableDate(json['lastFundingAccrualAtUtc']) ??
+            _date(json['openedAtUtc']),
         maximumFavorablePrice: _nullableDouble(json['maximumFavorablePrice']),
         maximumAdversePrice: _nullableDouble(json['maximumAdversePrice']),
         filledTargetIndexes:
