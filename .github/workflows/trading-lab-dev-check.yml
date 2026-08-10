@@ -1,58 +1,114 @@
-name: Trading Lab UI completion retry
+name: Trading Lab final validation
 
 on:
   push:
     branches:
       - feat/176-bot-trading-lab
+    paths:
+      - 'src/client/quantara_app/**'
+      - '.github/workflows/trading-lab-dev-check.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: trading-lab-dev-${{ github.ref }}
+  group: trading-lab-final-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  upgrade-source:
+  static-checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Reuse the audited UI patch and commit from Flutter app root
+      - name: Restore packages
+        run: flutter pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+  test-shards:
+    needs: static-checks
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Run test shard ${{ matrix.shard }}
         shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARD_COUNT: 8
         run: |
           set -euo pipefail
-          git show HEAD^:.github/workflows/trading-lab-dev-check.yml > /tmp/previous-lab-ui.yml
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path('/tmp/previous-lab-ui.yml').read_text().splitlines()
-          start = next(i for i, line in enumerate(source) if "python3 - <<'PY'" in line) + 1
-          end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
-          code = []
-          for line in source[start:end]:
-              code.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/apply_lab_ui.py').write_text('\n'.join(code) + '\n')
-          PY
-          python3 /tmp/apply_lab_ui.py
-          pushd src/client/quantara_app
-          flutter pub get
-          dart format lib test
-          popd
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/client/quantara_app/lib src/client/quantara_app/test \
-            src/client/quantara_app/pubspec.lock
-          if git diff --cached --quiet; then
-            echo 'UI patch already present.'
-            exit 0
-          fi
-          git commit -m 'feat(lab): complete advanced config import and comparison UI'
-          git push origin HEAD:feat/176-bot-trading-lab
+          index=0
+          selected=0
+          while IFS= read -r test_file; do
+            if (( index % SHARD_COUNT == SHARD )); then
+              selected=$((selected + 1))
+              echo "::group::TEST_FILE ${test_file}"
+              if ! flutter test "${test_file}" --reporter compact; then
+                echo "FIRST_FAILING_TEST_FILE=${test_file}"
+                echo "FAILED_SHARD=${SHARD}"
+                echo "::endgroup::"
+                exit 1
+              fi
+              echo "::endgroup::"
+            fi
+            index=$((index + 1))
+          done < <(find test -type f -name '*_test.dart' | sort)
+          echo "SHARD_${SHARD}_FILES_PASSED=${selected}"
+
+  build-debug-apk:
+    needs: [static-checks, test-shards]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-bot-trading-lab-final-debug
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
