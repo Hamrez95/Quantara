@@ -195,7 +195,7 @@ final class TradingLabZipBundleCodec {
       ...payloadFiles,
     };
     if (!files.keys.toSet().containsAll(requiredEvidenceFiles)) {
-      throw const StateError(
+      throw StateError(
         'Trading Lab evidence bundle contract is incomplete.',
       );
     }
