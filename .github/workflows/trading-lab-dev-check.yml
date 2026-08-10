@@ -1,4 +1,4 @@
-name: Trading Lab UI completion
+name: Trading Lab UI completion retry
 
 on:
   push:
@@ -18,110 +18,41 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Wire complete Bot Lab product UI
+      - name: Reuse the audited UI patch and commit from Flutter app root
         shell: bash
         run: |
           set -euo pipefail
+          git show HEAD^:.github/workflows/trading-lab-dev-check.yml > /tmp/previous-lab-ui.yml
           python3 - <<'PY'
           from pathlib import Path
-
-          page = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
-          text = page.read_text()
-          if "package:file_selector/file_selector.dart" not in text:
-              text = text.replace(
-                  "import 'package:flutter_foreground_task/flutter_foreground_task.dart';",
-                  "import 'package:flutter_foreground_task/flutter_foreground_task.dart';\nimport 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;",
-                  1,
-              )
-          if "trading_lab_metrics.dart" not in text:
-              text = text.replace(
-                  "import '../../trading_lab/application/trading_lab_controller.dart';",
-                  "import '../../trading_lab/application/trading_lab_controller.dart';\nimport '../../trading_lab/application/trading_lab_metrics.dart';\nimport '../../trading_lab/application/trading_lab_scorecards.dart';",
-                  1,
-              )
-          if "part 'owner_alpha_trading_lab_insights.dart';" not in text:
-              text = text.replace(
-                  "part 'owner_alpha_trading_lab.dart';",
-                  "part 'owner_alpha_trading_lab.dart';\npart 'owner_alpha_trading_lab_insights.dart';",
-                  1,
-              )
-          page.write_text(text)
-
-          lab = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart')
-          text = lab.read_text()
-          old = '''  final _fee = TextEditingController(text: '6');\n  final _slippage = TextEditingController(text: '2');\n  final _notes = TextEditingController();\n  int _slots = 3;\n'''
-          new = '''  final _fee = TextEditingController(text: '6');\n  final _slippage = TextEditingController(text: '2');\n  final _spread = TextEditingController(text: '1');\n  final _fundingBps = TextEditingController(text: '1');\n  final _portfolioRisk = TextEditingController(text: '3');\n  final _symbolHeat = TextEditingController(text: '1');\n  final _confidenceGate = TextEditingController(text: '65');\n  final _minimumRr = TextEditingController(text: '1.5');\n  final _scannerInterval = TextEditingController(text: '15');\n  final _experimentTag = TextEditingController();\n  final _notes = TextEditingController();\n  int _slots = 3;\n  TradingLabExecutionModel _executionModel =\n      TradingLabExecutionModel.conservativeCandlePath;\n'''
-          if 'final _portfolioRisk = TextEditingController' not in text:
-              if old not in text: raise SystemExit('state field anchor missing')
-              text = text.replace(old, new, 1)
-
-          old = '''    _fee.dispose();\n    _slippage.dispose();\n    _notes.dispose();\n'''
-          new = '''    _fee.dispose();\n    _slippage.dispose();\n    _spread.dispose();\n    _fundingBps.dispose();\n    _portfolioRisk.dispose();\n    _symbolHeat.dispose();\n    _confidenceGate.dispose();\n    _minimumRr.dispose();\n    _scannerInterval.dispose();\n    _experimentTag.dispose();\n    _notes.dispose();\n'''
-          if '_portfolioRisk.dispose();' not in text:
-              if old not in text: raise SystemExit('dispose anchor missing')
-              text = text.replace(old, new, 1)
-
-          old = '''    final fee = double.tryParse(_fee.text.trim());\n    final slippage = double.tryParse(_slippage.text.trim());\n    if (equity == null ||\n        risk == null ||\n        leverage == null ||\n        fee == null ||\n        slippage == null) {\n'''
-          new = '''    final fee = double.tryParse(_fee.text.trim());\n    final slippage = double.tryParse(_slippage.text.trim());\n    final spread = double.tryParse(_spread.text.trim());\n    final fundingBps = double.tryParse(_fundingBps.text.trim());\n    final portfolioRisk = double.tryParse(_portfolioRisk.text.trim());\n    final symbolHeat = double.tryParse(_symbolHeat.text.trim());\n    final confidenceGate = int.tryParse(_confidenceGate.text.trim());\n    final minimumRr = double.tryParse(_minimumRr.text.trim());\n    final scannerInterval = int.tryParse(_scannerInterval.text.trim());\n    if (equity == null ||\n        risk == null ||\n        leverage == null ||\n        fee == null ||\n        slippage == null ||\n        spread == null ||\n        fundingBps == null ||\n        portfolioRisk == null ||\n        symbolHeat == null ||\n        confidenceGate == null ||\n        minimumRr == null ||\n        scannerInterval == null) {\n'''
-          if 'final portfolioRisk = double.tryParse' not in text:
-              if old not in text: raise SystemExit('start parse anchor missing')
-              text = text.replace(old, new, 1)
-
-          old = '''        feeRateBps: fee,\n        slippageBps: slippage,\n        notes: _notes.text.trim(),\n'''
-          new = '''        feeRateBps: fee,\n        slippageBps: slippage,\n        spreadBps: spread,\n        fundingRatePerEightHours: fundingBps / 10000,\n        portfolioRiskPercent: portfolioRisk,\n        symbolHeatPercent: symbolHeat,\n        minimumConfidencePercent: confidenceGate,\n        minimumRiskReward: minimumRr,\n        scannerIntervalSeconds: scannerInterval,\n        executionModel: _executionModel,\n        experimentTag: _experimentTag.text.trim(),\n        notes: _notes.text.trim(),\n'''
-          if 'portfolioRiskPercent: portfolioRisk' not in text:
-              if old not in text: raise SystemExit('start call anchor missing')
-              text = text.replace(old, new, 1)
-
-          import_anchor = '''  @override\n  Widget build(BuildContext context) {\n'''
-          import_method = '''  Future<void> _importZip() async {\n    try {\n      const group = XTypeGroup(\n        label: 'Quantara Trading Lab ZIP',\n        extensions: ['zip'],\n      );\n      final file = await openFile(acceptedTypeGroups: const [group]);\n      if (file == null) return;\n      final bytes = await file.readAsBytes();\n      await widget.controller.restoreFullEvidenceZip(bytes);\n      if (!mounted) return;\n      ScaffoldMessenger.of(context).showSnackBar(\n        SnackBar(\n          content: Text(\n            _fa\n                ? 'بسته آزمایش با موفقیت بررسی و به‌صورت Stopped بازیابی شد.'\n                : 'Experiment bundle verified and restored as Stopped.',\n          ),\n        ),\n      );\n    } on Object catch (error) {\n      if (!mounted) return;\n      ScaffoldMessenger.of(context).showSnackBar(\n        SnackBar(\n          content: Text(\n            _fa ? 'Import ZIP ناموفق بود: $error' : 'ZIP import failed: $error',\n          ),\n        ),\n      );\n    }\n  }\n\n'''
-          if 'Future<void> _importZip()' not in text:
-              if import_anchor not in text: raise SystemExit('build anchor missing')
-              text = text.replace(import_anchor, import_method + import_anchor, 1)
-
-          old = '''              _TradingLabSummary(run: run),\n              const SizedBox(height: 16),\n              _TradingLabWhyNoTrade(run: run),\n'''
-          new = '''              _TradingLabSummary(run: run),\n              const SizedBox(height: 16),\n              _TradingLabInsights(\n                run: run,\n                history: widget.controller.history,\n              ),\n              const SizedBox(height: 16),\n              _TradingLabWhyNoTrade(run: run),\n'''
-          if '_TradingLabInsights(' not in text:
-              if old not in text: raise SystemExit('insights build anchor missing')
-              text = text.replace(old, new, 1)
-
-          fields_anchor = '''                  SizedBox(\n                    width: itemWidth,\n                    child: DropdownButtonFormField<int>(\n                      initialValue: _slots,\n'''
-          advanced_fields = '''                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _spread,\n                      _fa ? 'اسپرد (bps)' : 'Spread (bps)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _fundingBps,\n                      _fa ? 'Funding هر ۸ ساعت (bps)' : 'Funding / 8h (bps)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _portfolioRisk,\n                      _fa ? 'بودجه ریسک پرتفوی (%)' : 'Portfolio risk budget (%)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _symbolHeat,\n                      _fa ? 'Symbol heat (%)' : 'Symbol heat (%)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _confidenceGate,\n                      _fa ? 'حداقل Confidence' : 'Minimum confidence',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _minimumRr,\n                      _fa ? 'حداقل RR' : 'Minimum RR',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _scannerInterval,\n                      _fa ? 'فاصله Scanner (ثانیه)' : 'Scanner interval (seconds)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: DropdownButtonFormField<TradingLabExecutionModel>(\n                      initialValue: _executionModel,\n                      decoration: InputDecoration(\n                        labelText: _fa ? 'مدل اجرا' : 'Execution model',\n                      ),\n                      items: TradingLabExecutionModel.values\n                          .map(\n                            (value) => DropdownMenuItem(\n                              value: value,\n                              child: Text(value.name),\n                            ),\n                          )\n                          .toList(growable: false),\n                      onChanged: _busy\n                          ? null\n                          : (value) => setState(\n                              () => _executionModel = value ?? _executionModel,\n                            ),\n                    ),\n                  ),\n'''
-          if "_fa ? 'اسپرد (bps)'" not in text:
-              if fields_anchor not in text: raise SystemExit('advanced field anchor missing')
-              text = text.replace(fields_anchor, advanced_fields + fields_anchor, 1)
-
-          notes_anchor = '''          const SizedBox(height: 12),\n          TextField(\n            controller: _notes,\n'''
-          tag_field = '''          const SizedBox(height: 12),\n          TextField(\n            controller: _experimentTag,\n            maxLength: 80,\n            decoration: InputDecoration(\n              labelText: _fa ? 'Tag آزمایش' : 'Experiment tag',\n              hintText: 'champion / candidate / rr-gate-v2',\n            ),\n          ),\n          TextField(\n            controller: _notes,\n'''
-          if 'controller: _experimentTag' not in text:
-              if notes_anchor not in text: raise SystemExit('tag anchor missing')
-              text = text.replace(notes_anchor, tag_field, 1)
-
-          actions_anchor = '''          FilledButton.tonalIcon(\n            onPressed: _shareReview,\n            icon: const Icon(Icons.ios_share_rounded),\n            label: Text(_fa ? 'خروجی کامل ZIP' : 'Export full ZIP'),\n          ),\n'''
-          import_button = actions_anchor + '''          OutlinedButton.icon(\n            onPressed: run.isRunning || _busy ? null : _importZip,\n            icon: const Icon(Icons.file_open_rounded),\n            label: Text(_fa ? 'Import ZIP' : 'Import ZIP'),\n          ),\n'''
-          if 'onPressed: run.isRunning || _busy ? null : _importZip' not in text:
-              if actions_anchor not in text: raise SystemExit('actions anchor missing')
-              text = text.replace(actions_anchor, import_button, 1)
-
-          text = text.replace(
-              '  TradingLabEventKind.stopPromoted => Icons.lock_outline_rounded,',
-              '  TradingLabEventKind.stopPromoted => Icons.lock_outline_rounded,\n  TradingLabEventKind.fundingAccrued => Icons.account_balance_wallet_outlined,',
-              1,
-          )
-          lab.write_text(text)
+          source = Path('/tmp/previous-lab-ui.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(source) if "python3 - <<'PY'" in line) + 1
+          end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
+          code = []
+          for line in source[start:end]:
+              code.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/apply_lab_ui.py').write_text('\n'.join(code) + '\n')
           PY
-
+          python3 /tmp/apply_lab_ui.py
+          pushd src/client/quantara_app
           flutter pub get
-          dart format src/client/quantara_app/lib src/client/quantara_app/test
+          dart format lib test
+          popd
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/client/quantara_app/lib src/client/quantara_app/test \
             src/client/quantara_app/pubspec.lock
+          if git diff --cached --quiet; then
+            echo 'UI patch already present.'
+            exit 0
+          fi
           git commit -m 'feat(lab): complete advanced config import and comparison UI'
           git push origin HEAD:feat/176-bot-trading-lab
