@@ -75,6 +75,16 @@ void main() {
     expect(restored.aiReviewJson, contains('lab-zip-roundtrip'));
     expect(restored.shadowEvidenceJson, contains('signalsTracked'));
     expect(restored.accountContextJson, contains('read_only_context'));
+    expect(
+      restored.fileNames,
+      containsAll(TradingLabZipBundleCodec.requiredEvidenceFiles),
+    );
+    expect(restored.fileNames, contains('summary.json'));
+    expect(restored.fileNames, contains('trades.jsonl'));
+    expect(restored.fileNames, contains('decisions.jsonl'));
+    expect(restored.fileNames, contains('management_events.jsonl'));
+    expect(restored.fileNames, contains('equity_curve.jsonl'));
+    expect(restored.fileNames, contains('market_feature_snapshots.jsonl'));
   });
 
   test('ZIP corruption is rejected instead of silently importing evidence', () {
