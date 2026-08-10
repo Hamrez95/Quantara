@@ -4,12 +4,17 @@ import '../../auto_trade/domain/profit_lock_stop_policy.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
+import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
 
 final class TradingLabPaperBroker {
   const TradingLabPaperBroker();
 
-  void processSnapshot(TradingLabRun run, OwnerAlphaSnapshot snapshot) {
+  void processSnapshot(
+    TradingLabRun run,
+    OwnerAlphaSnapshot snapshot, {
+    TradingLabAccountContext? accountContext,
+  }) {
     if (!run.isRunning) return;
     final previous = run.lastSnapshotAtUtc;
     if (previous != null && !snapshot.generatedAt.isAfter(previous)) return;
@@ -18,10 +23,18 @@ final class TradingLabPaperBroker {
     final cycle = run.cycleId;
     final openedBefore = run.openPositions.length;
     final closedBefore = run.closedPositions.length;
+    final lastScan = run.lastScanAtUtc;
+    final scanDue =
+        lastScan == null ||
+        snapshot.generatedAt.difference(lastScan).inSeconds >=
+            run.manifest.scannerIntervalSeconds;
 
     _manageOpenPositions(run, snapshot);
-    _discoverCandidates(run, snapshot);
-    _evaluatePendingCandidates(run, snapshot);
+    if (scanDue) {
+      _discoverCandidates(run, snapshot);
+      _evaluatePendingCandidates(run, snapshot);
+      run.lastScanAtUtc = snapshot.generatedAt.toUtc();
+    }
     _markToMarket(run, snapshot);
 
     final openedThisCycle =
@@ -54,10 +67,50 @@ final class TradingLabPaperBroker {
       metrics: {
         'equity': run.currentEquity,
         'balance': run.balance,
+        'virtualAvailableMargin': _virtualAvailableMargin(run),
+        'reservedMargin': _reservedMargin(run),
+        'openRisk': _openRisk(run),
+        'portfolioRiskBudget':
+            run.currentEquity * run.manifest.portfolioRiskPercent / 100,
+        'portfolioRiskFree': math
+            .max(
+              0,
+              run.currentEquity * run.manifest.portfolioRiskPercent / 100 -
+                  _openRisk(run),
+            )
+            .toDouble(),
         'openPositions': run.openPositions.length.toDouble(),
+        'freeSlots': math
+            .max(
+              0,
+              run.manifest.maximumConcurrentPositions -
+                  run.openPositions.length,
+            )
+            .toDouble(),
         'pendingCandidates': run.pendingCandidates.length.toDouble(),
         'closedTrades': run.closedPositions.length.toDouble(),
         'maximumDrawdownPercent': run.maximumDrawdownPercent,
+        'realAccountEstimatedEquity': accountContext?.estimatedEquity ?? 0,
+        'realAccountAvailable': accountContext?.available ?? 0,
+        'realAccountAgeSeconds': accountContext?.syncedAtUtc == null
+            ? -1
+            : math
+                  .max(
+                    0,
+                    snapshot.generatedAt
+                        .difference(accountContext!.syncedAtUtc!)
+                        .inSeconds,
+                  )
+                  .toDouble(),
+      },
+      attributes: {
+        'scanDue': scanDue.toString(),
+        'accountConnected': (accountContext?.connected ?? false).toString(),
+        'accountHealth': accountContext?.reconciliationHealth ?? 'unavailable',
+        'accountBlocksNewEntries': (accountContext?.blocksNewEntries ?? true)
+            .toString(),
+        'marginMode': run.manifest.marginMode.name,
+        'executionModel': run.manifest.executionModel.name,
       },
     );
   }
@@ -106,6 +159,31 @@ final class TradingLabPaperBroker {
             'direction': idea.direction.name,
           },
         );
+
+        if (idea.confidencePercent < run.manifest.minimumConfidencePercent) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            'Candidate rejected by experiment confidence gate.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {'rejectionReason': 'confidence_below_gate'},
+          );
+          continue;
+        }
+        if ((idea.riskReward ?? 0) < run.manifest.minimumRiskReward) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            'Candidate rejected by experiment minimum RR gate.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {'rejectionReason': 'risk_reward_below_gate'},
+          );
+          continue;
+        }
 
         if (!_isValidActionablePlan(idea)) {
           _event(
@@ -225,8 +303,14 @@ final class TradingLabPaperBroker {
     DateTime now,
   ) {
     final referenceEntry = (candidate.entryLower + candidate.entryUpper) / 2;
-    final entry = _applyAdverseSlippage(
+    final afterSpread = _applyAdverseSlippage(
       referenceEntry,
+      direction: candidate.direction,
+      opening: true,
+      bps: run.manifest.spreadBps / 2,
+    );
+    final entry = _applyAdverseSlippage(
+      afterSpread,
       direction: candidate.direction,
       opening: true,
       bps: run.manifest.slippageBps,
@@ -266,7 +350,8 @@ final class TradingLabPaperBroker {
 
     final fractions = _fractionsForTargets(candidate.targets.length);
     final entryFee = _fee(notional, run.manifest.feeRateBps);
-    final slippageCost = (entry - referenceEntry).abs() * quantity;
+    final spreadCost = (afterSpread - referenceEntry).abs() * quantity;
+    final slippageCost = (entry - afterSpread).abs() * quantity;
     run.balance -= entryFee;
     final position = TradingLabPosition(
       positionId:
@@ -294,6 +379,7 @@ final class TradingLabPaperBroker {
       marginReserved: margin,
       entryFee: entryFee,
       slippageCost: slippageCost,
+      spreadCost: spreadCost,
       maximumFavorablePrice: entry,
       maximumAdversePrice: entry,
     );
@@ -314,10 +400,12 @@ final class TradingLabPaperBroker {
         'leverage': leverage.toDouble(),
         'entryFee': entryFee,
         'slippageCost': slippageCost,
+        'spreadCost': spreadCost,
+        'portfolioRiskAfter': _openRisk(run) + position.initialRisk,
+        'portfolioRiskBudget':
+            run.currentEquity * run.manifest.portfolioRiskPercent / 100,
       },
-      attributes: {
-        'executionModel': 'future-candle-touch/conservative-collision',
-      },
+      attributes: {'executionModel': run.manifest.executionModel.name},
     );
     return true;
   }
@@ -330,6 +418,7 @@ final class TradingLabPaperBroker {
         position.timeframe,
       );
       if (analysis == null) continue;
+      _accrueFunding(run, position, snapshot.generatedAt.toUtc());
       final newCandles = analysis.candles
           .where(
             (candle) =>
@@ -395,12 +484,20 @@ final class TradingLabPaperBroker {
           ? position.remainingQuantity
           : math.min(position.remainingQuantity, planned);
       if (quantity <= 0) continue;
-      final exit = _applyAdverseSlippage(
+      final spreadExit = _applyAdverseSlippage(
         target,
+        direction: position.direction,
+        opening: false,
+        bps: run.manifest.spreadBps / 2,
+      );
+      final exit = _applyAdverseSlippage(
+        spreadExit,
         direction: position.direction,
         opening: false,
         bps: run.manifest.slippageBps,
       );
+      position.spreadCost += (spreadExit - target).abs() * quantity;
+      position.slippageCost += (exit - spreadExit).abs() * quantity;
       _realize(run, position, quantity, exit);
       position.filledTargetIndexes.add(index);
       _event(
@@ -473,12 +570,21 @@ final class TradingLabPaperBroker {
   }) {
     final quantity = position.remainingQuantity;
     if (quantity <= 0) return;
-    final exit = _applyAdverseSlippage(
+    final spreadExit = _applyAdverseSlippage(
       position.currentStopLoss,
+      direction: position.direction,
+      opening: false,
+      bps: run.manifest.spreadBps / 2,
+    );
+    final exit = _applyAdverseSlippage(
+      spreadExit,
       direction: position.direction,
       opening: false,
       bps: run.manifest.slippageBps,
     );
+    position.spreadCost +=
+        (spreadExit - position.currentStopLoss).abs() * quantity;
+    position.slippageCost += (exit - spreadExit).abs() * quantity;
     _realize(run, position, quantity, exit);
     _event(
       run,
@@ -538,6 +644,8 @@ final class TradingLabPaperBroker {
         'entryFee': position.entryFee,
         'exitFees': position.exitFees,
         'funding': position.funding,
+        'slippageCost': position.slippageCost,
+        'spreadCost': position.spreadCost,
       },
     );
   }
@@ -583,18 +691,78 @@ final class TradingLabPaperBroker {
     final stopDistance = (entry - candidate.stopLoss).abs();
     if (stopDistance <= 0) return 'Paper entry blocked: invalid stop distance.';
     final candidateRisk = run.currentEquity * run.manifest.riskPercent / 100;
-    final riskCap = candidateRisk * run.manifest.maximumConcurrentPositions;
-    final openRisk = run.openPositions.fold<double>(
-      0,
-      (sum, position) =>
-          sum +
-          position.initialRisk *
-              (position.remainingQuantity / position.initialQuantity),
-    );
+    final riskCap = run.currentEquity * run.manifest.portfolioRiskPercent / 100;
+    final symbolHeatCap =
+        run.currentEquity * run.manifest.symbolHeatPercent / 100;
+    final openRisk = _openRisk(run);
+    final symbolRisk = run.openPositions
+        .where((position) => position.symbol == candidate.symbol)
+        .fold<double>(
+          0,
+          (sum, position) =>
+              sum +
+              position.initialRisk *
+                  (position.remainingQuantity / position.initialQuantity),
+        );
+    if (candidateRisk > symbolHeatCap + 0.0000001 ||
+        symbolRisk + candidateRisk > symbolHeatCap + 0.0000001) {
+      return 'Paper entry blocked: symbol heat budget is exhausted.';
+    }
     if (openRisk + candidateRisk > riskCap + 0.0000001) {
       return 'Paper entry blocked: portfolio risk budget is exhausted.';
     }
     return null;
+  }
+
+  static double _reservedMargin(TradingLabRun run) => run.openPositions
+      .fold<double>(0, (sum, position) => sum + position.marginReserved);
+
+  static double _virtualAvailableMargin(TradingLabRun run) =>
+      math.max(0, run.currentEquity - _reservedMargin(run)).toDouble();
+
+  static double _openRisk(TradingLabRun run) => run.openPositions.fold<double>(
+    0,
+    (sum, position) =>
+        sum +
+        position.initialRisk *
+            (position.remainingQuantity / position.initialQuantity),
+  );
+
+  void _accrueFunding(
+    TradingLabRun run,
+    TradingLabPosition position,
+    DateTime now,
+  ) {
+    if (!now.isAfter(position.lastFundingAccrualAtUtc)) return;
+    final elapsedSeconds = now
+        .difference(position.lastFundingAccrualAtUtc)
+        .inSeconds;
+    if (elapsedSeconds <= 0) return;
+    final rate = run.manifest.fundingRatePerEightHours;
+    position.lastFundingAccrualAtUtc = now;
+    if (rate == 0 || position.remainingQuantity <= 0) return;
+    final intervals = elapsedSeconds / const Duration(hours: 8).inSeconds;
+    final notional = position.entryPrice * position.remainingQuantity;
+    final directionalRate = position.direction == TradeDirection.long
+        ? rate
+        : -rate;
+    final charge = notional * directionalRate * intervals;
+    if (!charge.isFinite || charge == 0) return;
+    position.funding += charge;
+    run.balance -= charge;
+    _event(
+      run,
+      TradingLabEventKind.fundingAccrued,
+      now,
+      'Paper funding accrued using the configured eight-hour rate.',
+      position: position,
+      metrics: {
+        'fundingCharge': charge,
+        'fundingRatePerEightHours': rate,
+        'elapsedSeconds': elapsedSeconds.toDouble(),
+        'remainingNotional': notional,
+      },
+    );
   }
 
   static bool _isValidActionablePlan(TradeIdea idea) {
@@ -701,6 +869,7 @@ final class TradingLabPaperBroker {
     final value = reason.toLowerCase();
     if (value.contains('slots')) return 'portfolio_slots_full';
     if (value.contains('same-symbol')) return 'same_symbol_exposure';
+    if (value.contains('symbol heat')) return 'symbol_heat_exhausted';
     if (value.contains('risk budget')) return 'portfolio_risk_exhausted';
     if (value.contains('margin')) return 'insufficient_virtual_margin';
     if (value.contains('stop')) return 'invalid_stop';

@@ -18,6 +18,7 @@ enum TradingLabEventKind {
   positionOpened,
   targetFilled,
   stopPromoted,
+  fundingAccrued,
   stopFilled,
   positionClosed,
   anomaly,
@@ -631,6 +632,7 @@ final class TradingLabRun {
     Iterable<TradingLabEvent> events = const [],
     Iterable<String> processedDecisionKeys = const [],
     this.lastSnapshotAtUtc,
+    this.lastScanAtUtc,
     this.cycleId = 0,
     this.lastWhyNoTrade = 'Run created; waiting for the first market snapshot.',
   }) : balance = balance ?? manifest.startingEquity,
@@ -661,6 +663,7 @@ final class TradingLabRun {
   final List<TradingLabEvent> events;
   final Set<String> processedDecisionKeys;
   DateTime? lastSnapshotAtUtc;
+  DateTime? lastScanAtUtc;
   int cycleId;
   String lastWhyNoTrade;
 
@@ -728,6 +731,7 @@ final class TradingLabRun {
     'events': events.map((item) => item.toJson()).toList(),
     'processedDecisionKeys': processedDecisionKeys.toList()..sort(),
     'lastSnapshotAtUtc': lastSnapshotAtUtc?.toIso8601String(),
+    'lastScanAtUtc': lastScanAtUtc?.toIso8601String(),
     'cycleId': cycleId,
     'lastWhyNoTrade': lastWhyNoTrade,
   };

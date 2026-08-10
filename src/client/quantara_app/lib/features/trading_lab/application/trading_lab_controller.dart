@@ -165,7 +165,11 @@ final class TradingLabController extends ChangeNotifier {
         final snapshot = _marketController.snapshot;
         final current = _run;
         if (snapshot != null && current?.isRunning == true) {
-          _broker.processSnapshot(current!, snapshot);
+          _broker.processSnapshot(
+            current!,
+            snapshot,
+            accountContext: accountContext,
+          );
           await _store.save(current);
           _history = await _store.loadHistory();
           _error = null;
