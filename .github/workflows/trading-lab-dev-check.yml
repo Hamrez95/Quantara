@@ -9,14 +9,91 @@ on:
       - '.github/workflows/trading-lab-dev-check.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: trading-lab-dev-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  source-fixups:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.patch.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Apply final Lab navigation and ZIP share wiring
+        id: patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('src/client/quantara_app/lib/features/owner_alpha/presentation')
+
+          page = root / 'owner_alpha_page.dart'
+          text = page.read_text()
+          old = 'const _mobileDestinationIndexes = [0, 1, 4, 5, 7];'
+          new = 'const _mobileDestinationIndexes = [0, 1, 5, 7];'
+          if old in text:
+              text = text.replace(old, new, 1)
+              page.write_text(text)
+          elif new not in text:
+              raise SystemExit('mobile navigation anchor not found')
+
+          home = root / 'owner_alpha_home.dart'
+          text = home.read_text()
+          if "destination: 4," not in text:
+              anchor = """      _HomeAction(\n        icon: Icons.smart_toy_rounded,\n        label: strings.t('ترید خودکار', 'Auto Trade'),\n        caption: strings.t('اتصال حساب و شروع امن', 'Connect and start safely'),\n        destination: 5,\n        color: QuantaraColors.magenta,\n      ),\n"""
+              addition = anchor + """      _HomeAction(\n        icon: Icons.science_rounded,\n        label: strings.t('آزمایشگاه بات', 'Bot Lab'),\n        caption: strings.t(\n          'فوروارد تست و خروجی کامل شواهد',\n          'Forward test and full evidence export',\n        ),\n        destination: 4,\n        color: QuantaraColors.warning,\n      ),\n"""
+              if anchor not in text:
+                  raise SystemExit('home quick action anchor not found')
+              text = text.replace(anchor, addition, 1)
+          text = text.replace(
+              'final columns = constraints.maxWidth >= 920\n                  ? 5',
+              'final columns = constraints.maxWidth >= 1080\n                  ? 6',
+              1,
+          )
+          home.write_text(text)
+
+          lab = root / 'owner_alpha_trading_lab.dart'
+          text = lab.read_text()
+          start = text.find('  Future<void> _shareReview() async {')
+          end = text.find('\n  @override\n  Widget build(BuildContext context)', start)
+          if start < 0 or end < 0:
+              raise SystemExit('Lab share method anchor not found')
+          method = """  Future<void> _shareReview() async {\n    try {\n      final bundle = widget.controller.exportFullEvidenceZip();\n      await SharePlus.instance.share(\n        ShareParams(\n          title: 'Quantara Bot Trading Lab',\n          text: _fa\n              ? 'بسته کامل شواهد آزمایش بات Quantara — شامل Run، AI Review، Shadow Evidence، Account Context پاک‌سازی‌شده و checksum؛ بدون کلید API.'\n              : 'Complete Quantara Bot Trading Lab evidence bundle — run, AI review, shadow evidence, sanitized account context and checksums; no API credentials.',\n          files: [\n            XFile.fromData(bundle.bytes, mimeType: 'application/zip'),\n          ],\n          fileNameOverrides: [bundle.fileName],\n        ),\n      );\n    } on Object catch (error) {\n      if (!mounted) return;\n      ScaffoldMessenger.of(context).showSnackBar(\n        SnackBar(\n          content: Text(\n            _fa ? 'خروجی ZIP ساخته نشد: $error' : 'ZIP export failed: $error',\n          ),\n        ),\n      );\n    }\n  }\n"""
+          text = text[:start] + method + text[end:]
+          text = text.replace(
+              "_fa ? 'خروجی برای بررسی AI' : 'Export AI review'",
+              "_fa ? 'خروجی کامل ZIP' : 'Export full ZIP'",
+              1,
+          )
+          lab.write_text(text)
+          PY
+
+          dart format src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_home.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart
+
+          if git diff --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_home.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart
+          git commit -m 'feat(lab): wire full zip export into product navigation'
+          git push origin HEAD:feat/176-bot-trading-lab
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+
   static-checks:
+    needs: source-fixups
+    if: needs.source-fixups.outputs.changed != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
