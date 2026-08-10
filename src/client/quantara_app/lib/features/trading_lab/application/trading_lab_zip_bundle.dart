@@ -6,7 +6,7 @@ import 'package:crypto/crypto.dart';
 import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
 
-const tradingLabBundleSchemaVersion = 1;
+const tradingLabBundleSchemaVersion = 2;
 const _maximumBundleBytes = 32 * 1024 * 1024;
 const _maximumBundleFiles = 32;
 
@@ -23,16 +23,37 @@ final class TradingLabImportedBundle {
     required this.aiReviewJson,
     required this.shadowEvidenceJson,
     required this.accountContextJson,
+    required this.fileNames,
   });
 
   final TradingLabRun run;
   final String aiReviewJson;
   final String shadowEvidenceJson;
   final String accountContextJson;
+  final Set<String> fileNames;
 }
 
 final class TradingLabZipBundleCodec {
   const TradingLabZipBundleCodec();
+
+  static const requiredEvidenceFiles = <String>{
+    'bundle_manifest.json',
+    'manifest.json',
+    'summary.json',
+    'run.json',
+    'trades.jsonl',
+    'candidates.jsonl',
+    'decisions.jsonl',
+    'management_events.jsonl',
+    'equity_curve.jsonl',
+    'market_feature_snapshots.jsonl',
+    'anomalies.jsonl',
+    'strategy_versions.json',
+    'ai_review.json',
+    'shadow_evidence.json',
+    'account_context.json',
+    'README.txt',
+  };
 
   TradingLabZipBundle encode({
     required TradingLabRun run,
@@ -41,22 +62,120 @@ final class TradingLabZipBundleCodec {
     required TradingLabAccountContext accountContext,
   }) {
     final pretty = const JsonEncoder.withIndent('  ');
-    final runJson = pretty.convert(run.toJson());
-    final manifestJson = pretty.convert(run.manifest.toJson());
-    final shadowJson = pretty.convert(shadowEvidence);
-    final accountJson = pretty.convert(accountContext.toJson());
+    final runObject = run.toJson();
+    final manifestObject = run.manifest.toJson();
+    final accountObject = accountContext.toJson();
+    final summaryObject = _summary(run);
+    final strategyVersionsObject = <String, Object?>{
+      'schemaVersion': tradingLabBundleSchemaVersion,
+      'runId': run.manifest.runId,
+      'strategies': run.manifest.strategies,
+    };
 
-    _assertNoSensitiveKeys(jsonDecode(runJson));
-    _assertNoSensitiveKeys(jsonDecode(aiReviewJson));
-    _assertNoSensitiveKeys(jsonDecode(shadowJson));
-    _assertNoSensitiveKeys(jsonDecode(accountJson));
+    final trades = <Map<String, Object?>>[
+      for (final position in run.closedPositions)
+        {'state': 'closed', ...position.toJson()},
+      for (final position in run.openPositions)
+        {'state': 'open', ...position.toJson()},
+    ];
+    final candidates = <Map<String, Object?>>[
+      for (final candidate in run.pendingCandidates)
+        {'state': 'pending', ...candidate.toJson()},
+    ];
+    final decisions = run.events
+        .where(
+          (event) =>
+              event.kind == TradingLabEventKind.candidateObserved ||
+              event.kind == TradingLabEventKind.candidatePending ||
+              event.kind == TradingLabEventKind.candidateRejected,
+        )
+        .map((event) => event.toJson())
+        .toList(growable: false);
+    final managementEvents = run.events
+        .where(
+          (event) =>
+              event.kind == TradingLabEventKind.positionOpened ||
+              event.kind == TradingLabEventKind.targetFilled ||
+              event.kind == TradingLabEventKind.stopPromoted ||
+              event.kind == TradingLabEventKind.stopFilled ||
+              event.kind == TradingLabEventKind.positionClosed,
+        )
+        .map((event) => event.toJson())
+        .toList(growable: false);
+    final equityCurve = run.events
+        .where((event) => event.kind == TradingLabEventKind.heartbeat)
+        .map(
+          (event) => <String, Object?>{
+            'atUtc': event.atUtc.toIso8601String(),
+            'cycleId': event.cycleId,
+            'equity': event.metrics['equity'],
+            'balance': event.metrics['balance'],
+            'openPositions': event.metrics['openPositions'],
+            'pendingCandidates': event.metrics['pendingCandidates'],
+            'closedTrades': event.metrics['closedTrades'],
+            'maximumDrawdownPercent':
+                event.metrics['maximumDrawdownPercent'],
+          },
+        )
+        .toList(growable: false);
+    final marketFeatureSnapshots = run.events
+        .where((event) => event.kind == TradingLabEventKind.candidateObserved)
+        .map(
+          (event) => <String, Object?>{
+            'atUtc': event.atUtc.toIso8601String(),
+            'cycleId': event.cycleId,
+            'setupId': event.setupId,
+            'symbol': event.symbol,
+            'timeframe': event.timeframe,
+            'strategy': event.strategy,
+            'strategyVersion': event.strategyVersion,
+            'features': event.metrics,
+            'attributes': event.attributes,
+          },
+        )
+        .toList(growable: false);
+    final anomalies = run.events
+        .where((event) => event.kind == TradingLabEventKind.anomaly)
+        .map((event) => event.toJson())
+        .toList(growable: false);
+
+    final objectsToValidate = <Object?>[
+      runObject,
+      manifestObject,
+      summaryObject,
+      strategyVersionsObject,
+      trades,
+      candidates,
+      decisions,
+      managementEvents,
+      equityCurve,
+      marketFeatureSnapshots,
+      anomalies,
+      shadowEvidence,
+      accountObject,
+      jsonDecode(aiReviewJson),
+    ];
+    for (final value in objectsToValidate) {
+      _assertNoSensitiveKeys(value);
+    }
 
     final payloadFiles = <String, Uint8List>{
-      'manifest.json': _utf8(manifestJson),
-      'run.json': _utf8(runJson),
+      'manifest.json': _utf8(pretty.convert(manifestObject)),
+      'summary.json': _utf8(pretty.convert(summaryObject)),
+      'run.json': _utf8(pretty.convert(runObject)),
+      'trades.jsonl': _utf8(_jsonl(trades)),
+      'candidates.jsonl': _utf8(_jsonl(candidates)),
+      'decisions.jsonl': _utf8(_jsonl(decisions)),
+      'management_events.jsonl': _utf8(_jsonl(managementEvents)),
+      'equity_curve.jsonl': _utf8(_jsonl(equityCurve)),
+      'market_feature_snapshots.jsonl': _utf8(
+        _jsonl(marketFeatureSnapshots),
+      ),
+      'anomalies.jsonl': _utf8(_jsonl(anomalies)),
+      'strategy_versions.json': _utf8(pretty.convert(strategyVersionsObject)),
       'ai_review.json': _utf8(aiReviewJson),
-      'shadow_evidence.json': _utf8(shadowJson),
-      'account_context.json': _utf8(accountJson),
+      'shadow_evidence.json': _utf8(pretty.convert(shadowEvidence)),
+      'account_context.json': _utf8(pretty.convert(accountObject)),
       'README.txt': _utf8(_readme(run)),
     };
     final checksums = <String, String>{
@@ -78,6 +197,9 @@ final class TradingLabZipBundleCodec {
       'bundle_manifest.json': _utf8(pretty.convert(bundleManifest)),
       ...payloadFiles,
     };
+    if (!files.keys.toSet().containsAll(requiredEvidenceFiles)) {
+      throw const StateError('Trading Lab evidence bundle contract is incomplete.');
+    }
     final bytes = _StoredZipCodec.encode(files);
     if (bytes.length > _maximumBundleBytes) {
       throw const FormatException('Trading Lab ZIP bundle exceeds 32 MiB.');
@@ -98,15 +220,7 @@ final class TradingLabZipBundleCodec {
         'Trading Lab ZIP bundle contains too many files.',
       );
     }
-    const required = <String>{
-      'bundle_manifest.json',
-      'manifest.json',
-      'run.json',
-      'ai_review.json',
-      'shadow_evidence.json',
-      'account_context.json',
-    };
-    if (!files.keys.toSet().containsAll(required)) {
+    if (!files.keys.toSet().containsAll(requiredEvidenceFiles)) {
       throw const FormatException('Trading Lab ZIP bundle is incomplete.');
     }
 
@@ -120,6 +234,17 @@ final class TradingLabZipBundleCodec {
         bundleManifest['containsCredentials'] != false) {
       throw const FormatException(
         'Trading Lab bundle safety metadata is invalid.',
+      );
+    }
+
+    final declaredFiles = (bundleManifest['files'] as List<Object?>? ?? const [])
+        .map((item) => item.toString())
+        .toSet();
+    if (!declaredFiles.containsAll(requiredEvidenceFiles.difference({
+      'bundle_manifest.json',
+    }))) {
+      throw const FormatException(
+        'Trading Lab bundle manifest does not declare all evidence files.',
       );
     }
 
@@ -146,6 +271,17 @@ final class TradingLabZipBundleCodec {
     _assertNoSensitiveKeys(jsonDecode(aiReviewJson));
     _assertNoSensitiveKeys(jsonDecode(shadowJson));
     _assertNoSensitiveKeys(jsonDecode(accountJson));
+    for (final name in const <String>[
+      'trades.jsonl',
+      'candidates.jsonl',
+      'decisions.jsonl',
+      'management_events.jsonl',
+      'equity_curve.jsonl',
+      'market_feature_snapshots.jsonl',
+      'anomalies.jsonl',
+    ]) {
+      _validateJsonl(files[name]!, name);
+    }
     if (runMap is! Map) {
       throw const FormatException('Trading Lab run payload is invalid.');
     }
@@ -161,8 +297,38 @@ final class TradingLabZipBundleCodec {
       aiReviewJson: aiReviewJson,
       shadowEvidenceJson: shadowJson,
       accountContextJson: accountJson,
+      fileNames: Set.unmodifiable(files.keys.toSet()),
     );
   }
+
+  static Map<String, Object?> _summary(TradingLabRun run) => {
+    'schemaVersion': tradingLabBundleSchemaVersion,
+    'runId': run.manifest.runId,
+    'status': run.status.name,
+    'startingEquity': run.manifest.startingEquity,
+    'balance': run.balance,
+    'currentEquity': run.currentEquity,
+    'returnPercent': run.returnPercent,
+    'maximumDrawdownPercent': run.maximumDrawdownPercent,
+    'openPositions': run.openPositions.length,
+    'pendingCandidates': run.pendingCandidates.length,
+    'tradeCount': run.tradeCount,
+    'wins': run.wins,
+    'losses': run.losses,
+    'winRatePercent': run.winRatePercent,
+    'netRealizedPnl': run.netRealizedPnl,
+    'grossProfit': run.grossProfit,
+    'grossLoss': run.grossLoss,
+    'profitFactor': run.profitFactor?.isFinite == true ? run.profitFactor : null,
+    'averageR': run.averageR,
+    'cycleId': run.cycleId,
+    'lastSnapshotAtUtc': run.lastSnapshotAtUtc?.toIso8601String(),
+    'lastWhyNoTrade': run.lastWhyNoTrade,
+  };
+
+  static String _jsonl(Iterable<Map<String, Object?>> rows) => rows
+      .map(jsonEncode)
+      .join('\n');
 
   static Uint8List _utf8(String value) =>
       Uint8List.fromList(utf8.encode(value));
@@ -173,6 +339,21 @@ final class TradingLabZipBundleCodec {
       throw const FormatException('Trading Lab bundle JSON object expected.');
     }
     return decoded.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  static void _validateJsonl(Uint8List bytes, String name) {
+    final text = utf8.decode(bytes);
+    if (text.trim().isEmpty) return;
+    var lineNumber = 0;
+    for (final line in const LineSplitter().convert(text)) {
+      lineNumber += 1;
+      if (line.trim().isEmpty) continue;
+      final decoded = jsonDecode(line);
+      if (decoded is! Map) {
+        throw FormatException('$name line $lineNumber must be a JSON object.');
+      }
+      _assertNoSensitiveKeys(decoded, '$name:$lineNumber');
+    }
   }
 
   static int _int(Object? value) => switch (value) {
@@ -226,17 +407,29 @@ final class TradingLabZipBundleCodec {
 Run: ${run.manifest.runId}
 Started (UTC): ${run.manifest.startedAtUtc.toIso8601String()}
 Mode: PAPER / FORWARD TEST ONLY
+Bundle schema: $tradingLabBundleSchemaVersion
 
-This ZIP contains the complete portable evidence for the selected Trading Lab run:
+Files:
 - bundle_manifest.json: bundle identity, safety flags and SHA-256 checksums
-- manifest.json: experiment configuration and strategy versions
-- run.json: durable paper-run state, positions, decisions and events
+- manifest.json: immutable experiment configuration and strategy versions
+- summary.json: normalized run scorecard
+- run.json: complete durable paper-run state
+- trades.jsonl: open and closed paper positions
+- candidates.jsonl: currently pending candidates
+- decisions.jsonl: observed/pending/rejected candidate decisions
+- management_events.jsonl: paper entry, TP, stop promotion, stop and close events
+- equity_curve.jsonl: heartbeat-derived equity/balance/drawdown series
+- market_feature_snapshots.jsonl: bounded candidate feature/indicator evidence
+- anomalies.jsonl: explicit Lab anomaly events
+- strategy_versions.json: strategy/version identities used by the run
 - ai_review.json: deterministic AI review payload and scorecards
-- shadow_evidence.json: outcomes for tracked Quantara signals, including non-entered setups
+- shadow_evidence.json: tracked outcomes for Quantara signals, including non-entered setups
 - account_context.json: sanitized read-only account health/equity context
+- README.txt: this schema guide
 
 No API key, API secret, authorization header, password or private key is intentionally included.
 The Trading Lab does not have a real-order execution path.
+Imported bundles are restored stopped/read-only and never resume live processing automatically.
 ''';
 }
 
