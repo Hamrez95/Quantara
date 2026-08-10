@@ -113,8 +113,7 @@ final class TradingLabZipBundleCodec {
             'openPositions': event.metrics['openPositions'],
             'pendingCandidates': event.metrics['pendingCandidates'],
             'closedTrades': event.metrics['closedTrades'],
-            'maximumDrawdownPercent':
-                event.metrics['maximumDrawdownPercent'],
+            'maximumDrawdownPercent': event.metrics['maximumDrawdownPercent'],
           },
         )
         .toList(growable: false);
@@ -168,9 +167,7 @@ final class TradingLabZipBundleCodec {
       'decisions.jsonl': _utf8(_jsonl(decisions)),
       'management_events.jsonl': _utf8(_jsonl(managementEvents)),
       'equity_curve.jsonl': _utf8(_jsonl(equityCurve)),
-      'market_feature_snapshots.jsonl': _utf8(
-        _jsonl(marketFeatureSnapshots),
-      ),
+      'market_feature_snapshots.jsonl': _utf8(_jsonl(marketFeatureSnapshots)),
       'anomalies.jsonl': _utf8(_jsonl(anomalies)),
       'strategy_versions.json': _utf8(pretty.convert(strategyVersionsObject)),
       'ai_review.json': _utf8(aiReviewJson),
@@ -198,7 +195,9 @@ final class TradingLabZipBundleCodec {
       ...payloadFiles,
     };
     if (!files.keys.toSet().containsAll(requiredEvidenceFiles)) {
-      throw const StateError('Trading Lab evidence bundle contract is incomplete.');
+      throw const StateError(
+        'Trading Lab evidence bundle contract is incomplete.',
+      );
     }
     final bytes = _StoredZipCodec.encode(files);
     if (bytes.length > _maximumBundleBytes) {
@@ -237,12 +236,13 @@ final class TradingLabZipBundleCodec {
       );
     }
 
-    final declaredFiles = (bundleManifest['files'] as List<Object?>? ?? const [])
-        .map((item) => item.toString())
-        .toSet();
-    if (!declaredFiles.containsAll(requiredEvidenceFiles.difference({
-      'bundle_manifest.json',
-    }))) {
+    final declaredFiles =
+        (bundleManifest['files'] as List<Object?>? ?? const [])
+            .map((item) => item.toString())
+            .toSet();
+    if (!declaredFiles.containsAll(
+      requiredEvidenceFiles.difference({'bundle_manifest.json'}),
+    )) {
       throw const FormatException(
         'Trading Lab bundle manifest does not declare all evidence files.',
       );
@@ -319,16 +319,17 @@ final class TradingLabZipBundleCodec {
     'netRealizedPnl': run.netRealizedPnl,
     'grossProfit': run.grossProfit,
     'grossLoss': run.grossLoss,
-    'profitFactor': run.profitFactor?.isFinite == true ? run.profitFactor : null,
+    'profitFactor': run.profitFactor?.isFinite == true
+        ? run.profitFactor
+        : null,
     'averageR': run.averageR,
     'cycleId': run.cycleId,
     'lastSnapshotAtUtc': run.lastSnapshotAtUtc?.toIso8601String(),
     'lastWhyNoTrade': run.lastWhyNoTrade,
   };
 
-  static String _jsonl(Iterable<Map<String, Object?>> rows) => rows
-      .map(jsonEncode)
-      .join('\n');
+  static String _jsonl(Iterable<Map<String, Object?>> rows) =>
+      rows.map(jsonEncode).join('\n');
 
   static Uint8List _utf8(String value) =>
       Uint8List.fromList(utf8.encode(value));
