@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
@@ -39,6 +40,8 @@ import '../../trading_journal/data/database_trading_journal_store.dart';
 import '../../trading_journal/domain/trading_journal_evidence_packet.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../../trading_lab/application/trading_lab_controller.dart';
+import '../../trading_lab/application/trading_lab_metrics.dart';
+import '../../trading_lab/application/trading_lab_scorecards.dart';
 import '../../trading_lab/data/database_trading_lab_store.dart';
 import '../../trading_lab/domain/trading_lab_account_context.dart';
 import '../../trading_lab/domain/trading_lab_models.dart';
@@ -63,6 +66,7 @@ part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
 part 'owner_alpha_trading_lab.dart';
+part 'owner_alpha_trading_lab_insights.dart';
 
 typedef _OpenAnalysis =
     void Function(String symbol, [String? timeframe, String? setupId]);

@@ -90,7 +90,9 @@ List<TradingLabStrategyScorecard> buildTradingLabStrategyScorecards(
   for (final entry in groups.entries) {
     final parts = entry.key.split('|');
     final trades = entry.value;
-    final pnls = trades.map((item) => item.netRealizedPnl).toList(growable: false);
+    final pnls = trades
+        .map((item) => item.netRealizedPnl)
+        .toList(growable: false);
     final rs = trades.map((item) => item.realizedR).toList(growable: false);
     final mfe = trades.map(_mfeR).toList(growable: false);
     final mae = trades.map(_maeR).toList(growable: false);
@@ -168,9 +170,11 @@ double _mfeR(TradingLabPosition position) {
   if (riskPerUnit <= 1e-12) return 0;
   final move = switch (position.direction.name) {
     'long' =>
-      (position.maximumFavorablePrice ?? position.entryPrice) - position.entryPrice,
+      (position.maximumFavorablePrice ?? position.entryPrice) -
+          position.entryPrice,
     'short' =>
-      position.entryPrice - (position.maximumFavorablePrice ?? position.entryPrice),
+      position.entryPrice -
+          (position.maximumFavorablePrice ?? position.entryPrice),
     _ => 0.0,
   };
   return move / riskPerUnit;
@@ -181,9 +185,11 @@ double _maeR(TradingLabPosition position) {
   if (riskPerUnit <= 1e-12) return 0;
   final move = switch (position.direction.name) {
     'long' =>
-      position.entryPrice - (position.maximumAdversePrice ?? position.entryPrice),
+      position.entryPrice -
+          (position.maximumAdversePrice ?? position.entryPrice),
     'short' =>
-      (position.maximumAdversePrice ?? position.entryPrice) - position.entryPrice,
+      (position.maximumAdversePrice ?? position.entryPrice) -
+          position.entryPrice,
     _ => 0.0,
   };
   return move / riskPerUnit;

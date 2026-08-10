@@ -163,10 +163,7 @@ TradingLabMetrics calculateTradingLabMetrics(
   final evidenceAt = (evidenceAtUtc ?? run.lastSnapshotAtUtc ?? DateTime.now())
       .toUtc();
   final closed = run.closedPositions;
-  final allPositions = <TradingLabPosition>[
-    ...closed,
-    ...run.openPositions,
-  ];
+  final allPositions = <TradingLabPosition>[...closed, ...run.openPositions];
   final realizedPnl = closed.fold<double>(
     0,
     (sum, position) => sum + position.netRealizedPnl,
@@ -190,7 +187,9 @@ TradingLabMetrics calculateTradingLabMetrics(
   final netPnl = run.currentEquity - run.manifest.startingEquity;
   final unrealizedPnl = netPnl - realizedPnl;
 
-  final wins = closed.where((position) => position.netRealizedPnl > 1e-9).length;
+  final wins = closed
+      .where((position) => position.netRealizedPnl > 1e-9)
+      .length;
   final losses = closed
       .where((position) => position.netRealizedPnl < -1e-9)
       .length;
@@ -229,7 +228,10 @@ TradingLabMetrics calculateTradingLabMetrics(
   var currentWins = 0;
   var currentLosses = 0;
   final chronological = [...closed]
-    ..sort((a, b) => (a.closedAtUtc ?? evidenceAt).compareTo(b.closedAtUtc ?? evidenceAt));
+    ..sort(
+      (a, b) =>
+          (a.closedAtUtc ?? evidenceAt).compareTo(b.closedAtUtc ?? evidenceAt),
+    );
   for (final position in chronological) {
     if (position.netRealizedPnl > 1e-9) {
       currentWins += 1;
@@ -266,7 +268,8 @@ TradingLabMetrics calculateTradingLabMetrics(
   var tp3 = 0;
   var partialExitTrades = 0;
   for (final position in closed) {
-    if ((position.closeReason ?? '').toLowerCase().contains('stop')) stopOuts += 1;
+    if ((position.closeReason ?? '').toLowerCase().contains('stop'))
+      stopOuts += 1;
     final filled = position.filledTargetIndexes.length;
     if (filled >= 1) tp1OrBetter += 1;
     if (filled >= 2) tp2OrBetter += 1;
@@ -362,7 +365,10 @@ Map<String, Object?> compareTradingLabRuns(
 }) {
   final evidenceAt = evidenceAtUtc?.toUtc() ?? DateTime.now().toUtc();
   final left = calculateTradingLabMetrics(champion, evidenceAtUtc: evidenceAt);
-  final right = calculateTradingLabMetrics(candidate, evidenceAtUtc: evidenceAt);
+  final right = calculateTradingLabMetrics(
+    candidate,
+    evidenceAtUtc: evidenceAt,
+  );
   return {
     'schema': 'quantara.trading_lab.comparison.v1',
     'evidenceAtUtc': evidenceAt.toIso8601String(),
@@ -374,7 +380,8 @@ Map<String, Object?> compareTradingLabRuns(
       'returnPercent': right.returnPercent - left.returnPercent,
       'maximumDrawdownPercent':
           right.maximumDrawdownPercent - left.maximumDrawdownPercent,
-      'profitFactor': _finiteOrNull(right.profitFactor) == null ||
+      'profitFactor':
+          _finiteOrNull(right.profitFactor) == null ||
               _finiteOrNull(left.profitFactor) == null
           ? null
           : right.profitFactor! - left.profitFactor!,
@@ -382,7 +389,8 @@ Map<String, Object?> compareTradingLabRuns(
       'averageR': right.averageR - left.averageR,
       'winRatePercent': right.winRatePercent - left.winRatePercent,
       'signalToEntryConversionPercent':
-          right.signalToEntryConversionPercent - left.signalToEntryConversionPercent,
+          right.signalToEntryConversionPercent -
+          left.signalToEntryConversionPercent,
       'positionSlotUtilizationPercent':
           right.positionSlotUtilizationPercent -
           left.positionSlotUtilizationPercent,
@@ -390,9 +398,14 @@ Map<String, Object?> compareTradingLabRuns(
     'promotionGuard': {
       'candidateHasEnoughTrades': right.tradeCount >= 30,
       'championHasEnoughTrades': left.tradeCount >= 30,
-      'sameSymbols': _sameSet(champion.manifest.symbols, candidate.manifest.symbols),
-      'sameTimeframes':
-          _sameSet(champion.manifest.timeframes, candidate.manifest.timeframes),
+      'sameSymbols': _sameSet(
+        champion.manifest.symbols,
+        candidate.manifest.symbols,
+      ),
+      'sameTimeframes': _sameSet(
+        champion.manifest.timeframes,
+        candidate.manifest.timeframes,
+      ),
       'warning': right.tradeCount < 30 || left.tradeCount < 30
           ? 'Comparison is informational only until both samples are large enough.'
           : null,
@@ -429,11 +442,12 @@ double _maeR(TradingLabPosition position) {
 }
 
 int _maximumDrawdownDuration(TradingLabRun run, DateTime evidenceAt) {
-  final heartbeats = run.events
-      .where((event) => event.kind == TradingLabEventKind.heartbeat)
-      .where((event) => event.metrics['equity'] != null)
-      .toList(growable: false)
-    ..sort((a, b) => a.atUtc.compareTo(b.atUtc));
+  final heartbeats =
+      run.events
+          .where((event) => event.kind == TradingLabEventKind.heartbeat)
+          .where((event) => event.metrics['equity'] != null)
+          .toList(growable: false)
+        ..sort((a, b) => a.atUtc.compareTo(b.atUtc));
   if (heartbeats.isEmpty) return 0;
   var peak = run.manifest.startingEquity;
   DateTime? drawdownStarted;

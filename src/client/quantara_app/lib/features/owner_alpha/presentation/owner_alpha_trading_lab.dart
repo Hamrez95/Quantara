@@ -19,8 +19,18 @@ class _TradingLabViewState extends State<_TradingLabView> {
   final _leverage = TextEditingController(text: '5');
   final _fee = TextEditingController(text: '6');
   final _slippage = TextEditingController(text: '2');
+  final _spread = TextEditingController(text: '1');
+  final _fundingBps = TextEditingController(text: '1');
+  final _portfolioRisk = TextEditingController(text: '3');
+  final _symbolHeat = TextEditingController(text: '1');
+  final _confidenceGate = TextEditingController(text: '65');
+  final _minimumRr = TextEditingController(text: '1.5');
+  final _scannerInterval = TextEditingController(text: '15');
+  final _experimentTag = TextEditingController();
   final _notes = TextEditingController();
   int _slots = 3;
+  TradingLabExecutionModel _executionModel =
+      TradingLabExecutionModel.conservativeCandlePath;
   bool _busy = false;
   String? _formError;
 
@@ -33,6 +43,14 @@ class _TradingLabViewState extends State<_TradingLabView> {
     _leverage.dispose();
     _fee.dispose();
     _slippage.dispose();
+    _spread.dispose();
+    _fundingBps.dispose();
+    _portfolioRisk.dispose();
+    _symbolHeat.dispose();
+    _confidenceGate.dispose();
+    _minimumRr.dispose();
+    _scannerInterval.dispose();
+    _experimentTag.dispose();
     _notes.dispose();
     super.dispose();
   }
@@ -43,11 +61,25 @@ class _TradingLabViewState extends State<_TradingLabView> {
     final leverage = int.tryParse(_leverage.text.trim());
     final fee = double.tryParse(_fee.text.trim());
     final slippage = double.tryParse(_slippage.text.trim());
+    final spread = double.tryParse(_spread.text.trim());
+    final fundingBps = double.tryParse(_fundingBps.text.trim());
+    final portfolioRisk = double.tryParse(_portfolioRisk.text.trim());
+    final symbolHeat = double.tryParse(_symbolHeat.text.trim());
+    final confidenceGate = int.tryParse(_confidenceGate.text.trim());
+    final minimumRr = double.tryParse(_minimumRr.text.trim());
+    final scannerInterval = int.tryParse(_scannerInterval.text.trim());
     if (equity == null ||
         risk == null ||
         leverage == null ||
         fee == null ||
-        slippage == null) {
+        slippage == null ||
+        spread == null ||
+        fundingBps == null ||
+        portfolioRisk == null ||
+        symbolHeat == null ||
+        confidenceGate == null ||
+        minimumRr == null ||
+        scannerInterval == null) {
       setState(
         () => _formError = _fa
             ? 'مقادیر عددی معتبر وارد کن.'
@@ -67,6 +99,15 @@ class _TradingLabViewState extends State<_TradingLabView> {
         leverage: leverage,
         feeRateBps: fee,
         slippageBps: slippage,
+        spreadBps: spread,
+        fundingRatePerEightHours: fundingBps / 10000,
+        portfolioRiskPercent: portfolioRisk,
+        symbolHeatPercent: symbolHeat,
+        minimumConfidencePercent: confidenceGate,
+        minimumRiskReward: minimumRr,
+        scannerIntervalSeconds: scannerInterval,
+        executionModel: _executionModel,
+        experimentTag: _experimentTag.text.trim(),
         notes: _notes.text.trim(),
       );
     } on Object catch (error) {
@@ -110,6 +151,38 @@ class _TradingLabViewState extends State<_TradingLabView> {
     }
   }
 
+  Future<void> _importZip() async {
+    try {
+      const group = XTypeGroup(
+        label: 'Quantara Trading Lab ZIP',
+        extensions: ['zip'],
+      );
+      final file = await openFile(acceptedTypeGroups: const [group]);
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      await widget.controller.restoreFullEvidenceZip(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _fa
+                ? 'بسته آزمایش با موفقیت بررسی و به‌صورت Stopped بازیابی شد.'
+                : 'Experiment bundle verified and restored as Stopped.',
+          ),
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _fa ? 'Import ZIP ناموفق بود: $error' : 'ZIP import failed: $error',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -144,6 +217,8 @@ class _TradingLabViewState extends State<_TradingLabView> {
             if (run != null) ...[
               if (!run.isRunning) const SizedBox(height: 16),
               _TradingLabSummary(run: run),
+              const SizedBox(height: 16),
+              _TradingLabInsights(run: run, history: widget.controller.history),
               const SizedBox(height: 16),
               _TradingLabWhyNoTrade(run: run),
               const SizedBox(height: 16),
@@ -226,6 +301,81 @@ class _TradingLabViewState extends State<_TradingLabView> {
                   ),
                   SizedBox(
                     width: itemWidth,
+                    child: _labNumberField(
+                      _spread,
+                      _fa ? 'اسپرد (bps)' : 'Spread (bps)',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _labNumberField(
+                      _fundingBps,
+                      _fa ? 'Funding هر ۸ ساعت (bps)' : 'Funding / 8h (bps)',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _labNumberField(
+                      _portfolioRisk,
+                      _fa
+                          ? 'بودجه ریسک پرتفوی (%)'
+                          : 'Portfolio risk budget (%)',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _labNumberField(
+                      _symbolHeat,
+                      _fa ? 'Symbol heat (%)' : 'Symbol heat (%)',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _labNumberField(
+                      _confidenceGate,
+                      _fa ? 'حداقل Confidence' : 'Minimum confidence',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _labNumberField(
+                      _minimumRr,
+                      _fa ? 'حداقل RR' : 'Minimum RR',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _labNumberField(
+                      _scannerInterval,
+                      _fa
+                          ? 'فاصله Scanner (ثانیه)'
+                          : 'Scanner interval (seconds)',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<TradingLabExecutionModel>(
+                      initialValue: _executionModel,
+                      decoration: InputDecoration(
+                        labelText: _fa ? 'مدل اجرا' : 'Execution model',
+                      ),
+                      items: TradingLabExecutionModel.values
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(value.name),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: _busy
+                          ? null
+                          : (value) => setState(
+                              () => _executionModel = value ?? _executionModel,
+                            ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
                     child: DropdownButtonFormField<int>(
                       initialValue: _slots,
                       decoration: InputDecoration(
@@ -251,6 +401,14 @@ class _TradingLabViewState extends State<_TradingLabView> {
             },
           ),
           const SizedBox(height: 12),
+          TextField(
+            controller: _experimentTag,
+            maxLength: 80,
+            decoration: InputDecoration(
+              labelText: _fa ? 'Tag آزمایش' : 'Experiment tag',
+              hintText: 'champion / candidate / rr-gate-v2',
+            ),
+          ),
           TextField(
             controller: _notes,
             minLines: 1,
@@ -307,6 +465,11 @@ class _TradingLabViewState extends State<_TradingLabView> {
             onPressed: _shareReview,
             icon: const Icon(Icons.ios_share_rounded),
             label: Text(_fa ? 'خروجی کامل ZIP' : 'Export full ZIP'),
+          ),
+          OutlinedButton.icon(
+            onPressed: run.isRunning || _busy ? null : _importZip,
+            icon: const Icon(Icons.file_open_rounded),
+            label: Text(_fa ? 'Import ZIP' : 'Import ZIP'),
           ),
           if (run.isRunning)
             FilledButton.icon(
@@ -778,6 +941,7 @@ IconData _labEventIcon(TradingLabEventKind kind) => switch (kind) {
   TradingLabEventKind.targetFilled => Icons.flag_outlined,
   TradingLabEventKind.stopFilled => Icons.gpp_bad_outlined,
   TradingLabEventKind.stopPromoted => Icons.lock_outline_rounded,
+  TradingLabEventKind.fundingAccrued => Icons.account_balance_wallet_outlined,
   TradingLabEventKind.candidateRejected => Icons.block_rounded,
   TradingLabEventKind.candidatePending => Icons.hourglass_top_rounded,
   TradingLabEventKind.anomaly => Icons.warning_amber_rounded,

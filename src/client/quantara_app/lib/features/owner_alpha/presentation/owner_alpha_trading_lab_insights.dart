@@ -60,9 +60,9 @@ class _TradingLabDetailedMetricsCard extends StatelessWidget {
         children: [
           Text(
             fa ? 'متریک‌های کامل آزمایش' : 'Complete experiment metrics',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
           Text(
@@ -75,10 +75,26 @@ class _TradingLabDetailedMetricsCard extends StatelessWidget {
             spacing: 24,
             runSpacing: 16,
             children: [
-              _labMetric(fa ? 'PnL خالص' : 'Net PnL', metrics.netPnl, suffix: ' USDT'),
-              _labMetric(fa ? 'PnL تحقق‌یافته' : 'Realized PnL', metrics.realizedPnl, suffix: ' USDT'),
-              _labMetric(fa ? 'PnL باز' : 'Unrealized PnL', metrics.unrealizedPnl, suffix: ' USDT'),
-              _labMetric(fa ? 'کارمزد' : 'Fees', metrics.totalFees, suffix: ' USDT'),
+              _labMetric(
+                fa ? 'PnL خالص' : 'Net PnL',
+                metrics.netPnl,
+                suffix: ' USDT',
+              ),
+              _labMetric(
+                fa ? 'PnL تحقق‌یافته' : 'Realized PnL',
+                metrics.realizedPnl,
+                suffix: ' USDT',
+              ),
+              _labMetric(
+                fa ? 'PnL باز' : 'Unrealized PnL',
+                metrics.unrealizedPnl,
+                suffix: ' USDT',
+              ),
+              _labMetric(
+                fa ? 'کارمزد' : 'Fees',
+                metrics.totalFees,
+                suffix: ' USDT',
+              ),
               _labMetric('Funding', metrics.totalFunding, suffix: ' USDT'),
               _labMetric('Slippage', metrics.totalSlippage, suffix: ' USDT'),
               MetricTile(
@@ -87,23 +103,42 @@ class _TradingLabDetailedMetricsCard extends StatelessWidget {
               ),
               MetricTile(
                 label: fa ? 'برد/باخت/سر‌به‌سر' : 'W/L/BE',
-                value: '${metrics.wins}/${metrics.losses}/${metrics.breakevens}',
+                value:
+                    '${metrics.wins}/${metrics.losses}/${metrics.breakevens}',
               ),
               MetricTile(
                 label: 'Profit Factor',
-                value: pf == null ? '—' : (pf.isFinite ? pf.toStringAsFixed(2) : '∞'),
+                value: pf == null
+                    ? '—'
+                    : (pf.isFinite ? pf.toStringAsFixed(2) : '∞'),
               ),
               _labMetric('Expectancy', metrics.expectancyUsdt, suffix: ' USDT'),
               _labMetric('Expectancy R', metrics.expectancyR),
               _labMetric(fa ? 'Median R' : 'Median R', metrics.medianR),
-              _labMetric(fa ? 'میانگین برد' : 'Avg winner', metrics.averageWinner, suffix: ' USDT'),
-              _labMetric(fa ? 'میانگین باخت' : 'Avg loser', metrics.averageLoser, suffix: ' USDT'),
+              _labMetric(
+                fa ? 'میانگین برد' : 'Avg winner',
+                metrics.averageWinner,
+                suffix: ' USDT',
+              ),
+              _labMetric(
+                fa ? 'میانگین باخت' : 'Avg loser',
+                metrics.averageLoser,
+                suffix: ' USDT',
+              ),
               MetricTile(
                 label: fa ? 'Payoff' : 'Payoff ratio',
                 value: payoff?.toStringAsFixed(2) ?? '—',
               ),
-              _labMetric(fa ? 'بهترین معامله' : 'Best trade', metrics.bestTrade, suffix: ' USDT'),
-              _labMetric(fa ? 'بدترین معامله' : 'Worst trade', metrics.worstTrade, suffix: ' USDT'),
+              _labMetric(
+                fa ? 'بهترین معامله' : 'Best trade',
+                metrics.bestTrade,
+                suffix: ' USDT',
+              ),
+              _labMetric(
+                fa ? 'بدترین معامله' : 'Worst trade',
+                metrics.worstTrade,
+                suffix: ' USDT',
+              ),
               MetricTile(
                 label: fa ? 'میانگین زمان معامله' : 'Avg holding',
                 value: _labDuration(metrics.averageHoldingSeconds.round()),
@@ -116,17 +151,27 @@ class _TradingLabDetailedMetricsCard extends StatelessWidget {
                 label: fa ? 'بیشترین باخت متوالی' : 'Max loss streak',
                 value: '${metrics.maximumConsecutiveLosses}',
               ),
-              _labMetric(fa ? 'زمان در بازار' : 'Exposure', metrics.exposurePercent, suffix: '%'),
-              _labMetric(fa ? 'استفاده از Slot' : 'Slot utilization', metrics.positionSlotUtilizationPercent, suffix: '%'),
+              _labMetric(
+                fa ? 'زمان در بازار' : 'Exposure',
+                metrics.exposurePercent,
+                suffix: '%',
+              ),
+              _labMetric(
+                fa ? 'استفاده از Slot' : 'Slot utilization',
+                metrics.positionSlotUtilizationPercent,
+                suffix: '%',
+              ),
               _labMetric('MFE avg', metrics.averageMfeR, suffix: 'R'),
               _labMetric('MAE avg', metrics.averageMaeR, suffix: 'R'),
               MetricTile(
                 label: fa ? 'تبدیل سیگنال به ورود' : 'Signal → entry',
-                value: '${metrics.signalToEntryConversionPercent.toStringAsFixed(1)}%',
+                value:
+                    '${metrics.signalToEntryConversionPercent.toStringAsFixed(1)}%',
               ),
               MetricTile(
                 label: 'SL / TP1+ / TP2+ / TP3',
-                value: '${metrics.stopOutCount}/${metrics.tp1OrBetterCount}/${metrics.tp2OrBetterCount}/${metrics.tp3Count}',
+                value:
+                    '${metrics.stopOutCount}/${metrics.tp1OrBetterCount}/${metrics.tp2OrBetterCount}/${metrics.tp3Count}',
               ),
             ],
           ),
@@ -137,9 +182,8 @@ class _TradingLabDetailedMetricsCard extends StatelessWidget {
               runSpacing: 8,
               children: metrics.rejectionsByReason.entries
                   .map(
-                    (entry) => Chip(
-                      label: Text('${entry.key}: ${entry.value}'),
-                    ),
+                    (entry) =>
+                        Chip(label: Text('${entry.key}: ${entry.value}')),
                   )
                   .toList(growable: false),
             ),
@@ -159,11 +203,12 @@ class _TradingLabDetailedMetricsCard extends StatelessWidget {
     );
   }
 
-  Widget _labMetric(String label, double value, {String suffix = ''}) => MetricTile(
-    label: label,
-    value: '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$suffix',
-    valueColor: value >= 0 ? QuantaraColors.success : QuantaraColors.danger,
-  );
+  Widget _labMetric(String label, double value, {String suffix = ''}) =>
+      MetricTile(
+        label: label,
+        value: '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$suffix',
+        valueColor: value >= 0 ? QuantaraColors.success : QuantaraColors.danger,
+      );
 }
 
 class _TradingLabStrategyScorecardCard extends StatelessWidget {
@@ -180,9 +225,9 @@ class _TradingLabStrategyScorecardCard extends StatelessWidget {
         children: [
           Text(
             'Strategy Scorecard',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
           Text(
@@ -205,7 +250,9 @@ class _TradingLabStrategyScorecardCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: Theme.of(context).dividerColor.withValues(alpha: 0.4),
+                    color: Theme.of(
+                      context,
+                    ).dividerColor.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Row(
@@ -258,7 +305,8 @@ class _TradingLabComparisonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final delta = (comparison['delta'] as Map<Object?, Object?>?) ?? const {};
-    final guard = (comparison['promotionGuard'] as Map<Object?, Object?>?) ?? const {};
+    final guard =
+        (comparison['promotionGuard'] as Map<Object?, Object?>?) ?? const {};
     double d(String key) => (delta[key] as num?)?.toDouble() ?? 0;
     return SectionCard(
       child: Column(
@@ -266,9 +314,9 @@ class _TradingLabComparisonCard extends StatelessWidget {
         children: [
           Text(
             fa ? 'Champion vs Candidate' : 'Champion vs Candidate',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
           Text(
@@ -281,11 +329,20 @@ class _TradingLabComparisonCard extends StatelessWidget {
             runSpacing: 14,
             children: [
               _deltaTile('Δ Return', d('returnPercent'), '%'),
-              _deltaTile('Δ Max DD', d('maximumDrawdownPercent'), '%', lowerIsBetter: true),
+              _deltaTile(
+                'Δ Max DD',
+                d('maximumDrawdownPercent'),
+                '%',
+                lowerIsBetter: true,
+              ),
               _deltaTile('Δ Expectancy', d('expectancyUsdt'), ' USDT'),
               _deltaTile('Δ Avg R', d('averageR'), 'R'),
               _deltaTile('Δ Win rate', d('winRatePercent'), '%'),
-              _deltaTile('Δ Slot use', d('positionSlotUtilizationPercent'), '%'),
+              _deltaTile(
+                'Δ Slot use',
+                d('positionSlotUtilizationPercent'),
+                '%',
+              ),
             ],
           ),
           if (guard['warning'] != null) ...[
@@ -332,9 +389,9 @@ class _TradingLabPlanOverlaysCard extends StatelessWidget {
         children: [
           Text(
             fa ? 'Overlay پلن پوزیشن' : 'Position plan overlays',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 12),
           for (final position in positions) ...[
@@ -360,7 +417,11 @@ class _TradingLabPricePlan extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final levels = <({String label, double price, Color color})>[
-      (label: 'SL', price: position.currentStopLoss, color: QuantaraColors.danger),
+      (
+        label: 'SL',
+        price: position.currentStopLoss,
+        color: QuantaraColors.danger,
+      ),
       (label: 'ENTRY', price: position.entryPrice, color: QuantaraColors.cyan),
       for (var index = 0; index < position.targets.length; index++)
         (
@@ -394,7 +455,10 @@ class _TradingLabPricePlan extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: Container(height: 1.5, color: level.color.withValues(alpha: 0.7)),
+                    child: Container(
+                      height: 1.5,
+                      color: level.color.withValues(alpha: 0.7),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
