@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -8,6 +9,7 @@ import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
 import 'trading_lab_paper_broker.dart';
 import 'trading_lab_shadow_evidence.dart';
+import 'trading_lab_zip_bundle.dart';
 
 final class TradingLabController extends ChangeNotifier {
   factory TradingLabController({
@@ -171,10 +173,57 @@ final class TradingLabController extends ChangeNotifier {
     );
   }
 
+  TradingLabZipBundle exportFullEvidenceZip() {
+    final current = _run;
+    if (current == null) {
+      throw StateError('No Trading Lab experiment is available to export.');
+    }
+    final context = accountContext;
+    final shadowEvidence = buildTradingLabShadowEvidence(
+      current,
+      _marketController.signalJournal,
+    );
+    final aiReviewJson = buildTradingLabAiReviewJsonWithShadows(
+      current,
+      _marketController.signalJournal,
+      accountContext: context,
+    );
+    return const TradingLabZipBundleCodec().encode(
+      run: current,
+      aiReviewJson: aiReviewJson,
+      shadowEvidence: shadowEvidence,
+      accountContext: context,
+    );
+  }
+
+  Future<void> restoreFullEvidenceZip(Uint8List bytes) async {
+    if (_run?.isRunning == true) {
+      throw StateError(
+        'Stop the active Trading Lab experiment before restoring another bundle.',
+      );
+    }
+    final imported = const TradingLabZipBundleCodec().decode(bytes);
+    final restored = imported.run;
+    // Imported evidence is restored read-only/stopped. A historical ZIP must
+    // never start processing fresh market data merely because it was opened.
+    restored.status = TradingLabRunStatus.stopped;
+    _run = restored;
+    _error = null;
+    await _store.save(restored);
+    _history = await _store.loadHistory();
+    if (!_disposed) notifyListeners();
+  }
+
   String suggestedExportFileName() {
     final current = _run;
     if (current == null) return 'quantara-lab-ai-review.json';
     return 'quantara-lab-${current.manifest.runId}-ai-review.json';
+  }
+
+  String suggestedZipExportFileName() {
+    final current = _run;
+    if (current == null) return 'quantara-lab-evidence.zip';
+    return 'quantara-lab-${current.manifest.runId}.zip';
   }
 
   void _onMarketChanged() {
