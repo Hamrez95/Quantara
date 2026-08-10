@@ -1,4 +1,4 @@
-name: Trading Lab execution upgrade
+name: Trading Lab UI completion
 
 on:
   push:
@@ -24,111 +24,104 @@ jobs:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Upgrade Paper Broker execution realism and telemetry
+      - name: Wire complete Bot Lab product UI
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          models = Path('src/client/quantara_app/lib/features/trading_lab/domain/trading_lab_models.dart')
-          text = models.read_text()
-          if 'fundingAccrued,' not in text:
-              text = text.replace('  stopPromoted,\n  stopFilled,', '  stopPromoted,\n  fundingAccrued,\n  stopFilled,', 1)
-          if 'this.lastScanAtUtc,' not in text:
-              text = text.replace('    this.lastSnapshotAtUtc,\n    this.cycleId = 0,', '    this.lastSnapshotAtUtc,\n    this.lastScanAtUtc,\n    this.cycleId = 0,', 1)
-              text = text.replace('  DateTime? lastSnapshotAtUtc;\n  int cycleId;', '  DateTime? lastSnapshotAtUtc;\n  DateTime? lastScanAtUtc;\n  int cycleId;', 1)
-              text = text.replace("    'lastSnapshotAtUtc': lastSnapshotAtUtc?.toIso8601String(),\n    'cycleId': cycleId,", "    'lastSnapshotAtUtc': lastSnapshotAtUtc?.toIso8601String(),\n    'lastScanAtUtc': lastScanAtUtc?.toIso8601String(),\n    'cycleId': cycleId,", 1)
-              text = text.replace("        lastSnapshotAtUtc: _nullableDate(json['lastSnapshotAtUtc']),\n        cycleId:", "        lastSnapshotAtUtc: _nullableDate(json['lastSnapshotAtUtc']),\n        lastScanAtUtc: _nullableDate(json['lastScanAtUtc']),\n        cycleId:", 1)
-          models.write_text(text)
+          page = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          text = page.read_text()
+          if "package:file_selector/file_selector.dart" not in text:
+              text = text.replace(
+                  "import 'package:flutter_foreground_task/flutter_foreground_task.dart';",
+                  "import 'package:flutter_foreground_task/flutter_foreground_task.dart';\nimport 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;",
+                  1,
+              )
+          if "trading_lab_metrics.dart" not in text:
+              text = text.replace(
+                  "import '../../trading_lab/application/trading_lab_controller.dart';",
+                  "import '../../trading_lab/application/trading_lab_controller.dart';\nimport '../../trading_lab/application/trading_lab_metrics.dart';\nimport '../../trading_lab/application/trading_lab_scorecards.dart';",
+                  1,
+              )
+          if "part 'owner_alpha_trading_lab_insights.dart';" not in text:
+              text = text.replace(
+                  "part 'owner_alpha_trading_lab.dart';",
+                  "part 'owner_alpha_trading_lab.dart';\npart 'owner_alpha_trading_lab_insights.dart';",
+                  1,
+              )
+          page.write_text(text)
 
-          broker = Path('src/client/quantara_app/lib/features/trading_lab/application/trading_lab_paper_broker.dart')
-          text = broker.read_text()
-          if "../domain/trading_lab_account_context.dart" not in text:
-              text = text.replace("import '../domain/trading_lab_models.dart';", "import '../domain/trading_lab_account_context.dart';\nimport '../domain/trading_lab_models.dart';", 1)
-
-          old = '''  void processSnapshot(TradingLabRun run, OwnerAlphaSnapshot snapshot) {\n    if (!run.isRunning) return;\n    final previous = run.lastSnapshotAtUtc;\n    if (previous != null && !snapshot.generatedAt.isAfter(previous)) return;\n\n    run.cycleId += 1;\n    final cycle = run.cycleId;\n    final openedBefore = run.openPositions.length;\n    final closedBefore = run.closedPositions.length;\n\n    _manageOpenPositions(run, snapshot);\n    _discoverCandidates(run, snapshot);\n    _evaluatePendingCandidates(run, snapshot);\n    _markToMarket(run, snapshot);\n'''
-          new = '''  void processSnapshot(\n    TradingLabRun run,\n    OwnerAlphaSnapshot snapshot, {\n    TradingLabAccountContext? accountContext,\n  }) {\n    if (!run.isRunning) return;\n    final previous = run.lastSnapshotAtUtc;\n    if (previous != null && !snapshot.generatedAt.isAfter(previous)) return;\n\n    run.cycleId += 1;\n    final cycle = run.cycleId;\n    final openedBefore = run.openPositions.length;\n    final closedBefore = run.closedPositions.length;\n    final lastScan = run.lastScanAtUtc;\n    final scanDue = lastScan == null ||\n        snapshot.generatedAt.difference(lastScan).inSeconds >=\n            run.manifest.scannerIntervalSeconds;\n\n    _manageOpenPositions(run, snapshot);\n    if (scanDue) {\n      _discoverCandidates(run, snapshot);\n      _evaluatePendingCandidates(run, snapshot);\n      run.lastScanAtUtc = snapshot.generatedAt.toUtc();\n    }\n    _markToMarket(run, snapshot);\n'''
-          if 'TradingLabAccountContext? accountContext' not in text:
-              if old not in text: raise SystemExit('processSnapshot anchor missing')
+          lab = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart')
+          text = lab.read_text()
+          old = '''  final _fee = TextEditingController(text: '6');\n  final _slippage = TextEditingController(text: '2');\n  final _notes = TextEditingController();\n  int _slots = 3;\n'''
+          new = '''  final _fee = TextEditingController(text: '6');\n  final _slippage = TextEditingController(text: '2');\n  final _spread = TextEditingController(text: '1');\n  final _fundingBps = TextEditingController(text: '1');\n  final _portfolioRisk = TextEditingController(text: '3');\n  final _symbolHeat = TextEditingController(text: '1');\n  final _confidenceGate = TextEditingController(text: '65');\n  final _minimumRr = TextEditingController(text: '1.5');\n  final _scannerInterval = TextEditingController(text: '15');\n  final _experimentTag = TextEditingController();\n  final _notes = TextEditingController();\n  int _slots = 3;\n  TradingLabExecutionModel _executionModel =\n      TradingLabExecutionModel.conservativeCandlePath;\n'''
+          if 'final _portfolioRisk = TextEditingController' not in text:
+              if old not in text: raise SystemExit('state field anchor missing')
               text = text.replace(old, new, 1)
 
-          old = '''      metrics: {\n        'equity': run.currentEquity,\n        'balance': run.balance,\n        'openPositions': run.openPositions.length.toDouble(),\n        'pendingCandidates': run.pendingCandidates.length.toDouble(),\n        'closedTrades': run.closedPositions.length.toDouble(),\n        'maximumDrawdownPercent': run.maximumDrawdownPercent,\n      },\n    );\n'''
-          new = '''      metrics: {\n        'equity': run.currentEquity,\n        'balance': run.balance,\n        'virtualAvailableMargin': _virtualAvailableMargin(run),\n        'reservedMargin': _reservedMargin(run),\n        'openRisk': _openRisk(run),\n        'portfolioRiskBudget':\n            run.currentEquity * run.manifest.portfolioRiskPercent / 100,\n        'portfolioRiskFree': math.max(\n          0,\n          run.currentEquity * run.manifest.portfolioRiskPercent / 100 -\n              _openRisk(run),\n        ).toDouble(),\n        'openPositions': run.openPositions.length.toDouble(),\n        'freeSlots': math.max(\n          0,\n          run.manifest.maximumConcurrentPositions - run.openPositions.length,\n        ).toDouble(),\n        'pendingCandidates': run.pendingCandidates.length.toDouble(),\n        'closedTrades': run.closedPositions.length.toDouble(),\n        'maximumDrawdownPercent': run.maximumDrawdownPercent,\n        'realAccountEstimatedEquity': accountContext?.estimatedEquity ?? 0,\n        'realAccountAvailable': accountContext?.available ?? 0,\n        'realAccountAgeSeconds': accountContext?.syncedAtUtc == null\n            ? -1\n            : math.max(\n                0,\n                snapshot.generatedAt\n                    .difference(accountContext!.syncedAtUtc!)\n                    .inSeconds,\n              ).toDouble(),\n      },\n      attributes: {\n        'scanDue': scanDue.toString(),\n        'accountConnected': (accountContext?.connected ?? false).toString(),\n        'accountHealth': accountContext?.reconciliationHealth ?? 'unavailable',\n        'accountBlocksNewEntries':\n            (accountContext?.blocksNewEntries ?? true).toString(),\n        'marginMode': run.manifest.marginMode.name,\n        'executionModel': run.manifest.executionModel.name,\n      },\n    );\n'''
-          if "'virtualAvailableMargin': _virtualAvailableMargin(run)" not in text:
-              if old not in text: raise SystemExit('heartbeat anchor missing')
+          old = '''    _fee.dispose();\n    _slippage.dispose();\n    _notes.dispose();\n'''
+          new = '''    _fee.dispose();\n    _slippage.dispose();\n    _spread.dispose();\n    _fundingBps.dispose();\n    _portfolioRisk.dispose();\n    _symbolHeat.dispose();\n    _confidenceGate.dispose();\n    _minimumRr.dispose();\n    _scannerInterval.dispose();\n    _experimentTag.dispose();\n    _notes.dispose();\n'''
+          if '_portfolioRisk.dispose();' not in text:
+              if old not in text: raise SystemExit('dispose anchor missing')
               text = text.replace(old, new, 1)
 
-          gate_anchor = '''        if (!_isValidActionablePlan(idea)) {\n'''
-          gates = '''        if (idea.confidencePercent < run.manifest.minimumConfidencePercent) {\n          _event(\n            run,\n            TradingLabEventKind.candidateRejected,\n            snapshot.generatedAt,\n            'Candidate rejected by experiment confidence gate.',\n            idea: idea,\n            metrics: commonMetrics,\n            attributes: {'rejectionReason': 'confidence_below_gate'},\n          );\n          continue;\n        }\n        if ((idea.riskReward ?? 0) < run.manifest.minimumRiskReward) {\n          _event(\n            run,\n            TradingLabEventKind.candidateRejected,\n            snapshot.generatedAt,\n            'Candidate rejected by experiment minimum RR gate.',\n            idea: idea,\n            metrics: commonMetrics,\n            attributes: {'rejectionReason': 'risk_reward_below_gate'},\n          );\n          continue;\n        }\n\n'''
-          if 'confidence_below_gate' not in text:
-              if gate_anchor not in text: raise SystemExit('candidate gate anchor missing')
-              text = text.replace(gate_anchor, gates + gate_anchor, 1)
-
-          old = '''    final referenceEntry = (candidate.entryLower + candidate.entryUpper) / 2;\n    final entry = _applyAdverseSlippage(\n      referenceEntry,\n      direction: candidate.direction,\n      opening: true,\n      bps: run.manifest.slippageBps,\n    );\n'''
-          new = '''    final referenceEntry = (candidate.entryLower + candidate.entryUpper) / 2;\n    final afterSpread = _applyAdverseSlippage(\n      referenceEntry,\n      direction: candidate.direction,\n      opening: true,\n      bps: run.manifest.spreadBps / 2,\n    );\n    final entry = _applyAdverseSlippage(\n      afterSpread,\n      direction: candidate.direction,\n      opening: true,\n      bps: run.manifest.slippageBps,\n    );\n'''
-          if 'final afterSpread = _applyAdverseSlippage' not in text:
-              if old not in text: raise SystemExit('entry execution anchor missing')
+          old = '''    final fee = double.tryParse(_fee.text.trim());\n    final slippage = double.tryParse(_slippage.text.trim());\n    if (equity == null ||\n        risk == null ||\n        leverage == null ||\n        fee == null ||\n        slippage == null) {\n'''
+          new = '''    final fee = double.tryParse(_fee.text.trim());\n    final slippage = double.tryParse(_slippage.text.trim());\n    final spread = double.tryParse(_spread.text.trim());\n    final fundingBps = double.tryParse(_fundingBps.text.trim());\n    final portfolioRisk = double.tryParse(_portfolioRisk.text.trim());\n    final symbolHeat = double.tryParse(_symbolHeat.text.trim());\n    final confidenceGate = int.tryParse(_confidenceGate.text.trim());\n    final minimumRr = double.tryParse(_minimumRr.text.trim());\n    final scannerInterval = int.tryParse(_scannerInterval.text.trim());\n    if (equity == null ||\n        risk == null ||\n        leverage == null ||\n        fee == null ||\n        slippage == null ||\n        spread == null ||\n        fundingBps == null ||\n        portfolioRisk == null ||\n        symbolHeat == null ||\n        confidenceGate == null ||\n        minimumRr == null ||\n        scannerInterval == null) {\n'''
+          if 'final portfolioRisk = double.tryParse' not in text:
+              if old not in text: raise SystemExit('start parse anchor missing')
               text = text.replace(old, new, 1)
 
-          old = '''    final entryFee = _fee(notional, run.manifest.feeRateBps);\n    final slippageCost = (entry - referenceEntry).abs() * quantity;\n'''
-          new = '''    final entryFee = _fee(notional, run.manifest.feeRateBps);\n    final spreadCost = (afterSpread - referenceEntry).abs() * quantity;\n    final slippageCost = (entry - afterSpread).abs() * quantity;\n'''
-          if 'final spreadCost = (afterSpread - referenceEntry)' not in text:
-              if old not in text: raise SystemExit('entry cost anchor missing')
+          old = '''        feeRateBps: fee,\n        slippageBps: slippage,\n        notes: _notes.text.trim(),\n'''
+          new = '''        feeRateBps: fee,\n        slippageBps: slippage,\n        spreadBps: spread,\n        fundingRatePerEightHours: fundingBps / 10000,\n        portfolioRiskPercent: portfolioRisk,\n        symbolHeatPercent: symbolHeat,\n        minimumConfidencePercent: confidenceGate,\n        minimumRiskReward: minimumRr,\n        scannerIntervalSeconds: scannerInterval,\n        executionModel: _executionModel,\n        experimentTag: _experimentTag.text.trim(),\n        notes: _notes.text.trim(),\n'''
+          if 'portfolioRiskPercent: portfolioRisk' not in text:
+              if old not in text: raise SystemExit('start call anchor missing')
               text = text.replace(old, new, 1)
 
-          text = text.replace('      slippageCost: slippageCost,\n      maximumFavorablePrice:', '      slippageCost: slippageCost,\n      spreadCost: spreadCost,\n      maximumFavorablePrice:', 1)
-          text = text.replace("        'slippageCost': slippageCost,\n      },", "        'slippageCost': slippageCost,\n        'spreadCost': spreadCost,\n        'portfolioRiskAfter': _openRisk(run) + position.initialRisk,\n        'portfolioRiskBudget':\n            run.currentEquity * run.manifest.portfolioRiskPercent / 100,\n      },", 1)
-          text = text.replace("        'executionModel': 'future-candle-touch/conservative-collision',", "        'executionModel': run.manifest.executionModel.name,", 1)
+          import_anchor = '''  @override\n  Widget build(BuildContext context) {\n'''
+          import_method = '''  Future<void> _importZip() async {\n    try {\n      const group = XTypeGroup(\n        label: 'Quantara Trading Lab ZIP',\n        extensions: ['zip'],\n      );\n      final file = await openFile(acceptedTypeGroups: const [group]);\n      if (file == null) return;\n      final bytes = await file.readAsBytes();\n      await widget.controller.restoreFullEvidenceZip(bytes);\n      if (!mounted) return;\n      ScaffoldMessenger.of(context).showSnackBar(\n        SnackBar(\n          content: Text(\n            _fa\n                ? 'بسته آزمایش با موفقیت بررسی و به‌صورت Stopped بازیابی شد.'\n                : 'Experiment bundle verified and restored as Stopped.',\n          ),\n        ),\n      );\n    } on Object catch (error) {\n      if (!mounted) return;\n      ScaffoldMessenger.of(context).showSnackBar(\n        SnackBar(\n          content: Text(\n            _fa ? 'Import ZIP ناموفق بود: $error' : 'ZIP import failed: $error',\n          ),\n        ),\n      );\n    }\n  }\n\n'''
+          if 'Future<void> _importZip()' not in text:
+              if import_anchor not in text: raise SystemExit('build anchor missing')
+              text = text.replace(import_anchor, import_method + import_anchor, 1)
 
-          old = '''      if (analysis == null) continue;\n      final newCandles = analysis.candles\n'''
-          new = '''      if (analysis == null) continue;\n      _accrueFunding(run, position, snapshot.generatedAt.toUtc());\n      final newCandles = analysis.candles\n'''
-          if '_accrueFunding(run, position' not in text:
-              if old not in text: raise SystemExit('funding manage anchor missing')
+          old = '''              _TradingLabSummary(run: run),\n              const SizedBox(height: 16),\n              _TradingLabWhyNoTrade(run: run),\n'''
+          new = '''              _TradingLabSummary(run: run),\n              const SizedBox(height: 16),\n              _TradingLabInsights(\n                run: run,\n                history: widget.controller.history,\n              ),\n              const SizedBox(height: 16),\n              _TradingLabWhyNoTrade(run: run),\n'''
+          if '_TradingLabInsights(' not in text:
+              if old not in text: raise SystemExit('insights build anchor missing')
               text = text.replace(old, new, 1)
 
-          old = '''      final exit = _applyAdverseSlippage(\n        target,\n        direction: position.direction,\n        opening: false,\n        bps: run.manifest.slippageBps,\n      );\n      _realize(run, position, quantity, exit);\n'''
-          new = '''      final spreadExit = _applyAdverseSlippage(\n        target,\n        direction: position.direction,\n        opening: false,\n        bps: run.manifest.spreadBps / 2,\n      );\n      final exit = _applyAdverseSlippage(\n        spreadExit,\n        direction: position.direction,\n        opening: false,\n        bps: run.manifest.slippageBps,\n      );\n      position.spreadCost += (spreadExit - target).abs() * quantity;\n      position.slippageCost += (exit - spreadExit).abs() * quantity;\n      _realize(run, position, quantity, exit);\n'''
-          if 'final spreadExit = _applyAdverseSlippage' not in text:
-              if old not in text: raise SystemExit('target exit anchor missing')
-              text = text.replace(old, new, 1)
+          fields_anchor = '''                  SizedBox(\n                    width: itemWidth,\n                    child: DropdownButtonFormField<int>(\n                      initialValue: _slots,\n'''
+          advanced_fields = '''                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _spread,\n                      _fa ? 'اسپرد (bps)' : 'Spread (bps)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _fundingBps,\n                      _fa ? 'Funding هر ۸ ساعت (bps)' : 'Funding / 8h (bps)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _portfolioRisk,\n                      _fa ? 'بودجه ریسک پرتفوی (%)' : 'Portfolio risk budget (%)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _symbolHeat,\n                      _fa ? 'Symbol heat (%)' : 'Symbol heat (%)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _confidenceGate,\n                      _fa ? 'حداقل Confidence' : 'Minimum confidence',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _minimumRr,\n                      _fa ? 'حداقل RR' : 'Minimum RR',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _scannerInterval,\n                      _fa ? 'فاصله Scanner (ثانیه)' : 'Scanner interval (seconds)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: DropdownButtonFormField<TradingLabExecutionModel>(\n                      initialValue: _executionModel,\n                      decoration: InputDecoration(\n                        labelText: _fa ? 'مدل اجرا' : 'Execution model',\n                      ),\n                      items: TradingLabExecutionModel.values\n                          .map(\n                            (value) => DropdownMenuItem(\n                              value: value,\n                              child: Text(value.name),\n                            ),\n                          )\n                          .toList(growable: false),\n                      onChanged: _busy\n                          ? null\n                          : (value) => setState(\n                              () => _executionModel = value ?? _executionModel,\n                            ),\n                    ),\n                  ),\n'''
+          if "_fa ? 'اسپرد (bps)'" not in text:
+              if fields_anchor not in text: raise SystemExit('advanced field anchor missing')
+              text = text.replace(fields_anchor, advanced_fields + fields_anchor, 1)
 
-          old = '''    final exit = _applyAdverseSlippage(\n      position.currentStopLoss,\n      direction: position.direction,\n      opening: false,\n      bps: run.manifest.slippageBps,\n    );\n    _realize(run, position, quantity, exit);\n'''
-          new = '''    final spreadExit = _applyAdverseSlippage(\n      position.currentStopLoss,\n      direction: position.direction,\n      opening: false,\n      bps: run.manifest.spreadBps / 2,\n    );\n    final exit = _applyAdverseSlippage(\n      spreadExit,\n      direction: position.direction,\n      opening: false,\n      bps: run.manifest.slippageBps,\n    );\n    position.spreadCost +=\n        (spreadExit - position.currentStopLoss).abs() * quantity;\n    position.slippageCost += (exit - spreadExit).abs() * quantity;\n    _realize(run, position, quantity, exit);\n'''
-          if text.count('final spreadExit = _applyAdverseSlippage') < 2:
-              if old not in text: raise SystemExit('stop exit anchor missing')
-              text = text.replace(old, new, 1)
+          notes_anchor = '''          const SizedBox(height: 12),\n          TextField(\n            controller: _notes,\n'''
+          tag_field = '''          const SizedBox(height: 12),\n          TextField(\n            controller: _experimentTag,\n            maxLength: 80,\n            decoration: InputDecoration(\n              labelText: _fa ? 'Tag آزمایش' : 'Experiment tag',\n              hintText: 'champion / candidate / rr-gate-v2',\n            ),\n          ),\n          TextField(\n            controller: _notes,\n'''
+          if 'controller: _experimentTag' not in text:
+              if notes_anchor not in text: raise SystemExit('tag anchor missing')
+              text = text.replace(notes_anchor, tag_field, 1)
 
-          text = text.replace("        'funding': position.funding,\n      },", "        'funding': position.funding,\n        'slippageCost': position.slippageCost,\n        'spreadCost': position.spreadCost,\n      },", 1)
+          actions_anchor = '''          FilledButton.tonalIcon(\n            onPressed: _shareReview,\n            icon: const Icon(Icons.ios_share_rounded),\n            label: Text(_fa ? 'خروجی کامل ZIP' : 'Export full ZIP'),\n          ),\n'''
+          import_button = actions_anchor + '''          OutlinedButton.icon(\n            onPressed: run.isRunning || _busy ? null : _importZip,\n            icon: const Icon(Icons.file_open_rounded),\n            label: Text(_fa ? 'Import ZIP' : 'Import ZIP'),\n          ),\n'''
+          if 'onPressed: run.isRunning || _busy ? null : _importZip' not in text:
+              if actions_anchor not in text: raise SystemExit('actions anchor missing')
+              text = text.replace(actions_anchor, import_button, 1)
 
-          old = '''    final candidateRisk = run.currentEquity * run.manifest.riskPercent / 100;\n    final riskCap = candidateRisk * run.manifest.maximumConcurrentPositions;\n    final openRisk = run.openPositions.fold<double>(\n      0,\n      (sum, position) =>\n          sum +\n          position.initialRisk *\n              (position.remainingQuantity / position.initialQuantity),\n    );\n    if (openRisk + candidateRisk > riskCap + 0.0000001) {\n      return 'Paper entry blocked: portfolio risk budget is exhausted.';\n    }\n'''
-          new = '''    final candidateRisk = run.currentEquity * run.manifest.riskPercent / 100;\n    final riskCap = run.currentEquity * run.manifest.portfolioRiskPercent / 100;\n    final symbolHeatCap = run.currentEquity * run.manifest.symbolHeatPercent / 100;\n    final openRisk = _openRisk(run);\n    final symbolRisk = run.openPositions\n        .where((position) => position.symbol == candidate.symbol)\n        .fold<double>(\n          0,\n          (sum, position) =>\n              sum +\n              position.initialRisk *\n                  (position.remainingQuantity / position.initialQuantity),\n        );\n    if (candidateRisk > symbolHeatCap + 0.0000001 ||\n        symbolRisk + candidateRisk > symbolHeatCap + 0.0000001) {\n      return 'Paper entry blocked: symbol heat budget is exhausted.';\n    }\n    if (openRisk + candidateRisk > riskCap + 0.0000001) {\n      return 'Paper entry blocked: portfolio risk budget is exhausted.';\n    }\n'''
-          if 'symbolHeatCap' not in text:
-              if old not in text: raise SystemExit('risk admission anchor missing')
-              text = text.replace(old, new, 1)
-
-          helper_anchor = '''  static bool _isValidActionablePlan(TradeIdea idea) {\n'''
-          helpers = '''  static double _reservedMargin(TradingLabRun run) =>\n      run.openPositions.fold<double>(\n        0,\n        (sum, position) => sum + position.marginReserved,\n      );\n\n  static double _virtualAvailableMargin(TradingLabRun run) =>\n      math.max(0, run.currentEquity - _reservedMargin(run)).toDouble();\n\n  static double _openRisk(TradingLabRun run) => run.openPositions.fold<double>(\n    0,\n    (sum, position) =>\n        sum +\n        position.initialRisk *\n            (position.remainingQuantity / position.initialQuantity),\n  );\n\n  void _accrueFunding(\n    TradingLabRun run,\n    TradingLabPosition position,\n    DateTime now,\n  ) {\n    if (!now.isAfter(position.lastFundingAccrualAtUtc)) return;\n    final elapsedSeconds =\n        now.difference(position.lastFundingAccrualAtUtc).inSeconds;\n    if (elapsedSeconds <= 0) return;\n    final rate = run.manifest.fundingRatePerEightHours;\n    position.lastFundingAccrualAtUtc = now;\n    if (rate == 0 || position.remainingQuantity <= 0) return;\n    final intervals = elapsedSeconds / const Duration(hours: 8).inSeconds;\n    final notional = position.entryPrice * position.remainingQuantity;\n    final directionalRate = position.direction == TradeDirection.long ? rate : -rate;\n    final charge = notional * directionalRate * intervals;\n    if (!charge.isFinite || charge == 0) return;\n    position.funding += charge;\n    run.balance -= charge;\n    _event(\n      run,\n      TradingLabEventKind.fundingAccrued,\n      now,\n      'Paper funding accrued using the configured eight-hour rate.',\n      position: position,\n      metrics: {\n        'fundingCharge': charge,\n        'fundingRatePerEightHours': rate,\n        'elapsedSeconds': elapsedSeconds.toDouble(),\n        'remainingNotional': notional,\n      },\n    );\n  }\n\n'''
-          if 'void _accrueFunding(' not in text:
-              if helper_anchor not in text: raise SystemExit('helper anchor missing')
-              text = text.replace(helper_anchor, helpers + helper_anchor, 1)
-
-          text = text.replace("    if (value.contains('risk budget')) return 'portfolio_risk_exhausted';", "    if (value.contains('symbol heat')) return 'symbol_heat_exhausted';\n    if (value.contains('risk budget')) return 'portfolio_risk_exhausted';", 1)
-          broker.write_text(text)
-
-          controller = Path('src/client/quantara_app/lib/features/trading_lab/application/trading_lab_controller.dart')
-          text = controller.read_text()
-          text = text.replace('_broker.processSnapshot(current!, snapshot);', '_broker.processSnapshot(\n            current!,\n            snapshot,\n            accountContext: accountContext,\n          );')
-          controller.write_text(text)
+          text = text.replace(
+              '  TradingLabEventKind.stopPromoted => Icons.lock_outline_rounded,',
+              '  TradingLabEventKind.stopPromoted => Icons.lock_outline_rounded,\n  TradingLabEventKind.fundingAccrued => Icons.account_balance_wallet_outlined,',
+              1,
+          )
+          lab.write_text(text)
           PY
 
-          dart format src/client/quantara_app/lib/features/trading_lab/domain/trading_lab_models.dart \
-            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_paper_broker.dart \
-            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_controller.dart
+          flutter pub get
+          dart format src/client/quantara_app/lib src/client/quantara_app/test
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/client/quantara_app/lib/features/trading_lab/domain/trading_lab_models.dart \
-            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_paper_broker.dart \
-            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_controller.dart
-          git commit -m 'feat(lab): model funding spread risk gates and runtime telemetry'
+          git add src/client/quantara_app/lib src/client/quantara_app/test \
+            src/client/quantara_app/pubspec.lock
+          git commit -m 'feat(lab): complete advanced config import and comparison UI'
           git push origin HEAD:feat/176-bot-trading-lab
