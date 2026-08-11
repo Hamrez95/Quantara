@@ -3,7 +3,6 @@ name: Quantara Android Preview
 on:
   push:
     branches:
-      - dev
       - 'alpha/**'
     paths:
       - 'src/client/quantara_app/**'
