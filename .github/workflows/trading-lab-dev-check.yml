@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 14
+          fetch-depth: 16
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PATCH_COMMIT="$(git log --format='%H %s' -14 | grep 'ci(lab): apply post-run hardening and evidence upgrade' | head -1 | cut -d' ' -f1)"
+          PATCH_COMMIT="$(git log --format='%H %s' -16 | grep 'ci(lab): apply post-run hardening and evidence upgrade' | head -1 | cut -d' ' -f1)"
           test -n "$PATCH_COMMIT"
           git show "$PATCH_COMMIT":.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
           python3 - <<'PY'
@@ -57,10 +57,6 @@ jobs:
           import re
 
           root = Path('src/client/quantara_app')
-
-          # The generic anchor in the original patch added ZIP-only arguments to
-          # the immediately preceding AI-review call. Keep AI review read-only
-          # and move the new evidence arguments to the ZIP encoder itself.
           controller = root / 'lib/features/trading_lab/application/trading_lab_controller.dart'
           text = controller.read_text()
           ai_start = text.index('    final aiReviewJson = buildTradingLabAiReviewJsonWithShadows(')
@@ -93,7 +89,6 @@ jobs:
               text = text[:zip_start] + zip_segment + text[zip_end:]
           controller.write_text(text)
 
-          # v3 JSONL list contains runtime collection-if entries.
           zip_file = root / 'lib/features/trading_lab/application/trading_lab_zip_bundle.dart'
           text = zip_file.read_text()
           runtime_list = "for (final name in const <String>["
@@ -101,7 +96,6 @@ jobs:
               text = text.replace(runtime_list, "for (final name in <String>[", 1)
           zip_file.write_text(text)
 
-          # 30m must be included in every exhaustive test switch over the enum.
           e2e = root / 'test/realtime_market_application_e2e_test.dart'
           text = e2e.read_text()
           anchor = '  BitunixKlineInterval.fifteenMinutes ||\n  BitunixKlineInterval.oneHour ||'
@@ -115,20 +109,21 @@ jobs:
               )
           e2e.write_text(text)
 
-          # Ensure every test ZIP encode call uses the v3 evidence contract.
           ztest = root / 'test/trading_lab_zip_bundle_test.dart'
           text = ztest.read_text()
           pattern = re.compile(
-              r'(?P<indent>[ \t]*)accountContext: accountContext,\n(?P<close>[ \t]*)\);'
+              r'(?P<indent>[ \t]*)accountContext: accountContext,\n'
+              r'(?P<close>[ \t]*)(?P<suffix>\);|\),)'
           )
           def add_v3(match):
               indent = match.group('indent')
               close = match.group('close')
+              suffix = match.group('suffix')
               return (
                   f'{indent}accountContext: accountContext,\n'
                   f'{indent}realAccountEvidence: realAccountEvidence,\n'
                   f'{indent}benchmarkMatrix: benchmarkMatrix,\n'
-                  f'{close});'
+                  f'{close}{suffix}'
               )
           text = pattern.sub(add_v3, text)
           ztest.write_text(text)
