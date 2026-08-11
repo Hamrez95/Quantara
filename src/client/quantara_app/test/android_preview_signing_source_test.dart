@@ -12,6 +12,15 @@ void main() {
     expect(gradle, contains('QUANTARA_PREVIEW_RELEASE'));
     expect(gradle, contains('quantaraPreview'));
     expect(gradle, contains('Runner-local debug signing is forbidden'));
+    expect(gradle, contains('gradle.taskGraph.whenReady'));
+    expect(gradle, contains('releaseTaskSelected'));
+    expect(
+      gradle,
+      contains(
+        'releaseTaskSelected && !quantaraStableRelease && !quantaraPreviewRelease',
+      ),
+    );
+    expect(gradle, contains('else -> Unit'));
     expect(gradle, isNot(contains('QUANTARA_UNSIGNED_CANDIDATE')));
     expect(gradle, isNot(contains('signingConfig = null')));
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
