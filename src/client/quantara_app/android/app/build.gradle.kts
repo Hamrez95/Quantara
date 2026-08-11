@@ -16,6 +16,10 @@ val quantaraKeystorePath = System.getenv("QUANTARA_ANDROID_KEYSTORE_PATH")
 val quantaraKeystorePassword = System.getenv("QUANTARA_ANDROID_KEYSTORE_PASSWORD")
 val quantaraKeyAlias = System.getenv("QUANTARA_ANDROID_KEY_ALIAS")
 val quantaraKeyPassword = System.getenv("QUANTARA_ANDROID_KEY_PASSWORD")
+val quantaraReleaseSigningError =
+    "Release APK signing is fail-closed. Set QUANTARA_PREVIEW_RELEASE=true " +
+        "with the owner-controlled Preview keystore, or QUANTARA_STABLE_RELEASE=true " +
+        "with the Stable keystore. Runner-local debug signing is forbidden."
 
 android {
     namespace = "com.quantara.quantara_app"
@@ -90,15 +94,22 @@ android {
                     versionNameSuffix = "-preview"
                     signingConfig = signingConfigs.getByName("quantaraPreview")
                 }
-                else -> {
-                    throw GradleException(
-                        "Release APK signing is fail-closed. Set QUANTARA_PREVIEW_RELEASE=true " +
-                            "with the owner-controlled Preview keystore, or QUANTARA_STABLE_RELEASE=true " +
-                            "with the Stable keystore. Runner-local debug signing is forbidden."
-                    )
-                }
+                else -> Unit
             }
         }
+    }
+}
+
+// Android configures every build type even for `assembleDebug`. Enforce the
+// release-signing constitution only when the resolved task graph actually
+// contains a Release task. Debug QA therefore remains secret-free while every
+// Preview/Stable release remains fail-closed without its persistent signer.
+gradle.taskGraph.whenReady {
+    val releaseTaskSelected = allTasks.any { task ->
+        task.name.contains("release", ignoreCase = true)
+    }
+    if (releaseTaskSelected && !quantaraStableRelease && !quantaraPreviewRelease) {
+        throw GradleException(quantaraReleaseSigningError)
     }
 }
 
