@@ -26,6 +26,22 @@ void main() {
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
   });
 
+  test('debug cleartext override cannot weaken main release manifest', () {
+    final debugManifest = File(
+      'android/app/src/debug/AndroidManifest.xml',
+    ).readAsStringSync();
+    final mainManifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+
+    expect(debugManifest, contains('android:usesCleartextTraffic="true"'));
+    expect(
+      debugManifest,
+      contains('tools:replace="android:usesCleartextTraffic"'),
+    );
+    expect(mainManifest, contains('android:usesCleartextTraffic="false"'));
+  });
+
   test('generic Flutter CI is secret-free and uses an unsigned QA build', () {
     final workflow = File(
       '../../../.github/workflows/flutter-ci.yml',
