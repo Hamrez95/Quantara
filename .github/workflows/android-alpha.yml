@@ -13,6 +13,7 @@ permissions:
   contents: read
 
 env:
+  FLUTTER_VERSION: '3.44.8'
   PREVIEW_CERT_SHA256: c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984
 
 concurrency:
@@ -21,9 +22,9 @@ concurrency:
 
 jobs:
   android-alpha:
-    name: Test and build Quantara Android
+    name: Test and build persistently signed Preview APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     environment: Preview
     defaults:
       run:
@@ -62,43 +63,42 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - name: Restore packages
-        run: flutter pub get
+      - name: Validate source and tests
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --fatal-infos
+          flutter test --reporter expanded
 
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
-
-      - name: Analyze
-        run: flutter analyze --fatal-infos
-
-      - name: Test
-        run: flutter test --reporter expanded
-
-      - name: Build Android release APK
+      - name: Build Preview release APK
         run: flutter build apk --release
 
-      - name: Verify Preview signing
+      - name: Verify Preview identity and signing
         shell: bash
         run: |
           set -euo pipefail
           apk="build/app/outputs/flutter-apk/app-release.apk"
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
           apksigner_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apkanalyzer_path"
           test -x "$apksigner_path"
+          "$apkanalyzer_path" manifest application-id "$apk" | grep -Fxq 'com.quantara.quantara_app.alpha'
           "$apksigner_path" verify --verbose --print-certs "$apk" | tee preview-signing.txt
           actual="$(grep -m1 'certificate SHA-256 digest:' preview-signing.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
           test "$actual" = "$PREVIEW_CERT_SHA256"
           sha256sum "$apk" | tee SHA256SUMS.txt
 
-      - name: Upload Quantara Android preview
+      - name: Upload signed Preview candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-0.9.0-strategy-validation-preview
+          name: quantara-android-preview-${{ github.sha }}
           path: |
             src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
             src/client/quantara_app/preview-signing.txt
             src/client/quantara_app/SHA256SUMS.txt
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
