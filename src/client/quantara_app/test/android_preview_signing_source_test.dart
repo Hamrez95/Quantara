@@ -45,13 +45,14 @@ void main() {
     expect(workflow, contains('SHA256SUMS.txt'));
   });
 
-  test('stable release workflow keeps stable signing isolated', () {
+  test('stable release workflow pins the permanent signer', () {
     final workflow = File(
       '../../../.github/workflows/android-stable-release.yml',
     ).readAsStringSync();
 
     expect(workflow, contains('environment: production'));
     expect(workflow, contains('QUANTARA_ANDROID_KEYSTORE_BASE64'));
+    expect(workflow, contains('QUANTARA_STABLE_CERT_SHA256'));
     expect(workflow, contains("QUANTARA_STABLE_RELEASE: 'true'"));
     expect(workflow, contains('apksigner'));
     expect(workflow, isNot(contains('QUANTARA_PREVIEW_RELEASE=true')));
