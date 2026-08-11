@@ -35,48 +35,19 @@ env:
   ANDROID_PACKAGE: com.quantara.quantara_app.alpha
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
   RC_VERSION: 1.2.0-rc.2
-  ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.2
-  PREVIEW_CERT_SHA256: c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984
+  ANDROID_DEBUG_ARTIFACT: quantara-android-debug-${{ github.sha }}
 
 jobs:
   flutter:
-    name: Flutter format, analyze, test, and build
+    name: Flutter format, analyze, test, and unsigned QA build
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: Preview
     defaults:
       run:
         working-directory: src/client/quantara_app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Provision persistent Preview signing
-        shell: bash
-        env:
-          KEYSTORE_BASE64: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          test -n "$KEYSTORE_BASE64"
-          test -n "$KEYSTORE_PASSWORD"
-          test -n "$KEY_ALIAS"
-          test -n "$KEY_PASSWORD"
-          keystore="$RUNNER_TEMP/quantara-preview.jks"
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
-          chmod 600 "$keystore"
-          keytool -list -v -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > preview-keystore.txt
-          actual="$(grep -m1 'SHA256:' preview-keystore.txt | sed 's/.*SHA256: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          test "$actual" = "$PREVIEW_CERT_SHA256"
-          {
-            echo "QUANTARA_PREVIEW_RELEASE=true"
-            echo "QUANTARA_ANDROID_KEYSTORE_PATH=$keystore"
-            echo "QUANTARA_ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
-            echo "QUANTARA_ANDROID_KEY_ALIAS=$KEY_ALIAS"
-            echo "QUANTARA_ANDROID_KEY_PASSWORD=$KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -118,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics-${{ env.RC_VERSION }}
+          name: flutter-diagnostics-${{ github.sha }}
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
@@ -130,26 +101,20 @@ jobs:
           flutter build web --release
           --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
 
-      - name: Compile API-configured Android RC
-        run: >-
-          flutter build apk --release
-          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
-
       - name: Build offline-first web PWA
         run: flutter build web --release
 
-      - name: Build universal Android RC APK
-        run: flutter build apk --release
+      - name: Build Android alpha debug QA APK
+        run: flutter build apk --debug --flavor alpha
 
-      - name: Verify RC identity, signing, and manifest safety declarations
+      - name: Verify debug manifest safety declarations
         shell: bash
         run: |
           set -euo pipefail
-          apk="build/app/outputs/flutter-apk/app-release.apk"
+          apk="build/app/outputs/flutter-apk/app-alpha-debug.apk"
           apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
-          apksigner_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$apkanalyzer_path"
-          test -x "$apksigner_path"
+          test -f "$apk"
           "$apkanalyzer_path" manifest application-id "$apk" | grep -Fxq "$ANDROID_PACKAGE"
           "$apkanalyzer_path" manifest print "$apk" > merged-manifest.xml
           grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
@@ -159,62 +124,23 @@ jobs:
           ! grep -Fq "android.permission.RECEIVE_BOOT_COMPLETED" merged-manifest.xml
           ! grep -Fq "com.pravera.flutter_foreground_task.service.RebootReceiver" merged-manifest.xml
           ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
-          "$apksigner_path" verify --verbose --print-certs "$apk" | tee preview-signing.txt
-          actual="$(grep -m1 'certificate SHA-256 digest:' preview-signing.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
-          test "$actual" = "$PREVIEW_CERT_SHA256"
+          sha256sum "$apk" | tee SHA256SUMS.txt
 
-      - name: Upload merged Android manifest
-        if: always()
+      - name: Upload PWA QA candidate
         uses: actions/upload-artifact@v4
         with:
-          name: android-merged-manifest-${{ env.RC_VERSION }}
-          path: src/client/quantara_app/merged-manifest.xml
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Verify universal APK 16KB ZIP alignment
-        shell: bash
-        run: |
-          set -euo pipefail
-          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
-          test -x "$zipalign_path"
-          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Build ABI-split Android RC APKs
-        run: flutter build apk --release --split-per-abi
-
-      - name: Verify arm64 signing and 16KB ZIP alignment
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
-          apksigner_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
-          test -x "$apksigner_path"
-          test -x "$zipalign_path"
-          "$apksigner_path" verify --verbose --print-certs "$apk" > preview-signing-arm64.txt
-          actual="$(grep -m1 'certificate SHA-256 digest:' preview-signing-arm64.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
-          test "$actual" = "$PREVIEW_CERT_SHA256"
-          "$zipalign_path" -c -P 16 -v 4 "$apk"
-          sha256sum build/app/outputs/flutter-apk/app-release.apk "$apk" | tee SHA256SUMS.txt
-
-      - name: Upload PWA release candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: quantara-pwa-${{ env.RC_VERSION }}
+          name: quantara-pwa-${{ github.sha }}
           path: src/client/quantara_app/build/web
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload Android release candidate
+      - name: Upload Android debug QA candidate
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ANDROID_RC_ARTIFACT }}
+          name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
           path: |
-            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
-            src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            src/client/quantara_app/preview-signing.txt
-            src/client/quantara_app/preview-signing-arm64.txt
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-alpha-debug.apk
+            src/client/quantara_app/merged-manifest.xml
             src/client/quantara_app/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
@@ -232,20 +158,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Android release candidate
+      - name: Download Android debug QA candidate
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.ANDROID_RC_ARTIFACT }}
+          name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
           path: apk
 
-      - name: Resolve Android release candidate path
+      - name: Resolve Android QA candidate path
         shell: bash
         run: |
           set -euo pipefail
-          apk_path="$(find apk -type f -name 'app-release.apk' -print -quit)"
+          apk_path="$(find apk -type f -name 'app-alpha-debug.apk' -print -quit)"
           test -n "$apk_path"
           test -f "$apk_path"
-          echo "ANDROID_RC_APK_PATH=$apk_path" >> "$GITHUB_ENV"
+          echo "ANDROID_QA_APK_PATH=$apk_path" >> "$GITHUB_ENV"
 
       - name: Enable KVM group permissions
         run: |
@@ -261,13 +187,13 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: bash scripts/android-cold-start-smoke.sh "$ANDROID_RC_APK_PATH"
+          script: bash scripts/android-cold-start-smoke.sh "$ANDROID_QA_APK_PATH"
 
       - name: Upload Android launch diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics-${{ env.RC_VERSION }}
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-${{ github.sha }}
           path: |
             android-start.txt
             android-pid.txt
