@@ -1,0 +1,43 @@
+name: Temporary PR164 Dart formatter
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - '.github/workflows/format-164-temp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format exact files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/client/quantara_app
+          dart format \
+            test/android_preview_signing_source_test.dart \
+            test/issue_165_management_only_after_flat_test.dart
+          cd ../../..
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/client/quantara_app/test/android_preview_signing_source_test.dart \
+            src/client/quantara_app/test/issue_165_management_only_after_flat_test.dart
+          if git diff --cached --quiet; then
+            echo 'Already formatted.'
+            exit 0
+          fi
+          git commit -m 'style: format final local-live release tests'
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
