@@ -34,8 +34,8 @@ env:
   FLUTTER_VERSION: '3.44.8'
   ANDROID_PACKAGE: com.quantara.quantara_app.alpha
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  RC_VERSION: 1.2.0-rc.2
-  ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.2
+  RC_VERSION: 1.2.0-rc.3
+  ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.3
   PREVIEW_CERT_SHA256: c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984
 
 jobs:
