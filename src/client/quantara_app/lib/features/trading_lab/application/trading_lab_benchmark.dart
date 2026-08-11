@@ -10,8 +10,9 @@ Map<String, Object?> buildTradingLabBenchmarkMatrix(
   final byId = <String, TradingLabRun>{
     for (final run in sourceRuns) run.manifest.runId: run,
   };
-  final runs = byId.values.toList(growable: false)
-    ..sort((a, b) => a.manifest.startedAtUtc.compareTo(b.manifest.startedAtUtc));
+  final runs = byId.values.toList(
+    growable: false,
+  )..sort((a, b) => a.manifest.startedAtUtc.compareTo(b.manifest.startedAtUtc));
 
   final strategyTimeframeGroups = <String, List<TradingLabPosition>>{};
   final strategyTimeframeRuns = <String, Set<String>>{};
@@ -180,9 +181,7 @@ Map<String, Object?> _tradeStats(Iterable<TradingLabPosition> source) {
     'winRatePercent': trades.isEmpty ? 0.0 : wins / trades.length * 100,
     'netPnl': pnls.fold<double>(0, (sum, value) => sum + value),
     'averageR': _average(rs),
-    'profitFactor': grossLoss <= 1e-9
-        ? null
-        : grossProfit / grossLoss,
+    'profitFactor': grossLoss <= 1e-9 ? null : grossProfit / grossLoss,
   };
 }
 
