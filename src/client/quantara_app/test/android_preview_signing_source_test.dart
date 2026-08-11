@@ -17,22 +17,25 @@ void main() {
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
   });
 
-  test('Flutter CI pins preview signer and publishes signing evidence', () {
+  test('generic Flutter CI needs no release signing secrets', () {
     final workflow = File(
       '../../../.github/workflows/flutter-ci.yml',
     ).readAsStringSync();
 
-    expect(workflow, contains(fingerprint));
-    expect(workflow, contains('QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64'));
-    expect(workflow, contains('QUANTARA_PREVIEW_RELEASE=true'));
-    expect(workflow, contains('apksigner'));
-    expect(workflow, contains('preview-signing.txt'));
-    expect(workflow, contains('SHA256SUMS.txt'));
-    expect(workflow, contains('Resolve Android release candidate path'));
-    expect(workflow, contains('ANDROID_RC_APK_PATH'));
+    expect(workflow, contains('flutter analyze --fatal-infos'));
+    expect(workflow, contains('flutter test --reporter expanded'));
+    expect(workflow, contains('flutter build apk --debug --flavor alpha'));
+    expect(workflow, contains('app-alpha-debug.apk'));
+    expect(workflow, contains('Android ${{ matrix.api-level }} cold-start smoke'));
+    expect(workflow, isNot(contains('environment: Preview')));
+    expect(
+      workflow,
+      isNot(contains('QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64')),
+    );
+    expect(workflow, isNot(contains('QUANTARA_PREVIEW_RELEASE=true')));
   });
 
-  test('alpha preview workflow uses the same persistent signer', () {
+  test('alpha preview workflow uses the persistent preview signer', () {
     final workflow = File(
       '../../../.github/workflows/android-alpha.yml',
     ).readAsStringSync();
@@ -43,5 +46,16 @@ void main() {
     expect(workflow, contains('QUANTARA_PREVIEW_RELEASE=true'));
     expect(workflow, contains('apksigner'));
     expect(workflow, contains('SHA256SUMS.txt'));
+  });
+
+  test('stable release workflow keeps stable signing isolated', () {
+    final workflow = File(
+      '../../../.github/workflows/android-stable-release.yml',
+    ).readAsStringSync();
+
+    expect(workflow, contains('environment: Stable'));
+    expect(workflow, contains('QUANTARA_STABLE_KEYSTORE_B64'));
+    expect(workflow, contains('QUANTARA_STABLE_CERT_SHA256'));
+    expect(workflow, contains('apksigner'));
   });
 }
