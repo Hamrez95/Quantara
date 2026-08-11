@@ -1,0 +1,41 @@
+name: Format Trading Lab final files
+
+on:
+  push:
+    branches:
+      - feat/176-bot-trading-lab
+    paths:
+      - '.github/workflows/format-trading-lab-final.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Trading Lab branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/176-bot-trading-lab
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format only the two final Lab files and remove this workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format \
+            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_benchmark.dart \
+            src/client/quantara_app/test/trading_lab_post_run_hardening_test.dart
+          git rm .github/workflows/format-trading-lab-final.yml
+          git config user.name 'quantara-ci'
+          git config user.email 'quantara-ci@users.noreply.github.com'
+          git add \
+            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_benchmark.dart \
+            src/client/quantara_app/test/trading_lab_post_run_hardening_test.dart
+          git commit -m 'style: format final Trading Lab evidence files'
+          git push origin HEAD:feat/176-bot-trading-lab
