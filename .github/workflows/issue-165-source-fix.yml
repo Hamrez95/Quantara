@@ -1,0 +1,94 @@
+name: Issue 165 management-only source fix
+
+on:
+  push:
+    branches:
+      - feat/163-portfolio-budgeted-local-live
+    paths:
+      - '.github/workflows/issue-165-source-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Patch Local Live management-only latch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
+          text = path.read_text()
+          if 'localLiveManagementOnlyAfterFlatKey' in text:
+              print('Issue #165 patch already present.')
+              raise SystemExit(0)
+
+          replacements = [
+              (
+                  "import '../domain/local_live_cycle_readiness.dart';\n",
+                  "import '../domain/local_live_cycle_readiness.dart';\nimport '../domain/local_live_management_only_after_flat.dart';\n",
+              ),
+              (
+                  "const localLivePendingJournalClosuresKey =\n    'quantara.local-live.pending-journal-closures.v1';\n",
+                  "const localLivePendingJournalClosuresKey =\n    'quantara.local-live.pending-journal-closures.v1';\nconst localLiveManagementOnlyAfterFlatKey =\n    'quantara.local-live.management-only-after-flat.v1';\n",
+              ),
+              (
+                  "  bool _entriesEnabled = false;\n  bool _userRequestedEntries = false;\n",
+                  "  bool _entriesEnabled = false;\n  bool _userRequestedEntries = false;\n  bool _managementOnlyAfterFlat = false;\n",
+              ),
+              (
+                  "        _userRequestedEntries = message['entriesEnabled'] == true;\n        _entriesEnabled = _userRequestedEntries;\n",
+                  "        _userRequestedEntries = message['entriesEnabled'] == true;\n        if (_userRequestedEntries && _managementOnlyAfterFlat) {\n          await _setManagementOnlyAfterFlat(\n            false,\n            auditMessage:\n                'Explicit user start/resume cleared management-only after-flat safety.',\n          );\n        }\n        _entriesEnabled =\n            LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(\n              userRequestedEntries: _userRequestedEntries,\n              managementOnlyAfterFlat: _managementOnlyAfterFlat,\n            );\n",
+              ),
+              (
+                  "      _entriesEnabled = _userRequestedEntries;\n      _entryBlockReason = null;\n",
+                  "      _entriesEnabled =\n          LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(\n            userRequestedEntries: _userRequestedEntries,\n            managementOnlyAfterFlat: _managementOnlyAfterFlat,\n          );\n      _entryBlockReason = _managementOnlyAfterFlat\n          ? 'managementOnlyAfterFlat'\n          : null;\n",
+              ),
+              (
+                  "  Future<void> _reconcileManagedPositions(\n    List<BitunixLivePosition> positions,\n    TradingPnlProjection pnlProjection,\n  ) async {\n    final exchange = _exchange!;\n",
+                  "  Future<void> _reconcileManagedPositions(\n    List<BitunixLivePosition> positions,\n    TradingPnlProjection pnlProjection,\n  ) async {\n    final hadManagedPositions = _managed.isNotEmpty;\n    final exchange = _exchange!;\n",
+              ),
+              (
+                  "      _replaceManaged(managed, next);\n    }\n    await _persistState();\n  }\n\n  Future<LocalLiveManagedPosition> _promoteStopAfterConfirmedTarget({\n",
+                  "      _replaceManaged(managed, next);\n    }\n    if (!_managementOnlyAfterFlat &&\n        LocalLiveManagementOnlyAfterFlatPolicy.shouldLatchAfterFinalExchangeClose(\n          hadManagedPositions: hadManagedPositions,\n          hasManagedPositions: _managed.isNotEmpty,\n          exchangeOpenPositionCount: _exchangeOpenPositionCount,\n          userRequestedEntries: _userRequestedEntries,\n        )) {\n      await _setManagementOnlyAfterFlat(\n        true,\n        auditMessage:\n            'Final managed exchange position closed; entries remain paused until explicit user resume.',\n      );\n      _entriesEnabled = false;\n      _entryBlockReason = 'managementOnlyAfterFlat';\n    }\n    await _persistState();\n  }\n\n  Future<LocalLiveManagedPosition> _promoteStopAfterConfirmedTarget({\n",
+              ),
+              (
+                  "    _sessionStartedAt = DateTime.tryParse(startedAtRaw ?? '')?.toUtc();\n  }\n\n  Future<void> _persistSessionMetadata() async {\n",
+                  "    _sessionStartedAt = DateTime.tryParse(startedAtRaw ?? '')?.toUtc();\n    _managementOnlyAfterFlat =\n        await FlutterForegroundTask.getData<bool>(\n          key: localLiveManagementOnlyAfterFlatKey,\n        ) ??\n        false;\n    if (_managementOnlyAfterFlat) {\n      _entriesEnabled = false;\n      _entryBlockReason = 'managementOnlyAfterFlat';\n    }\n  }\n\n  Future<void> _setManagementOnlyAfterFlat(\n    bool value, {\n    String? auditMessage,\n  }) async {\n    if (_managementOnlyAfterFlat == value) return;\n    _managementOnlyAfterFlat = value;\n    await FlutterForegroundTask.saveData(\n      key: localLiveManagementOnlyAfterFlatKey,\n      value: value,\n    );\n    if (auditMessage != null) {\n      _auditEvent(\n        value ? 'management_only_after_flat' : 'entries_explicitly_resumed',\n        auditMessage,\n      );\n    }\n  }\n\n  Future<void> _persistSessionMetadata() async {\n",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Issue #165 patch anchor missing:\n{old[:160]}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+
+          pushd src/client/quantara_app
+          dart format lib/features/auto_trade/application/local_live_trade_service.dart \
+            lib/features/auto_trade/domain/local_live_management_only_after_flat.dart \
+            test/issue_165_management_only_after_flat_test.dart
+          popd
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
+            src/client/quantara_app/lib/features/auto_trade/domain/local_live_management_only_after_flat.dart \
+            src/client/quantara_app/test/issue_165_management_only_after_flat_test.dart
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix(local-live): latch management-only after final close (#165)'
+          git push origin HEAD:feat/163-portfolio-budgeted-local-live
