@@ -1,5 +1,6 @@
 name: Trading Lab final validation
 
+# Final read-only validation for the RC3 Trading Lab candidate.
 on:
   push:
     branches:
