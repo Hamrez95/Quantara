@@ -1,148 +1,104 @@
-name: Trading Lab post-run source hardening
+name: Trading Lab final validation
 
 on:
   push:
     branches:
       - feat/176-bot-trading-lab
     paths:
+      - 'src/client/quantara_app/**'
       - '.github/workflows/trading-lab-dev-check.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: trading-lab-hardening-${{ github.ref }}
+  group: trading-lab-dev-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    working-directory: src/client/quantara_app
+
 jobs:
-  harden-source:
+  static-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 16
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Apply and validate audited post-run patch
+      - name: Restore packages
+        run: flutter pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+  test-shards:
+    needs: static-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Run test shard ${{ matrix.shard }}
         shell: bash
         run: |
           set -euo pipefail
-          PATCH_COMMIT="$(git log --format='%H %s' -16 | grep 'ci(lab): apply post-run hardening and evidence upgrade' | head -1 | cut -d' ' -f1)"
-          test -n "$PATCH_COMMIT"
-          git show "$PATCH_COMMIT":.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path('/tmp/post-run-workflow.yml').read_text().splitlines()
-          start = next(i for i, line in enumerate(source) if "python3 - <<'PY'" in line) + 1
-          end = next(i for i in range(start, len(source)) if source[i].strip() == 'PY')
-          code = []
-          for line in source[start:end]:
-              code.append(line[10:] if line.startswith('          ') else line)
-          script = '\n'.join(code) + '\n'
-          fragile = """if old not in broker:\n    raise SystemExit('candidate gate ordering anchor missing')\nbroker = broker.replace(old, new, 1)\nbroker_path.write_text(broker)\n"""
-          resilient = """if old not in broker:\n    gate_start = broker.index(\"        if (idea.confidencePercent < run.manifest.minimumConfidencePercent) {\")\n    gate_end = broker.index(\"        final pending = TradingLabPendingCandidate(\", gate_start)\n    broker = broker[:gate_start] + new + \"\\n\" + broker[gate_end:]\nelse:\n    broker = broker.replace(old, new, 1)\nbroker_path.write_text(broker)\n"""
-          if fragile not in script:
-              raise SystemExit('candidate patch fallback anchor missing')
-          Path('/tmp/apply_post_run.py').write_text(script.replace(fragile, resilient, 1))
-          PY
-          python3 /tmp/apply_post_run.py
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          root = Path('src/client/quantara_app')
-          controller = root / 'lib/features/trading_lab/application/trading_lab_controller.dart'
-          text = controller.read_text()
-          ai_start = text.index('    final aiReviewJson = buildTradingLabAiReviewJsonWithShadows(')
-          zip_start = text.index('    return const TradingLabZipBundleCodec().encode(', ai_start)
-          ai_segment = text[ai_start:zip_start]
-          accidental = ai_segment.find('      realAccountEvidence: realAccountEvidence,')
-          if accidental >= 0:
-              close = ai_segment.index('    );', accidental)
-              prefix = ai_segment[:accidental]
-              if not prefix.endswith('      accountContext: context,\n'):
-                  raise SystemExit('unexpected AI review evidence placement')
-              ai_segment = prefix + ai_segment[close:]
-              text = text[:ai_start] + ai_segment + text[zip_start:]
-              zip_start = text.index('    return const TradingLabZipBundleCodec().encode(', ai_start)
-          zip_end = text.index('    );', zip_start)
-          zip_segment = text[zip_start:zip_end]
-          if 'realAccountEvidence:' not in zip_segment:
-              anchor = '      accountContext: context,\n'
-              if anchor not in zip_segment:
-                  raise SystemExit('ZIP account context anchor missing')
-              addition = (
-                  anchor
-                  + '      realAccountEvidence: realAccountEvidence,\n'
-                  + '      benchmarkMatrix: buildTradingLabBenchmarkMatrix(<TradingLabRun>[\n'
-                  + '        ..._history,\n'
-                  + '        current,\n'
-                  + '      ]),\n'
-              )
-              zip_segment = zip_segment.replace(anchor, addition, 1)
-              text = text[:zip_start] + zip_segment + text[zip_end:]
-          controller.write_text(text)
-
-          zip_file = root / 'lib/features/trading_lab/application/trading_lab_zip_bundle.dart'
-          text = zip_file.read_text()
-          runtime_list = "for (final name in const <String>["
-          if runtime_list in text and "if (bundleSchema >= 3) 'real_account_trades.jsonl'" in text:
-              text = text.replace(runtime_list, "for (final name in <String>[", 1)
-          zip_file.write_text(text)
-
-          e2e = root / 'test/realtime_market_application_e2e_test.dart'
-          text = e2e.read_text()
-          anchor = '  BitunixKlineInterval.fifteenMinutes ||\n  BitunixKlineInterval.oneHour ||'
-          if anchor in text:
-              text = text.replace(
-                  anchor,
-                  '  BitunixKlineInterval.fifteenMinutes ||\n'
-                  '  BitunixKlineInterval.thirtyMinutes ||\n'
-                  '  BitunixKlineInterval.oneHour ||',
-                  1,
-              )
-          e2e.write_text(text)
-
-          ztest = root / 'test/trading_lab_zip_bundle_test.dart'
-          text = ztest.read_text()
-          pattern = re.compile(
-              r'(?P<indent>[ \t]*)accountContext: accountContext,\n'
-              r'(?P<close>[ \t]*)(?P<suffix>\);|\),)'
-          )
-          def add_v3(match):
-              indent = match.group('indent')
-              close = match.group('close')
-              suffix = match.group('suffix')
-              return (
-                  f'{indent}accountContext: accountContext,\n'
-                  f'{indent}realAccountEvidence: realAccountEvidence,\n'
-                  f'{indent}benchmarkMatrix: benchmarkMatrix,\n'
-                  f'{close}{suffix}'
-              )
-          text = pattern.sub(add_v3, text)
-          ztest.write_text(text)
-          PY
-          pushd src/client/quantara_app
-          flutter pub get
-          dart format lib test
-          flutter analyze --fatal-infos
-          flutter test test/trading_lab_paper_broker_test.dart --reporter compact
-          flutter test test/trading_lab_zip_bundle_test.dart --reporter compact
-          flutter test test/trading_lab_post_run_hardening_test.dart --reporter compact
-          flutter test test/trading_lab_no_real_order_source_test.dart --reporter compact
-          popd
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/client/quantara_app
-          if git diff --cached --quiet; then
-            echo 'No source changes generated.'
+          mapfile -t tests < <(find test -maxdepth 1 -type f -name '*_test.dart' | sort)
+          selected=()
+          for i in "${!tests[@]}"; do
+            if (( i % 8 == ${{ matrix.shard }} )); then
+              selected+=("${tests[$i]}")
+            fi
+          done
+          if (( ${#selected[@]} == 0 )); then
+            echo 'No tests assigned to this shard.'
             exit 0
           fi
-          git commit -m 'feat(lab): harden forward tests and export sanitized live evidence'
-          git push origin HEAD:feat/176-bot-trading-lab
+          for test_file in "${selected[@]}"; do
+            echo "=== $test_file ==="
+            flutter test "$test_file" --reporter compact
+          done
+
+  build-debug-apk:
+    needs: [static-checks, test-shards]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-rc3-trading-lab-debug
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
