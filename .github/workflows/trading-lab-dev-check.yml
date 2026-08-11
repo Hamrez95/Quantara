@@ -1,114 +1,1038 @@
-name: Trading Lab final validation
+name: Trading Lab post-run hardening
 
 on:
   push:
     branches:
       - feat/176-bot-trading-lab
     paths:
-      - 'src/client/quantara_app/**'
       - '.github/workflows/trading-lab-dev-check.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: trading-lab-final-${{ github.ref }}
+  group: trading-lab-hardening-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  static-checks:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: src/client/quantara_app
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.44.8'
-          channel: stable
-          cache: true
-      - name: Restore packages
-        run: flutter pub get
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
-      - name: Analyze
-        run: flutter analyze --fatal-infos
-
-  test-shards:
-    needs: static-checks
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+  harden-source:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: src/client/quantara_app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Restore packages
-        run: flutter pub get
-      - name: Run test shard ${{ matrix.shard }}
+      - name: Apply audited post-run patch
         shell: bash
-        env:
-          SHARD: ${{ matrix.shard }}
-          SHARD_COUNT: 8
         run: |
           set -euo pipefail
-          index=0
-          selected=0
-          while IFS= read -r test_file; do
-            if (( index % SHARD_COUNT == SHARD )); then
-              selected=$((selected + 1))
-              echo "::group::TEST_FILE ${test_file}"
-              if ! flutter test "${test_file}" --reporter compact; then
-                echo "FIRST_FAILING_TEST_FILE=${test_file}"
-                echo "FAILED_SHARD=${SHARD}"
-                echo "::endgroup::"
-                exit 1
-              fi
-              echo "::endgroup::"
-            fi
-            index=$((index + 1))
-          done < <(find test -type f -name '*_test.dart' | sort)
-          echo "SHARD_${SHARD}_FILES_PASSED=${selected}"
+          python3 - <<'PY'
+          from pathlib import Path
 
-  build-debug-apk:
-    needs: [static-checks, test-shards]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: src/client/quantara_app
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.44.8'
-          channel: stable
-          cache: true
-      - name: Restore packages
-        run: flutter pub get
-      - name: Build Android debug APK
-        run: flutter build apk --debug
-      - name: Upload Android debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: quantara-bot-trading-lab-final-debug
-          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+          ROOT = Path('src/client/quantara_app')
+
+          def replace(path, old, new, count=1):
+              p = ROOT / path
+              text = p.read_text()
+              found = text.count(old)
+              if found < count:
+                  raise SystemExit(f'anchor missing in {path}: expected {count}, found {found}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          # ------------------------------------------------------------------
+          # 30m is a first-class production market timeframe.
+          # ------------------------------------------------------------------
+          replace(
+              'lib/features/owner_alpha/domain/bitunix_public_stream_models.dart',
+              "  fifteenMinutes('15m', 'market_kline_15min', Duration(minutes: 15)),\n  oneHour('1h', 'market_kline_60min', Duration(hours: 1)),",
+              "  fifteenMinutes('15m', 'market_kline_15min', Duration(minutes: 15)),\n  thirtyMinutes('30m', 'market_kline_30min', Duration(minutes: 30)),\n  oneHour('1h', 'market_kline_60min', Duration(hours: 1)),",
+          )
+          replace(
+              'lib/features/owner_alpha/application/owner_alpha_controller.dart',
+              "static const timeframes = ['5m', '15m', '1h', '4h', '1D'];",
+              "static const timeframes = ['5m', '15m', '30m', '1h', '4h', '1D'];",
+          )
+          replace(
+              'lib/features/owner_alpha/data/bitunix_owner_alpha_repository.dart',
+              "static const supportedTimeframes = ['5m', '15m', '1h', '4h', '1D'];\n  static const opportunityTimeframes = ['5m', '15m', '1h', '4h'];",
+              "static const supportedTimeframes = ['5m', '15m', '30m', '1h', '4h', '1D'];\n  static const opportunityTimeframes = ['5m', '15m', '30m', '1h', '4h'];",
+          )
+          replace(
+              'lib/features/owner_alpha/data/bitunix_owner_alpha_repository.dart',
+              "            analyses['1h'] ??\n            analyses['15m'] ??\n            analyses['5m'] ??",
+              "            analyses['1h'] ??\n            analyses['30m'] ??\n            analyses['15m'] ??\n            analyses['5m'] ??",
+          )
+          replace(
+              'lib/features/owner_alpha/data/realtime_production_runtime.dart',
+              "    BitunixKlineInterval.fifteenMinutes,\n    BitunixKlineInterval.oneHour,",
+              "    BitunixKlineInterval.fifteenMinutes,\n    BitunixKlineInterval.thirtyMinutes,\n    BitunixKlineInterval.oneHour,",
+          )
+
+          # ------------------------------------------------------------------
+          # Trading Lab manifest v3 adds a configurable execution-cost/risk gate.
+          # ------------------------------------------------------------------
+          replace(
+              'lib/features/trading_lab/domain/trading_lab_models.dart',
+              'const tradingLabSchemaVersion = 2;',
+              'const tradingLabSchemaVersion = 3;',
+          )
+          replace(
+              'lib/features/trading_lab/domain/trading_lab_models.dart',
+              "    this.minimumRiskReward = 1.5,\n    this.marginMode = TradingLabMarginMode.isolated,",
+              "    this.minimumRiskReward = 1.5,\n    this.maxEstimatedCostToRiskPercent = 25,\n    this.marginMode = TradingLabMarginMode.isolated,",
+          )
+          replace(
+              'lib/features/trading_lab/domain/trading_lab_models.dart',
+              "    this.engineVersion = 'trading-lab-v2',",
+              "    this.engineVersion = 'trading-lab-v3',",
+          )
+          replace(
+              'lib/features/trading_lab/domain/trading_lab_models.dart',
+              "  final double minimumRiskReward;\n  final TradingLabMarginMode marginMode;",
+              "  final double minimumRiskReward;\n  final double maxEstimatedCostToRiskPercent;\n  final TradingLabMarginMode marginMode;",
+          )
+          replace(
+              'lib/features/trading_lab/domain/trading_lab_models.dart',
+              "    if (!minimumRiskReward.isFinite ||\n        minimumRiskReward < 0 ||\n        minimumRiskReward > 20) {\n      throw const FormatException('Trading Lab RR gate is invalid.');\n    }",
+              "    if (!minimumRiskReward.isFinite ||\n        minimumRiskReward < 0 ||\n        minimumRiskReward > 20) {\n      throw const FormatException('Trading Lab RR gate is invalid.');\n    }\n    if (!maxEstimatedCostToRiskPercent.isFinite ||\n        maxEstimatedCostToRiskPercent < 0 ||\n        maxEstimatedCostToRiskPercent > 200) {\n      throw const FormatException(\n        'Trading Lab execution cost/risk gate must be between 0% and 200%.',\n      );\n    }",
+          )
+          replace(
+              'lib/features/trading_lab/domain/trading_lab_models.dart',
+              "    'minimumRiskReward': minimumRiskReward,\n    'marginMode': marginMode.name,",
+              "    'minimumRiskReward': minimumRiskReward,\n    'maxEstimatedCostToRiskPercent': maxEstimatedCostToRiskPercent,\n    'marginMode': marginMode.name,",
+          )
+          replace(
+              'lib/features/trading_lab/domain/trading_lab_models.dart',
+              "    minimumRiskReward: _double(json['minimumRiskReward'], fallback: 1.5),\n    marginMode:",
+              "    minimumRiskReward: _double(json['minimumRiskReward'], fallback: 1.5),\n    maxEstimatedCostToRiskPercent: _double(\n      json['maxEstimatedCostToRiskPercent'],\n      fallback: 25,\n    ),\n    marginMode:",
+          )
+
+          # ------------------------------------------------------------------
+          # Sanitized real-account evidence: never persist exchange identifiers.
+          # ------------------------------------------------------------------
+          real_evidence = r'''final class TradingLabRealAccountTradeEvidence {
+            TradingLabRealAccountTradeEvidence({
+              required this.symbol,
+              required this.side,
+              required this.state,
+              required this.quantity,
+              required this.averageEntryPrice,
+              required this.averageExitPrice,
+              required this.realizedGrossPnl,
+              required this.fees,
+              required this.funding,
+              required this.netRealizedPnl,
+              required this.unrealizedPnl,
+              required this.openedAtUtc,
+              required this.closedAtUtc,
+              required this.asOfUtc,
+              required this.verified,
+            }) {
+              if (symbol.trim().isEmpty || !asOfUtc.isUtc) {
+                throw const FormatException('Invalid sanitized real-account trade evidence.');
+              }
+              if (openedAtUtc != null && !openedAtUtc!.isUtc ||
+                  closedAtUtc != null && !closedAtUtc!.isUtc ||
+                  openedAtUtc != null &&
+                      closedAtUtc != null &&
+                      closedAtUtc!.isBefore(openedAtUtc!)) {
+                throw const FormatException('Invalid sanitized real-account trade chronology.');
+              }
+            }
+
+            final String symbol;
+            final String side;
+            final String state;
+            final double quantity;
+            final double? averageEntryPrice;
+            final double? averageExitPrice;
+            final double? realizedGrossPnl;
+            final double? fees;
+            final double? funding;
+            final double? netRealizedPnl;
+            final double? unrealizedPnl;
+            final DateTime? openedAtUtc;
+            final DateTime? closedAtUtc;
+            final DateTime asOfUtc;
+            final bool verified;
+
+            Map<String, Object?> toJson() => {
+              'symbol': symbol,
+              'side': side,
+              'state': state,
+              'quantity': quantity,
+              'averageEntryPrice': averageEntryPrice,
+              'averageExitPrice': averageExitPrice,
+              'realizedGrossPnl': realizedGrossPnl,
+              'fees': fees,
+              'funding': funding,
+              'netRealizedPnl': netRealizedPnl,
+              'unrealizedPnl': unrealizedPnl,
+              'openedAtUtc': openedAtUtc?.toIso8601String(),
+              'closedAtUtc': closedAtUtc?.toIso8601String(),
+              'asOfUtc': asOfUtc.toIso8601String(),
+              'verified': verified,
+            };
+          }
+
+          final class TradingLabRealAccountEvidence {
+            TradingLabRealAccountEvidence({
+              required this.currency,
+              required this.asOfUtc,
+              required this.verified,
+              required this.fillsAvailable,
+              required this.settlementsAvailable,
+              required this.accountUnrealizedPnl,
+              required this.accountRealizedGrossPnl,
+              required this.accountFees,
+              required this.accountFunding,
+              required this.accountNetRealizedPnl,
+              required this.sourceWarningPresent,
+              Iterable<TradingLabRealAccountTradeEvidence> trades = const [],
+            }) : trades = List.unmodifiable(trades) {
+              if (currency.trim().isEmpty || !asOfUtc.isUtc) {
+                throw const FormatException('Invalid sanitized real-account evidence.');
+              }
+            }
+
+            factory TradingLabRealAccountEvidence.unavailable({DateTime? asOfUtc}) =>
+                TradingLabRealAccountEvidence(
+                  currency: 'USDT',
+                  asOfUtc: (asOfUtc ?? DateTime.now()).toUtc(),
+                  verified: false,
+                  fillsAvailable: false,
+                  settlementsAvailable: false,
+                  accountUnrealizedPnl: null,
+                  accountRealizedGrossPnl: null,
+                  accountFees: null,
+                  accountFunding: null,
+                  accountNetRealizedPnl: null,
+                  sourceWarningPresent: false,
+                );
+
+            final String currency;
+            final DateTime asOfUtc;
+            final bool verified;
+            final bool fillsAvailable;
+            final bool settlementsAvailable;
+            final double? accountUnrealizedPnl;
+            final double? accountRealizedGrossPnl;
+            final double? accountFees;
+            final double? accountFunding;
+            final double? accountNetRealizedPnl;
+            final bool sourceWarningPresent;
+            final List<TradingLabRealAccountTradeEvidence> trades;
+
+            Map<String, Object?> toJson() => {
+              'schema': 'quantara.trading_lab.real_account_evidence.v1',
+              'sanitized': true,
+              'containsExchangeIdentifiers': false,
+              'currency': currency,
+              'asOfUtc': asOfUtc.toIso8601String(),
+              'verified': verified,
+              'fillsAvailable': fillsAvailable,
+              'settlementsAvailable': settlementsAvailable,
+              'accountUnrealizedPnl': accountUnrealizedPnl,
+              'accountRealizedGrossPnl': accountRealizedGrossPnl,
+              'accountFees': accountFees,
+              'accountFunding': accountFunding,
+              'accountNetRealizedPnl': accountNetRealizedPnl,
+              'sourceWarningPresent': sourceWarningPresent,
+              'tradeCount': trades.length,
+            };
+          }
+          '''
+          (ROOT / 'lib/features/trading_lab/domain/trading_lab_real_account_evidence.dart').write_text(real_evidence)
+
+          benchmark = r'''import 'trading_lab_metrics.dart';
+          import '../domain/trading_lab_models.dart';
+
+          Map<String, Object?> buildTradingLabBenchmarkMatrix(
+            Iterable<TradingLabRun> sourceRuns, {
+            DateTime? generatedAtUtc,
+          }) {
+            final byId = <String, TradingLabRun>{
+              for (final run in sourceRuns) run.manifest.runId: run,
+            };
+            final runs = byId.values.toList(growable: false)
+              ..sort((a, b) => a.manifest.startedAtUtc.compareTo(b.manifest.startedAtUtc));
+            final groups = <String, List<TradingLabPosition>>{};
+            final groupRuns = <String, Set<String>>{};
+            for (final run in runs) {
+              for (final position in run.closedPositions) {
+                final key = '${position.strategy}@${position.strategyVersion}|${position.timeframe}';
+                (groups[key] ??= <TradingLabPosition>[]).add(position);
+                (groupRuns[key] ??= <String>{}).add(run.manifest.runId);
+              }
+            }
+
+            final strategyTimeframe = <Map<String, Object?>>[];
+            for (final entry in groups.entries) {
+              final parts = entry.key.split('|');
+              final trades = entry.value;
+              final pnls = trades.map((item) => item.netRealizedPnl).toList(growable: false);
+              final rs = trades.map((item) => item.realizedR).toList(growable: false);
+              final wins = pnls.where((value) => value > 1e-9).length;
+              final losses = pnls.where((value) => value < -1e-9).length;
+              final grossProfit = pnls
+                  .where((value) => value > 0)
+                  .fold<double>(0, (sum, value) => sum + value);
+              final grossLoss = pnls
+                  .where((value) => value < 0)
+                  .fold<double>(0, (sum, value) => sum + value.abs());
+              final averageR = rs.isEmpty
+                  ? 0.0
+                  : rs.fold<double>(0, (sum, value) => sum + value) / rs.length;
+              strategyTimeframe.add({
+                'strategyVersion': parts[0],
+                'timeframe': parts[1],
+                'sampleSize': trades.length,
+                'wins': wins,
+                'losses': losses,
+                'breakevens': trades.length - wins - losses,
+                'winRatePercent': trades.isEmpty ? 0 : wins / trades.length * 100,
+                'netPnl': pnls.fold<double>(0, (sum, value) => sum + value),
+                'averageR': averageR,
+                'profitFactor': grossLoss <= 1e-9
+                    ? (grossProfit > 1e-9 ? null : null)
+                    : grossProfit / grossLoss,
+                'runCount': groupRuns[entry.key]?.length ?? 0,
+                'evidenceTier': trades.length >= 30 ? 'decision_eligible' : 'insufficient_sample',
+              });
+            }
+            strategyTimeframe.sort((a, b) {
+              final sample = (b['sampleSize'] as int).compareTo(a['sampleSize'] as int);
+              if (sample != 0) return sample;
+              return (b['averageR'] as double).compareTo(a['averageR'] as double);
+            });
+
+            final runConfigurations = <Map<String, Object?>>[
+              for (final run in runs)
+                {
+                  'runId': run.manifest.runId,
+                  'experimentTag': run.manifest.experimentTag,
+                  'startedAtUtc': run.manifest.startedAtUtc.toIso8601String(),
+                  'startingEquity': run.manifest.startingEquity,
+                  'riskPercent': run.manifest.riskPercent,
+                  'maximumConcurrentPositions': run.manifest.maximumConcurrentPositions,
+                  'leverage': run.manifest.leverage,
+                  'timeframes': run.manifest.timeframes,
+                  'strategies': run.manifest.strategies,
+                  'minimumConfidencePercent': run.manifest.minimumConfidencePercent,
+                  'minimumRiskReward': run.manifest.minimumRiskReward,
+                  'maxEstimatedCostToRiskPercent': run.manifest.maxEstimatedCostToRiskPercent,
+                  'feeRateBps': run.manifest.feeRateBps,
+                  'slippageBps': run.manifest.slippageBps,
+                  'spreadBps': run.manifest.spreadBps,
+                  'metrics': calculateTradingLabMetrics(run).toJson(),
+                },
+            ];
+            final eligible = strategyTimeframe
+                .where((row) => row['evidenceTier'] == 'decision_eligible')
+                .toList(growable: false)
+              ..sort((a, b) => (b['averageR'] as double).compareTo(a['averageR'] as double));
+
+            return {
+              'schema': 'quantara.trading_lab.benchmark.v1',
+              'generatedAtUtc': (generatedAtUtc ?? DateTime.now()).toUtc().toIso8601String(),
+              'targetTimeframes': const ['5m', '15m', '30m', '1h'],
+              'runCount': runs.length,
+              'runConfigurations': runConfigurations,
+              'strategyTimeframeMatrix': strategyTimeframe,
+              'rankingStatus': eligible.isEmpty ? 'insufficient_evidence' : 'decision_eligible',
+              'rankedEligibleStrategyTimeframes': eligible,
+              'minimumClosedTradesForRanking': 30,
+            };
+          }
+          '''
+          (ROOT / 'lib/features/trading_lab/application/trading_lab_benchmark.dart').write_text(benchmark)
+
+          # ------------------------------------------------------------------
+          # Controller: fixed benchmark universe and sanitized account provider.
+          # ------------------------------------------------------------------
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "import '../domain/trading_lab_account_context.dart';\nimport '../domain/trading_lab_models.dart';",
+              "import '../domain/trading_lab_account_context.dart';\nimport '../domain/trading_lab_models.dart';\nimport '../domain/trading_lab_real_account_evidence.dart';\nimport 'trading_lab_benchmark.dart';",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "    TradingLabAccountContext Function()? accountContextProvider,\n  }) => TradingLabController._(\n    marketController,\n    store,\n    broker,\n    accountContextProvider,\n  );",
+              "    TradingLabAccountContext Function()? accountContextProvider,\n    TradingLabRealAccountEvidence Function()? realAccountEvidenceProvider,\n  }) => TradingLabController._(\n    marketController,\n    store,\n    broker,\n    accountContextProvider,\n    realAccountEvidenceProvider,\n  );",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "    this._broker,\n    this._accountContextProvider,\n  );",
+              "    this._broker,\n    this._accountContextProvider,\n    this._realAccountEvidenceProvider,\n  );",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "  final TradingLabAccountContext Function()? _accountContextProvider;",
+              "  final TradingLabAccountContext Function()? _accountContextProvider;\n  final TradingLabRealAccountEvidence Function()? _realAccountEvidenceProvider;",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "  TradingLabAccountContext get accountContext =>\n      _accountContextProvider?.call() ??\n      TradingLabAccountContext.disconnected();",
+              "  TradingLabAccountContext get accountContext =>\n      _accountContextProvider?.call() ??\n      TradingLabAccountContext.disconnected();\n  TradingLabRealAccountEvidence get realAccountEvidence =>\n      _realAccountEvidenceProvider?.call() ??\n      TradingLabRealAccountEvidence.unavailable();",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "    double minimumRiskReward = 1.5,\n    TradingLabMarginMode marginMode =",
+              "    double minimumRiskReward = 1.5,\n    double maxEstimatedCostToRiskPercent = 25,\n    TradingLabMarginMode marginMode =",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "        timeframes: OwnerAlphaController.timeframes.where(\n          (item) => item != '1D',\n        ),",
+              "        timeframes: const ['5m', '15m', '30m', '1h'],",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "        minimumRiskReward: minimumRiskReward,\n        marginMode: marginMode,",
+              "        minimumRiskReward: minimumRiskReward,\n        maxEstimatedCostToRiskPercent: maxEstimatedCostToRiskPercent,\n        marginMode: marginMode,",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_controller.dart',
+              "      accountContext: context,\n    );",
+              "      accountContext: context,\n      realAccountEvidence: realAccountEvidence,\n      benchmarkMatrix: buildTradingLabBenchmarkMatrix(<TradingLabRun>[\n        ..._history,\n        current,\n      ]),\n    );",
+          )
+
+          # ------------------------------------------------------------------
+          # Owner page maps authoritative PnL to a sanitized identifier-free seam.
+          # ------------------------------------------------------------------
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
+              "import '../../trading_lab/domain/trading_lab_models.dart';",
+              "import '../../trading_lab/domain/trading_lab_models.dart';\nimport '../../trading_lab/domain/trading_lab_real_account_evidence.dart';",
+          )
+          helper = r'''
+          double? _tradingLabWeightedFillPrice(Iterable<ExchangePnlFill> fills) {
+            var quantity = 0.0;
+            var notional = 0.0;
+            for (final fill in fills) {
+              final weight = fill.quantity.abs();
+              quantity += weight;
+              notional += fill.price * weight;
+            }
+            return quantity <= 1e-12 ? null : notional / quantity;
+          }
+
+          TradingLabRealAccountEvidence _buildTradingLabRealAccountEvidence(
+            AutoTradeController controller,
+          ) {
+            final snapshot = controller.snapshot;
+            final projection = snapshot?.authoritativePnl;
+            if (projection == null) {
+              return TradingLabRealAccountEvidence.unavailable(
+                asOfUtc: snapshot?.syncedAt,
+              );
+            }
+            final trades = <TradingLabRealAccountTradeEvidence>[];
+            for (final position in projection.positions) {
+              final entryFills = position.fills
+                  .where((fill) => !fill.reduceOnly)
+                  .toList(growable: false);
+              final exitFills = position.exitFills.toList(growable: false);
+              DateTime? openedAt = position.settlement?.openedAt;
+              if (openedAt == null && entryFills.isNotEmpty) {
+                openedAt = entryFills
+                    .map((fill) => fill.occurredAt.toUtc())
+                    .reduce((a, b) => a.isBefore(b) ? a : b);
+              }
+              final closedAt = position.settlement?.closedAt.toUtc();
+              final side = entryFills.isEmpty ? '' : entryFills.first.side.trim().toLowerCase();
+              final quantity = entryFills.fold<double>(
+                0,
+                (sum, fill) => sum + fill.quantity.abs(),
+              );
+              trades.add(
+                TradingLabRealAccountTradeEvidence(
+                  symbol: position.symbol.trim().toUpperCase(),
+                  side: side,
+                  state: closedAt != null ? 'closed' : 'open_or_observed',
+                  quantity: quantity,
+                  averageEntryPrice: _tradingLabWeightedFillPrice(entryFills),
+                  averageExitPrice: _tradingLabWeightedFillPrice(exitFills),
+                  realizedGrossPnl: position.realizedGross.value,
+                  fees: position.fees.value,
+                  funding: position.funding.value,
+                  netRealizedPnl: position.netRealized.value,
+                  unrealizedPnl: position.unrealized.value,
+                  openedAtUtc: openedAt?.toUtc(),
+                  closedAtUtc: closedAt,
+                  asOfUtc: position.asOf.toUtc(),
+                  verified: position.isVerified,
+                ),
+              );
+            }
+            return TradingLabRealAccountEvidence(
+              currency: projection.currency,
+              asOfUtc: projection.asOf.toUtc(),
+              verified: projection.isVerified,
+              fillsAvailable: projection.fillsAvailable,
+              settlementsAvailable: projection.settlementsAvailable,
+              accountUnrealizedPnl: projection.accountUnrealized.value,
+              accountRealizedGrossPnl: projection.accountRealizedGross.value,
+              accountFees: projection.accountFees.value,
+              accountFunding: projection.accountFunding.value,
+              accountNetRealizedPnl: projection.accountNetRealized.value,
+              sourceWarningPresent: projection.warning != null,
+              trades: trades,
+            );
+          }
+          '''
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
+              "void _noopOpenPortfolioRisk() {}\n",
+              "void _noopOpenPortfolioRisk() {}\n" + helper,
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
+              "      );\n    },\n  );\n  final GlobalKey<_AutoTradeViewState>",
+              "      );\n    },\n    realAccountEvidenceProvider: () =>\n        _buildTradingLabRealAccountEvidence(_autoTradeController),\n  );\n  final GlobalKey<_AutoTradeViewState>",
+          )
+
+          # ------------------------------------------------------------------
+          # Paper Broker fixes discovered from the 20h physical evidence run.
+          # ------------------------------------------------------------------
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "    final cycle = run.cycleId;\n    final openedBefore = run.openPositions.length;",
+              "    final cycle = run.cycleId;\n    final snapshotGapSeconds = previous == null\n        ? 0\n        : snapshot.generatedAt.difference(previous).inSeconds;\n    if (previous != null &&\n        snapshotGapSeconds > run.manifest.scannerIntervalSeconds * 3) {\n      _event(\n        run,\n        TradingLabEventKind.anomaly,\n        snapshot.generatedAt,\n        'Trading Lab market snapshot cadence exceeded the configured scanner interval.',\n        metrics: {\n          'gapSeconds': snapshotGapSeconds.toDouble(),\n          'configuredScannerIntervalSeconds':\n              run.manifest.scannerIntervalSeconds.toDouble(),\n        },\n        attributes: {'anomalyCode': 'scanner_gap'},\n      );\n    }\n    final openedBefore = run.openPositions.length;",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "        'realAccountAvailable': accountContext?.available ?? 0,\n        'realAccountAgeSeconds':",
+              "        'realAccountAvailable': accountContext?.available ?? 0,\n        'realAccountOpenPositionCount':\n            (accountContext?.openPositionCount ?? 0).toDouble(),\n        'realAccountPendingOrderCount':\n            (accountContext?.pendingOrderCount ?? 0).toDouble(),\n        'snapshotGapSeconds': snapshotGapSeconds.toDouble(),\n        'realAccountAgeSeconds':",
+          )
+
+          broker_path = ROOT / 'lib/features/trading_lab/application/trading_lab_paper_broker.dart'
+          broker = broker_path.read_text()
+          old = """        if (idea.confidencePercent < run.manifest.minimumConfidencePercent) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            'Candidate rejected by experiment confidence gate.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {'rejectionReason': 'confidence_below_gate'},
+          );
+          continue;
+        }
+        if ((idea.riskReward ?? 0) < run.manifest.minimumRiskReward) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            'Candidate rejected by experiment minimum RR gate.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {'rejectionReason': 'risk_reward_below_gate'},
+          );
+          continue;
+        }
+
+        if (!_isValidActionablePlan(idea)) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            idea.direction == TradeDirection.wait
+                ? 'Strategy rejected candidate: ${idea.rejectionReason.name}.'
+                : 'Candidate plan is incomplete or has a wrong-side stop.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {'rejectionReason': idea.rejectionReason.name},
+          );
+          continue;
+        }
+"""
+          new = """        if (!_isValidActionablePlan(idea)) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            idea.direction == TradeDirection.wait
+                ? 'Strategy produced WAIT/non-actionable evidence: ${idea.rejectionReason.name}.'
+                : 'Candidate plan is incomplete or has a wrong-side stop.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {
+              'rejectionReason': idea.direction == TradeDirection.wait
+                  ? 'strategy_wait_${idea.rejectionReason.name}'
+                  : idea.rejectionReason.name,
+              'decisionClass': idea.direction == TradeDirection.wait
+                  ? 'non_actionable_wait'
+                  : 'invalid_plan',
+            },
+          );
+          continue;
+        }
+        if (idea.confidencePercent < run.manifest.minimumConfidencePercent) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            'Actionable candidate rejected by experiment confidence gate.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {'rejectionReason': 'confidence_below_gate'},
+          );
+          continue;
+        }
+        if ((idea.riskReward ?? 0) < run.manifest.minimumRiskReward) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            'Actionable candidate rejected by experiment minimum RR gate.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {'rejectionReason': 'risk_reward_below_gate'},
+          );
+          continue;
+        }
+"""
+          if old not in broker:
+              raise SystemExit('candidate gate ordering anchor missing')
+          broker = broker.replace(old, new, 1)
+          broker_path.write_text(broker)
+
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "    for (final candidate in List<TradingLabPendingCandidate>.of(\n      run.pendingCandidates,\n    )) {\n      if (!snapshot.generatedAt.isBefore(candidate.validUntilUtc)) {",
+              "    for (final candidate in List<TradingLabPendingCandidate>.of(\n      run.pendingCandidates,\n    )) {\n      final currentIdea = _currentIdeaFor(snapshot, candidate);\n      if (currentIdea != null &&\n          (currentIdea.direction == TradeDirection.wait ||\n              currentIdea.setupId != candidate.setupId ||\n              currentIdea.strategy.name != candidate.strategy ||\n              currentIdea.strategyVersion != candidate.strategyVersion)) {\n        remove.add(candidate);\n        _event(\n          run,\n          TradingLabEventKind.candidateRejected,\n          snapshot.generatedAt,\n          currentIdea.direction == TradeDirection.wait\n              ? 'Pending candidate invalidated because the current strategy state is WAIT.'\n              : 'Pending candidate superseded by a newer setup for the same symbol/timeframe.',\n          candidate: candidate,\n          attributes: {\n            'rejectionReason': currentIdea.direction == TradeDirection.wait\n                ? 'setup_invalidated'\n                : 'setup_superseded',\n          },\n        );\n        continue;\n      }\n      if (!snapshot.generatedAt.isBefore(candidate.validUntilUtc)) {",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "            (candle) =>\n                candle.openTime.isAfter(candidate.signalCandleOpenTimeUtc),",
+              "            (candle) =>\n                candle.openTime.isAfter(candidate.signalCandleOpenTimeUtc) &&\n                !candle.openTime.isBefore(candidate.observedAtUtc),",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "        entryCandle,\n        snapshot.generatedAt,\n      );",
+              "        entryCandle,\n        entryCandle.openTime.toUtc(),\n      );",
+          )
+          helper2 = r'''
+            TradeIdea? _currentIdeaFor(
+              OwnerAlphaSnapshot snapshot,
+              TradingLabPendingCandidate candidate,
+            ) {
+              for (final radar in snapshot.radar) {
+                if (radar.quote.symbol.toUpperCase() != candidate.symbol) continue;
+                return radar.ideasByTimeframe[candidate.timeframe];
+              }
+              return null;
+            }
+
+          '''
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "  bool _openPosition(\n",
+              helper2 + "  bool _openPosition(\n",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "    final fractions = _fractionsForTargets(candidate.targets.length);\n    final entryFee = _fee(notional, run.manifest.feeRateBps);\n    final spreadCost = (afterSpread - referenceEntry).abs() * quantity;\n    final slippageCost = (entry - afterSpread).abs() * quantity;\n    run.balance -= entryFee;",
+              "    final fractions = _fractionsForTargets(candidate.targets.length);\n    final entryFee = _fee(notional, run.manifest.feeRateBps);\n    final spreadCost = (afterSpread - referenceEntry).abs() * quantity;\n    final slippageCost = (entry - afterSpread).abs() * quantity;\n    final estimatedExitFee = _fee(notional, run.manifest.feeRateBps);\n    final estimatedExitExecutionCost =\n        notional * (run.manifest.spreadBps / 2 + run.manifest.slippageBps) / 10000;\n    final estimatedRoundTripExecutionCost =\n        entryFee +\n        estimatedExitFee +\n        spreadCost +\n        slippageCost +\n        estimatedExitExecutionCost;\n    final executionCostToRiskPercent =\n        estimatedRoundTripExecutionCost / riskBudget * 100;\n    if (executionCostToRiskPercent >\n        run.manifest.maxEstimatedCostToRiskPercent) {\n      _event(\n        run,\n        TradingLabEventKind.candidateRejected,\n        now,\n        'Paper entry blocked: estimated execution costs consume too much of the configured risk budget.',\n        candidate: candidate,\n        metrics: {\n          'estimatedRoundTripExecutionCost': estimatedRoundTripExecutionCost,\n          'riskBudget': riskBudget,\n          'executionCostToRiskPercent': executionCostToRiskPercent,\n          'maximumExecutionCostToRiskPercent':\n              run.manifest.maxEstimatedCostToRiskPercent,\n        },\n        attributes: {\n          'rejectionReason': 'execution_cost_to_risk_too_high',\n        },\n      );\n      return false;\n    }\n    run.balance -= entryFee;",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "        'portfolioRiskAfter': _openRisk(run) + position.initialRisk,",
+              "        'portfolioRiskAfter': _openRisk(run),",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_paper_broker.dart',
+              "            (candle) =>\n                candle.openTime.isAfter(position.lastEvaluatedCandleAtUtc),",
+              "            (candle) =>\n                candle.openTime.isAfter(position.lastEvaluatedCandleAtUtc) &&\n                !candle.openTime.isBefore(position.openedAtUtc),",
+          )
+
+          # ------------------------------------------------------------------
+          # ZIP v3: real account evidence, snapshots, and cross-run benchmark.
+          # ------------------------------------------------------------------
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              "import '../domain/trading_lab_models.dart';",
+              "import '../domain/trading_lab_models.dart';\nimport '../domain/trading_lab_real_account_evidence.dart';",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              'const tradingLabBundleSchemaVersion = 2;',
+              'const tradingLabBundleSchemaVersion = 3;',
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              "    'account_context.json',\n    'README.txt',",
+              "    'account_context.json',\n    'real_account_summary.json',\n    'real_account_trades.jsonl',\n    'real_account_snapshots.jsonl',\n    'benchmark_matrix.json',\n    'README.txt',",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              "    required TradingLabAccountContext accountContext,\n  }) {",
+              "    required TradingLabAccountContext accountContext,\n    required TradingLabRealAccountEvidence realAccountEvidence,\n    required Map<String, Object?> benchmarkMatrix,\n  }) {",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              "    final accountObject = accountContext.toJson();\n    final summaryObject = _summary(run);",
+              "    final accountObject = accountContext.toJson();\n    final realAccountObject = realAccountEvidence.toJson();\n    final realAccountTrades = realAccountEvidence.trades\n        .map((trade) => trade.toJson())\n        .toList(growable: false);\n    final realAccountSnapshots = run.events\n        .where((event) => event.kind == TradingLabEventKind.heartbeat)\n        .map(\n          (event) => <String, Object?>{\n            'atUtc': event.atUtc.toIso8601String(),\n            'estimatedEquity': event.metrics['realAccountEstimatedEquity'],\n            'available': event.metrics['realAccountAvailable'],\n            'openPositionCount': event.metrics['realAccountOpenPositionCount'],\n            'pendingOrderCount': event.metrics['realAccountPendingOrderCount'],\n            'accountHealth': event.attributes['accountHealth'],\n            'connected': event.attributes['accountConnected'],\n          },\n        )\n        .toList(growable: false);\n    final summaryObject = _summary(run);",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              "      accountObject,\n      jsonDecode(aiReviewJson),",
+              "      accountObject,\n      realAccountObject,\n      realAccountTrades,\n      realAccountSnapshots,\n      benchmarkMatrix,\n      jsonDecode(aiReviewJson),",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              "      'account_context.json': _utf8(pretty.convert(accountObject)),\n      'README.txt':",
+              "      'account_context.json': _utf8(pretty.convert(accountObject)),\n      'real_account_summary.json': _utf8(pretty.convert(realAccountObject)),\n      'real_account_trades.jsonl': _utf8(_jsonl(realAccountTrades)),\n      'real_account_snapshots.jsonl': _utf8(_jsonl(realAccountSnapshots)),\n      'benchmark_matrix.json': _utf8(pretty.convert(benchmarkMatrix)),\n      'README.txt':",
+          )
+          replace(
+              'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
+              "      'containsCredentials': false,\n      'files':",
+              "      'containsCredentials': false,\n      'sanitizedRealAccountEvidence': true,\n      'containsExchangeIdentifiers': false,\n      'files':",
+          )
+          # Decode remains strict for the new schema, but accept legacy v2 bundles.
+          zip_path = ROOT / 'lib/features/trading_lab/application/trading_lab_zip_bundle.dart'
+          zip_text = zip_path.read_text()
+          old = """    if (!files.keys.toSet().containsAll(requiredEvidenceFiles)) {
+      throw const FormatException('Trading Lab ZIP bundle is incomplete.');
+    }
+
+    final bundleManifest = _jsonObject(files['bundle_manifest.json']!);
+    if (_int(bundleManifest['bundleSchemaVersion']) !=
+        tradingLabBundleSchemaVersion) {
+      throw const FormatException('Unsupported Trading Lab bundle schema.');
+    }
+    if (bundleManifest['bundleType'] != 'bot-trading-lab-evidence' ||
+        bundleManifest['paperOnly'] != true ||
+        bundleManifest['containsCredentials'] != false) {
+"""
+          new = """    if (!files.containsKey('bundle_manifest.json')) {
+      throw const FormatException('Trading Lab ZIP bundle is incomplete.');
+    }
+
+    final bundleManifest = _jsonObject(files['bundle_manifest.json']!);
+    final bundleSchema = _int(bundleManifest['bundleSchemaVersion']);
+    const legacyV2Files = <String>{
+      'bundle_manifest.json',
+      'manifest.json',
+      'summary.json',
+      'run.json',
+      'trades.jsonl',
+      'candidates.jsonl',
+      'decisions.jsonl',
+      'management_events.jsonl',
+      'equity_curve.jsonl',
+      'market_feature_snapshots.jsonl',
+      'anomalies.jsonl',
+      'strategy_versions.json',
+      'ai_review.json',
+      'shadow_evidence.json',
+      'account_context.json',
+      'README.txt',
+    };
+    final expectedFiles = bundleSchema == 2
+        ? legacyV2Files
+        : bundleSchema == tradingLabBundleSchemaVersion
+        ? requiredEvidenceFiles
+        : throw const FormatException('Unsupported Trading Lab bundle schema.');
+    if (!files.keys.toSet().containsAll(expectedFiles)) {
+      throw const FormatException('Trading Lab ZIP bundle is incomplete.');
+    }
+    if (bundleManifest['bundleType'] != 'bot-trading-lab-evidence' ||
+        bundleManifest['paperOnly'] != true ||
+        bundleManifest['containsCredentials'] != false ||
+        (bundleSchema >= 3 &&
+            (bundleManifest['sanitizedRealAccountEvidence'] != true ||
+                bundleManifest['containsExchangeIdentifiers'] != false))) {
+"""
+          if old not in zip_text:
+              raise SystemExit('zip decode schema anchor missing')
+          zip_text = zip_text.replace(old, new, 1)
+          zip_text = zip_text.replace(
+              "requiredEvidenceFiles.difference({'bundle_manifest.json'}),",
+              "expectedFiles.difference({'bundle_manifest.json'}),",
+              1,
+          )
+          zip_text = zip_text.replace(
+              "      'anomalies.jsonl',\n    ]) {",
+              "      'anomalies.jsonl',\n      if (bundleSchema >= 3) 'real_account_trades.jsonl',\n      if (bundleSchema >= 3) 'real_account_snapshots.jsonl',\n    ]) {",
+              1,
+          )
+          zip_text = zip_text.replace(
+              "    _assertNoSensitiveKeys(jsonDecode(accountJson));\n",
+              "    _assertNoSensitiveKeys(jsonDecode(accountJson));\n    if (bundleSchema >= 3) {\n      _assertNoSensitiveKeys(\n        jsonDecode(utf8.decode(files['real_account_summary.json']!)),\n      );\n      _assertNoSensitiveKeys(\n        jsonDecode(utf8.decode(files['benchmark_matrix.json']!)),\n      );\n    }\n",
+              1,
+          )
+          zip_path.write_text(zip_text)
+
+          # ------------------------------------------------------------------
+          # UI defaults reflect observed evidence: 2 slots and cost/risk gate.
+          # ------------------------------------------------------------------
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "  final _minimumRr = TextEditingController(text: '1.5');\n  final _scannerInterval",
+              "  final _minimumRr = TextEditingController(text: '1.5');\n  final _maxCostToRisk = TextEditingController(text: '25');\n  final _scannerInterval",
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              '  int _slots = 3;',
+              '  int _slots = 2;',
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "    _minimumRr.dispose();\n    _scannerInterval.dispose();",
+              "    _minimumRr.dispose();\n    _maxCostToRisk.dispose();\n    _scannerInterval.dispose();",
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "    final minimumRr = double.tryParse(_minimumRr.text.trim());\n    final scannerInterval",
+              "    final minimumRr = double.tryParse(_minimumRr.text.trim());\n    final maxCostToRisk = double.tryParse(_maxCostToRisk.text.trim());\n    final scannerInterval",
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "        minimumRr == null ||\n        scannerInterval == null)",
+              "        minimumRr == null ||\n        maxCostToRisk == null ||\n        scannerInterval == null)",
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "        minimumRiskReward: minimumRr,\n        scannerIntervalSeconds:",
+              "        minimumRiskReward: minimumRr,\n        maxEstimatedCostToRiskPercent: maxCostToRisk,\n        scannerIntervalSeconds:",
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _scannerInterval,",
+              "                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _maxCostToRisk,\n                      _fa\n                          ? 'حداکثر هزینه اجرا / ریسک (%)'\n                          : 'Max execution cost / risk (%)',\n                    ),\n                  ),\n                  SizedBox(\n                    width: itemWidth,\n                    child: _labNumberField(\n                      _scannerInterval,",
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "بسته کامل شواهد آزمایش بات Quantara — شامل Run، AI Review، Shadow Evidence، Account Context پاک‌سازی‌شده و checksum؛ بدون کلید API.",
+              "بسته کامل شواهد آزمایش بات Quantara — شامل Paper/Shadow، مانیتور امن حساب واقعی، Benchmark تایم‌فریم/استراتژی/تنظیمات و checksum؛ بدون شناسه سفارش یا کلید API.",
+          )
+          replace(
+              'lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart',
+              "Complete Quantara Bot Trading Lab evidence bundle — run, AI review, shadow evidence, sanitized account context and checksums; no API credentials.",
+              "Complete Quantara Bot Trading Lab evidence bundle — paper/shadow evidence, sanitized real-account monitoring, timeframe/strategy/config benchmark and checksums; no exchange identifiers or API credentials.",
+          )
+
+          # ------------------------------------------------------------------
+          # Tests: temporal safety, cadence anomalies, execution cost gate, ZIP v3.
+          # ------------------------------------------------------------------
+          test_path = ROOT / 'test/trading_lab_paper_broker_test.dart'
+          test_text = test_path.read_text()
+          marker = """    test(
+      'keeps scanning and explains slot capacity while a paper position is open',
+"""
+          insert = r'''    test('never opens from a candle earlier than candidate observation', () {
+              const broker = TradingLabPaperBroker();
+              final run = _run(slots: 2);
+              broker.processSnapshot(
+                run,
+                _snapshot(candleCount: 20, generatedMinute: 21),
+              );
+              broker.processSnapshot(
+                run,
+                _snapshot(
+                  candleCount: 21,
+                  generatedMinute: 22,
+                  lastCandle: _candle(
+                    20,
+                    open: 102,
+                    high: 103,
+                    low: 100.25,
+                    close: 102,
+                  ),
+                ),
+              );
+              expect(run.openPositions, isEmpty);
+              broker.processSnapshot(
+                run,
+                _snapshot(
+                  candleCount: 22,
+                  generatedMinute: 23,
+                  lastCandle: _candle(
+                    21,
+                    open: 102,
+                    high: 103,
+                    low: 100.25,
+                    close: 102,
+                  ),
+                ),
+              );
+              expect(run.openPositions, hasLength(1));
+              expect(
+                run.openPositions.single.openedAtUtc,
+                isNot(lessThan(DateTime.utc(2026, 8, 10, 0, 21))),
+              );
+            });
+
+            test('records scanner gaps as anomalies', () {
+              const broker = TradingLabPaperBroker();
+              final run = _run(slots: 2);
+              broker.processSnapshot(
+                run,
+                _snapshot(candleCount: 20, generatedMinute: 20),
+              );
+              broker.processSnapshot(
+                run,
+                _snapshot(candleCount: 20, generatedMinute: 22),
+              );
+              expect(
+                run.events.where(
+                  (event) =>
+                      event.kind == TradingLabEventKind.anomaly &&
+                      event.attributes['anomalyCode'] == 'scanner_gap',
+                ),
+                isNotEmpty,
+              );
+            });
+
+            test('blocks entries when estimated execution cost consumes too much risk', () {
+              const broker = TradingLabPaperBroker();
+              final run = _run(slots: 2, maxCostToRiskPercent: 1);
+              broker.processSnapshot(
+                run,
+                _snapshot(candleCount: 20, generatedMinute: 20),
+              );
+              broker.processSnapshot(
+                run,
+                _snapshot(
+                  candleCount: 21,
+                  generatedMinute: 21,
+                  lastCandle: _candle(
+                    20,
+                    open: 102,
+                    high: 103,
+                    low: 100.25,
+                    close: 102,
+                  ),
+                ),
+              );
+              expect(run.openPositions, isEmpty);
+              expect(
+                run.events.where(
+                  (event) =>
+                      event.attributes['rejectionReason'] ==
+                      'execution_cost_to_risk_too_high',
+                ),
+                isNotEmpty,
+              );
+            });
+
+          '''
+          if marker not in test_text:
+              raise SystemExit('paper broker test insertion anchor missing')
+          test_text = test_text.replace(marker, insert + marker, 1)
+          test_text = test_text.replace(
+              'TradingLabRun _run({required int slots}) {',
+              'TradingLabRun _run({required int slots, double maxCostToRiskPercent = 25}) {',
+              1,
+          )
+          test_text = test_text.replace(
+              "      slippageBps: 2,\n    ),",
+              "      slippageBps: 2,\n      maxEstimatedCostToRiskPercent: maxCostToRiskPercent,\n    ),",
+              1,
+          )
+          test_path.write_text(test_text)
+
+          zip_test = ROOT / 'test/trading_lab_zip_bundle_test.dart'
+          zt = zip_test.read_text()
+          zt = zt.replace(
+              "import 'package:quantara_app/features/trading_lab/domain/trading_lab_models.dart';",
+              "import 'package:quantara_app/features/trading_lab/domain/trading_lab_models.dart';\nimport 'package:quantara_app/features/trading_lab/domain/trading_lab_real_account_evidence.dart';",
+              1,
+          )
+          zt = zt.replace(
+              "  test('full Lab evidence is a standard ZIP and round-trips safely', () {",
+              "  final realAccountEvidence = TradingLabRealAccountEvidence(\n    currency: 'USDT',\n    asOfUtc: DateTime.utc(2026, 8, 10, 4),\n    verified: true,\n    fillsAvailable: true,\n    settlementsAvailable: true,\n    accountUnrealizedPnl: 0.4,\n    accountRealizedGrossPnl: 1.2,\n    accountFees: 0.1,\n    accountFunding: 0.02,\n    accountNetRealizedPnl: 1.08,\n    sourceWarningPresent: false,\n    trades: [\n      TradingLabRealAccountTradeEvidence(\n        symbol: 'BTCUSDT',\n        side: 'long',\n        state: 'closed',\n        quantity: 0.01,\n        averageEntryPrice: 100,\n        averageExitPrice: 102,\n        realizedGrossPnl: 1.2,\n        fees: 0.1,\n        funding: 0.02,\n        netRealizedPnl: 1.08,\n        unrealizedPnl: 0,\n        openedAtUtc: DateTime.utc(2026, 8, 10, 3),\n        closedAtUtc: DateTime.utc(2026, 8, 10, 4),\n        asOfUtc: DateTime.utc(2026, 8, 10, 4),\n        verified: true,\n      ),\n    ],\n  );\n\n  const benchmarkMatrix = <String, Object?>{\n    'schema': 'quantara.trading_lab.benchmark.v1',\n    'targetTimeframes': ['5m', '15m', '30m', '1h'],\n  };\n\n  test('full Lab evidence is a standard ZIP and round-trips safely', () {",
+              1,
+          )
+          zt = zt.replace(
+              "      accountContext: accountContext,\n    );",
+              "      accountContext: accountContext,\n      realAccountEvidence: realAccountEvidence,\n      benchmarkMatrix: benchmarkMatrix,\n    );",
+          )
+          zt = zt.replace(
+              "    expect(restored.fileNames, contains('market_feature_snapshots.jsonl'));",
+              "    expect(restored.fileNames, contains('market_feature_snapshots.jsonl'));\n    expect(restored.fileNames, contains('real_account_summary.json'));\n    expect(restored.fileNames, contains('real_account_trades.jsonl'));\n    expect(restored.fileNames, contains('real_account_snapshots.jsonl'));\n    expect(restored.fileNames, contains('benchmark_matrix.json'));",
+              1,
+          )
+          zip_test.write_text(zt)
+
+          support_test = r'''import 'package:flutter_test/flutter_test.dart';
+          import 'package:quantara_app/features/owner_alpha/application/owner_alpha_controller.dart';
+          import 'package:quantara_app/features/owner_alpha/domain/bitunix_public_stream_models.dart';
+          import 'package:quantara_app/features/trading_lab/application/trading_lab_benchmark.dart';
+          import 'package:quantara_app/features/trading_lab/domain/trading_lab_models.dart';
+
+          void main() {
+            test('30m is available in production and Lab benchmark timeframe universe', () {
+              expect(OwnerAlphaController.timeframes, contains('30m'));
+              expect(
+                BitunixKlineInterval.values.map((item) => item.timeframe),
+                contains('30m'),
+              );
+              expect(
+                BitunixKlineInterval.thirtyMinutes.channel,
+                'market_kline_30min',
+              );
+            });
+
+            test('benchmark records run capital and fixed 5m-to-1h target universe', () {
+              final run = TradingLabRun(
+                manifest: TradingLabRunManifest(
+                  runId: 'benchmark-run',
+                  startedAtUtc: DateTime.utc(2026, 8, 11),
+                  startingEquity: 500,
+                  riskPercent: 1,
+                  maximumConcurrentPositions: 2,
+                  leverage: 5,
+                  symbols: const ['BTCUSDT'],
+                  timeframes: const ['5m', '15m', '30m', '1h'],
+                  strategies: const ['trendPullback@test'],
+                ),
+              );
+              final matrix = buildTradingLabBenchmarkMatrix(
+                [run],
+                generatedAtUtc: DateTime.utc(2026, 8, 11, 1),
+              );
+              expect(matrix['targetTimeframes'], ['5m', '15m', '30m', '1h']);
+              final configs = matrix['runConfigurations']! as List<Object?>;
+              final first = configs.single as Map<String, Object?>;
+              expect(first['startingEquity'], 500);
+              expect(first['maximumConcurrentPositions'], 2);
+              expect(matrix['rankingStatus'], 'insufficient_evidence');
+            });
+          }
+          '''
+          (ROOT / 'test/trading_lab_post_run_hardening_test.dart').write_text(support_test)
+
+          # Version is advanced once for the release-candidate line; signed Preview will
+          # use this monotonically increasing versionCode after secrets are provisioned.
+          replace(
+              'pubspec.yaml',
+              'version: 1.2.0-rc.2+124',
+              'version: 1.2.0-rc.3+125',
+          )
+          PY
+
+          pushd src/client/quantara_app
+          flutter pub get
+          dart format lib test
+          flutter analyze --fatal-infos
+          flutter test test/trading_lab_paper_broker_test.dart --reporter compact
+          flutter test test/trading_lab_zip_bundle_test.dart --reporter compact
+          flutter test test/trading_lab_post_run_hardening_test.dart --reporter compact
+          flutter test test/trading_lab_no_real_order_source_test.dart --reporter compact
+          popd
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app
+          git commit -m 'feat(lab): harden forward tests and export sanitized live evidence'
+          git push origin HEAD:feat/176-bot-trading-lab
