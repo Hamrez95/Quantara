@@ -24,7 +24,7 @@ void main() {
       'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
     ).readAsStringSync();
 
-    expect(pubspec, contains('version: 1.2.0-rc.3+125'));
+    expect(pubspec, contains('version: 1.2.0-rc.3+126'));
     expect(
       flutterWorkflow,
       contains('Flutter format, analyze, test, and unsigned QA build'),
