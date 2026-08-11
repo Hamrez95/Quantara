@@ -252,6 +252,7 @@ final class ExchangeUnrealizedPnl {
     this.realizedPnl,
     this.fee,
     this.funding,
+    this.openedAt,
   });
 
   final String positionId;
@@ -260,6 +261,7 @@ final class ExchangeUnrealizedPnl {
   final double? realizedPnl;
   final double? fee;
   final double? funding;
+  final DateTime? openedAt;
 
   Map<String, Object?> toJson() => {
     'positionId': positionId,
@@ -268,6 +270,7 @@ final class ExchangeUnrealizedPnl {
     'realizedPnl': realizedPnl,
     'fee': fee,
     'funding': funding,
+    'openedAt': openedAt?.toUtc().toIso8601String(),
   };
 
   factory ExchangeUnrealizedPnl.fromJson(Map<String, Object?> json) =>
@@ -278,6 +281,9 @@ final class ExchangeUnrealizedPnl {
         realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
         fee: (json['fee'] as num?)?.toDouble(),
         funding: (json['funding'] as num?)?.toDouble(),
+        openedAt: DateTime.tryParse(
+          json['openedAt']?.toString() ?? '',
+        )?.toUtc(),
       );
 }
 
@@ -461,6 +467,7 @@ final class TradingPnlProjection {
       ...settlementsByKey.keys,
     };
     final positions = <PositionPnlProjection>[];
+    final accountBlockingPositionKeys = <String>{};
     for (final key in keys) {
       final open = unrealizedByPosition[key];
       final positionFills =
@@ -481,13 +488,32 @@ final class TradingPnlProjection {
           (positionFills.isNotEmpty
               ? positionFills.first.positionId
               : settlement?.positionId ?? key);
-      final positionConflict = conflicts.any(
+      final unassignedAttribution = key.startsWith('unassigned-trade:');
+      final attributionCouldAffectOpenPosition =
+          unassignedAttribution &&
+          positionFills.any((fill) {
+            final matchingOpen = unrealizedByPosition.values.where(
+              (candidate) =>
+                  candidate.symbol.trim().toUpperCase() ==
+                  fill.symbol.trim().toUpperCase(),
+            );
+            return matchingOpen.any((candidate) {
+              final openedAt = candidate.openedAt;
+              return openedAt == null ||
+                  !fill.occurredAt.toUtc().isBefore(openedAt.toUtc());
+            });
+          });
+      final identityConflict = conflicts.any(
         (item) =>
             positionFills.any((fill) => fill.tradeId == item) ||
             item == 'settlement:$key' ||
             item == 'missing tradeId',
       );
-      final verified = !positionConflict && sourceVerified;
+      final positionConflict = unassignedAttribution || identityConflict;
+      final closedEvidenceCanStandAlone =
+          settlement != null && positionFills.isNotEmpty && !positionConflict;
+      final verified =
+          !positionConflict && (sourceVerified || closedEvidenceCanStandAlone);
 
       final realizedValue = fillsAvailable
           ? positionFills.fold<double>(0, (sum, item) => sum + item.realizedPnl)
@@ -506,25 +532,57 @@ final class TradingPnlProjection {
           fillsAvailable &&
           settlement?.fee != null &&
           (feeValue! - settlement!.fee!).abs() > tolerance;
-      final pendingRealizedMismatch =
-          fillsAvailable &&
-          open?.realizedPnl != null &&
-          (realizedValue! - open!.realizedPnl!).abs() > tolerance;
+      // Bitunix pending positions expose realizedPNL as the position net
+      // economic result (gross realized - fee expense + funding). Trade history
+      // exposes gross realized PnL, while the pending-position fee is signed.
+      // Compare like-for-like values so a healthy open position is not marked
+      // unverified merely because of representation/sign differences.
+      final pendingFeeExpense = open?.fee?.abs();
       final pendingFeeMismatch =
           fillsAvailable &&
-          open?.fee != null &&
-          (feeValue! - open!.fee!).abs() > tolerance;
+          pendingFeeExpense != null &&
+          feeValue != null &&
+          (feeValue - pendingFeeExpense).abs() > tolerance;
+      final pendingNetFromHistory =
+          fillsAvailable &&
+              realizedValue != null &&
+              feeValue != null &&
+              open?.funding != null
+          ? realizedValue - feeValue + open!.funding!
+          : null;
+      final pendingRealizedMatchesGross =
+          fillsAvailable &&
+          open?.realizedPnl != null &&
+          realizedValue != null &&
+          (realizedValue - open!.realizedPnl!).abs() <= tolerance;
+      final pendingRealizedMatchesNet =
+          open?.realizedPnl != null &&
+          pendingNetFromHistory != null &&
+          (pendingNetFromHistory - open!.realizedPnl!).abs() <= tolerance;
+      final pendingRealizedMismatch =
+          open?.realizedPnl != null &&
+          !pendingRealizedMatchesGross &&
+          !pendingRealizedMatchesNet;
       final totalsMismatch =
           realizedMismatch ||
           feeMismatch ||
           pendingRealizedMismatch ||
           pendingFeeMismatch;
       final positionVerified = verified && !totalsMismatch;
-      final positionWarning = totalsMismatch
+      if (identityConflict ||
+          attributionCouldAffectOpenPosition ||
+          totalsMismatch) {
+        accountBlockingPositionKeys.add(key);
+      }
+      final positionWarning = unassignedAttribution
+          ? 'A valid exchange trade remains quarantined because it could not be assigned to one position.'
+          : totalsMismatch
           ? 'Trade-history totals diverge from the Bitunix position totals.'
           : positionConflict
           ? 'Conflicting exchange event identity for $key.'
-          : warning;
+          : !sourceVerified
+          ? (warning ?? 'Exchange PnL source could not be verified.')
+          : null;
 
       final realized = _metric(
         value: realizedValue,
@@ -594,7 +652,8 @@ final class TradingPnlProjection {
               source: TradingPnlSource.bitunixTradeHistory,
               scope: TradingPnlScope.position,
               asOf: normalizedAsOf,
-              warning: warning ?? 'Fee or funding history is incomplete.',
+              warning:
+                  positionWarning ?? 'Fee or funding history is incomplete.',
             );
 
       positions.add(
@@ -625,7 +684,7 @@ final class TradingPnlProjection {
     final componentsVerified =
         conflicts.isEmpty &&
         sourceVerified &&
-        positions.every((item) => item.isVerified);
+        accountBlockingPositionKeys.isEmpty;
     final projectionVerified =
         componentsVerified && fillsAvailable && settlementsAvailable;
     final projectionWarning = conflicts.isEmpty
@@ -810,8 +869,10 @@ final class TradingPnlProjection {
       settlements: settlements,
       fillsAvailable: fillsAvailable,
       settlementsAvailable: settlementsAvailable,
-      sourceVerified: isVerified,
-      stale: positions.any(
+      sourceVerified: includedPositions.every(
+        (position) => position.isVerified,
+      ),
+      stale: includedPositions.any(
         (item) => item.unrealized.state == TradingPnlState.stale,
       ),
       warning: warning,
@@ -923,7 +984,10 @@ TradingPnlMetric _aggregateMetric(
   required String? warning,
 }) {
   final values = metrics.toList(growable: false);
-  if (values.any((item) => !item.isAvailable)) {
+  final hasUnavailableComponent = verified
+      ? values.any((item) => item.value == null)
+      : values.any((item) => !item.isAvailable);
+  if (hasUnavailableComponent) {
     return TradingPnlMetric.unavailable(
       currency: currency,
       source: source,

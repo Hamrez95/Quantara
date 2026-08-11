@@ -41,9 +41,19 @@ void main() {
     );
   });
 
-  test('rejects more than one concurrent position', () {
+  test('accepts one to three concurrent positions and rejects outside cap', () {
+    for (final positions in [1, 2, 3]) {
+      expect(
+        validConfiguration(maximumConcurrentPositions: positions).validate,
+        returnsNormally,
+      );
+    }
     expect(
-      () => validConfiguration(maximumConcurrentPositions: 2).validate(),
+      () => validConfiguration(maximumConcurrentPositions: 0).validate(),
+      throwsFormatException,
+    );
+    expect(
+      () => validConfiguration(maximumConcurrentPositions: 4).validate(),
       throwsFormatException,
     );
   });
@@ -64,6 +74,7 @@ void main() {
       leverage: 20,
       riskPercent: 0.20,
       dailyLossLimitPercent: 1.5,
+      maximumConcurrentPositions: 2,
       symbols: const ['BTCUSDT', 'ETHUSDT'],
     );
 
@@ -74,7 +85,7 @@ void main() {
     expect(restored.leverage, 20);
     expect(restored.riskPercent, 0.20);
     expect(restored.dailyLossLimitPercent, 1.5);
-    expect(restored.maximumConcurrentPositions, 1);
+    expect(restored.maximumConcurrentPositions, 2);
   });
 
   test('status reports running only for active or managing-only states', () {

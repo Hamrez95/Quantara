@@ -30,11 +30,22 @@ final class DatabasePortfolioRiskLedgerStore
     implements PortfolioRiskLedgerStore, AtomicPortfolioRiskLedgerStore {
   DatabasePortfolioRiskLedgerStore({
     Future<QuantaraDurableDatabase> Function()? databaseFactory,
+    String recordKey = defaultRecordKey,
   }) : _databaseFactory =
-           databaseFactory ?? (() => QuantaraDatabaseProvider.instance);
+           databaseFactory ?? (() => QuantaraDatabaseProvider.instance),
+       _recordKey = _validatedRecordKey(recordKey);
 
-  static const _recordKey = 'portfolio-risk-ledger-v1';
+  static const defaultRecordKey = 'portfolio-risk-ledger-v1';
   final Future<QuantaraDurableDatabase> Function() _databaseFactory;
+  final String _recordKey;
+
+  static String _validatedRecordKey(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || normalized.length > 120) {
+      throw const FormatException('Portfolio risk record key is invalid.');
+    }
+    return normalized;
+  }
 
   @override
   Future<PortfolioRiskLedger?> load() async {
@@ -113,7 +124,7 @@ final class DatabasePortfolioRiskLedgerStore
     );
   }
 
-  static QuantaraDurableRecord _recordFor(
+  QuantaraDurableRecord _recordFor(
     PortfolioRiskLedger ledger,
     int durableRevision,
   ) => QuantaraDurableRecord(

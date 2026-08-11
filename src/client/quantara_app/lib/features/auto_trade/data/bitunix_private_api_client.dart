@@ -18,27 +18,34 @@ final class BitunixPrivateApiClient {
   BitunixPrivateApiClient._(this._client, this._utcNow, this._random);
 
   static const _host = 'fapi.bitunix.com';
+  static const _historyPageSize = 100;
+  static const _historyMaxPages = 50;
 
   final http.Client _client;
   final DateTime Function() _utcNow;
   final Random _random;
+  final Map<String, Map<String, Object?>> _positionHistoryCache = {};
+  final Map<String, Map<String, Object?>> _tradeHistoryCache = {};
 
   Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
-    final accountResponse = await _signedGet('/api/v1/futures/account', const {
-      'marginCoin': 'USDT',
-    }, credentials);
-    final positionsResponse = await _signedGet(
-      '/api/v1/futures/position/get_pending_positions',
-      const {},
-      credentials,
-    );
-    final ordersResponse = await _signedGet(
-      '/api/v1/futures/trade/get_pending_orders',
-      const {'limit': '100'},
-      credentials,
-    );
+    final baseResponses = await Future.wait<Map<String, Object?>>([
+      _signedGet('/api/v1/futures/account', const {
+        'marginCoin': 'USDT',
+      }, credentials),
+      _signedGet(
+        '/api/v1/futures/position/get_pending_positions',
+        const {},
+        credentials,
+      ),
+      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
+        'limit': '100',
+      }, credentials),
+    ]);
+    final accountResponse = baseResponses[0];
+    final positionsResponse = baseResponses[1];
+    final ordersResponse = baseResponses[2];
 
     final account = _firstMap(accountResponse['data']);
     if (account == null) {
@@ -66,6 +73,7 @@ final class BitunixPrivateApiClient {
           realizedPnl: position.realizedPnl,
           fee: position.fee,
           funding: position.funding,
+          openedAt: position.openedAt,
         ),
     };
 
@@ -127,38 +135,59 @@ final class BitunixPrivateApiClient {
     final pnlWarnings = <String>[];
     List<ExchangePositionSettlement> settlements = const [];
     List<ExchangePnlFill> fills = const [];
-    try {
-      final response = await _signedGet(
-        '/api/v1/futures/position/get_history_positions',
-        const {'limit': '100'},
-        credentials,
-      );
-      final parsed = BitunixPnlMapper.settlements(response['data']);
+    Future<({Map<String, Object?>? data, AutoTradeSafeException? error})>
+    guardedHistory(Future<Map<String, Object?>> Function() request) async {
+      try {
+        return (data: await request(), error: null);
+      } on AutoTradeSafeException catch (error) {
+        return (data: null, error: error);
+      }
+    }
+
+    final historyResults = await Future.wait([
+      guardedHistory(
+        () => _signedGetCachedCompleteHistory(
+          path: '/api/v1/futures/position/get_history_positions',
+          listKey: 'positionList',
+          identityKey: 'positionId',
+          credentials: credentials,
+          cache: _positionHistoryCache,
+        ),
+      ),
+      guardedHistory(
+        () => _signedGetCachedCompleteHistory(
+          path: '/api/v1/futures/trade/get_history_trades',
+          listKey: 'tradeList',
+          identityKey: 'tradeId',
+          credentials: credentials,
+          cache: _tradeHistoryCache,
+        ),
+      ),
+    ]);
+    final settlementResult = historyResults[0];
+    if (settlementResult.error != null) {
+      settlementsAvailable = false;
+      pnlWarnings.add(settlementResult.error!.message);
+    } else {
+      final parsed = BitunixPnlMapper.settlements(settlementResult.data);
       settlements = parsed.values;
       sourceVerified = sourceVerified && parsed.verified;
       if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
-    } on AutoTradeSafeException catch (error) {
-      settlementsAvailable = false;
-      pnlWarnings.add(error.message);
     }
-    try {
-      final response = await _signedGet(
-        '/api/v1/futures/trade/get_history_trades',
-        const {'limit': '100'},
-        credentials,
-      );
+    final fillResult = historyResults[1];
+    if (fillResult.error != null) {
+      fillsAvailable = false;
+      sourceVerified = false;
+      pnlWarnings.add(fillResult.error!.message);
+    } else {
       final parsed = BitunixPnlMapper.fills(
-        response['data'],
+        fillResult.data,
         openPositions: unrealizedByPosition.values,
         settlements: settlements,
       );
       fills = parsed.values;
       sourceVerified = sourceVerified && parsed.verified;
       if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
-    } on AutoTradeSafeException catch (error) {
-      fillsAvailable = false;
-      sourceVerified = false;
-      pnlWarnings.add(error.message);
     }
     final pnlAsOf = _utcNow().toUtc();
     final pnlProjection = TradingPnlProjection.reconcile(
@@ -187,6 +216,122 @@ final class BitunixPrivateApiClient {
       protectionVerifications: Map.unmodifiable(protectionVerifications),
       pnlProjection: pnlProjection,
       syncedAt: pnlAsOf,
+    );
+  }
+
+  Future<Map<String, Object?>> _signedGetCachedCompleteHistory({
+    required String path,
+    required String listKey,
+    required String identityKey,
+    required BitunixApiCredentials credentials,
+    required Map<String, Map<String, Object?>> cache,
+  }) async {
+    Future<Map<String, Object?>> reload() async {
+      final full = await _signedGetCompleteHistory(
+        path: path,
+        listKey: listKey,
+        identityKey: identityKey,
+        credentials: credentials,
+      );
+      final dataRows = _mapList(full[listKey]);
+      cache
+        ..clear()
+        ..addEntries(
+          dataRows.map((row) => MapEntry(_string(row[identityKey]), row)),
+        );
+      return full;
+    }
+
+    if (cache.isEmpty) return reload();
+    final response = await _signedGet(path, {
+      'limit': '$_historyPageSize',
+      'skip': '0',
+    }, credentials);
+    final data = _map(response['data']);
+    if (data == null) return reload();
+    final rows = _mapList(data[listKey]);
+    final total = _optionalInteger(data['total']);
+    if (total == null ||
+        total < 0 ||
+        rows.any((row) => _string(row[identityKey]).isEmpty)) {
+      return reload();
+    }
+    final merged = Map<String, Map<String, Object?>>.of(cache);
+    for (final row in rows) {
+      merged[_string(row[identityKey])] = row;
+    }
+    if (merged.length != total) return reload();
+    cache
+      ..clear()
+      ..addAll(merged);
+    return <String, Object?>{
+      listKey: List.unmodifiable(cache.values),
+      'total': total,
+    };
+  }
+
+  Future<Map<String, Object?>> _signedGetCompleteHistory({
+    required String path,
+    required String listKey,
+    required String identityKey,
+    required BitunixApiCredentials credentials,
+  }) async {
+    final rows = <Map<String, Object?>>[];
+    final seenIdentities = <String>{};
+    var skip = 0;
+    int? total;
+
+    for (var page = 0; page < _historyMaxPages; page += 1) {
+      final response = await _signedGet(path, {
+        'limit': '$_historyPageSize',
+        'skip': '$skip',
+      }, credentials);
+      final data = _map(response['data']);
+      if (data == null) {
+        throw const AutoTradeSafeException(
+          'Bitunix history data was empty or malformed.',
+        );
+      }
+      final pageRows = _mapList(data[listKey]);
+      final pageTotal = _optionalInteger(data['total']);
+      if (pageTotal != null && pageTotal >= 0) total = pageTotal;
+
+      for (var index = 0; index < pageRows.length; index += 1) {
+        final row = pageRows[index];
+        final identity = _string(row[identityKey]);
+        if (identity.isEmpty) {
+          // Preserve malformed rows so the mapper can mark source quality
+          // unverified instead of silently hiding bad exchange data.
+          rows.add(row);
+          continue;
+        }
+        if (seenIdentities.add(identity)) rows.add(row);
+      }
+
+      skip += pageRows.length;
+      final reachedReportedTotal = total != null && skip >= total;
+      if (pageRows.isEmpty ||
+          pageRows.length < _historyPageSize ||
+          reachedReportedTotal) {
+        return <String, Object?>{
+          listKey: List.unmodifiable(rows),
+          'total': total ?? skip,
+        };
+      }
+
+      if (page + 1 >= _historyMaxPages) {
+        throw AutoTradeSafeException(
+          'Bitunix $listKey history exceeded the verified pagination safety bound; full history was not claimed.',
+        );
+      }
+
+      // Both history endpoints are rate-limited. Sequential paging plus this
+      // guard stays comfortably below the documented per-UID request ceiling.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+    }
+
+    throw AutoTradeSafeException(
+      'Bitunix $listKey history pagination ended without a verified boundary.',
     );
   }
 
@@ -332,6 +477,14 @@ final class BitunixPrivateApiClient {
     return values.isEmpty ? null : values.first;
   }
 
+  static Map<String, Object?>? _map(Object? value) {
+    if (value is Map<String, Object?>) return value;
+    if (value is Map<Object?, Object?>) {
+      return value.map((key, item) => MapEntry(key.toString(), item));
+    }
+    return null;
+  }
+
   static List<Map<String, Object?>> _mapList(Object? value) {
     if (value is! List<Object?>) return const [];
     return value
@@ -353,6 +506,11 @@ final class BitunixPrivateApiClient {
         ? value.toDouble()
         : double.tryParse(value?.toString().trim() ?? '');
     return parsed != null && parsed.isFinite ? parsed : null;
+  }
+
+  static int? _optionalInteger(Object? value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString().trim() ?? '');
   }
 
   static DateTime? _timestamp(Object? value) {

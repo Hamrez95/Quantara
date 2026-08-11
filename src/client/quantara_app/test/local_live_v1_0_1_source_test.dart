@@ -15,6 +15,9 @@ void main() {
       final ui = source(
         'lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart',
       );
+      final settingsUi = source(
+        'lib/features/owner_alpha/presentation/owner_alpha_local_live_tools.dart',
+      );
       final service = source(
         'lib/features/auto_trade/application/local_live_trade_service.dart',
       );
@@ -31,7 +34,11 @@ void main() {
       expect(repository, contains("['5m', '15m', '1h', '4h', '1D']"));
       expect(repository, contains("'5m' => const Duration(minutes: 5)"));
       expect(ui, contains('SharedPreferencesLocalLivePreferencesStore'));
-      expect(ui, contains("['5m', '15m', '1h', '4h']"));
+      final compactSettingsUi = settingsUi.replaceAll(RegExp(r'\s+'), '');
+      expect(
+        compactSettingsUi,
+        contains("for(finaltimeframeinconst['5m','15m','1h','4h',])"),
+      );
       expect(service, contains('ProfitProtectionPolicy.forIdea'));
       expect(service, contains('ConfirmedTargetFillProgress.reconcile'));
       expect(service, contains('targetOrderIds: managed.targetOrderIds'));

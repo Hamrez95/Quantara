@@ -58,6 +58,7 @@ final class BitunixLivePosition {
     required this.unrealizedPnl,
     required this.fee,
     required this.funding,
+    this.openedAt,
   });
 
   final String positionId;
@@ -72,6 +73,7 @@ final class BitunixLivePosition {
   final double unrealizedPnl;
   final double fee;
   final double funding;
+  final DateTime? openedAt;
 }
 
 final class BitunixOrderDetail {
@@ -204,15 +206,18 @@ final class BitunixLocalLiveApiClient {
   Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
-    final accountResponse = await _signedGet('/api/v1/futures/account', {
-      'marginCoin': 'USDT',
-    }, credentials);
-    final positions = await fetchPositions(credentials);
-    final ordersResponse = await _signedGet(
-      '/api/v1/futures/trade/get_pending_orders',
-      const {'limit': '100'},
-      credentials,
-    );
+    final baseResponses = await Future.wait<Object>([
+      _signedGet('/api/v1/futures/account', {
+        'marginCoin': 'USDT',
+      }, credentials),
+      fetchPositions(credentials),
+      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
+        'limit': '100',
+      }, credentials),
+    ]);
+    final accountResponse = baseResponses[0] as Map<String, Object?>;
+    final positions = baseResponses[1] as List<BitunixLivePosition>;
+    final ordersResponse = baseResponses[2] as Map<String, Object?>;
     final account = _firstMap(accountResponse['data']);
     if (account == null) {
       throw const LocalLiveTradeSafeException(
@@ -232,6 +237,7 @@ final class BitunixLocalLiveApiClient {
           realizedPnl: position.realizedPnl,
           fee: position.fee,
           funding: position.funding,
+          openedAt: position.openedAt,
         ),
     };
     var settlementsAvailable = true;
@@ -310,6 +316,7 @@ final class BitunixLocalLiveApiClient {
               realizedPnl: item.realizedPnl,
               fee: item.fee,
               funding: item.funding,
+              openedAt: item.openedAt,
             ),
           )
           .toList(growable: false),
@@ -728,6 +735,7 @@ final class BitunixLocalLiveApiClient {
         unrealizedPnl: _number(item['unrealizedPNL']),
         fee: _number(item['fee']),
         funding: _number(item['funding']),
+        openedAt: _timestamp(item['ctime']),
       );
 
   static AutoTradeOrder _orderFromJson(Map<String, Object?> item) =>
@@ -764,6 +772,14 @@ final class BitunixLocalLiveApiClient {
   static double _number(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static DateTime? _timestamp(Object? value) {
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(parsed, isUtc: true);
   }
 
   static int _integer(Object? value, {required int fallback}) {

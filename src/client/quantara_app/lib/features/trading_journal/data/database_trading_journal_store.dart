@@ -1,9 +1,49 @@
 import 'dart:async';
+import 'dart:convert';
 
 import '../../../core/persistence/quantara_database_provider.dart';
 import '../../../core/persistence/quantara_durable_database.dart';
 import '../domain/trading_journal_models.dart';
 import 'trading_journal_store.dart';
+
+TradingJournalLedger mergeTradingJournalLedgers(
+  TradingJournalLedger durable,
+  TradingJournalLedger foregroundMirror, {
+  DateTime? newerThan,
+}) {
+  if (durable.integrity == TradingJournalIntegrity.unverified) {
+    return durable;
+  }
+  var merged = durable;
+  bool isNewer(DateTime timestamp) =>
+      newerThan == null || timestamp.toUtc().isAfter(newerThan.toUtc());
+
+  for (final plan in foregroundMirror.plans) {
+    if (plan.source != TradingJournalSource.localLive ||
+        !isNewer(plan.decidedAt)) {
+      continue;
+    }
+    final candidate = merged.appendPlan(plan);
+    if (candidate.integrity != TradingJournalIntegrity.unverified) {
+      merged = candidate;
+    }
+  }
+  final knownTradeIds = merged.plans.map((plan) => plan.journalTradeId).toSet();
+  for (final event in foregroundMirror.events) {
+    if (!knownTradeIds.contains(event.journalTradeId) ||
+        !isNewer(event.recordedAt)) {
+      continue;
+    }
+    final candidate = merged.appendEvent(event);
+    if (candidate.integrity != TradingJournalIntegrity.unverified) {
+      merged = candidate;
+    }
+  }
+  return merged;
+}
+
+bool _sameLedger(TradingJournalLedger left, TradingJournalLedger right) =>
+    jsonEncode(left.toJson()) == jsonEncode(right.toJson());
 
 final class DatabaseTradingJournalStore implements TradingJournalStore {
   DatabaseTradingJournalStore({
@@ -22,12 +62,26 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
   Future<TradingJournalLedger> load() => _serialValue(() async {
     final database = await _databaseFactory();
     final record = await database.read(QuantaraDurableCategory.journal, _key);
-    if (record != null) {
+    if (record == null) {
+      final legacy = await _legacyStore.load();
+      if (_isEmpty(legacy)) return legacy;
+      return _write(database, legacy, minimumRevision: 1);
+    }
+    if (_legacyStore is! ForegroundTradingJournalMirror) {
       return TradingJournalLedger.fromJson(record.payload);
     }
-    final legacy = await _legacyStore.load();
-    if (_isEmpty(legacy)) return legacy;
-    return _write(database, legacy, minimumRevision: 1);
+    final durable = TradingJournalLedger.fromJson(record.payload);
+    if (durable.integrity == TradingJournalIntegrity.unverified) {
+      return durable;
+    }
+    final foregroundMirror = await _legacyStore.load();
+    final merged = mergeTradingJournalLedgers(
+      durable,
+      foregroundMirror,
+      newerThan: record.updatedAt,
+    );
+    if (_sameLedger(durable, merged)) return durable;
+    return _write(database, merged);
   });
 
   @override
@@ -54,10 +108,26 @@ final class DatabaseTradingJournalStore implements TradingJournalStore {
     QuantaraDurableDatabase database,
   ) async {
     final record = await database.read(QuantaraDurableCategory.journal, _key);
-    if (record != null) return TradingJournalLedger.fromJson(record.payload);
-    final legacy = await _legacyStore.load();
-    if (_isEmpty(legacy)) return legacy;
-    return _write(database, legacy, minimumRevision: 1);
+    if (record == null) {
+      final legacy = await _legacyStore.load();
+      if (_isEmpty(legacy)) return legacy;
+      return _write(database, legacy, minimumRevision: 1);
+    }
+    if (_legacyStore is! ForegroundTradingJournalMirror) {
+      return TradingJournalLedger.fromJson(record.payload);
+    }
+    final durable = TradingJournalLedger.fromJson(record.payload);
+    if (durable.integrity == TradingJournalIntegrity.unverified) {
+      return durable;
+    }
+    final foregroundMirror = await _legacyStore.load();
+    final merged = mergeTradingJournalLedgers(
+      durable,
+      foregroundMirror,
+      newerThan: record.updatedAt,
+    );
+    if (_sameLedger(durable, merged)) return durable;
+    return _write(database, merged);
   }
 
   Future<TradingJournalLedger> _write(

@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/formatting/number_formatters.dart';
 import '../../../core/localization/app_strings.dart';
@@ -13,6 +16,9 @@ import '../../../core/localization/local_live_message_localizer.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
+import '../../auto_trade/application/local_live_diagnostic_bundle.dart';
+import '../../auto_trade/application/local_live_trade_service.dart';
+import '../../auto_trade/application/read_only_support_session.dart';
 import '../../auto_trade/application/unattended_auto_trade_controller.dart';
 import '../../auto_trade/data/bitunix_private_api_client.dart';
 import '../../auto_trade/data/local_live_preferences_store.dart';
@@ -30,6 +36,7 @@ import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../trading_journal/application/trading_journal_controller.dart';
 import '../../trading_journal/data/database_trading_journal_store.dart';
+import '../../trading_journal/domain/trading_journal_evidence_packet.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
@@ -46,6 +53,7 @@ part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_auto_trade.dart';
+part 'owner_alpha_local_live_tools.dart';
 part 'owner_alpha_auto_trade_support.dart';
 part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
@@ -109,6 +117,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     backgroundScanGateway: widget.backgroundScanGateway,
     languageCode: widget.locale.languageCode,
   );
+  final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
+      GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
 
   @override
@@ -170,6 +180,49 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     );
   }
 
+  Future<void> _reconcileJournalFromAccount() async {
+    final snapshot = _autoTradeController.snapshot;
+    if (snapshot == null) return;
+    await _journalController.reconcileVerifiedExchangeClosures(
+      pnlProjection: snapshot.authoritativePnl,
+      openPositionIds: snapshot.positions
+          .map((position) => position.positionId.trim())
+          .where((positionId) => positionId.isNotEmpty)
+          .toSet(),
+    );
+  }
+
+  Future<void> _refreshCurrentDestination() async {
+    switch (_destination) {
+      case 5:
+        final state = _autoTradeViewKey.currentState;
+        if (state != null) {
+          await state.refreshAll();
+        } else {
+          await _autoTradeController.reconcile(
+            reason: PrivateAccountRefreshReason.manual,
+            force: true,
+          );
+        }
+        await _reconcileJournalFromAccount();
+        return;
+      case 6:
+        await _controller.refresh();
+        if (_autoTradeController.isConnected) {
+          await _autoTradeController.reconcile(
+            reason: PrivateAccountRefreshReason.manual,
+            force: true,
+          );
+        }
+        await _reconcileJournalFromAccount();
+        await _journalController.refresh();
+        return;
+      default:
+        await _controller.refresh();
+        return;
+    }
+  }
+
   Future<void> _showAddSymbolDialog() async {
     final strings = AppStrings.of(context);
     final value = await showDialog<String>(
@@ -208,9 +261,16 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
             onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
-            onNavigate: (value) => setState(() => _destination = value),
+            onNavigate: (value) {
+              setState(() => _destination = value);
+              if (value == 5 || value == 6) {
+                unawaited(_refreshCurrentDestination());
+              }
+            },
             showTopBar: desktop,
             realtimeMonitor: widget.realtimeMonitor,
+            autoTradeViewKey: _autoTradeViewKey,
+            onRefresh: _refreshCurrentDestination,
           ),
         );
         if (desktop) {
@@ -264,7 +324,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             destination: _destination,
             themeMode: widget.themeMode,
             onToggleTheme: widget.onToggleTheme,
-            onRefresh: _controller.refresh,
+            onRefresh: _refreshCurrentDestination,
           ),
           body: SafeArea(
             bottom: false,
@@ -350,7 +410,7 @@ class _QuantaraMobileAppBar extends StatelessWidget
   final int destination;
   final ThemeMode themeMode;
   final VoidCallback onToggleTheme;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
 
   @override
   Size get preferredSize => const Size.fromHeight(64);
@@ -419,7 +479,7 @@ class _QuantaraMobileAppBar extends StatelessWidget
       ),
       actions: [
         IconButton(
-          onPressed: controller.isLoading ? null : onRefresh,
+          onPressed: controller.isLoading ? null : () => unawaited(onRefresh()),
           tooltip: strings.isPersian ? 'به‌روزرسانی' : 'Refresh',
           icon: AnimatedRotation(
             duration: QuantaraMotion.standard,
@@ -560,6 +620,8 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.onNavigate,
     required this.showTopBar,
     required this.realtimeMonitor,
+    required this.autoTradeViewKey,
+    required this.onRefresh,
   });
 
   final OwnerAlphaController controller;
@@ -577,12 +639,88 @@ class _OwnerAlphaBody extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   final bool showTopBar;
   final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
+  final GlobalKey<_AutoTradeViewState> autoTradeViewKey;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final marketSnapshot = controller.snapshot;
+    final journalLiveAnalyses = <String, TimeframeChartAnalysis>{
+      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+        for (final entry in radar.analysesByTimeframe.entries)
+          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+              entry.value,
+    };
+    final journalLiveIdeas = <String, TradeIdea>{
+      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+        for (final entry in radar.ideasByTimeframe.entries)
+          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+              entry.value,
+    };
+    final initialMarketLoading =
+        controller.snapshot == null &&
+        destination != 5 &&
+        destination != 6 &&
+        destination != 7;
+    if (initialMarketLoading) {
+      final horizontal = wide ? 28.0 : 16.0;
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: CustomScrollView(
+          key: PageStorageKey('owner-alpha-$destination'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(horizontal, 14, horizontal, 0),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1280),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (showTopBar) ...[
+                          _AlphaTopBar(
+                            controller: controller,
+                            themeMode: themeMode,
+                            onToggleTheme: onToggleTheme,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
+                        if (controller.error != null) ...[
+                          const SizedBox(height: 12),
+                          _AlphaErrorStrip(
+                            message: controller.error!,
+                            stale: controller.hasStaleSnapshot,
+                            onRetry: controller.refresh,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 32),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: _InitialLoading(controller: controller),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return RefreshIndicator(
-      onRefresh: controller.refresh,
+      onRefresh: onRefresh,
       child: ListView(
         key: PageStorageKey('owner-alpha-$destination'),
         physics: const AlwaysScrollableScrollPhysics(),
@@ -628,12 +766,15 @@ class _OwnerAlphaBody extends StatelessWidget {
                         locale: locale,
                         projections: journalController.projections,
                         statistics: journalController.statistics,
+                        liveAnalyses: journalLiveAnalyses,
+                        liveIdeas: journalLiveIdeas,
                         isLoading: journalController.isLoading,
                         error: journalController.error,
                       ),
                     )
                   else if (destination == 5)
                     _AutoTradeView(
+                      key: autoTradeViewKey,
                       controller: autoTradeController,
                       unattendedController: unattendedAutoTradeController,
                       analysisController: controller,

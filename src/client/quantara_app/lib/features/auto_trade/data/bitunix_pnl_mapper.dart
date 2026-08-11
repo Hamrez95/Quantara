@@ -15,6 +15,10 @@ final class BitunixPnlParseResult<T> {
 final class BitunixPnlMapper {
   const BitunixPnlMapper._();
 
+  static const _closedPositionAttributionTolerance = Duration(minutes: 2);
+  static const _minimumNearestSeparation = Duration(seconds: 5);
+  static const unassignedPositionPrefix = 'unassigned-trade:';
+
   static BitunixPnlParseResult<ExchangePositionSettlement> settlements(
     Object? data,
   ) {
@@ -58,6 +62,7 @@ final class BitunixPnlMapper {
     final closed = settlements.toList(growable: false);
     final values = <ExchangePnlFill>[];
     final warnings = <String>[];
+    final attributionWarnings = <String>[];
     for (final row in rows) {
       final tradeId = _string(row['tradeId']);
       final orderId = _string(row['orderId']);
@@ -79,16 +84,17 @@ final class BitunixPnlMapper {
         continue;
       }
       final directPositionId = _string(row['positionId']);
-      final resolved = directPositionId.isNotEmpty
-          ? directPositionId
+      final resolution = directPositionId.isNotEmpty
+          ? (positionId: directPositionId, ambiguous: false)
           : _resolvePositionId(
               symbol: symbol,
               occurredAt: occurredAt,
               openPositions: open,
               settlements: closed,
             );
+      final resolved = resolution.positionId;
       if (resolved == null) {
-        warnings.add(
+        attributionWarnings.add(
           'Trade $tradeId could not be assigned to one exchange position.',
         );
       }
@@ -96,7 +102,7 @@ final class BitunixPnlMapper {
         ExchangePnlFill(
           tradeId: tradeId,
           orderId: orderId,
-          positionId: resolved ?? '',
+          positionId: resolved ?? '$unassignedPositionPrefix$tradeId',
           symbol: symbol,
           quantity: quantity.abs(),
           price: price,
@@ -109,40 +115,97 @@ final class BitunixPnlMapper {
         ),
       );
     }
+    final allWarnings = [...warnings, ...attributionWarnings];
     return BitunixPnlParseResult(
       values: List.unmodifiable(values),
       verified: warnings.isEmpty,
-      warning: warnings.isEmpty ? null : warnings.toSet().join(' '),
+      warning: allWarnings.isEmpty ? null : allWarnings.toSet().join(' '),
     );
   }
 
-  static String? _resolvePositionId({
+  static ({String? positionId, bool ambiguous}) _resolvePositionId({
     required String symbol,
     required DateTime occurredAt,
     required List<ExchangeUnrealizedPnl> openPositions,
     required List<ExchangePositionSettlement> settlements,
   }) {
     final at = occurredAt.toUtc();
-    final closedMatches = settlements
+    final exactClosedMatches = settlements
         .where((item) {
           if (item.symbol.toUpperCase() != symbol) return false;
           final openedAt = item.openedAt;
-          if (openedAt != null && at.isBefore(openedAt.toUtc())) return false;
+          if (openedAt != null && at.isBefore(openedAt.toUtc())) {
+            return false;
+          }
           return !at.isAfter(item.closedAt.toUtc());
         })
-        .map((item) => item.positionId)
+        .map((item) => item.positionId.trim())
         .where((item) => item.isNotEmpty)
         .toSet();
-    if (closedMatches.length == 1) return closedMatches.single;
-    if (closedMatches.length > 1) return null;
+    if (exactClosedMatches.length == 1) {
+      return (positionId: exactClosedMatches.single, ambiguous: false);
+    }
+    if (exactClosedMatches.length > 1) {
+      return (positionId: null, ambiguous: true);
+    }
+
+    final toleranceMicros = _closedPositionAttributionTolerance.inMicroseconds;
+    final tolerantClosedMatches =
+        settlements
+            .where((item) {
+              if (item.symbol.toUpperCase() != symbol) return false;
+              final openedAt = item.openedAt;
+              if (openedAt != null && at.isBefore(openedAt.toUtc())) {
+                return false;
+              }
+              return item.positionId.trim().isNotEmpty;
+            })
+            .map(
+              (item) => (
+                positionId: item.positionId.trim(),
+                deltaMicros: at
+                    .difference(item.closedAt.toUtc())
+                    .inMicroseconds
+                    .abs(),
+              ),
+            )
+            .where((item) => item.deltaMicros <= toleranceMicros)
+            .toList(growable: false)
+          ..sort(
+            (left, right) => left.deltaMicros.compareTo(right.deltaMicros),
+          );
+    if (tolerantClosedMatches.length == 1) {
+      return (
+        positionId: tolerantClosedMatches.single.positionId,
+        ambiguous: false,
+      );
+    }
+    if (tolerantClosedMatches.length > 1) {
+      final nearest = tolerantClosedMatches[0];
+      final next = tolerantClosedMatches[1];
+      if (nearest.deltaMicros + _minimumNearestSeparation.inMicroseconds <
+          next.deltaMicros) {
+        return (positionId: nearest.positionId, ambiguous: false);
+      }
+      return (positionId: null, ambiguous: true);
+    }
 
     final openMatches = openPositions
-        .where((item) => item.symbol.toUpperCase() == symbol)
+        .where((item) {
+          if (item.symbol.toUpperCase() != symbol) return false;
+          final openedAt = item.openedAt;
+          return openedAt == null || !at.isBefore(openedAt.toUtc());
+        })
         .map((item) => item.positionId)
         .where((item) => item.trim().isNotEmpty)
         .toSet();
-    if (openMatches.length == 1) return openMatches.single;
-    return null;
+    if (openMatches.length == 1) {
+      return (positionId: openMatches.single, ambiguous: false);
+    }
+    if (openMatches.length > 1) {
+      return (positionId: null, ambiguous: true);
+    }
+    return (positionId: null, ambiguous: false);
   }
 
   static List<Map<String, Object?>> _nestedList(Object? data, String key) {

@@ -14,6 +14,7 @@ final class TradingJournalProjection {
     required this.timeline,
     required this.decidedAt,
     required this.integrity,
+    this.plan,
     this.positionId,
     this.entryPrice,
     this.initialQuantity,
@@ -82,7 +83,17 @@ final class TradingJournalProjection {
   final List<TradingJournalEvent> timeline;
   final DateTime decidedAt;
   final TradingJournalIntegrity integrity;
+  final TradingJournalPlan? plan;
   final String? positionId;
+
+  bool get economicsPending =>
+      state == TradingJournalTradeState.closed &&
+      netPnl == null &&
+      timeline.any(
+        (event) =>
+            event.type == TradingJournalEventType.positionClosed &&
+            event.details['economicsPending'] == true,
+      );
   final double? entryPrice;
   final double? initialQuantity;
   final double? remainingQuantity;
@@ -135,12 +146,21 @@ abstract final class TradingJournalProjector {
         : partialEntries.isEmpty
         ? null
         : partialEntries.first;
-    final closed = timeline.where(
-      (item) =>
-          item.type == TradingJournalEventType.positionClosed ||
-          item.type == TradingJournalEventType.liquidation,
-    );
-    final close = closed.isEmpty ? null : closed.last;
+    final closed = timeline
+        .where(
+          (item) =>
+              item.type == TradingJournalEventType.positionClosed ||
+              item.type == TradingJournalEventType.liquidation,
+        )
+        .toList(growable: false);
+    final authoritativeClosed = closed
+        .where((item) => item.details['economicsPending'] != true)
+        .toList(growable: false);
+    final close = authoritativeClosed.isNotEmpty
+        ? authoritativeClosed.last
+        : closed.isEmpty
+        ? null
+        : closed.last;
 
     final grossValues = timeline
         .map((item) => item.grossPnl)
@@ -260,6 +280,7 @@ abstract final class TradingJournalProjector {
       timeline: List.unmodifiable(timeline),
       decidedAt: plan.decidedAt,
       integrity: integrity,
+      plan: plan,
       positionId: positionId,
       entryPrice: entryPrice,
       initialQuantity: initialQuantity,
@@ -325,14 +346,16 @@ abstract final class TradingJournalProjector {
     required bool hasClose,
     required TradingJournalCounterfactualOutcome? counterfactual,
   }) {
-    if (ledger.integrity == TradingJournalIntegrity.unverified ||
-        timeline.any(
-          (item) => item.quality == TradingJournalFactQuality.unverified,
-        )) {
+    if (timeline.any(
+      (item) => item.quality == TradingJournalFactQuality.unverified,
+    )) {
       return TradingJournalTradeState.unverified;
     }
     if (hasClose) return TradingJournalTradeState.closed;
     if (hasEntry) return TradingJournalTradeState.open;
+    if (ledger.integrity == TradingJournalIntegrity.unverified) {
+      return TradingJournalTradeState.unverified;
+    }
     if (plan.source == TradingJournalSource.paper) {
       return TradingJournalTradeState.simulated;
     }
