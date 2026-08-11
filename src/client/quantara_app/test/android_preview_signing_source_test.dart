@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-// Generic CI must remain secret-free; signed Preview/Stable builds use isolated workflows.
 void main() {
   const fingerprint =
       'c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984';
@@ -18,15 +17,15 @@ void main() {
     expect(gradle, isNot(contains('signingConfigs.getByName("debug")')));
   });
 
-  test('generic Flutter CI needs no release signing secrets', () {
+  test('generic Flutter CI is secret-free and uses an unsigned QA build', () {
     final workflow = File(
       '../../../.github/workflows/flutter-ci.yml',
     ).readAsStringSync();
 
     expect(workflow, contains('flutter analyze --fatal-infos'));
     expect(workflow, contains('flutter test --reporter expanded'));
-    expect(workflow, contains('--debug --flavor alpha'));
-    expect(workflow, contains('app-alpha-debug.apk'));
+    expect(workflow, contains('flutter build apk --debug'));
+    expect(workflow, contains('app-debug.apk'));
     expect(workflow, contains('cold-start smoke'));
     expect(workflow, isNot(contains('environment: Preview')));
     expect(workflow, isNot(contains('KEYSTORE_BASE64:')));
