@@ -2,7 +2,7 @@ name: quantara_app
 description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
 # Quantara 1.2.0 release candidate. Stable publication remains gated by physical-device, upgrade and permanent-signing validation.
-version: 1.2.0-rc.3+125
+version: 1.2.0-rc.3+126
 
 environment:
   sdk: ^3.12.2
@@ -18,15 +18,17 @@ dependencies:
   crypto: ^3.0.7
   cryptography: ^2.9.0
   crypto_icons: ^1.0.0
-  flutter_secure_storage: ^10.3.1
-  flutter_local_notifications: ^22.2.0
-  flutter_foreground_task: ^10.0.0
-  shared_preferences: ^2.5.3
-  sembast: ^3.8.9+1
-  sembast_web: ^2.4.5+1
-  path_provider: ^2.1.6
+  path_provider: ^2.1.5
+  url_launcher: ^6.3.2
   web_socket_channel: ^3.0.3
+  sqlite3: ^3.1.6
+  sqlite3_flutter_libs: ^0.5.41
   workmanager: ^0.9.0+3
+  path: ^1.9.1
+  flutter_secure_storage: ^10.0.0
+  flutter_local_notifications: ^22.0.0
+  timezone: ^0.11.0
+
 
 dev_dependencies:
   flutter_test:
@@ -35,15 +37,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  fonts:
-    - family: Vazirmatn
-      fonts:
-        - asset: assets/fonts/Vazirmatn-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/Vazirmatn-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/Vazirmatn-Bold.ttf
-          weight: 700
-    - family: CryptocurrencyIcons
-      fonts:
-        - asset: assets/fonts/cryptocurrency-icons.ttf
+  assets:
+    - assets/images/
