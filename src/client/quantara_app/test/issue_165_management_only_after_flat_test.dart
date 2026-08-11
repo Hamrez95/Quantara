@@ -39,6 +39,25 @@ void main() {
       );
     });
 
+    test('user-disabled entries stay disabled without creating a resume latch', () {
+      expect(
+        LocalLiveManagementOnlyAfterFlatPolicy.shouldLatchAfterFinalExchangeClose(
+          hadManagedPositions: true,
+          hasManagedPositions: false,
+          exchangeOpenPositionCount: 0,
+          userRequestedEntries: false,
+        ),
+        isFalse,
+      );
+      expect(
+        LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(
+          userRequestedEntries: false,
+          managementOnlyAfterFlat: false,
+        ),
+        isFalse,
+      );
+    });
+
     test(
       'restart keeps entries disabled until explicit resume clears latch',
       () {
