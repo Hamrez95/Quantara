@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('RC3 source and artifacts are version-locked to post-run fixes', () {
+  test('RC3 source and release paths retain post-run fixes', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final flutterWorkflow = File(
       '../../../.github/workflows/flutter-ci.yml',
@@ -25,11 +25,16 @@ void main() {
     ).readAsStringSync();
 
     expect(pubspec, contains('version: 1.2.0-rc.3+125'));
-    expect(flutterWorkflow, contains('RC_VERSION: 1.2.0-rc.3'));
     expect(
       flutterWorkflow,
-      contains('ANDROID_RC_ARTIFACT: quantara-android-1.2.0-rc.3'),
+      contains('Flutter format, analyze, test, and unsigned QA build'),
     );
+    expect(flutterWorkflow, contains('flutter build apk --debug'));
+    expect(
+      flutterWorkflow,
+      contains('ANDROID_DEBUG_ARTIFACT: quantara-android-debug-'),
+    );
+    expect(flutterWorkflow, isNot(contains('RC_VERSION:')));
     expect(windowsWorkflow, contains('RC_VERSION: 1.2.0-rc.3'));
     expect(application, contains('_quarantinedStreamFaults'));
     expect(autoTrade, contains('Resume entries'));
