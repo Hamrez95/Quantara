@@ -39,15 +39,26 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Decode owner-managed keystore
+      - name: Decode and verify owner-managed Stable keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.QUANTARA_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.QUANTARA_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.QUANTARA_ANDROID_KEY_ALIAS }}
+          EXPECTED_CERT_SHA256: ${{ secrets.QUANTARA_STABLE_CERT_SHA256 }}
         run: |
           set -euo pipefail
           test -n "$KEYSTORE_BASE64"
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/quantara-stable.jks"
-          chmod 600 "$RUNNER_TEMP/quantara-stable.jks"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$EXPECTED_CERT_SHA256"
+          keystore="$RUNNER_TEMP/quantara-stable.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          keytool -list -v -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > stable-keystore.txt
+          actual="$(grep -m1 'SHA256:' stable-keystore.txt | sed 's/.*SHA256: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test "$actual" = "$expected"
 
       - name: Validate source and tests
         working-directory: src/client/quantara_app
@@ -55,7 +66,7 @@ jobs:
           flutter pub get
           dart format --output=none --set-exit-if-changed lib test
           flutter analyze --fatal-infos
-          flutter test
+          flutter test --reporter expanded
 
       - name: Build Stable APKs
         working-directory: src/client/quantara_app
@@ -72,6 +83,8 @@ jobs:
       - name: Verify Stable identity, signing and alignment
         working-directory: src/client/quantara_app
         shell: bash
+        env:
+          EXPECTED_CERT_SHA256: ${{ secrets.QUANTARA_STABLE_CERT_SHA256 }}
         run: |
           set -euo pipefail
           apk="build/app/outputs/flutter-apk/app-release.apk"
@@ -84,6 +97,9 @@ jobs:
           "$apkanalyzer_path" manifest application-id "$apk" | grep -Fxq 'com.quantara.quantara_app'
           ! "$apkanalyzer_path" manifest application-id "$apk" | grep -Fq '.alpha'
           "$apksigner_path" verify --verbose --print-certs "$apk" | tee stable-signing.txt
+          actual="$(grep -m1 'certificate SHA-256 digest:' stable-signing.txt | awk '{print $NF}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test "$actual" = "$expected"
           "$zipalign_path" -c -P 16 -v 4 "$apk"
           "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           sha256sum build/app/outputs/flutter-apk/*.apk | tee SHA256SUMS.txt
@@ -108,6 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "main"
+          version="${TAG#v}"
           git tag "$TAG" "$GITHUB_SHA"
           git push origin "$TAG"
           gh release create "$TAG" \
@@ -115,5 +132,5 @@ jobs:
             src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk#Quantara-Android-arm64.apk \
             src/client/quantara_app/SHA256SUMS.txt \
             src/client/quantara_app/stable-signing.txt \
-            --title "Quantara 1.0.0" \
-            --notes "First stable Quantara source release. Analysis, monitoring and paper features are Stable; Local Live remains explicit opt-in Canary."
+            --title "Quantara $version" \
+            --generate-notes
