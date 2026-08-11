@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+// Generic CI must remain secret-free; signed Preview/Stable builds use isolated workflows.
 void main() {
   const fingerprint =
       'c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984';
