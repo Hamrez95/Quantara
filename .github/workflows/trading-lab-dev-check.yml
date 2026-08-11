@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 6
+          fetch-depth: 12
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -33,7 +33,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git show HEAD~3:.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
+          PATCH_COMMIT="$(git log --format='%H %s' -12 | grep 'ci(lab): apply post-run hardening and evidence upgrade' | head -1 | cut -d' ' -f1)"
+          test -n "$PATCH_COMMIT"
+          git show "$PATCH_COMMIT":.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
           python3 - <<'PY'
           from pathlib import Path
           source = Path('/tmp/post-run-workflow.yml').read_text().splitlines()
