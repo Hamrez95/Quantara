@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const fingerprint =
-      'c1f8cbedb45a35f62e2065d74a1041477d811efa374128c0af4c493628dad984';
+      'c48f5c19fd4d34182a317dab34477a518fc919800211b191858563e3907536b4';
 
   test('release Gradle is fail-closed without persistent signing', () {
     final gradle = File('android/app/build.gradle.kts').readAsStringSync();
