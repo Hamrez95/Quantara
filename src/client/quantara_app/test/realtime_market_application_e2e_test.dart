@@ -285,6 +285,7 @@ final class _GeneratedBackfillSource implements RealtimeCandleBackfillSource {
 DateTime _workingOpen(BitunixKlineInterval interval) => switch (interval) {
   BitunixKlineInterval.fiveMinutes ||
   BitunixKlineInterval.fifteenMinutes ||
+  BitunixKlineInterval.thirtyMinutes ||
   BitunixKlineInterval.oneHour ||
   BitunixKlineInterval.fourHours => DateTime.utc(2026, 8, 2, 12),
   BitunixKlineInterval.oneDay => DateTime.utc(2026, 8, 2),

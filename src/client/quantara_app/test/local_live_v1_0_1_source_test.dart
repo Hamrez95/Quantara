@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    '5m, persisted controls and exchange-confirmed protected exits stay wired',
+    '5m through 30m market support, persisted controls and exchange-confirmed protected exits stay wired',
     () {
       final root = Directory.current.path;
       String source(String path) => File('$root/$path').readAsStringSync();
@@ -31,8 +31,9 @@ void main() {
         'lib/features/auto_trade/application/profit_lock_promotion_executor.dart',
       );
 
-      expect(repository, contains("['5m', '15m', '1h', '4h', '1D']"));
+      expect(repository, contains("['5m', '15m', '30m', '1h', '4h', '1D']"));
       expect(repository, contains("'5m' => const Duration(minutes: 5)"));
+      expect(repository, contains("'30m' => const Duration(minutes: 30)"));
       expect(ui, contains('SharedPreferencesLocalLivePreferencesStore'));
       final compactSettingsUi = settingsUi.replaceAll(RegExp(r'\s+'), '');
       expect(

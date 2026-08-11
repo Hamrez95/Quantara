@@ -7,7 +7,7 @@ import 'package:quantara_app/features/owner_alpha/domain/realtime_market_runtime
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('settings produce a bounded four-timeframe public universe', () {
+  test('settings produce a bounded five-timeframe public universe', () {
     final universe = RealtimeSettingsUniverse.build(
       const OwnerAlphaSettings(
         symbols: ['BTCUSDT', 'ETHUSDT', 'BTCUSDT'],
@@ -16,11 +16,11 @@ void main() {
       ),
     );
 
-    expect(universe.streams, hasLength(8));
+    expect(universe.streams, hasLength(10));
     expect(universe.maximumStreams, 48);
     expect(
       universe.streams.map((stream) => stream.interval.timeframe).toSet(),
-      {'5m', '15m', '1h', '4h'},
+      {'5m', '15m', '30m', '1h', '4h'},
     );
   });
 

@@ -320,6 +320,16 @@ class _HomeQuickActions extends StatelessWidget {
         color: QuantaraColors.magenta,
       ),
       _HomeAction(
+        icon: Icons.science_rounded,
+        label: strings.t('آزمایشگاه بات', 'Bot Lab'),
+        caption: strings.t(
+          'فوروارد تست و خروجی کامل شواهد',
+          'Forward test and full evidence export',
+        ),
+        destination: 4,
+        color: QuantaraColors.warning,
+      ),
+      _HomeAction(
         icon: Icons.inbox_rounded,
         label: strings.setups,
         caption: strings.t('پیشنهادها و نتیجه آن‌ها', 'Setups and outcomes'),
@@ -369,8 +379,8 @@ class _HomeQuickActions extends StatelessWidget {
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 920
-                  ? 5
+              final columns = constraints.maxWidth >= 1080
+                  ? 6
                   : constraints.maxWidth >= 620
                   ? 3
                   : 2;

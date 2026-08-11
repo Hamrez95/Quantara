@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
@@ -38,6 +39,13 @@ import '../../trading_journal/application/trading_journal_controller.dart';
 import '../../trading_journal/data/database_trading_journal_store.dart';
 import '../../trading_journal/domain/trading_journal_evidence_packet.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
+import '../../trading_lab/application/trading_lab_controller.dart';
+import '../../trading_lab/application/trading_lab_metrics.dart';
+import '../../trading_lab/application/trading_lab_scorecards.dart';
+import '../../trading_lab/data/database_trading_lab_store.dart';
+import '../../trading_lab/domain/trading_lab_account_context.dart';
+import '../../trading_lab/domain/trading_lab_models.dart';
+import '../../trading_lab/domain/trading_lab_real_account_evidence.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
 import '../data/owner_alpha_settings_transfer.dart';
@@ -58,11 +66,90 @@ part 'owner_alpha_auto_trade_support.dart';
 part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
+part 'owner_alpha_trading_lab.dart';
+part 'owner_alpha_trading_lab_insights.dart';
 
 typedef _OpenAnalysis =
     void Function(String symbol, [String? timeframe, String? setupId]);
 
 void _noopOpenPortfolioRisk() {}
+
+double? _tradingLabWeightedFillPrice(Iterable<ExchangePnlFill> fills) {
+  var quantity = 0.0;
+  var notional = 0.0;
+  for (final fill in fills) {
+    final weight = fill.quantity.abs();
+    quantity += weight;
+    notional += fill.price * weight;
+  }
+  return quantity <= 1e-12 ? null : notional / quantity;
+}
+
+TradingLabRealAccountEvidence _buildTradingLabRealAccountEvidence(
+  AutoTradeController controller,
+) {
+  final snapshot = controller.snapshot;
+  final projection = snapshot?.authoritativePnl;
+  if (projection == null) {
+    return TradingLabRealAccountEvidence.unavailable(
+      asOfUtc: snapshot?.syncedAt,
+    );
+  }
+  final trades = <TradingLabRealAccountTradeEvidence>[];
+  for (final position in projection.positions) {
+    final entryFills = position.fills
+        .where((fill) => !fill.reduceOnly)
+        .toList(growable: false);
+    final exitFills = position.exitFills.toList(growable: false);
+    DateTime? openedAt = position.settlement?.openedAt;
+    if (openedAt == null && entryFills.isNotEmpty) {
+      openedAt = entryFills
+          .map((fill) => fill.occurredAt.toUtc())
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+    }
+    final closedAt = position.settlement?.closedAt.toUtc();
+    final side = entryFills.isEmpty
+        ? ''
+        : entryFills.first.side.trim().toLowerCase();
+    final quantity = entryFills.fold<double>(
+      0,
+      (sum, fill) => sum + fill.quantity.abs(),
+    );
+    trades.add(
+      TradingLabRealAccountTradeEvidence(
+        symbol: position.symbol.trim().toUpperCase(),
+        side: side,
+        state: closedAt != null ? 'closed' : 'open_or_observed',
+        quantity: quantity,
+        averageEntryPrice: _tradingLabWeightedFillPrice(entryFills),
+        averageExitPrice: _tradingLabWeightedFillPrice(exitFills),
+        realizedGrossPnl: position.realizedGross.value,
+        fees: position.fees.value,
+        funding: position.funding.value,
+        netRealizedPnl: position.netRealized.value,
+        unrealizedPnl: position.unrealized.value,
+        openedAtUtc: openedAt?.toUtc(),
+        closedAtUtc: closedAt,
+        asOfUtc: position.asOf.toUtc(),
+        verified: position.isVerified,
+      ),
+    );
+  }
+  return TradingLabRealAccountEvidence(
+    currency: projection.currency,
+    asOfUtc: projection.asOf.toUtc(),
+    verified: projection.isVerified,
+    fillsAvailable: projection.fillsAvailable,
+    settlementsAvailable: projection.settlementsAvailable,
+    accountUnrealizedPnl: projection.accountUnrealized.value,
+    accountRealizedGrossPnl: projection.accountRealizedGross.value,
+    accountFees: projection.accountFees.value,
+    accountFunding: projection.accountFunding.value,
+    accountNetRealizedPnl: projection.accountNetRealized.value,
+    sourceWarningPresent: projection.warning != null,
+    trades: trades,
+  );
+}
 
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
@@ -117,6 +204,36 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     backgroundScanGateway: widget.backgroundScanGateway,
     languageCode: widget.locale.languageCode,
   );
+  late final TradingLabController _tradingLabController = TradingLabController(
+    marketController: _controller,
+    store: DatabaseTradingLabRunStore(),
+    accountContextProvider: () {
+      final reconciliation = _autoTradeController.reconciliation;
+      final snapshot = _autoTradeController.snapshot;
+      return TradingLabAccountContext(
+        connected: _autoTradeController.isConnected,
+        reconciliationHealth: reconciliation.health.name,
+        refreshing: reconciliation.refreshing,
+        blocksNewEntries: reconciliation.blocksNewEntries,
+        canManageExistingPositions:
+            reconciliation.allowsExistingPositionManagement,
+        syncedAtUtc: snapshot?.syncedAt.toUtc(),
+        marginCoin: snapshot?.marginCoin,
+        available: snapshot?.available,
+        frozen: snapshot?.frozen,
+        positionMargin: snapshot?.positionMargin,
+        unrealizedPnl: snapshot?.totalUnrealizedPnl,
+        estimatedEquity: snapshot?.estimatedEquity,
+        openPositionCount: snapshot?.positions.length,
+        pendingOrderCount: snapshot?.totalPendingOrderCount,
+        allOpenPositionsFullyProtected:
+            snapshot?.allOpenPositionsFullyProtected,
+        warning: reconciliation.warning,
+      );
+    },
+    realAccountEvidenceProvider: () =>
+        _buildTradingLabRealAccountEvidence(_autoTradeController),
+  );
   final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
       GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
@@ -125,6 +242,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   void initState() {
     super.initState();
     unawaited(_controller.initialize());
+    unawaited(_tradingLabController.initialize());
     unawaited(_autoTradeController.initialize());
     unawaited(_unattendedAutoTradeController.initialize());
     unawaited(_journalController.initialize());
@@ -132,6 +250,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
 
   @override
   void dispose() {
+    _tradingLabController.dispose();
     _controller.dispose();
     _autoTradeController.dispose();
     _unattendedAutoTradeController.dispose();
@@ -253,6 +372,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             autoTradeController: _autoTradeController,
             unattendedAutoTradeController: _unattendedAutoTradeController,
             journalController: _journalController,
+            tradingLabController: _tradingLabController,
             destination: _destination,
             themeMode: widget.themeMode,
             locale: widget.locale,
@@ -263,7 +383,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
             onNavigate: (value) {
               setState(() => _destination = value);
-              if (value == 5 || value == 6) {
+              if (value == 4 || value == 5 || value == 6) {
                 unawaited(_refreshCurrentDestination());
               }
             },
@@ -578,7 +698,7 @@ const _destinations = [
     Icons.candlestick_chart_rounded,
   ),
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
-  _Destination(Icons.home_outlined, Icons.home_rounded),
+  _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
   _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
@@ -590,6 +710,7 @@ String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
   2 => strings.analysis,
   3 => strings.watchlist,
+  4 => strings.isPersian ? 'آزمایشگاه بات' : 'Bot Lab',
   5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',
   6 => strings.isPersian ? 'ژورنال' : 'Journal',
   7 => strings.profile,
@@ -609,6 +730,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.autoTradeController,
     required this.unattendedAutoTradeController,
     required this.journalController,
+    required this.tradingLabController,
     required this.destination,
     required this.themeMode,
     required this.locale,
@@ -628,6 +750,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   final AutoTradeController autoTradeController;
   final UnattendedAutoTradeController unattendedAutoTradeController;
   final TradingJournalController journalController;
+  final TradingLabController tradingLabController;
   final int destination;
   final ThemeMode themeMode;
   final Locale locale;
@@ -660,6 +783,7 @@ class _OwnerAlphaBody extends StatelessWidget {
     };
     final initialMarketLoading =
         controller.snapshot == null &&
+        destination != 4 &&
         destination != 5 &&
         destination != 6 &&
         destination != 7;
@@ -778,6 +902,11 @@ class _OwnerAlphaBody extends StatelessWidget {
                       controller: autoTradeController,
                       unattendedController: unattendedAutoTradeController,
                       analysisController: controller,
+                    )
+                  else if (destination == 4)
+                    _TradingLabView(
+                      controller: tradingLabController,
+                      marketController: controller,
                     )
                   else if (controller.snapshot == null)
                     _InitialLoading(controller: controller)
