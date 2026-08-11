@@ -189,69 +189,81 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         );
       }
       if (radar.isEmpty) {
-        throw const OwnerAlphaDataException(
-          'برای واچ‌لیست فعلی هیچ تحلیل سالمی در دسترس نیست.',
-          'No healthy analysis is available for the current watchlist.',
-        );
-      }
-      final selectedRadar = radar
-          .where((item) => item.quote.symbol == selected)
-          .firstOrNull;
-      if (selectedRadar == null) {
         throw OwnerAlphaDataException(
-          'تحلیل سالمی برای $selected در دسترس نیست.',
-          'No healthy analysis is available for $selected.',
+          'هیچ‌کدام از نمادها داده کافی و معتبر برای تحلیل نداشتند.',
+          'None of the symbols had enough valid data for analysis.',
         );
       }
+      final effectiveSelected =
+          radar.any((result) => result.quote.symbol == selected)
+          ? selected
+          : radar.first.quote.symbol;
+      final selectedResult = radar.firstWhere(
+        (result) => result.quote.symbol == effectiveSelected,
+      );
       final selectedAnalysis =
-          selectedRadar.analysesByTimeframe[selectedTimeframe];
-      if (selectedAnalysis == null) {
-        throw OwnerAlphaDataException(
-          'تحلیل $selected در تایم‌فریم $selectedTimeframe در دسترس نیست.',
-          '$selected $selectedTimeframe analysis is unavailable.',
-        );
-      }
-      final generatedAt = _now().toUtc();
-      final timeframeDirections = <String, ChartDirection>{
-        for (final timeframe in supportedTimeframes)
-          if (selectedRadar.analysesByTimeframe[timeframe] case final analysis?)
-            timeframe: analysis.direction,
+          selectedResult.analysesByTimeframe[selectedTimeframe] ??
+          selectedResult.analysis;
+      final directions = <String, ChartDirection>{
+        for (final entry in selectedResult.analysesByTimeframe.entries)
+          entry.key: entry.value.direction,
       };
+      final rejections = <SetupRejectionReason, int>{};
+      for (final result in radar) {
+        for (final idea in result.ideasByTimeframe.values) {
+          if (idea.rejectionReason != SetupRejectionReason.none) {
+            rejections.update(
+              idea.rejectionReason,
+              (count) => count + 1,
+              ifAbsent: () => 1,
+            );
+          }
+        }
+      }
+      if (failures.isNotEmpty) {
+        rejections[SetupRejectionReason.dataUnavailable] = failures.length;
+      }
+      stopwatch.stop();
       return OwnerAlphaSnapshot(
         radar: radar,
-        selectedSymbol: selected,
-        selectedTimeframe: selectedTimeframe,
+        selectedSymbol: effectiveSelected,
+        selectedTimeframe: selectedAnalysis.timeframe,
         selectedAnalysis: selectedAnalysis,
-        timeframeDirections: timeframeDirections,
+        selectedIdea: TradeIdeaFactory.create(
+          analysis: selectedAnalysis,
+          capital: capital,
+          riskPercent: riskPercent,
+          languageCode: languageCode,
+          confluence: directions,
+        ),
+        timeframeDirections: directions,
         scanFailures: failures,
-        generatedAt: generatedAt,
-        diagnostics: OwnerAlphaDiagnostics(
-          scanDuration: stopwatch.elapsed,
+        diagnostics: ScanDiagnostics(
+          elapsed: stopwatch.elapsed,
           networkRequests: pendingRequests.length + 1,
           cacheHits: cacheHits,
           requestedAnalyses: requests.length,
-          failedAnalyses: failures.length,
+          rejections: rejections,
         ),
+        generatedAt: _now().toUtc(),
       );
     } on OwnerAlphaDataException {
       rethrow;
     } on TimeoutException {
       throw const OwnerAlphaDataException(
-        'دریافت داده بازار بیش از حد طول کشید.',
-        'Market data loading timed out.',
+        'پاسخ Bitunix دیر رسید. اتصال اینترنت را بررسی کنید.',
+        'Bitunix took too long to respond. Check your internet connection.',
+      );
+    } on http.ClientException {
+      throw const OwnerAlphaDataException(
+        'اتصال امن به داده عمومی Bitunix برقرار نشد.',
+        'A secure connection to public Bitunix data could not be established.',
       );
     } on FormatException {
       throw const OwnerAlphaDataException(
-        'پاسخ داده بازار با قرارداد مورد انتظار سازگار نبود.',
-        'The market data response did not match the expected contract.',
+        'پاسخ بازار با قرارداد مورد انتظار Quantara سازگار نبود.',
+        'The market response did not match Quantara\'s expected contract.',
       );
-    } on Object {
-      throw const OwnerAlphaDataException(
-        'دریافت داده زنده بازار ناموفق بود.',
-        'Live market data loading failed.',
-      );
-    } finally {
-      stopwatch.stop();
     }
   }
 
@@ -263,18 +275,18 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
     if (cached == null) {
       return null;
     }
-    final age = _now().toUtc().difference(cached.generatedAt);
-    final maxAge = switch (timeframe) {
-      '5m' => const Duration(minutes: 1),
-      '15m' => const Duration(minutes: 3),
-      '30m' => const Duration(minutes: 6),
-      '1h' => const Duration(minutes: 12),
-      '4h' => const Duration(minutes: 30),
-      '1D' => const Duration(hours: 1),
-      _ => Duration.zero,
-    };
-    return age <= maxAge ? cached : null;
+    final nextClosedCandleAt = cached.latestCandle.openTime.add(
+      _durationFor(timeframe) * 2,
+    );
+    if (!_now().toUtc().isBefore(nextClosedCandleAt)) {
+      _analysisCache.remove(_cacheKey(symbol, timeframe));
+      return null;
+    }
+    return cached;
   }
+
+  static String _cacheKey(String symbol, String timeframe) =>
+      '$symbol/$timeframe';
 
   Future<_AnalysisLoadResult> _tryLoadAnalysis(
     String symbol,

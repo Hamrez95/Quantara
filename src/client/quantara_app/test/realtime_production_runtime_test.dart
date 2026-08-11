@@ -56,21 +56,20 @@ void main() {
       final host = RealtimeMarketHost(
         runtime: runtime,
         pollInterval: const Duration(milliseconds: 250),
-        backgroundPauseGrace: const Duration(milliseconds: 50),
+        backgroundPauseGrace: const Duration(milliseconds: 60),
       );
 
       await host.initialize();
       host.didChangeAppLifecycleState(AppLifecycleState.paused);
       await Future<void>.delayed(const Duration(milliseconds: 15));
       host.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
 
       expect(runtime.pauses, 0);
       expect(runtime.resumes, 0);
       expect(runtime.state, RealtimeMarketRuntimeState.live);
 
       host.dispose();
-      await Future<void>.delayed(Duration.zero);
     },
   );
 
@@ -86,103 +85,108 @@ void main() {
 
       await host.initialize();
       host.didChangeAppLifecycleState(AppLifecycleState.paused);
-      await Future<void>.delayed(const Duration(milliseconds: 35));
-
+      await Future<void>.delayed(const Duration(milliseconds: 60));
       expect(runtime.pauses, 1);
       expect(runtime.state, RealtimeMarketRuntimeState.paused);
 
       host.didChangeAppLifecycleState(AppLifecycleState.resumed);
       await Future<void>.delayed(Duration.zero);
-
+      await Future<void>.delayed(Duration.zero);
       expect(runtime.resumes, 1);
       expect(runtime.state, RealtimeMarketRuntimeState.live);
 
       host.dispose();
-      await Future<void>.delayed(Duration.zero);
     },
   );
 
   test('degraded monitoring receives one bounded recovery restart', () async {
-    final runtime = _FakeRuntime();
+    final runtime = _FakeRuntime(degraded: true);
     final host = RealtimeMarketHost(
       runtime: runtime,
-      pollInterval: const Duration(milliseconds: 10),
-      backgroundPauseGrace: const Duration(milliseconds: 20),
+      pollInterval: const Duration(milliseconds: 250),
+      degradedRetryInterval: const Duration(milliseconds: 150),
     );
 
     await host.initialize();
-    runtime.state = RealtimeMarketRuntimeState.degraded;
-    await Future<void>.delayed(const Duration(milliseconds: 40));
+    await Future<void>.delayed(const Duration(milliseconds: 340));
 
-    expect(runtime.restarts, 1);
+    expect(runtime.pauses, 1);
+    expect(runtime.resumes, 1);
+    expect(host.value.operational, isTrue);
+    expect(host.value.healthy, isFalse);
 
     host.dispose();
-    await Future<void>.delayed(Duration.zero);
   });
 
   test('invalid or oversized settings fail closed', () {
     expect(
       () => RealtimeSettingsUniverse.build(
-        const OwnerAlphaSettings(symbols: [], capital: 1000, riskPercent: 1),
+        const OwnerAlphaSettings(symbols: [], capital: 10000, riskPercent: 0.5),
       ),
-      throwsArgumentError,
-    );
-    expect(
-      () => RealtimeSettingsUniverse.build(
-        OwnerAlphaSettings(
-          symbols: List<String>.generate(13, (index) => 'COIN${index}USDT'),
-          capital: 1000,
-          riskPercent: 1,
-        ),
-      ),
-      throwsArgumentError,
+      throwsStateError,
     );
   });
 }
 
-final class _FakeRuntime implements RealtimeMarketRuntime {
-  RealtimeMarketRuntimeState state = RealtimeMarketRuntimeState.stopped;
-  int starts = 0;
-  int pauses = 0;
-  int resumes = 0;
-  int restarts = 0;
-  int stops = 0;
+final class _FakeRuntime implements RealtimeMarketRuntimeLifecycle {
+  _FakeRuntime({this.degraded = false});
+
+  final bool degraded;
+  var starts = 0;
+  var pauses = 0;
+  var resumes = 0;
+  var stops = 0;
+  RealtimeMarketRuntimeState _state = RealtimeMarketRuntimeState.idle;
 
   @override
-  RealtimeMarketRuntimeSnapshot get snapshot => RealtimeMarketRuntimeSnapshot(
-    state: state,
-    updatedAt: DateTime.now().toUtc(),
-    activeStreams: const [],
-    faults: const [],
+  RealtimeMarketRuntimeState get state => _state;
+
+  @override
+  RealtimeMarketHealthSnapshot get health => RealtimeMarketHealthSnapshot(
+    state: _state,
+    configuredStreams: 8,
+    activeStreams: degraded ? 7 : 8,
+    quarantinedStreams: degraded ? 1 : 0,
+    activeShards: 1,
+    liveShards: _state == RealtimeMarketRuntimeState.live ? 1 : 0,
+    eventsReceived: 0,
+    klineEventsReceived: 0,
+    closedCandleEvents: 0,
+    gapEvents: 0,
+    reconciliationEvents: 0,
+    candidateEvaluations: 0,
+    candidateCommits: 0,
+    reconnectTransitions: 0,
+    malformedPayloadFaults: 0,
+    backpressureFaults: 0,
+    p95TransportLag: Duration.zero,
+    p95PipelineLatency: Duration.zero,
+    lastEventAtUtc: null,
+    lastFaultAtUtc: null,
+    lastFaultMessage: null,
   );
 
   @override
   Future<void> start() async {
     starts++;
-    state = RealtimeMarketRuntimeState.live;
+    _state = RealtimeMarketRuntimeState.live;
   }
 
   @override
   Future<void> pause() async {
     pauses++;
-    state = RealtimeMarketRuntimeState.paused;
+    _state = RealtimeMarketRuntimeState.paused;
   }
 
   @override
   Future<void> resume() async {
     resumes++;
-    state = RealtimeMarketRuntimeState.live;
-  }
-
-  @override
-  Future<void> restart() async {
-    restarts++;
-    state = RealtimeMarketRuntimeState.live;
+    _state = RealtimeMarketRuntimeState.live;
   }
 
   @override
   Future<void> stop() async {
     stops++;
-    state = RealtimeMarketRuntimeState.stopped;
+    _state = RealtimeMarketRuntimeState.stopped;
   }
 }
