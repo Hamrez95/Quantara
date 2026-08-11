@@ -1,4 +1,4 @@
-name: Sync Local Live foundation into Trading Lab
+name: Remove one-shot Trading Lab sync
 
 on:
   push:
@@ -11,74 +11,20 @@ permissions:
   contents: write
 
 jobs:
-  sync:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Trading Lab branch
         uses: actions/checkout@v4
         with:
           ref: feat/176-bot-trading-lab
-          fetch-depth: 0
 
-      - name: Merge latest Local Live foundation with explicit conflict policy
+      - name: Remove one-shot workflow from the branch
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'quantara-ci'
           git config user.email 'quantara-ci@users.noreply.github.com'
-          git fetch origin feat/163-portfolio-budgeted-local-live
-
-          set +e
-          git merge --no-ff --no-commit origin/feat/163-portfolio-budgeted-local-live
-          merge_status=$?
-          set -e
-
-          if [ "$merge_status" -ne 0 ]; then
-            mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
-            allowed=(
-              '.github/workflows/android-alpha.yml'
-              '.github/workflows/android-stable-release.yml'
-              '.github/workflows/flutter-ci.yml'
-              'docs/ANDROID_RELEASE_SIGNING.md'
-              'src/client/quantara_app/android/app/build.gradle.kts'
-              'src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart'
-              'src/client/quantara_app/lib/features/auto_trade/domain/local_live_management_only_after_flat.dart'
-              'src/client/quantara_app/test/android_preview_signing_source_test.dart'
-              'src/client/quantara_app/test/issue_165_management_only_after_flat_test.dart'
-              'src/client/quantara_app/test/physical_canary_regression_source_test.dart'
-              'src/client/quantara_app/test/release_1_2_0_rc_2_source_test.dart'
-            )
-
-            for conflict in "${conflicts[@]}"; do
-              found=false
-              for candidate in "${allowed[@]}"; do
-                if [ "$conflict" = "$candidate" ]; then
-                  found=true
-                  break
-                fi
-              done
-              if [ "$found" != true ]; then
-                echo "Unexpected merge conflict: $conflict" >&2
-                exit 1
-              fi
-            done
-
-            for conflict in "${conflicts[@]}"; do
-              if [ "$conflict" = 'src/client/quantara_app/test/release_1_2_0_rc_2_source_test.dart' ]; then
-                git rm -f -- "$conflict"
-              else
-                git checkout --theirs -- "$conflict"
-                git add -- "$conflict"
-              fi
-            done
-          fi
-
-          if git diff --name-only --diff-filter=U | grep -q .; then
-            echo 'Unresolved conflicts remain.' >&2
-            git diff --name-only --diff-filter=U >&2
-            exit 1
-          fi
-
-          git add -A
-          git commit -m 'merge: sync latest Local Live foundation into Trading Lab'
+          git rm .github/workflows/sync-foundation-into-lab.yml
+          git commit -m 'ci: remove one-shot Trading Lab foundation sync'
           git push origin HEAD:feat/176-bot-trading-lab
