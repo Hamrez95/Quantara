@@ -24,14 +24,11 @@ void main() {
 
     expect(workflow, contains('flutter analyze --fatal-infos'));
     expect(workflow, contains('flutter test --reporter expanded'));
-    expect(
-      workflow,
-      contains('flutter build apk --debug --flavor alpha'),
-    );
+    expect(workflow, contains('flutter build apk --debug --flavor alpha'));
     expect(workflow, contains('app-alpha-debug.apk'));
     expect(
       workflow,
-      contains('Android ${{ matrix.api-level }} cold-start smoke'),
+      contains('Android ${{matrix.api - level}} cold-start smoke'),
     );
     expect(workflow, isNot(contains('environment: Preview')));
     expect(
@@ -48,10 +45,7 @@ void main() {
 
     expect(workflow, contains('environment: Preview'));
     expect(workflow, contains(fingerprint));
-    expect(
-      workflow,
-      contains('QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64'),
-    );
+    expect(workflow, contains('QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64'));
     expect(workflow, contains('QUANTARA_PREVIEW_RELEASE=true'));
     expect(workflow, contains('apksigner'));
     expect(workflow, contains('SHA256SUMS.txt'));
