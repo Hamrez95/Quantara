@@ -32,9 +32,8 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.44.8'
-  ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+  ANDROID_PACKAGE: com.quantara.quantara_app
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  RC_VERSION: 1.2.0-rc.2
   ANDROID_DEBUG_ARTIFACT: quantara-android-debug-${{ github.sha }}
 
 jobs:
@@ -104,14 +103,14 @@ jobs:
       - name: Build offline-first web PWA
         run: flutter build web --release
 
-      - name: Build Android alpha debug QA APK
-        run: flutter build apk --debug --flavor alpha
+      - name: Build Android debug QA APK
+        run: flutter build apk --debug
 
       - name: Verify debug manifest safety declarations
         shell: bash
         run: |
           set -euo pipefail
-          apk="build/app/outputs/flutter-apk/app-alpha-debug.apk"
+          apk="build/app/outputs/flutter-apk/app-debug.apk"
           apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
           test -x "$apkanalyzer_path"
           test -f "$apk"
@@ -139,14 +138,14 @@ jobs:
         with:
           name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
           path: |
-            src/client/quantara_app/build/app/outputs/flutter-apk/app-alpha-debug.apk
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
             src/client/quantara_app/merged-manifest.xml
             src/client/quantara_app/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
 
   android-launch:
-    name: Android ${{ matrix.api-level }} cold-start smoke
+    name: Android API cold-start smoke
     needs: flutter
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -168,7 +167,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apk_path="$(find apk -type f -name 'app-alpha-debug.apk' -print -quit)"
+          apk_path="$(find apk -type f -name 'app-debug.apk' -print -quit)"
           test -n "$apk_path"
           test -f "$apk_path"
           echo "ANDROID_QA_APK_PATH=$apk_path" >> "$GITHUB_ENV"
