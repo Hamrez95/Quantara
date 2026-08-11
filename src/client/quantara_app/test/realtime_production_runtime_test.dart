@@ -49,52 +49,58 @@ void main() {
     },
   );
 
-  test('brief background transition is cancelled when the app resumes', () async {
-    final runtime = _FakeRuntime();
-    final host = RealtimeMarketHost(
-      runtime: runtime,
-      pollInterval: const Duration(milliseconds: 250),
-      backgroundPauseGrace: const Duration(milliseconds: 50),
-    );
+  test(
+    'brief background transition is cancelled when the app resumes',
+    () async {
+      final runtime = _FakeRuntime();
+      final host = RealtimeMarketHost(
+        runtime: runtime,
+        pollInterval: const Duration(milliseconds: 250),
+        backgroundPauseGrace: const Duration(milliseconds: 50),
+      );
 
-    await host.initialize();
-    host.didChangeAppLifecycleState(AppLifecycleState.paused);
-    await Future<void>.delayed(const Duration(milliseconds: 15));
-    host.didChangeAppLifecycleState(AppLifecycleState.resumed);
-    await Future<void>.delayed(const Duration(milliseconds: 60));
+      await host.initialize();
+      host.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      host.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 60));
 
-    expect(runtime.pauses, 0);
-    expect(runtime.resumes, 0);
-    expect(runtime.state, RealtimeMarketRuntimeState.live);
+      expect(runtime.pauses, 0);
+      expect(runtime.resumes, 0);
+      expect(runtime.state, RealtimeMarketRuntimeState.live);
 
-    host.dispose();
-    await Future<void>.delayed(Duration.zero);
-  });
+      host.dispose();
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
 
-  test('sustained backgrounding pauses after grace and resumes safely', () async {
-    final runtime = _FakeRuntime();
-    final host = RealtimeMarketHost(
-      runtime: runtime,
-      pollInterval: const Duration(milliseconds: 250),
-      backgroundPauseGrace: const Duration(milliseconds: 20),
-    );
+  test(
+    'sustained backgrounding pauses after grace and resumes safely',
+    () async {
+      final runtime = _FakeRuntime();
+      final host = RealtimeMarketHost(
+        runtime: runtime,
+        pollInterval: const Duration(milliseconds: 250),
+        backgroundPauseGrace: const Duration(milliseconds: 20),
+      );
 
-    await host.initialize();
-    host.didChangeAppLifecycleState(AppLifecycleState.paused);
-    await Future<void>.delayed(const Duration(milliseconds: 35));
+      await host.initialize();
+      host.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future<void>.delayed(const Duration(milliseconds: 35));
 
-    expect(runtime.pauses, 1);
-    expect(runtime.state, RealtimeMarketRuntimeState.paused);
+      expect(runtime.pauses, 1);
+      expect(runtime.state, RealtimeMarketRuntimeState.paused);
 
-    host.didChangeAppLifecycleState(AppLifecycleState.resumed);
-    await Future<void>.delayed(Duration.zero);
+      host.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(runtime.resumes, 1);
-    expect(runtime.state, RealtimeMarketRuntimeState.live);
+      expect(runtime.resumes, 1);
+      expect(runtime.state, RealtimeMarketRuntimeState.live);
 
-    host.dispose();
-    await Future<void>.delayed(Duration.zero);
-  });
+      host.dispose();
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
 
   test('degraded monitoring receives one bounded recovery restart', () async {
     final runtime = _FakeRuntime();
@@ -117,11 +123,7 @@ void main() {
   test('invalid or oversized settings fail closed', () {
     expect(
       () => RealtimeSettingsUniverse.build(
-        const OwnerAlphaSettings(
-          symbols: [],
-          capital: 1000,
-          riskPercent: 1,
-        ),
+        const OwnerAlphaSettings(symbols: [], capital: 1000, riskPercent: 1),
       ),
       throwsArgumentError,
     );

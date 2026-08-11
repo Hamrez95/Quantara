@@ -203,7 +203,8 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
           'No healthy analysis is available for $selected.',
         );
       }
-      final selectedAnalysis = selectedRadar.analysesByTimeframe[selectedTimeframe];
+      final selectedAnalysis =
+          selectedRadar.analysesByTimeframe[selectedTimeframe];
       if (selectedAnalysis == null) {
         throw OwnerAlphaDataException(
           'تحلیل $selected در تایم‌فریم $selectedTimeframe در دسترس نیست.',
@@ -254,7 +255,10 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
     }
   }
 
-  TimeframeChartAnalysis? _freshCachedAnalysis(String symbol, String timeframe) {
+  TimeframeChartAnalysis? _freshCachedAnalysis(
+    String symbol,
+    String timeframe,
+  ) {
     final cached = _analysisCache[_cacheKey(symbol, timeframe)];
     if (cached == null) {
       return null;

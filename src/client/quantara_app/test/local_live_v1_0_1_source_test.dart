@@ -31,10 +31,7 @@ void main() {
         'lib/features/auto_trade/application/profit_lock_promotion_executor.dart',
       );
 
-      expect(
-        repository,
-        contains("['5m', '15m', '30m', '1h', '4h', '1D']"),
-      );
+      expect(repository, contains("['5m', '15m', '30m', '1h', '4h', '1D']"));
       expect(repository, contains("'5m' => const Duration(minutes: 5)"));
       expect(repository, contains("'30m' => const Duration(minutes: 30)"));
       expect(ui, contains('SharedPreferencesLocalLivePreferencesStore'));
