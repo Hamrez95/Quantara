@@ -18,10 +18,7 @@ void main() {
           'LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(',
         ),
       );
-      expect(
-        source,
-        contains('userRequestedEntries: _userRequestedEntries'),
-      );
+      expect(source, contains('userRequestedEntries: _userRequestedEntries'));
       expect(
         source,
         contains('managementOnlyAfterFlat: _managementOnlyAfterFlat'),
