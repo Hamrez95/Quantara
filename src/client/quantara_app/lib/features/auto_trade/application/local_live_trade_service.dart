@@ -15,6 +15,7 @@ import '../../trading_journal/domain/trading_journal_models.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_cycle_readiness.dart';
+import '../domain/local_live_management_only_after_flat.dart';
 import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
@@ -37,6 +38,8 @@ const localLiveSessionPositionIdsKey =
     'quantara.local-live.session-positions.v1';
 const localLivePendingJournalClosuresKey =
     'quantara.local-live.pending-journal-closures.v1';
+const localLiveManagementOnlyAfterFlatKey =
+    'quantara.local-live.management-only-after-flat.v1';
 
 @pragma('vm:entry-point')
 void quantaraLocalLiveStartCallback() {
@@ -54,6 +57,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   final List<LocalLiveAuditEvent> _audit = [];
   bool _entriesEnabled = false;
   bool _userRequestedEntries = false;
+  bool _managementOnlyAfterFlat = false;
   bool _cycleRunning = false;
   bool _destroyed = false;
   int _consecutiveFailures = 0;
@@ -171,7 +175,18 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _httpClient = http.Client();
         _exchange = BitunixLocalLiveApiClient(client: _httpClient!);
         _userRequestedEntries = message['entriesEnabled'] == true;
-        _entriesEnabled = _userRequestedEntries;
+        if (_userRequestedEntries && _managementOnlyAfterFlat) {
+          await _setManagementOnlyAfterFlat(
+            false,
+            auditMessage:
+                'Explicit user start/resume cleared management-only after-flat safety.',
+          );
+        }
+        _entriesEnabled =
+            LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(
+              userRequestedEntries: _userRequestedEntries,
+              managementOnlyAfterFlat: _managementOnlyAfterFlat,
+            );
         _destroyed = false;
         if (_managed.isEmpty ||
             _sessionId == null ||
@@ -275,8 +290,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .toList(growable: false);
       _exchangeOpenPositionCount = openExchangePositions.length;
       _lastExchangeSync = DateTime.now().toUtc();
-      _entriesEnabled = _userRequestedEntries;
-      _entryBlockReason = null;
+      _entriesEnabled =
+          LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(
+            userRequestedEntries: _userRequestedEntries,
+            managementOnlyAfterFlat: _managementOnlyAfterFlat,
+          );
+      _entryBlockReason = _managementOnlyAfterFlat
+          ? 'managementOnlyAfterFlat'
+          : null;
       _sessionStartEquity ??= account.estimatedEquity;
       if (_sessionStartEquity != null) {
         await FlutterForegroundTask.saveData(
@@ -1142,6 +1163,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     List<BitunixLivePosition> positions,
     TradingPnlProjection pnlProjection,
   ) async {
+    final hadManagedPositions = _managed.isNotEmpty;
     final exchange = _exchange!;
     final credentials = _credentials!;
     for (final managed in List<LocalLiveManagedPosition>.of(_managed)) {
@@ -1516,6 +1538,21 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         }
       }
       _replaceManaged(managed, next);
+    }
+    if (!_managementOnlyAfterFlat &&
+        LocalLiveManagementOnlyAfterFlatPolicy.shouldLatchAfterFinalExchangeClose(
+          hadManagedPositions: hadManagedPositions,
+          hasManagedPositions: _managed.isNotEmpty,
+          exchangeOpenPositionCount: _exchangeOpenPositionCount,
+          userRequestedEntries: _userRequestedEntries,
+        )) {
+      await _setManagementOnlyAfterFlat(
+        true,
+        auditMessage:
+            'Final managed exchange position closed; entries remain paused until explicit user resume.',
+      );
+      _entriesEnabled = false;
+      _entryBlockReason = 'managementOnlyAfterFlat';
     }
     await _persistState();
   }
@@ -1922,6 +1959,33 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       key: localLiveSessionStartedAtKey,
     );
     _sessionStartedAt = DateTime.tryParse(startedAtRaw ?? '')?.toUtc();
+    _managementOnlyAfterFlat =
+        await FlutterForegroundTask.getData<bool>(
+          key: localLiveManagementOnlyAfterFlatKey,
+        ) ??
+        false;
+    if (_managementOnlyAfterFlat) {
+      _entriesEnabled = false;
+      _entryBlockReason = 'managementOnlyAfterFlat';
+    }
+  }
+
+  Future<void> _setManagementOnlyAfterFlat(
+    bool value, {
+    String? auditMessage,
+  }) async {
+    if (_managementOnlyAfterFlat == value) return;
+    _managementOnlyAfterFlat = value;
+    await FlutterForegroundTask.saveData(
+      key: localLiveManagementOnlyAfterFlatKey,
+      value: value,
+    );
+    if (auditMessage != null) {
+      _auditEvent(
+        value ? 'management_only_after_flat' : 'entries_explicitly_resumed',
+        auditMessage,
+      );
+    }
   }
 
   Future<void> _persistSessionMetadata() async {

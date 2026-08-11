@@ -12,7 +12,18 @@ void main() {
       expect(source, contains('_pendingJournalClosures'));
       expect(source, contains('_reconcilePendingJournalClosures'));
       expect(source, contains('_userRequestedEntries'));
-      expect(source, contains('_entriesEnabled = _userRequestedEntries'));
+      expect(
+        source,
+        contains(
+          'LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(',
+        ),
+      );
+      expect(source, contains('userRequestedEntries: _userRequestedEntries'));
+      expect(
+        source,
+        contains('managementOnlyAfterFlat: _managementOnlyAfterFlat'),
+      );
+      expect(source, contains("_entryBlockReason = _managementOnlyAfterFlat"));
     },
   );
 

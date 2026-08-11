@@ -101,9 +101,9 @@ android {
 }
 
 // Android configures every build type even for `assembleDebug`. Enforce the
-// release-signing constitution when the resolved task graph actually contains
-// a Release task, so debug QA artifacts remain buildable without weakening
-// Preview/Stable release signing.
+// release-signing constitution only when the resolved task graph actually
+// contains a Release task. Debug QA therefore remains secret-free while every
+// Preview/Stable release remains fail-closed without its persistent signer.
 gradle.taskGraph.whenReady {
     val releaseTaskSelected = allTasks.any { task ->
         task.name.contains("release", ignoreCase = true)
