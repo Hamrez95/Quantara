@@ -1,6 +1,7 @@
 enum BitunixKlineInterval {
   fiveMinutes('5m', 'market_kline_5min', Duration(minutes: 5)),
   fifteenMinutes('15m', 'market_kline_15min', Duration(minutes: 15)),
+  thirtyMinutes('30m', 'market_kline_30min', Duration(minutes: 30)),
   oneHour('1h', 'market_kline_60min', Duration(hours: 1)),
   fourHours('4h', 'market_kline_4h', Duration(hours: 4)),
   oneDay('1D', 'market_kline_1day', Duration(days: 1));

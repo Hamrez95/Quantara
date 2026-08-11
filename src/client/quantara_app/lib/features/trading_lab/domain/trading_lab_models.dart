@@ -1,6 +1,6 @@
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 
-const tradingLabSchemaVersion = 2;
+const tradingLabSchemaVersion = 3;
 const tradingLabMaximumEvents = 20000;
 const tradingLabMaximumProcessedDecisions = 50000;
 
@@ -44,10 +44,11 @@ final class TradingLabRunManifest {
     this.scannerIntervalSeconds = 15,
     this.minimumConfidencePercent = 65,
     this.minimumRiskReward = 1.5,
+    this.maxEstimatedCostToRiskPercent = 25,
     this.marginMode = TradingLabMarginMode.isolated,
     this.executionModel = TradingLabExecutionModel.conservativeCandlePath,
     this.experimentTag = '',
-    this.engineVersion = 'trading-lab-v2',
+    this.engineVersion = 'trading-lab-v3',
     this.notes = '',
   }) : symbols = List.unmodifiable(
          symbols
@@ -88,6 +89,7 @@ final class TradingLabRunManifest {
   final int scannerIntervalSeconds;
   final int minimumConfidencePercent;
   final double minimumRiskReward;
+  final double maxEstimatedCostToRiskPercent;
   final TradingLabMarginMode marginMode;
   final TradingLabExecutionModel executionModel;
   final String experimentTag;
@@ -174,6 +176,13 @@ final class TradingLabRunManifest {
         minimumRiskReward > 20) {
       throw const FormatException('Trading Lab RR gate is invalid.');
     }
+    if (!maxEstimatedCostToRiskPercent.isFinite ||
+        maxEstimatedCostToRiskPercent < 0 ||
+        maxEstimatedCostToRiskPercent > 200) {
+      throw const FormatException(
+        'Trading Lab execution cost/risk gate must be between 0% and 200%.',
+      );
+    }
     if (experimentTag.length > 80 || engineVersion.trim().isEmpty) {
       throw const FormatException(
         'Trading Lab experiment identity is invalid.',
@@ -201,6 +210,7 @@ final class TradingLabRunManifest {
     'scannerIntervalSeconds': scannerIntervalSeconds,
     'minimumConfidencePercent': minimumConfidencePercent,
     'minimumRiskReward': minimumRiskReward,
+    'maxEstimatedCostToRiskPercent': maxEstimatedCostToRiskPercent,
     'marginMode': marginMode.name,
     'executionModel': executionModel.name,
     'experimentTag': experimentTag,
@@ -232,6 +242,10 @@ final class TradingLabRunManifest {
       fallback: 65,
     ),
     minimumRiskReward: _double(json['minimumRiskReward'], fallback: 1.5),
+    maxEstimatedCostToRiskPercent: _double(
+      json['maxEstimatedCostToRiskPercent'],
+      fallback: 25,
+    ),
     marginMode: TradingLabMarginMode.values.firstWhere(
       (item) => item.name == json['marginMode'],
       orElse: () => TradingLabMarginMode.isolated,

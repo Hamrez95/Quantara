@@ -279,6 +279,7 @@ abstract final class RealtimeSettingsUniverse {
   static const intervals = [
     BitunixKlineInterval.fiveMinutes,
     BitunixKlineInterval.fifteenMinutes,
+    BitunixKlineInterval.thirtyMinutes,
     BitunixKlineInterval.oneHour,
     BitunixKlineInterval.fourHours,
   ];

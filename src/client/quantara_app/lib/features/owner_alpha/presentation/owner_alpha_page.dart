@@ -45,6 +45,7 @@ import '../../trading_lab/application/trading_lab_scorecards.dart';
 import '../../trading_lab/data/database_trading_lab_store.dart';
 import '../../trading_lab/domain/trading_lab_account_context.dart';
 import '../../trading_lab/domain/trading_lab_models.dart';
+import '../../trading_lab/domain/trading_lab_real_account_evidence.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
 import '../data/owner_alpha_settings_transfer.dart';
@@ -72,6 +73,83 @@ typedef _OpenAnalysis =
     void Function(String symbol, [String? timeframe, String? setupId]);
 
 void _noopOpenPortfolioRisk() {}
+
+double? _tradingLabWeightedFillPrice(Iterable<ExchangePnlFill> fills) {
+  var quantity = 0.0;
+  var notional = 0.0;
+  for (final fill in fills) {
+    final weight = fill.quantity.abs();
+    quantity += weight;
+    notional += fill.price * weight;
+  }
+  return quantity <= 1e-12 ? null : notional / quantity;
+}
+
+TradingLabRealAccountEvidence _buildTradingLabRealAccountEvidence(
+  AutoTradeController controller,
+) {
+  final snapshot = controller.snapshot;
+  final projection = snapshot?.authoritativePnl;
+  if (projection == null) {
+    return TradingLabRealAccountEvidence.unavailable(
+      asOfUtc: snapshot?.syncedAt,
+    );
+  }
+  final trades = <TradingLabRealAccountTradeEvidence>[];
+  for (final position in projection.positions) {
+    final entryFills = position.fills
+        .where((fill) => !fill.reduceOnly)
+        .toList(growable: false);
+    final exitFills = position.exitFills.toList(growable: false);
+    DateTime? openedAt = position.settlement?.openedAt;
+    if (openedAt == null && entryFills.isNotEmpty) {
+      openedAt = entryFills
+          .map((fill) => fill.occurredAt.toUtc())
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+    }
+    final closedAt = position.settlement?.closedAt.toUtc();
+    final side = entryFills.isEmpty
+        ? ''
+        : entryFills.first.side.trim().toLowerCase();
+    final quantity = entryFills.fold<double>(
+      0,
+      (sum, fill) => sum + fill.quantity.abs(),
+    );
+    trades.add(
+      TradingLabRealAccountTradeEvidence(
+        symbol: position.symbol.trim().toUpperCase(),
+        side: side,
+        state: closedAt != null ? 'closed' : 'open_or_observed',
+        quantity: quantity,
+        averageEntryPrice: _tradingLabWeightedFillPrice(entryFills),
+        averageExitPrice: _tradingLabWeightedFillPrice(exitFills),
+        realizedGrossPnl: position.realizedGross.value,
+        fees: position.fees.value,
+        funding: position.funding.value,
+        netRealizedPnl: position.netRealized.value,
+        unrealizedPnl: position.unrealized.value,
+        openedAtUtc: openedAt?.toUtc(),
+        closedAtUtc: closedAt,
+        asOfUtc: position.asOf.toUtc(),
+        verified: position.isVerified,
+      ),
+    );
+  }
+  return TradingLabRealAccountEvidence(
+    currency: projection.currency,
+    asOfUtc: projection.asOf.toUtc(),
+    verified: projection.isVerified,
+    fillsAvailable: projection.fillsAvailable,
+    settlementsAvailable: projection.settlementsAvailable,
+    accountUnrealizedPnl: projection.accountUnrealized.value,
+    accountRealizedGrossPnl: projection.accountRealizedGross.value,
+    accountFees: projection.accountFees.value,
+    accountFunding: projection.accountFunding.value,
+    accountNetRealizedPnl: projection.accountNetRealized.value,
+    sourceWarningPresent: projection.warning != null,
+    trades: trades,
+  );
+}
 
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
@@ -153,6 +231,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
         warning: reconciliation.warning,
       );
     },
+    realAccountEvidenceProvider: () =>
+        _buildTradingLabRealAccountEvidence(_autoTradeController),
   );
   final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
       GlobalKey<_AutoTradeViewState>();

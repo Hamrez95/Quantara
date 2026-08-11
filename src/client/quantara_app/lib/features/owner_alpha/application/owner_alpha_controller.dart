@@ -57,7 +57,7 @@ final class OwnerAlphaController extends ChangeNotifier {
   static const defaultSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT'];
   static const maximumSymbols = 30;
   static final _symbolPattern = RegExp(r'^[A-Z0-9]{2,20}$');
-  static const timeframes = ['5m', '15m', '1h', '4h', '1D'];
+  static const timeframes = ['5m', '15m', '30m', '1h', '4h', '1D'];
   static const outcomeCatchUpBatchSize = 2;
 
   final OwnerAlphaRepository _repository;

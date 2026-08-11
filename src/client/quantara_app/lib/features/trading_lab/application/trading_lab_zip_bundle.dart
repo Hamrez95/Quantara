@@ -5,8 +5,9 @@ import 'package:crypto/crypto.dart';
 
 import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
+import '../domain/trading_lab_real_account_evidence.dart';
 
-const tradingLabBundleSchemaVersion = 2;
+const tradingLabBundleSchemaVersion = 3;
 const _maximumBundleBytes = 32 * 1024 * 1024;
 const _maximumBundleFiles = 32;
 
@@ -52,6 +53,10 @@ final class TradingLabZipBundleCodec {
     'ai_review.json',
     'shadow_evidence.json',
     'account_context.json',
+    'real_account_summary.json',
+    'real_account_trades.jsonl',
+    'real_account_snapshots.jsonl',
+    'benchmark_matrix.json',
     'README.txt',
   };
 
@@ -60,11 +65,31 @@ final class TradingLabZipBundleCodec {
     required String aiReviewJson,
     required Map<String, Object?> shadowEvidence,
     required TradingLabAccountContext accountContext,
+    required TradingLabRealAccountEvidence realAccountEvidence,
+    required Map<String, Object?> benchmarkMatrix,
   }) {
     final pretty = const JsonEncoder.withIndent('  ');
     final runObject = run.toJson();
     final manifestObject = run.manifest.toJson();
     final accountObject = accountContext.toJson();
+    final realAccountObject = realAccountEvidence.toJson();
+    final realAccountTrades = realAccountEvidence.trades
+        .map((trade) => trade.toJson())
+        .toList(growable: false);
+    final realAccountSnapshots = run.events
+        .where((event) => event.kind == TradingLabEventKind.heartbeat)
+        .map(
+          (event) => <String, Object?>{
+            'atUtc': event.atUtc.toIso8601String(),
+            'estimatedEquity': event.metrics['realAccountEstimatedEquity'],
+            'available': event.metrics['realAccountAvailable'],
+            'openPositionCount': event.metrics['realAccountOpenPositionCount'],
+            'pendingOrderCount': event.metrics['realAccountPendingOrderCount'],
+            'accountHealth': event.attributes['accountHealth'],
+            'connected': event.attributes['accountConnected'],
+          },
+        )
+        .toList(growable: false);
     final summaryObject = _summary(run);
     final strategyVersionsObject = <String, Object?>{
       'schemaVersion': tradingLabBundleSchemaVersion,
@@ -152,6 +177,10 @@ final class TradingLabZipBundleCodec {
       anomalies,
       shadowEvidence,
       accountObject,
+      realAccountObject,
+      realAccountTrades,
+      realAccountSnapshots,
+      benchmarkMatrix,
       jsonDecode(aiReviewJson),
     ];
     for (final value in objectsToValidate) {
@@ -173,6 +202,10 @@ final class TradingLabZipBundleCodec {
       'ai_review.json': _utf8(aiReviewJson),
       'shadow_evidence.json': _utf8(pretty.convert(shadowEvidence)),
       'account_context.json': _utf8(pretty.convert(accountObject)),
+      'real_account_summary.json': _utf8(pretty.convert(realAccountObject)),
+      'real_account_trades.jsonl': _utf8(_jsonl(realAccountTrades)),
+      'real_account_snapshots.jsonl': _utf8(_jsonl(realAccountSnapshots)),
+      'benchmark_matrix.json': _utf8(pretty.convert(benchmarkMatrix)),
       'README.txt': _utf8(_readme(run)),
     };
     final checksums = <String, String>{
@@ -187,6 +220,8 @@ final class TradingLabZipBundleCodec {
       'runStartedAtUtc': run.manifest.startedAtUtc.toIso8601String(),
       'paperOnly': true,
       'containsCredentials': false,
+      'sanitizedRealAccountEvidence': true,
+      'containsExchangeIdentifiers': false,
       'files': payloadFiles.keys.toList(growable: false),
       'checksumsSha256': checksums,
     };
@@ -217,18 +252,44 @@ final class TradingLabZipBundleCodec {
         'Trading Lab ZIP bundle contains too many files.',
       );
     }
-    if (!files.keys.toSet().containsAll(requiredEvidenceFiles)) {
+    if (!files.containsKey('bundle_manifest.json')) {
       throw const FormatException('Trading Lab ZIP bundle is incomplete.');
     }
 
     final bundleManifest = _jsonObject(files['bundle_manifest.json']!);
-    if (_int(bundleManifest['bundleSchemaVersion']) !=
-        tradingLabBundleSchemaVersion) {
-      throw const FormatException('Unsupported Trading Lab bundle schema.');
+    final bundleSchema = _int(bundleManifest['bundleSchemaVersion']);
+    const legacyV2Files = <String>{
+      'bundle_manifest.json',
+      'manifest.json',
+      'summary.json',
+      'run.json',
+      'trades.jsonl',
+      'candidates.jsonl',
+      'decisions.jsonl',
+      'management_events.jsonl',
+      'equity_curve.jsonl',
+      'market_feature_snapshots.jsonl',
+      'anomalies.jsonl',
+      'strategy_versions.json',
+      'ai_review.json',
+      'shadow_evidence.json',
+      'account_context.json',
+      'README.txt',
+    };
+    final expectedFiles = bundleSchema == 2
+        ? legacyV2Files
+        : bundleSchema == tradingLabBundleSchemaVersion
+        ? requiredEvidenceFiles
+        : throw const FormatException('Unsupported Trading Lab bundle schema.');
+    if (!files.keys.toSet().containsAll(expectedFiles)) {
+      throw const FormatException('Trading Lab ZIP bundle is incomplete.');
     }
     if (bundleManifest['bundleType'] != 'bot-trading-lab-evidence' ||
         bundleManifest['paperOnly'] != true ||
-        bundleManifest['containsCredentials'] != false) {
+        bundleManifest['containsCredentials'] != false ||
+        (bundleSchema >= 3 &&
+            (bundleManifest['sanitizedRealAccountEvidence'] != true ||
+                bundleManifest['containsExchangeIdentifiers'] != false))) {
       throw const FormatException(
         'Trading Lab bundle safety metadata is invalid.',
       );
@@ -239,7 +300,7 @@ final class TradingLabZipBundleCodec {
             .map((item) => item.toString())
             .toSet();
     if (!declaredFiles.containsAll(
-      requiredEvidenceFiles.difference({'bundle_manifest.json'}),
+      expectedFiles.difference({'bundle_manifest.json'}),
     )) {
       throw const FormatException(
         'Trading Lab bundle manifest does not declare all evidence files.',
@@ -269,7 +330,15 @@ final class TradingLabZipBundleCodec {
     _assertNoSensitiveKeys(jsonDecode(aiReviewJson));
     _assertNoSensitiveKeys(jsonDecode(shadowJson));
     _assertNoSensitiveKeys(jsonDecode(accountJson));
-    for (final name in const <String>[
+    if (bundleSchema >= 3) {
+      _assertNoSensitiveKeys(
+        jsonDecode(utf8.decode(files['real_account_summary.json']!)),
+      );
+      _assertNoSensitiveKeys(
+        jsonDecode(utf8.decode(files['benchmark_matrix.json']!)),
+      );
+    }
+    for (final name in <String>[
       'trades.jsonl',
       'candidates.jsonl',
       'decisions.jsonl',
@@ -277,6 +346,8 @@ final class TradingLabZipBundleCodec {
       'equity_curve.jsonl',
       'market_feature_snapshots.jsonl',
       'anomalies.jsonl',
+      if (bundleSchema >= 3) 'real_account_trades.jsonl',
+      if (bundleSchema >= 3) 'real_account_snapshots.jsonl',
     ]) {
       _validateJsonl(files[name]!, name);
     }

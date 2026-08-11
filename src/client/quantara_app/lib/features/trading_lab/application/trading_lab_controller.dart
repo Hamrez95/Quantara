@@ -6,6 +6,8 @@ import '../../owner_alpha/application/owner_alpha_controller.dart';
 import '../data/database_trading_lab_store.dart';
 import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
+import '../domain/trading_lab_real_account_evidence.dart';
+import 'trading_lab_benchmark.dart';
 import 'trading_lab_paper_broker.dart';
 import 'trading_lab_shadow_evidence.dart';
 import 'trading_lab_zip_bundle.dart';
@@ -16,11 +18,13 @@ final class TradingLabController extends ChangeNotifier {
     required TradingLabRunStore store,
     TradingLabPaperBroker broker = const TradingLabPaperBroker(),
     TradingLabAccountContext Function()? accountContextProvider,
+    TradingLabRealAccountEvidence Function()? realAccountEvidenceProvider,
   }) => TradingLabController._(
     marketController,
     store,
     broker,
     accountContextProvider,
+    realAccountEvidenceProvider,
   );
 
   TradingLabController._(
@@ -28,12 +32,14 @@ final class TradingLabController extends ChangeNotifier {
     this._store,
     this._broker,
     this._accountContextProvider,
+    this._realAccountEvidenceProvider,
   );
 
   final OwnerAlphaController _marketController;
   final TradingLabRunStore _store;
   final TradingLabPaperBroker _broker;
   final TradingLabAccountContext Function()? _accountContextProvider;
+  final TradingLabRealAccountEvidence Function()? _realAccountEvidenceProvider;
 
   TradingLabRun? _run;
   List<TradingLabRun> _history = const [];
@@ -52,6 +58,9 @@ final class TradingLabController extends ChangeNotifier {
   TradingLabAccountContext get accountContext =>
       _accountContextProvider?.call() ??
       TradingLabAccountContext.disconnected();
+  TradingLabRealAccountEvidence get realAccountEvidence =>
+      _realAccountEvidenceProvider?.call() ??
+      TradingLabRealAccountEvidence.unavailable();
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -84,6 +93,7 @@ final class TradingLabController extends ChangeNotifier {
     int scannerIntervalSeconds = 15,
     int minimumConfidencePercent = 65,
     double minimumRiskReward = 1.5,
+    double maxEstimatedCostToRiskPercent = 25,
     TradingLabMarginMode marginMode = TradingLabMarginMode.isolated,
     TradingLabExecutionModel executionModel =
         TradingLabExecutionModel.conservativeCandlePath,
@@ -117,9 +127,7 @@ final class TradingLabController extends ChangeNotifier {
         maximumConcurrentPositions: maximumConcurrentPositions,
         leverage: leverage,
         symbols: _marketController.symbols,
-        timeframes: OwnerAlphaController.timeframes.where(
-          (item) => item != '1D',
-        ),
+        timeframes: const ['5m', '15m', '30m', '1h'],
         strategies: strategyVersions,
         feeRateBps: feeRateBps,
         slippageBps: slippageBps,
@@ -130,6 +138,7 @@ final class TradingLabController extends ChangeNotifier {
         scannerIntervalSeconds: scannerIntervalSeconds,
         minimumConfidencePercent: minimumConfidencePercent,
         minimumRiskReward: minimumRiskReward,
+        maxEstimatedCostToRiskPercent: maxEstimatedCostToRiskPercent,
         marginMode: marginMode,
         executionModel: executionModel,
         experimentTag: experimentTag,
@@ -215,6 +224,11 @@ final class TradingLabController extends ChangeNotifier {
       aiReviewJson: aiReviewJson,
       shadowEvidence: shadowEvidence,
       accountContext: context,
+      realAccountEvidence: realAccountEvidence,
+      benchmarkMatrix: buildTradingLabBenchmarkMatrix(<TradingLabRun>[
+        ..._history,
+        current,
+      ]),
     );
   }
 

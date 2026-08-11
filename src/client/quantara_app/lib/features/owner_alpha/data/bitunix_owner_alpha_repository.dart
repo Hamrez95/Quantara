@@ -54,8 +54,8 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
   static final _symbolPattern = RegExp(r'^[A-Z0-9]{5,24}$');
   static const _apiOrigin = 'https://fapi.bitunix.com';
   static const _maximumResponseBytes = 2 * 1024 * 1024;
-  static const supportedTimeframes = ['5m', '15m', '1h', '4h', '1D'];
-  static const opportunityTimeframes = ['5m', '15m', '1h', '4h'];
+  static const supportedTimeframes = ['5m', '15m', '30m', '1h', '4h', '1D'];
+  static const opportunityTimeframes = ['5m', '15m', '30m', '1h', '4h'];
   static const _displayNames = {
     'BTCUSDT': 'Bitcoin',
     'ETHUSDT': 'Ethereum',
@@ -150,6 +150,7 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         }
         final analysis =
             analyses['1h'] ??
+            analyses['30m'] ??
             analyses['15m'] ??
             analyses['5m'] ??
             analyses['4h'] ??

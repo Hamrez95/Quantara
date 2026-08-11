@@ -21,6 +21,26 @@ final class TradingLabPaperBroker {
 
     run.cycleId += 1;
     final cycle = run.cycleId;
+    final snapshotGapSeconds = previous == null
+        ? 0
+        : snapshot.generatedAt.difference(previous).inSeconds;
+    if (previous != null &&
+        snapshotGapSeconds > run.manifest.scannerIntervalSeconds * 3) {
+      _event(
+        run,
+        TradingLabEventKind.anomaly,
+        snapshot.generatedAt,
+        'Trading Lab market snapshot cadence exceeded the configured scanner interval.',
+        metrics: {
+          'gapSeconds': snapshotGapSeconds.toDouble(),
+          'configuredScannerIntervalSeconds': run
+              .manifest
+              .scannerIntervalSeconds
+              .toDouble(),
+        },
+        attributes: {'anomalyCode': 'scanner_gap'},
+      );
+    }
     final openedBefore = run.openPositions.length;
     final closedBefore = run.closedPositions.length;
     final lastScan = run.lastScanAtUtc;
@@ -92,6 +112,11 @@ final class TradingLabPaperBroker {
         'maximumDrawdownPercent': run.maximumDrawdownPercent,
         'realAccountEstimatedEquity': accountContext?.estimatedEquity ?? 0,
         'realAccountAvailable': accountContext?.available ?? 0,
+        'realAccountOpenPositionCount': (accountContext?.openPositionCount ?? 0)
+            .toDouble(),
+        'realAccountPendingOrderCount': (accountContext?.pendingOrderCount ?? 0)
+            .toDouble(),
+        'snapshotGapSeconds': snapshotGapSeconds.toDouble(),
         'realAccountAgeSeconds': accountContext?.syncedAtUtc == null
             ? -1
             : math
@@ -160,12 +185,33 @@ final class TradingLabPaperBroker {
           },
         );
 
+        if (!_isValidActionablePlan(idea)) {
+          _event(
+            run,
+            TradingLabEventKind.candidateRejected,
+            snapshot.generatedAt,
+            idea.direction == TradeDirection.wait
+                ? 'Strategy produced WAIT/non-actionable evidence: ${idea.rejectionReason.name}.'
+                : 'Candidate plan is incomplete or has a wrong-side stop.',
+            idea: idea,
+            metrics: commonMetrics,
+            attributes: {
+              'rejectionReason': idea.direction == TradeDirection.wait
+                  ? 'strategy_wait_${idea.rejectionReason.name}'
+                  : idea.rejectionReason.name,
+              'decisionClass': idea.direction == TradeDirection.wait
+                  ? 'non_actionable_wait'
+                  : 'invalid_plan',
+            },
+          );
+          continue;
+        }
         if (idea.confidencePercent < run.manifest.minimumConfidencePercent) {
           _event(
             run,
             TradingLabEventKind.candidateRejected,
             snapshot.generatedAt,
-            'Candidate rejected by experiment confidence gate.',
+            'Actionable candidate rejected by experiment confidence gate.',
             idea: idea,
             metrics: commonMetrics,
             attributes: {'rejectionReason': 'confidence_below_gate'},
@@ -177,25 +223,10 @@ final class TradingLabPaperBroker {
             run,
             TradingLabEventKind.candidateRejected,
             snapshot.generatedAt,
-            'Candidate rejected by experiment minimum RR gate.',
+            'Actionable candidate rejected by experiment minimum RR gate.',
             idea: idea,
             metrics: commonMetrics,
             attributes: {'rejectionReason': 'risk_reward_below_gate'},
-          );
-          continue;
-        }
-
-        if (!_isValidActionablePlan(idea)) {
-          _event(
-            run,
-            TradingLabEventKind.candidateRejected,
-            snapshot.generatedAt,
-            idea.direction == TradeDirection.wait
-                ? 'Strategy rejected candidate: ${idea.rejectionReason.name}.'
-                : 'Candidate plan is incomplete or has a wrong-side stop.',
-            idea: idea,
-            metrics: commonMetrics,
-            attributes: {'rejectionReason': idea.rejectionReason.name},
           );
           continue;
         }
@@ -243,6 +274,29 @@ final class TradingLabPaperBroker {
     for (final candidate in List<TradingLabPendingCandidate>.of(
       run.pendingCandidates,
     )) {
+      final currentIdea = _currentIdeaFor(snapshot, candidate);
+      if (currentIdea != null &&
+          (currentIdea.direction == TradeDirection.wait ||
+              currentIdea.setupId != candidate.setupId ||
+              currentIdea.strategy.name != candidate.strategy ||
+              currentIdea.strategyVersion != candidate.strategyVersion)) {
+        remove.add(candidate);
+        _event(
+          run,
+          TradingLabEventKind.candidateRejected,
+          snapshot.generatedAt,
+          currentIdea.direction == TradeDirection.wait
+              ? 'Pending candidate invalidated because the current strategy state is WAIT.'
+              : 'Pending candidate superseded by a newer setup for the same symbol/timeframe.',
+          candidate: candidate,
+          attributes: {
+            'rejectionReason': currentIdea.direction == TradeDirection.wait
+                ? 'setup_invalidated'
+                : 'setup_superseded',
+          },
+        );
+        continue;
+      }
       if (!snapshot.generatedAt.isBefore(candidate.validUntilUtc)) {
         remove.add(candidate);
         _event(
@@ -264,7 +318,8 @@ final class TradingLabPaperBroker {
       final entryCandle = analysis.candles
           .where(
             (candle) =>
-                candle.openTime.isAfter(candidate.signalCandleOpenTimeUtc),
+                candle.openTime.isAfter(candidate.signalCandleOpenTimeUtc) &&
+                !candle.openTime.isBefore(candidate.observedAtUtc),
           )
           .where((candle) => _touchesEntry(candidate, candle))
           .firstOrNull;
@@ -287,13 +342,24 @@ final class TradingLabPaperBroker {
         run,
         candidate,
         entryCandle,
-        snapshot.generatedAt,
+        entryCandle.openTime.toUtc(),
       );
       if (opened) {
         remove.add(candidate);
       }
     }
     run.pendingCandidates.removeWhere(remove.contains);
+  }
+
+  TradeIdea? _currentIdeaFor(
+    OwnerAlphaSnapshot snapshot,
+    TradingLabPendingCandidate candidate,
+  ) {
+    for (final radar in snapshot.radar) {
+      if (radar.quote.symbol.toUpperCase() != candidate.symbol) continue;
+      return radar.ideasByTimeframe[candidate.timeframe];
+    }
+    return null;
   }
 
   bool _openPosition(
@@ -352,6 +418,38 @@ final class TradingLabPaperBroker {
     final entryFee = _fee(notional, run.manifest.feeRateBps);
     final spreadCost = (afterSpread - referenceEntry).abs() * quantity;
     final slippageCost = (entry - afterSpread).abs() * quantity;
+    final estimatedExitFee = _fee(notional, run.manifest.feeRateBps);
+    final estimatedExitExecutionCost =
+        notional *
+        (run.manifest.spreadBps / 2 + run.manifest.slippageBps) /
+        10000;
+    final estimatedRoundTripExecutionCost =
+        entryFee +
+        estimatedExitFee +
+        spreadCost +
+        slippageCost +
+        estimatedExitExecutionCost;
+    final executionCostToRiskPercent =
+        estimatedRoundTripExecutionCost / riskBudget * 100;
+    if (executionCostToRiskPercent >
+        run.manifest.maxEstimatedCostToRiskPercent) {
+      _event(
+        run,
+        TradingLabEventKind.candidateRejected,
+        now,
+        'Paper entry blocked: estimated execution costs consume too much of the configured risk budget.',
+        candidate: candidate,
+        metrics: {
+          'estimatedRoundTripExecutionCost': estimatedRoundTripExecutionCost,
+          'riskBudget': riskBudget,
+          'executionCostToRiskPercent': executionCostToRiskPercent,
+          'maximumExecutionCostToRiskPercent':
+              run.manifest.maxEstimatedCostToRiskPercent,
+        },
+        attributes: {'rejectionReason': 'execution_cost_to_risk_too_high'},
+      );
+      return false;
+    }
     run.balance -= entryFee;
     final position = TradingLabPosition(
       positionId:
@@ -401,7 +499,7 @@ final class TradingLabPaperBroker {
         'entryFee': entryFee,
         'slippageCost': slippageCost,
         'spreadCost': spreadCost,
-        'portfolioRiskAfter': _openRisk(run) + position.initialRisk,
+        'portfolioRiskAfter': _openRisk(run),
         'portfolioRiskBudget':
             run.currentEquity * run.manifest.portfolioRiskPercent / 100,
       },
@@ -422,7 +520,8 @@ final class TradingLabPaperBroker {
       final newCandles = analysis.candles
           .where(
             (candle) =>
-                candle.openTime.isAfter(position.lastEvaluatedCandleAtUtc),
+                candle.openTime.isAfter(position.lastEvaluatedCandleAtUtc) &&
+                !candle.openTime.isBefore(position.openedAtUtc),
           )
           .toList(growable: false);
       for (final candle in newCandles) {

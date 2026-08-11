@@ -2,7 +2,7 @@ name: quantara_app
 description: Quantara explainable market research and guarded trading cockpit.
 publish_to: 'none'
 # Quantara 1.2.0 release candidate. Stable publication remains gated by physical-device, upgrade and permanent-signing validation.
-version: 1.2.0-rc.2+124
+version: 1.2.0-rc.3+125
 
 environment:
   sdk: ^3.12.2

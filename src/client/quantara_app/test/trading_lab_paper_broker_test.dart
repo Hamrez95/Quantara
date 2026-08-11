@@ -92,6 +92,105 @@ void main() {
       },
     );
 
+    test('never opens from a candle earlier than candidate observation', () {
+      const broker = TradingLabPaperBroker();
+      final run = _run(slots: 2);
+      broker.processSnapshot(
+        run,
+        _snapshot(candleCount: 20, generatedMinute: 21),
+      );
+      broker.processSnapshot(
+        run,
+        _snapshot(
+          candleCount: 21,
+          generatedMinute: 22,
+          lastCandle: _candle(
+            20,
+            open: 102,
+            high: 103,
+            low: 100.25,
+            close: 102,
+          ),
+        ),
+      );
+      expect(run.openPositions, isEmpty);
+      broker.processSnapshot(
+        run,
+        _snapshot(
+          candleCount: 22,
+          generatedMinute: 23,
+          lastCandle: _candle(
+            21,
+            open: 102,
+            high: 103,
+            low: 100.25,
+            close: 102,
+          ),
+        ),
+      );
+      expect(run.openPositions, hasLength(1));
+      expect(
+        run.openPositions.single.openedAtUtc,
+        isNot(lessThan(DateTime.utc(2026, 8, 10, 0, 21))),
+      );
+    });
+
+    test('records scanner gaps as anomalies', () {
+      const broker = TradingLabPaperBroker();
+      final run = _run(slots: 2);
+      broker.processSnapshot(
+        run,
+        _snapshot(candleCount: 20, generatedMinute: 20),
+      );
+      broker.processSnapshot(
+        run,
+        _snapshot(candleCount: 20, generatedMinute: 22),
+      );
+      expect(
+        run.events.where(
+          (event) =>
+              event.kind == TradingLabEventKind.anomaly &&
+              event.attributes['anomalyCode'] == 'scanner_gap',
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test(
+      'blocks entries when estimated execution cost consumes too much risk',
+      () {
+        const broker = TradingLabPaperBroker();
+        final run = _run(slots: 2, maxCostToRiskPercent: 1);
+        broker.processSnapshot(
+          run,
+          _snapshot(candleCount: 20, generatedMinute: 20),
+        );
+        broker.processSnapshot(
+          run,
+          _snapshot(
+            candleCount: 21,
+            generatedMinute: 21,
+            lastCandle: _candle(
+              20,
+              open: 102,
+              high: 103,
+              low: 100.25,
+              close: 102,
+            ),
+          ),
+        );
+        expect(run.openPositions, isEmpty);
+        expect(
+          run.events.where(
+            (event) =>
+                event.attributes['rejectionReason'] ==
+                'execution_cost_to_risk_too_high',
+          ),
+          isNotEmpty,
+        );
+      },
+    );
+
     test(
       'keeps scanning and explains slot capacity while a paper position is open',
       () {
@@ -174,7 +273,7 @@ void main() {
   });
 }
 
-TradingLabRun _run({required int slots}) {
+TradingLabRun _run({required int slots, double maxCostToRiskPercent = 25}) {
   return TradingLabRun(
     manifest: TradingLabRunManifest(
       runId: 'lab-test',
@@ -188,6 +287,7 @@ TradingLabRun _run({required int slots}) {
       strategies: const ['trendPullback@test'],
       feeRateBps: 6,
       slippageBps: 2,
+      maxEstimatedCostToRiskPercent: maxCostToRiskPercent,
     ),
   );
 }

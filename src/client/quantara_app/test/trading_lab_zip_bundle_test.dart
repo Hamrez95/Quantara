@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/trading_lab/application/trading_lab_zip_bundle.dart';
 import 'package:quantara_app/features/trading_lab/domain/trading_lab_account_context.dart';
 import 'package:quantara_app/features/trading_lab/domain/trading_lab_models.dart';
+import 'package:quantara_app/features/trading_lab/domain/trading_lab_real_account_evidence.dart';
 
 void main() {
   TradingLabRun buildRun() => TradingLabRun(
@@ -46,6 +47,44 @@ void main() {
     allOpenPositionsFullyProtected: true,
   );
 
+  final realAccountEvidence = TradingLabRealAccountEvidence(
+    currency: 'USDT',
+    asOfUtc: DateTime.utc(2026, 8, 10, 4),
+    verified: true,
+    fillsAvailable: true,
+    settlementsAvailable: true,
+    accountUnrealizedPnl: 0.4,
+    accountRealizedGrossPnl: 1.2,
+    accountFees: 0.1,
+    accountFunding: 0.02,
+    accountNetRealizedPnl: 1.08,
+    sourceWarningPresent: false,
+    trades: [
+      TradingLabRealAccountTradeEvidence(
+        symbol: 'BTCUSDT',
+        side: 'long',
+        state: 'closed',
+        quantity: 0.01,
+        averageEntryPrice: 100,
+        averageExitPrice: 102,
+        realizedGrossPnl: 1.2,
+        fees: 0.1,
+        funding: 0.02,
+        netRealizedPnl: 1.08,
+        unrealizedPnl: 0,
+        openedAtUtc: DateTime.utc(2026, 8, 10, 3),
+        closedAtUtc: DateTime.utc(2026, 8, 10, 4),
+        asOfUtc: DateTime.utc(2026, 8, 10, 4),
+        verified: true,
+      ),
+    ],
+  );
+
+  const benchmarkMatrix = <String, Object?>{
+    'schema': 'quantara.trading_lab.benchmark.v1',
+    'targetTimeframes': ['5m', '15m', '30m', '1h'],
+  };
+
   test('full Lab evidence is a standard ZIP and round-trips safely', () {
     final run = buildRun();
     final aiReview = jsonEncode({
@@ -64,6 +103,8 @@ void main() {
       aiReviewJson: aiReview,
       shadowEvidence: shadow,
       accountContext: accountContext,
+      realAccountEvidence: realAccountEvidence,
+      benchmarkMatrix: benchmarkMatrix,
     );
 
     expect(bundle.fileName, 'quantara-lab-lab-zip-roundtrip.zip');
@@ -85,6 +126,10 @@ void main() {
     expect(restored.fileNames, contains('management_events.jsonl'));
     expect(restored.fileNames, contains('equity_curve.jsonl'));
     expect(restored.fileNames, contains('market_feature_snapshots.jsonl'));
+    expect(restored.fileNames, contains('real_account_summary.json'));
+    expect(restored.fileNames, contains('real_account_trades.jsonl'));
+    expect(restored.fileNames, contains('real_account_snapshots.jsonl'));
+    expect(restored.fileNames, contains('benchmark_matrix.json'));
   });
 
   test('ZIP corruption is rejected instead of silently importing evidence', () {
@@ -94,6 +139,8 @@ void main() {
       aiReviewJson: jsonEncode({'runId': run.manifest.runId}),
       shadowEvidence: const {'signals': <Object?>[]},
       accountContext: accountContext,
+      realAccountEvidence: realAccountEvidence,
+      benchmarkMatrix: benchmarkMatrix,
     );
     final corrupted = Uint8List.fromList(bundle.bytes);
     final readme = utf8.encode('Quantara Bot Trading Lab evidence bundle');
@@ -118,6 +165,8 @@ void main() {
         }),
         shadowEvidence: const {'signals': <Object?>[]},
         accountContext: accountContext,
+        realAccountEvidence: realAccountEvidence,
+        benchmarkMatrix: benchmarkMatrix,
       ),
       throwsFormatException,
     );

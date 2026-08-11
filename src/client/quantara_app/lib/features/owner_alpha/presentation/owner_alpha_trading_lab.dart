@@ -25,10 +25,11 @@ class _TradingLabViewState extends State<_TradingLabView> {
   final _symbolHeat = TextEditingController(text: '1');
   final _confidenceGate = TextEditingController(text: '65');
   final _minimumRr = TextEditingController(text: '1.5');
+  final _maxCostToRisk = TextEditingController(text: '25');
   final _scannerInterval = TextEditingController(text: '15');
   final _experimentTag = TextEditingController();
   final _notes = TextEditingController();
-  int _slots = 3;
+  int _slots = 2;
   TradingLabExecutionModel _executionModel =
       TradingLabExecutionModel.conservativeCandlePath;
   bool _busy = false;
@@ -49,6 +50,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
     _symbolHeat.dispose();
     _confidenceGate.dispose();
     _minimumRr.dispose();
+    _maxCostToRisk.dispose();
     _scannerInterval.dispose();
     _experimentTag.dispose();
     _notes.dispose();
@@ -67,6 +69,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
     final symbolHeat = double.tryParse(_symbolHeat.text.trim());
     final confidenceGate = int.tryParse(_confidenceGate.text.trim());
     final minimumRr = double.tryParse(_minimumRr.text.trim());
+    final maxCostToRisk = double.tryParse(_maxCostToRisk.text.trim());
     final scannerInterval = int.tryParse(_scannerInterval.text.trim());
     if (equity == null ||
         risk == null ||
@@ -79,6 +82,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
         symbolHeat == null ||
         confidenceGate == null ||
         minimumRr == null ||
+        maxCostToRisk == null ||
         scannerInterval == null) {
       setState(
         () => _formError = _fa
@@ -105,6 +109,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
         symbolHeatPercent: symbolHeat,
         minimumConfidencePercent: confidenceGate,
         minimumRiskReward: minimumRr,
+        maxEstimatedCostToRiskPercent: maxCostToRisk,
         scannerIntervalSeconds: scannerInterval,
         executionModel: _executionModel,
         experimentTag: _experimentTag.text.trim(),
@@ -133,8 +138,8 @@ class _TradingLabViewState extends State<_TradingLabView> {
         ShareParams(
           title: 'Quantara Bot Trading Lab',
           text: _fa
-              ? 'بسته کامل شواهد آزمایش بات Quantara — شامل Run، AI Review، Shadow Evidence، Account Context پاک‌سازی‌شده و checksum؛ بدون کلید API.'
-              : 'Complete Quantara Bot Trading Lab evidence bundle — run, AI review, shadow evidence, sanitized account context and checksums; no API credentials.',
+              ? 'بسته کامل شواهد آزمایش بات Quantara — شامل Paper/Shadow، مانیتور امن حساب واقعی، Benchmark تایم‌فریم/استراتژی/تنظیمات و checksum؛ بدون شناسه سفارش یا کلید API.'
+              : 'Complete Quantara Bot Trading Lab evidence bundle — paper/shadow evidence, sanitized real-account monitoring, timeframe/strategy/config benchmark and checksums; no exchange identifiers or API credentials.',
           files: [XFile.fromData(bundle.bytes, mimeType: 'application/zip')],
           fileNameOverrides: [bundle.fileName],
         ),
@@ -341,6 +346,15 @@ class _TradingLabViewState extends State<_TradingLabView> {
                     child: _labNumberField(
                       _minimumRr,
                       _fa ? 'حداقل RR' : 'Minimum RR',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: _labNumberField(
+                      _maxCostToRisk,
+                      _fa
+                          ? 'حداکثر هزینه اجرا / ریسک (%)'
+                          : 'Max execution cost / risk (%)',
                     ),
                   ),
                   SizedBox(
