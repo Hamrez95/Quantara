@@ -1,23 +1,28 @@
-name: Trading Lab rc3 formatter
+name: Trading Lab final validation
 
 on:
   push:
     branches:
       - feat/176-bot-trading-lab
     paths:
+      - 'src/client/quantara_app/**'
       - '.github/workflows/trading-lab-dev-check.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: trading-lab-format-${{ github.ref }}
+  group: trading-lab-dev-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    working-directory: src/client/quantara_app
+
 jobs:
-  format-source:
+  static-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,25 +32,73 @@ jobs:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Format exact rc3 files and commit
+      - name: Restore packages
+        run: flutter pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+  test-shards:
+    needs: static-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Run test shard ${{ matrix.shard }}
         shell: bash
         run: |
           set -euo pipefail
-          cd src/client/quantara_app
-          dart format \
-            lib/features/owner_alpha/data/bitunix_owner_alpha_repository.dart \
-            test/local_live_v1_0_1_source_test.dart \
-            test/realtime_production_runtime_test.dart
-          cd ../../..
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/client/quantara_app/lib/features/owner_alpha/data/bitunix_owner_alpha_repository.dart \
-            src/client/quantara_app/test/local_live_v1_0_1_source_test.dart \
-            src/client/quantara_app/test/realtime_production_runtime_test.dart
-          if git diff --cached --quiet; then
-            echo 'Formatting already clean.'
+          mapfile -t tests < <(find test -maxdepth 1 -type f -name '*_test.dart' | sort)
+          selected=()
+          for i in "${!tests[@]}"; do
+            if (( i % 8 == ${{ matrix.shard }} )); then
+              selected+=("${tests[$i]}")
+            fi
+          done
+          if (( ${#selected[@]} == 0 )); then
+            echo 'No tests assigned to this shard.'
             exit 0
           fi
-          git commit -m 'style: format rc3 30m regression fixes'
-          git push origin HEAD:feat/176-bot-trading-lab
+          for test_file in "${selected[@]}"; do
+            echo "=== $test_file ==="
+            flutter test "$test_file" --reporter compact
+          done
+
+  build-debug-apk:
+    needs: [static-checks, test-shards]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-rc3-trading-lab-debug
+          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
