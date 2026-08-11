@@ -53,9 +53,10 @@ void main() {
       '../../../.github/workflows/android-stable-release.yml',
     ).readAsStringSync();
 
-    expect(workflow, contains('environment: Stable'));
-    expect(workflow, contains('QUANTARA_STABLE_KEYSTORE_B64'));
-    expect(workflow, contains('QUANTARA_STABLE_CERT_SHA256'));
+    expect(workflow, contains('environment: production'));
+    expect(workflow, contains('QUANTARA_ANDROID_KEYSTORE_BASE64'));
+    expect(workflow, contains("QUANTARA_STABLE_RELEASE: 'true'"));
     expect(workflow, contains('apksigner'));
+    expect(workflow, isNot(contains('QUANTARA_PREVIEW_RELEASE=true')));
   });
 }
