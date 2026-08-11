@@ -21,19 +21,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Reuse audited post-run patch from previous workflow revision
+      - name: Apply and validate audited post-run patch
         shell: bash
         run: |
           set -euo pipefail
-          git show HEAD^:.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
+          git show dedf5dbf44b2c4eaa7da7462e53bb4f3648661be:.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
           python3 - <<'PY'
           from pathlib import Path
           source = Path('/tmp/post-run-workflow.yml').read_text().splitlines()
@@ -42,7 +40,13 @@ jobs:
           code = []
           for line in source[start:end]:
               code.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/apply_post_run.py').write_text('\n'.join(code) + '\n')
+          script = '\n'.join(code) + '\n'
+          fragile = """if old not in broker:\n    raise SystemExit('candidate gate ordering anchor missing')\nbroker = broker.replace(old, new, 1)\nbroker_path.write_text(broker)\n"""
+          resilient = """if old not in broker:\n    gate_start = broker.index(\"        if (idea.confidencePercent < run.manifest.minimumConfidencePercent) {\")\n    gate_end = broker.index(\"        final pending = TradingLabPendingCandidate(\", gate_start)\n    broker = broker[:gate_start] + new + \"\\n\" + broker[gate_end:]\nelse:\n    broker = broker.replace(old, new, 1)\nbroker_path.write_text(broker)\n"""
+          if fragile not in script:
+              raise SystemExit('candidate patch fallback anchor missing')
+          script = script.replace(fragile, resilient, 1)
+          Path('/tmp/apply_post_run.py').write_text(script)
           PY
           python3 /tmp/apply_post_run.py
           pushd src/client/quantara_app
