@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 5
+          fetch-depth: 6
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git show HEAD~2:.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
+          git show HEAD~3:.github/workflows/trading-lab-dev-check.yml > /tmp/post-run-workflow.yml
           python3 - <<'PY'
           from pathlib import Path
           source = Path('/tmp/post-run-workflow.yml').read_text().splitlines()
