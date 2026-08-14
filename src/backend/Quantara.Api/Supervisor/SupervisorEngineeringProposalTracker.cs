@@ -17,6 +17,7 @@ public sealed record SupervisorProposalLifecycleContract(
     string ProposalId,
     string BranchName,
     int? PullRequestNumber,
+    SupervisorEngineeringReviewTargetContract? ReviewTarget,
     SupervisorProposalValidationState State,
     IReadOnlyList<string> EvidenceIds,
     SupervisorProposalValidationEvidenceContract? Validation,
@@ -62,6 +63,7 @@ public sealed class SupervisorEngineeringProposalTracker
         var item = new SupervisorProposalLifecycleContract(
             proposal.ProposalId,
             branchName,
+            null,
             null,
             SupervisorProposalValidationState.Draft,
             proposal.EvidenceIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
@@ -118,15 +120,17 @@ public sealed class SupervisorEngineeringProposalTracker
                 return false;
             }
 
-            if (current.PullRequestNumber is not null)
+            if (current.ReviewTarget is not null || current.PullRequestNumber is not null)
             {
                 error = "engineering_review_target_already_attached";
                 return false;
             }
 
+            var targetSnapshot = target with { };
             var updated = current with
             {
-                PullRequestNumber = target.PullRequestNumber,
+                PullRequestNumber = targetSnapshot.PullRequestNumber,
+                ReviewTarget = targetSnapshot,
                 UpdatedAtUtc = _timeProvider.GetUtcNow()
             };
             _items[proposalId] = updated;
@@ -164,7 +168,7 @@ public sealed class SupervisorEngineeringProposalTracker
                 return false;
             }
 
-            if (current.PullRequestNumber is null)
+            if (current.ReviewTarget is null || current.PullRequestNumber is null)
             {
                 error = "engineering_review_target_not_attached";
                 return false;
