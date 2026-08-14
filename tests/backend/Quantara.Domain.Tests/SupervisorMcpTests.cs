@@ -107,6 +107,26 @@ public sealed class SupervisorMcpTests
     }
 
     [Fact]
+    public void McpRateLimiterIsBoundedPerSessionAndRecoversAfterWindow()
+    {
+        var time = new MutableTimeProvider(
+            new DateTimeOffset(2026, 8, 14, 9, 30, 0, TimeSpan.Zero));
+        var limiter = new SupervisorMcpRateLimiter(time);
+
+        for (var request = 0; request < SupervisorMcpRateLimiter.MaximumRequestsPerWindow; request++)
+        {
+            Assert.True(limiter.TryAcquire("support-aabbccdd"));
+        }
+
+        Assert.False(limiter.TryAcquire("support-aabbccdd"));
+        Assert.True(limiter.TryAcquire("support-other"));
+
+        time.Advance(SupervisorMcpRateLimiter.Window);
+        Assert.True(limiter.TryAcquire("support-aabbccdd"));
+        Assert.False(limiter.TryAcquire(string.Empty));
+    }
+
+    [Fact]
     public void McpAuditLedgerNeverNeedsCredentialMaterial()
     {
         var ledger = new SupervisorMcpAuditLedger();
