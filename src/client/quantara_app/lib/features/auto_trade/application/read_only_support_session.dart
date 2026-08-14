@@ -191,7 +191,9 @@ final class ReadOnlySupportSessionTransport {
         'token': grant.token,
         'expiresAtUtc': grant.expiresAt.toUtc().toIso8601String(),
         'scope': grant.scope,
-        'evidence': evidence.map((item) => item.toJson()).toList(growable: false),
+        'evidence': evidence
+            .map((item) => item.toJson())
+            .toList(growable: false),
       },
     ),
   );
@@ -207,28 +209,28 @@ final class ReadOnlySupportSessionTransport {
       method: 'POST',
       headers: _sessionHeaders(supportToken, json: true),
       body: <String, Object?>{
-        'evidence': evidence.map((item) => item.toJson()).toList(growable: false),
+        'evidence': evidence
+            .map((item) => item.toJson())
+            .toList(growable: false),
       },
     ),
   );
 
-  Future<void> revoke({
-    required Uri baseUrl,
-    required String supportToken,
-  }) => _withClient((client) async {
-    final response = await client
-        .delete(
-          baseUrl.resolve('/api/v1/supervisor/support-session'),
-          headers: _sessionHeaders(supportToken),
-        )
-        .timeout(const Duration(seconds: 12));
-    if (response.statusCode != 204) {
-      throw ReadOnlySupportTransportException(
-        'The remote support session could not be revoked safely.',
-        statusCode: response.statusCode,
-      );
-    }
-  });
+  Future<void> revoke({required Uri baseUrl, required String supportToken}) =>
+      _withClient((client) async {
+        final response = await client
+            .delete(
+              baseUrl.resolve('/api/v1/supervisor/support-session'),
+              headers: _sessionHeaders(supportToken),
+            )
+            .timeout(const Duration(seconds: 12));
+        if (response.statusCode != 204) {
+          throw ReadOnlySupportTransportException(
+            'The remote support session could not be revoked safely.',
+            statusCode: response.statusCode,
+          );
+        }
+      });
 
   static Map<String, String> _sessionHeaders(
     String token, {
@@ -260,12 +262,14 @@ final class ReadOnlySupportSessionTransport {
     late final http.Response response;
     try {
       response = switch (method) {
-        'GET' => await client
-            .get(uri, headers: headers)
-            .timeout(const Duration(seconds: 12)),
-        _ => await client
-            .post(uri, headers: headers, body: jsonEncode(body))
-            .timeout(const Duration(seconds: 15)),
+        'GET' =>
+          await client
+              .get(uri, headers: headers)
+              .timeout(const Duration(seconds: 12)),
+        _ =>
+          await client
+              .post(uri, headers: headers, body: jsonEncode(body))
+              .timeout(const Duration(seconds: 15)),
       };
     } on Object {
       throw const ReadOnlySupportTransportException(
