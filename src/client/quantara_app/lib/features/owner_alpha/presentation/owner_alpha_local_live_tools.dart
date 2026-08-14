@@ -886,7 +886,7 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
               ),
               color: QuantaraColors.cyan,
             ),
-            if (active && remote != null) ...[
+            if (active) ...[
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -997,7 +997,7 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
 
   Future<void> _enableSupervisorSupportSession() async {
     final state = _supervisorSupportUi;
-    setState(() {
+    _supervisorSetState(() {
       state.busy = true;
       state.error = null;
     });
@@ -1034,7 +1034,7 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
           evidence: evidence,
         );
         if (!mounted) return;
-        setState(() {
+        _supervisorSetState(() {
           state.grant = grant;
           state.remote = remote;
           state.baseUrl = serverConfig.baseUrl;
@@ -1045,7 +1045,7 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
       }
     } on Object catch (error) {
       if (!mounted) return;
-      setState(() {
+      _supervisorSetState(() {
         state.error = error is StateError
             ? error.message.toString()
             : _t(
@@ -1054,7 +1054,7 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
               );
       });
     } finally {
-      if (mounted) setState(() => state.busy = false);
+      if (mounted) _supervisorSetState(() => state.busy = false);
     }
   }
 
@@ -1065,7 +1065,7 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
     if (grant == null || baseUrl == null || state.manager.current == null) {
       return;
     }
-    setState(() {
+    _supervisorSetState(() {
       state.busy = true;
       state.error = null;
     });
@@ -1084,17 +1084,17 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
         evidence: evidence,
       );
       if (!mounted) return;
-      setState(() => state.remote = remote);
+      _supervisorSetState(() => state.remote = remote);
     } on Object catch (error) {
       if (!mounted) return;
-      setState(() {
+      _supervisorSetState(() {
         state.error = _t(
           'تازه‌سازی شواهد انجام نشد (${error.runtimeType}).',
           'Evidence refresh failed (${error.runtimeType}).',
         );
       });
     } finally {
-      if (mounted) setState(() => state.busy = false);
+      if (mounted) _supervisorSetState(() => state.busy = false);
     }
   }
 
@@ -1103,7 +1103,7 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
     final grant = state.grant;
     final baseUrl = state.baseUrl;
     if (grant == null || baseUrl == null) return;
-    setState(() {
+    _supervisorSetState(() {
       state.busy = true;
       state.error = null;
     });
@@ -1111,21 +1111,21 @@ extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
       await state.transport.revoke(baseUrl: baseUrl, supportToken: grant.token);
       state.manager.revoke();
       if (!mounted) return;
-      setState(() {
+      _supervisorSetState(() {
         state.grant = null;
         state.remote = null;
         state.baseUrl = null;
       });
     } on Object catch (error) {
       if (!mounted) return;
-      setState(() {
+      _supervisorSetState(() {
         state.error = _t(
           'لغو سمت سرور تأیید نشد؛ Session تا تأیید لغو یا زمان انقضا فعال فرض می‌شود (${error.runtimeType}).',
           'Server-side revoke was not confirmed; treat the session as active until revoke succeeds or it expires (${error.runtimeType}).',
         );
       });
     } finally {
-      if (mounted) setState(() => state.busy = false);
+      if (mounted) _supervisorSetState(() => state.busy = false);
     }
   }
 

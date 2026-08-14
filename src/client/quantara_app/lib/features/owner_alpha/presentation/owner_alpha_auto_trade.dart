@@ -404,6 +404,8 @@ class _LocalLiveTradeControlCardState
 
   String _t(String fa, String en) => _fa ? fa : en;
 
+  void _supervisorSetState(VoidCallback callback) => setState(callback);
+
   @override
   void initState() {
     super.initState();
