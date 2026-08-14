@@ -44,12 +44,8 @@ final class SupervisorFinding {
     'summary': SupervisorSafeText.sanitize(summary),
     'confidence': confidence,
     'evidence': evidence.map((item) => item.toJson()).toList(growable: false),
-    'validationTests': validationTests
-        .map(SupervisorSafeText.sanitize)
-        .toList(growable: false),
-    'rollbackCriteria': rollbackCriteria
-        .map(SupervisorSafeText.sanitize)
-        .toList(growable: false),
+    'validationTests': SupervisorSafeText.sanitizeAll(validationTests),
+    'rollbackCriteria': SupervisorSafeText.sanitizeAll(rollbackCriteria),
   };
 }
 
@@ -77,9 +73,7 @@ final class SupervisorReview {
     'schemaVersion': schemaVersion,
     'generatedAtUtc': generatedAtUtc.toIso8601String(),
     'reviewId': SupervisorSafeText.sanitize(reviewId),
-    'snapshotSchemaVersion': SupervisorSafeText.sanitize(
-      snapshotSchemaVersion,
-    ),
+    'snapshotSchemaVersion': SupervisorSafeText.sanitize(snapshotSchemaVersion),
     'findings': findings.map((item) => item.toJson()).toList(growable: false),
     if (insufficientEvidenceReason != null)
       'insufficientEvidenceReason': SupervisorSafeText.sanitize(
