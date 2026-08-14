@@ -46,6 +46,12 @@ public sealed record SupervisorExperimentContract(
     IReadOnlyList<string> ValidationTests,
     IReadOnlyList<string> RollbackCriteria);
 
+public sealed record SupervisorUsageContract(
+    int InputTokens,
+    int OutputTokens,
+    int TotalTokens,
+    long LatencyMilliseconds);
+
 public sealed record SupervisorReviewContract(
     string ReviewId,
     string Summary,
@@ -57,7 +63,9 @@ public sealed record SupervisorReviewContract(
     bool InsufficientEvidence,
     string InsufficientEvidenceReason,
     string AuditId,
-    string Model);
+    string Model,
+    string PromptVersion,
+    SupervisorUsageContract Usage);
 
 public enum SupervisorAnalysisCode
 {
