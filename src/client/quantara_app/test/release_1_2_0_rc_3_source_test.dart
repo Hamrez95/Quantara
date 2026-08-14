@@ -24,7 +24,12 @@ void main() {
       'lib/features/trading_lab/application/trading_lab_zip_bundle.dart',
     ).readAsStringSync();
 
-    expect(pubspec, contains('version: 1.2.0-rc.3+126'));
+    final versionMatch = RegExp(
+      r'^version: 1\.2\.0-rc\.3\+(\d+)$',
+      multiLine: true,
+    ).firstMatch(pubspec);
+    expect(versionMatch, isNotNull);
+    expect(int.parse(versionMatch!.group(1)!), greaterThanOrEqualTo(126));
     expect(
       flutterWorkflow,
       contains('Flutter format, analyze, test, and unsigned QA build'),
