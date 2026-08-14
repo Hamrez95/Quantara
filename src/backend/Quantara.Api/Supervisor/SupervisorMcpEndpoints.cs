@@ -301,7 +301,7 @@ public static class SupervisorMcpEndpoints
         return true;
     }
 
-    private static IReadOnlyList<SupervisorEvidenceContract> Filter(
+    private static SupervisorEvidenceContract[] Filter(
         IReadOnlyList<SupervisorEvidenceContract> evidence,
         int limit,
         params string[] domains) =>
