@@ -1,12 +1,13 @@
 namespace Quantara.Api.Supervisor;
 
-public sealed class SupervisorAnalysisGate
+public sealed class SupervisorAnalysisGate : IDisposable
 {
     private readonly SemaphoreSlim _concurrency;
     private readonly object _sync = new();
     private readonly Queue<DateTimeOffset> _recentRequests = new();
     private readonly TimeProvider _timeProvider;
     private readonly int _maxRequestsPerMinute;
+    private bool _disposed;
 
     public SupervisorAnalysisGate(
         TimeProvider timeProvider,
@@ -29,6 +30,8 @@ public sealed class SupervisorAnalysisGate
     public async ValueTask<SupervisorAnalysisLease?> TryAcquireAsync(
         CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         var now = _timeProvider.GetUtcNow();
         lock (_sync)
         {
@@ -53,6 +56,18 @@ public sealed class SupervisorAnalysisGate
         }
 
         return new SupervisorAnalysisLease(_concurrency);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _concurrency.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private static int ParseBounded(
