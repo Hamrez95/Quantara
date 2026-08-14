@@ -82,9 +82,8 @@ void main() {
       ],
     );
 
-    final finding =
-        (review.toJson()['findings']! as List<Object?>).single!
-            as Map<String, Object?>;
+    final findings = review.toJson()['findings']! as List<Object?>;
+    final finding = findings.single! as Map<String, Object?>;
     final tests = finding['validationTests']! as List<Object?>;
 
     expect(finding['summary'], contains('authorization=[REDACTED]'));
