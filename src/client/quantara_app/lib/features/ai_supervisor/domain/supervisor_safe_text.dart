@@ -18,11 +18,14 @@ abstract final class SupervisorSafeText {
   );
 
   static String sanitize(String value) {
-    var sanitized = value.replaceAllMapped(
+    // Redact the complete bearer credential before generic key/value handling.
+    // Otherwise `Authorization: Bearer secret` could redact only `Bearer` and
+    // accidentally leave the credential value behind as free text.
+    var sanitized = value.replaceAll(_bearerToken, 'Bearer $redacted');
+    sanitized = sanitized.replaceAllMapped(
       _credentialAssignment,
       (match) => '${match.group(1)}=$redacted',
     );
-    sanitized = sanitized.replaceAll(_bearerToken, 'Bearer $redacted');
     return sanitized;
   }
 
