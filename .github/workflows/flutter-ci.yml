@@ -64,7 +64,12 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format lib test
+          git diff -- lib/features/ai_supervisor test/ai_supervisor_*
+          git diff --quiet -- lib test
 
       - name: Analyze
         shell: bash
