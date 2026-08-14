@@ -109,12 +109,8 @@ final class SupervisorStrategyObservation {
   Map<String, Object?> toJson() => <String, Object?>{
     'strategyId': SupervisorSafeText.sanitize(strategyId),
     'strategyVersion': SupervisorSafeText.sanitize(strategyVersion),
-    'selectedSymbols': selectedSymbols
-        .map(SupervisorSafeText.sanitize)
-        .toList(growable: false),
-    'selectedTimeframes': selectedTimeframes
-        .map(SupervisorSafeText.sanitize)
-        .toList(growable: false),
+    'selectedSymbols': SupervisorSafeText.sanitizeAll(selectedSymbols),
+    'selectedTimeframes': SupervisorSafeText.sanitizeAll(selectedTimeframes),
   };
 }
 
