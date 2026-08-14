@@ -8,6 +8,62 @@ public sealed class SupervisorEngineeringProposalTrackerTests
     private static readonly string[] MismatchedBeforeEvidenceIds = ["test.started"];
 
     [Fact]
+    public void AttachDraftPullRequestRequiresValidatedReviewTarget()
+    {
+        var tracker = CreateRegisteredTracker();
+        var attached = tracker.TryAttachDraftPullRequest(
+            "proposal-185",
+            new SupervisorEngineeringReviewTargetContract(
+                "feature/proposal-185",
+                "dev",
+                201,
+                IsDraft: false),
+            out var lifecycle,
+            out var error);
+
+        Assert.False(attached);
+        Assert.Null(lifecycle);
+        Assert.Equal("engineering_review_requires_draft_pull_request", error);
+        Assert.Null(tracker.Get("proposal-185")!.PullRequestNumber);
+    }
+
+    [Fact]
+    public void AttachDraftPullRequestRejectsDifferentFeatureBranch()
+    {
+        var tracker = CreateRegisteredTracker();
+        var attached = tracker.TryAttachDraftPullRequest(
+            "proposal-185",
+            new SupervisorEngineeringReviewTargetContract(
+                "feature/different-proposal",
+                "dev",
+                201,
+                IsDraft: true),
+            out var lifecycle,
+            out var error);
+
+        Assert.False(attached);
+        Assert.Null(lifecycle);
+        Assert.Equal("engineering_review_target_branch_mismatch", error);
+        Assert.Null(tracker.Get("proposal-185")!.PullRequestNumber);
+    }
+
+    [Fact]
+    public void StartValidationRequiresAttachedReviewTarget()
+    {
+        var tracker = CreateRegisteredTracker();
+        var started = tracker.TryStartValidation(
+            "proposal-185",
+            BeforeEvidenceIds,
+            out var lifecycle,
+            out var error);
+
+        Assert.False(started);
+        Assert.Null(lifecycle);
+        Assert.Equal("engineering_review_target_not_attached", error);
+        Assert.Equal(SupervisorProposalValidationState.Draft, tracker.Get("proposal-185")!.State);
+    }
+
+    [Fact]
     public void CompleteValidationFromBundlesRecordsComparedEvidence()
     {
         var tracker = CreateStartedTracker(BeforeEvidenceIds);
@@ -32,6 +88,7 @@ public sealed class SupervisorEngineeringProposalTrackerTests
         Assert.True(completed, error);
         Assert.NotNull(lifecycle);
         Assert.NotNull(comparison);
+        Assert.Equal(201, lifecycle.PullRequestNumber);
         Assert.Equal(SupervisorProposalValidationState.Validated, lifecycle.State);
         Assert.Equal(BeforeEvidenceIds, lifecycle.Validation!.BeforeEvidenceIds);
         Assert.Equal(["test.after"], lifecycle.Validation.AfterEvidenceIds);
@@ -70,8 +127,7 @@ public sealed class SupervisorEngineeringProposalTrackerTests
             tracker.Get("proposal-185")!.State);
     }
 
-    private static SupervisorEngineeringProposalTracker CreateStartedTracker(
-        IReadOnlyList<string> beforeEvidenceIds)
+    private static SupervisorEngineeringProposalTracker CreateRegisteredTracker()
     {
         var tracker = new SupervisorEngineeringProposalTracker(TimeProvider.System);
         Assert.True(
@@ -81,6 +137,24 @@ public sealed class SupervisorEngineeringProposalTrackerTests
                 out _,
                 out var registrationError),
             registrationError);
+        return tracker;
+    }
+
+    private static SupervisorEngineeringProposalTracker CreateStartedTracker(
+        IReadOnlyList<string> beforeEvidenceIds)
+    {
+        var tracker = CreateRegisteredTracker();
+        Assert.True(
+            tracker.TryAttachDraftPullRequest(
+                "proposal-185",
+                new SupervisorEngineeringReviewTargetContract(
+                    "feature/proposal-185",
+                    "dev",
+                    201,
+                    IsDraft: true),
+                out _,
+                out var attachmentError),
+            attachmentError);
         Assert.True(
             tracker.TryStartValidation(
                 "proposal-185",
