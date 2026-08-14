@@ -25,6 +25,7 @@ public sealed class SupervisorEngineeringProposalTrackerTests
         Assert.Null(lifecycle);
         Assert.Equal("engineering_review_requires_draft_pull_request", error);
         Assert.Null(tracker.Get("proposal-185")!.PullRequestNumber);
+        Assert.Null(tracker.Get("proposal-185")!.ReviewTarget);
     }
 
     [Fact]
@@ -45,6 +46,34 @@ public sealed class SupervisorEngineeringProposalTrackerTests
         Assert.Null(lifecycle);
         Assert.Equal("engineering_review_target_branch_mismatch", error);
         Assert.Null(tracker.Get("proposal-185")!.PullRequestNumber);
+        Assert.Null(tracker.Get("proposal-185")!.ReviewTarget);
+    }
+
+    [Fact]
+    public void AttachDraftPullRequestPersistsValidatedReviewTargetSnapshot()
+    {
+        var tracker = CreateRegisteredTracker();
+        var target = new SupervisorEngineeringReviewTargetContract(
+            "feature/proposal-185",
+            "dev",
+            201,
+            IsDraft: true);
+
+        var attached = tracker.TryAttachDraftPullRequest(
+            "proposal-185",
+            target,
+            out var lifecycle,
+            out var error);
+
+        Assert.True(attached, error);
+        Assert.NotNull(lifecycle);
+        Assert.Equal(201, lifecycle.PullRequestNumber);
+        Assert.NotNull(lifecycle.ReviewTarget);
+        Assert.Equal("feature/proposal-185", lifecycle.ReviewTarget.BranchName);
+        Assert.Equal("dev", lifecycle.ReviewTarget.BaseBranch);
+        Assert.Equal(201, lifecycle.ReviewTarget.PullRequestNumber);
+        Assert.True(lifecycle.ReviewTarget.IsDraft);
+        Assert.Equal(target, tracker.Get("proposal-185")!.ReviewTarget);
     }
 
     [Fact]
@@ -89,6 +118,10 @@ public sealed class SupervisorEngineeringProposalTrackerTests
         Assert.NotNull(lifecycle);
         Assert.NotNull(comparison);
         Assert.Equal(201, lifecycle.PullRequestNumber);
+        Assert.NotNull(lifecycle.ReviewTarget);
+        Assert.Equal("feature/proposal-185", lifecycle.ReviewTarget.BranchName);
+        Assert.Equal("dev", lifecycle.ReviewTarget.BaseBranch);
+        Assert.True(lifecycle.ReviewTarget.IsDraft);
         Assert.Equal(SupervisorProposalValidationState.Validated, lifecycle.State);
         Assert.Equal(BeforeEvidenceIds, lifecycle.Validation!.BeforeEvidenceIds);
         Assert.Equal(["test.after"], lifecycle.Validation.AfterEvidenceIds);
