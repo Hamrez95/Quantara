@@ -34,6 +34,17 @@ void main() {
     expect(sanitized, 'Authorization=[REDACTED]');
   });
 
+  test('redacts credential assignments inside quoted diagnostic snippets', () {
+    const source = '{"apiKey":"json-secret","password":"quoted secret"}';
+
+    final sanitized = SupervisorSafeText.sanitize(source);
+
+    expect(sanitized, isNot(contains('json-secret')));
+    expect(sanitized, isNot(contains('quoted secret')));
+    expect(sanitized, contains('apiKey=[REDACTED]'));
+    expect(sanitized, contains('password=[REDACTED]'));
+  });
+
   test('leaves ordinary diagnostic text unchanged', () {
     const source = 'portfolio slot available; candidate failed risk gate';
 
