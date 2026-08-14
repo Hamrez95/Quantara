@@ -1,3 +1,5 @@
+import 'supervisor_safe_text.dart';
+
 enum SupervisorRuntimeState {
   armed,
   blocked,
@@ -56,7 +58,8 @@ final class SupervisorRuntimeObservation {
       'lastSuccessfulExchangeSyncAtUtc': lastSuccessfulExchangeSyncAtUtc!
           .toUtc()
           .toIso8601String(),
-    if (topBlockReason != null) 'topBlockReason': topBlockReason,
+    if (topBlockReason != null)
+      'topBlockReason': SupervisorSafeText.sanitize(topBlockReason!),
   };
 }
 
@@ -104,10 +107,14 @@ final class SupervisorStrategyObservation {
   final List<String> selectedTimeframes;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'strategyId': strategyId,
-    'strategyVersion': strategyVersion,
-    'selectedSymbols': List<String>.unmodifiable(selectedSymbols),
-    'selectedTimeframes': List<String>.unmodifiable(selectedTimeframes),
+    'strategyId': SupervisorSafeText.sanitize(strategyId),
+    'strategyVersion': SupervisorSafeText.sanitize(strategyVersion),
+    'selectedSymbols': selectedSymbols
+        .map(SupervisorSafeText.sanitize)
+        .toList(growable: false),
+    'selectedTimeframes': selectedTimeframes
+        .map(SupervisorSafeText.sanitize)
+        .toList(growable: false),
   };
 }
 
@@ -125,9 +132,9 @@ final class SupervisorLifecycleEvidence {
   final DateTime occurredAtUtc;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'evidenceId': evidenceId,
-    'kind': kind,
-    'summary': summary,
+    'evidenceId': SupervisorSafeText.sanitize(evidenceId),
+    'kind': SupervisorSafeText.sanitize(kind),
+    'summary': SupervisorSafeText.sanitize(summary),
     'occurredAtUtc': occurredAtUtc.toUtc().toIso8601String(),
   };
 }
