@@ -148,22 +148,17 @@ public static partial class SupervisorEvidenceValidator
             return false;
         }
 
-        if (value.Contains("REDACTED", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
         return AuthorizationCredentialRegex().IsMatch(value)
             || CredentialAssignmentRegex().IsMatch(value);
     }
 
     [GeneratedRegex(
-        @"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}",
+        @"(?i)\b(?:bearer|basic)\s+(?!\[?REDACTED)[A-Za-z0-9._~+/=-]{8,}",
         RegexOptions.CultureInvariant)]
     private static partial Regex AuthorizationCredentialRegex();
 
     [GeneratedRegex(
-        "(?i)\\b(?:api[_-]?(?:key|secret)|secret[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|password|private[_-]?key|signature|authorization)\\s*[:=]\\s*[\\\"']?[^\\s,;}\\\"']{4,}",
+        "(?i)\\b(?:api[_-]?(?:key|secret)|secret[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|password|private[_-]?key|signature|authorization)\\s*[:=]\\s*[\\\"']?(?!\\[?REDACTED)[^\\s,;}\\\"']{4,}",
         RegexOptions.CultureInvariant)]
     private static partial Regex CredentialAssignmentRegex();
 }
