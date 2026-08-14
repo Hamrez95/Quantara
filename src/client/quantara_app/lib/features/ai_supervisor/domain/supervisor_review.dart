@@ -1,3 +1,5 @@
+import 'supervisor_safe_text.dart';
+
 enum SupervisorFindingKind {
   observedFact,
   hypothesis,
@@ -12,8 +14,8 @@ final class SupervisorEvidenceRef {
   final String source;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'id': id,
-    'source': source,
+    'id': SupervisorSafeText.sanitize(id),
+    'source': SupervisorSafeText.sanitize(source),
   };
 }
 
@@ -39,11 +41,15 @@ final class SupervisorFinding {
 
   Map<String, Object?> toJson() => <String, Object?>{
     'kind': kind.name,
-    'summary': summary,
+    'summary': SupervisorSafeText.sanitize(summary),
     'confidence': confidence,
     'evidence': evidence.map((item) => item.toJson()).toList(growable: false),
-    'validationTests': validationTests,
-    'rollbackCriteria': rollbackCriteria,
+    'validationTests': validationTests
+        .map(SupervisorSafeText.sanitize)
+        .toList(growable: false),
+    'rollbackCriteria': rollbackCriteria
+        .map(SupervisorSafeText.sanitize)
+        .toList(growable: false),
   };
 }
 
@@ -70,10 +76,14 @@ final class SupervisorReview {
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': schemaVersion,
     'generatedAtUtc': generatedAtUtc.toIso8601String(),
-    'reviewId': reviewId,
-    'snapshotSchemaVersion': snapshotSchemaVersion,
+    'reviewId': SupervisorSafeText.sanitize(reviewId),
+    'snapshotSchemaVersion': SupervisorSafeText.sanitize(
+      snapshotSchemaVersion,
+    ),
     'findings': findings.map((item) => item.toJson()).toList(growable: false),
     if (insufficientEvidenceReason != null)
-      'insufficientEvidenceReason': insufficientEvidenceReason,
+      'insufficientEvidenceReason': SupervisorSafeText.sanitize(
+        insufficientEvidenceReason!,
+      ),
   };
 }
