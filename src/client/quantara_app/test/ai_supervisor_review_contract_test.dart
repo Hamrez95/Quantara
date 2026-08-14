@@ -66,4 +66,30 @@ void main() {
       throwsA(isA<AssertionError>()),
     );
   });
+
+  test('review serialization redacts credential-like free-form text', () {
+    final review = SupervisorReview(
+      generatedAtUtc: DateTime.utc(2026, 8, 14),
+      reviewId: 'review-3',
+      snapshotSchemaVersion: '1',
+      findings: <SupervisorFinding>[
+        SupervisorFinding(
+          kind: SupervisorFindingKind.observedFact,
+          summary: 'request failed with authorization:secret-value',
+          confidence: 1,
+          validationTests: const <String>['replay with token=hidden-value'],
+        ),
+      ],
+    );
+
+    final finding =
+        (review.toJson()['findings']! as List<Object?>).single!
+            as Map<String, Object?>;
+    final tests = finding['validationTests']! as List<Object?>;
+
+    expect(finding['summary'], contains('authorization=[REDACTED]'));
+    expect(finding['summary'], isNot(contains('secret-value')));
+    expect(tests.single, contains('token=[REDACTED]'));
+    expect(tests.single, isNot(contains('hidden-value')));
+  });
 }
