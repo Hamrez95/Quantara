@@ -8,6 +8,10 @@ namespace Quantara.Api.Supervisor;
 public static class SupervisorEngineeringProposalFactory
 {
     private const int MaximumGeneratedProposals = 16;
+    private static readonly string[] DefaultFailureModes =
+    {
+        "The observed behavior may not reproduce under deterministic validation."
+    };
 
     public static IReadOnlyList<SupervisorEngineeringReviewRequestContract> CreateExperimentDrafts(
         SupervisorAnalysisRequestContract evidenceBundle,
@@ -60,10 +64,7 @@ public static class SupervisorEngineeringProposalFactory
                         BuildArtifactContent(proposalId, evidenceIds))
                 },
                 NormalizeList(experiment.ValidationTests),
-                new[]
-                {
-                    "The observed behavior may not reproduce under deterministic validation."
-                },
+                DefaultFailureModes,
                 NormalizeList(experiment.RollbackCriteria),
                 IsDraft: true,
                 RequiresHumanReview: true);
