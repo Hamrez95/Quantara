@@ -102,6 +102,7 @@ public static class SupervisorMcpEndpoints
                 JsonElement request,
                 SupervisorSupportSessionRegistry registry,
                 SupervisorMcpAuditLedger auditLedger,
+                SupervisorMcpRateLimiter rateLimiter,
                 TimeProvider timeProvider,
                 IConfiguration configuration) =>
             {
@@ -115,14 +116,27 @@ public static class SupervisorMcpEndpoints
                     return Results.Unauthorized();
                 }
 
-                return HandleMcpRequest(request, session!, auditLedger, timeProvider);
+                if (!rateLimiter.TryAcquire(session!.Snapshot.SessionId))
+                {
+                    auditLedger.Record(
+                        new SupervisorMcpAuditEvent(
+                            timeProvider.GetUtcNow(),
+                            session.Snapshot.SessionId,
+                            "rate_limit",
+                            false,
+                            Guid.NewGuid().ToString("N")));
+                    return Results.StatusCode(StatusCodes.Status429TooManyRequests);
+                }
+
+                return HandleMcpRequest(request, session, auditLedger, timeProvider);
             })
             .WithName("QuantaraSupervisorMcp")
             .Accepts<JsonElement>("application/json")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status202Accepted)
             .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status403Forbidden);
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status429TooManyRequests);
 
         return endpoints;
     }
