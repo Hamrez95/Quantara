@@ -214,16 +214,23 @@ public sealed class SupervisorEngineeringProposalTracker
         if (!SupervisorEngineeringValidationComparison.TryCreate(
                 before,
                 after,
-                out comparison,
+                out var createdComparison,
                 out error))
         {
             return false;
         }
 
+        if (createdComparison is null)
+        {
+            error = "invalid_engineering_validation_comparison";
+            return false;
+        }
+
+        comparison = createdComparison;
         var comparisonBeforeEvidenceIds = NormalizeEvidence(
-            comparison.Domains.SelectMany(domain => domain.BeforeEvidenceIds));
+            createdComparison.Domains.SelectMany(domain => domain.BeforeEvidenceIds));
         var comparisonAfterEvidenceIds = NormalizeEvidence(
-            comparison.Domains.SelectMany(domain => domain.AfterEvidenceIds));
+            createdComparison.Domains.SelectMany(domain => domain.AfterEvidenceIds));
 
         if (!ValidEvidenceIds(comparisonBeforeEvidenceIds)
             || !ValidEvidenceIds(comparisonAfterEvidenceIds))
