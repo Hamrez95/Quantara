@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -16,6 +17,7 @@ public sealed class OpenAiSupervisorAnalysisService : ISupervisorAnalysisService
 {
     private const int MaximumRequestCharacters = 500_000;
     private const string ResponsesEndpoint = "https://api.openai.com/v1/responses";
+    private const string PromptVersion = "quantara-supervisor-v1";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly JsonElement ReviewSchema = JsonDocument.Parse(
@@ -181,6 +183,7 @@ public sealed class OpenAiSupervisorAnalysisService : ISupervisorAnalysisService
         timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
         HttpResponseMessage? response = null;
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             for (var attempt = 0; attempt < 2; attempt++)
@@ -207,7 +210,14 @@ public sealed class OpenAiSupervisorAnalysisService : ISupervisorAnalysisService
 
             var body = await response.Content.ReadAsStringAsync(timeout.Token)
                 .ConfigureAwait(false);
-            if (!TryParseCompletedReview(body, request, auditId, model, out var review))
+            stopwatch.Stop();
+            if (!TryParseCompletedReview(
+                    body,
+                    request,
+                    auditId,
+                    model,
+                    stopwatch.ElapsedMilliseconds,
+                    out var review))
             {
                 return SupervisorAnalysisResult.Fail(
                     SupervisorAnalysisCode.InvalidModelOutput,
@@ -237,6 +247,7 @@ public sealed class OpenAiSupervisorAnalysisService : ISupervisorAnalysisService
         }
         finally
         {
+            stopwatch.Stop();
             response?.Dispose();
         }
     }
@@ -262,6 +273,7 @@ public sealed class OpenAiSupervisorAnalysisService : ISupervisorAnalysisService
     {
         var instruction =
             "You are Quantara's read-only engineering and trading supervisor. " +
+            $"Prompt version: {PromptVersion}. " +
             "Use only supplied evidence. Every factual claim must cite evidence IDs. " +
             "Separate facts from hypotheses. Never request, infer, reveal, or invent credentials. " +
             "Never propose direct mutation of live orders, positions, leverage, stops, take-profit, " +
@@ -307,6 +319,7 @@ public sealed class OpenAiSupervisorAnalysisService : ISupervisorAnalysisService
         SupervisorAnalysisRequestContract request,
         string auditId,
         string model,
+        long latencyMilliseconds,
         out SupervisorReviewContract? review)
     {
         review = null;
@@ -342,13 +355,49 @@ public sealed class OpenAiSupervisorAnalysisService : ISupervisorAnalysisService
                 modelReview.InsufficientEvidence,
                 modelReview.InsufficientEvidenceReason,
                 auditId,
-                model);
+                model,
+                PromptVersion,
+                ParseUsage(response.RootElement, latencyMilliseconds));
             return true;
         }
         catch (JsonException)
         {
             return false;
         }
+    }
+
+    private static SupervisorUsageContract ParseUsage(
+        JsonElement root,
+        long latencyMilliseconds)
+    {
+        var inputTokens = 0;
+        var outputTokens = 0;
+        var totalTokens = 0;
+        if (root.TryGetProperty("usage", out var usage)
+            && usage.ValueKind == JsonValueKind.Object)
+        {
+            inputTokens = ReadNonNegativeInt(usage, "input_tokens");
+            outputTokens = ReadNonNegativeInt(usage, "output_tokens");
+            totalTokens = ReadNonNegativeInt(usage, "total_tokens");
+        }
+
+        return new SupervisorUsageContract(
+            inputTokens,
+            outputTokens,
+            totalTokens,
+            Math.Max(0, latencyMilliseconds));
+    }
+
+    private static int ReadNonNegativeInt(JsonElement parent, string propertyName)
+    {
+        if (!parent.TryGetProperty(propertyName, out var value)
+            || value.ValueKind != JsonValueKind.Number
+            || !value.TryGetInt32(out var parsed))
+        {
+            return 0;
+        }
+
+        return Math.Max(0, parsed);
     }
 
     private static string? FindOutputText(JsonElement root)
