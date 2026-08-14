@@ -1,0 +1,47 @@
+name: Fix 184 CI
+
+on:
+  push:
+    branches:
+      - feature/184-chatgpt-readonly-mcp-v2
+    paths:
+      - .github/workflows/fix-184-ci.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/184-chatgpt-readonly-mcp-v2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Apply focused CI corrections
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/backend/Quantara.Api/Supervisor/SupervisorMcpEndpoints.cs')
+          text = path.read_text()
+          old = 'private static IReadOnlyList<SupervisorEvidenceContract> Filter('
+          new = 'private static SupervisorEvidenceContract[] Filter('
+          if old not in text:
+              raise SystemExit('CA1859 Filter signature anchor not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          dart format src/client/quantara_app/lib/features/auto_trade/application/read_only_support_session.dart
+      - name: Commit corrections
+        run: |
+          git config user.name "Quantara CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            src/backend/Quantara.Api/Supervisor/SupervisorMcpEndpoints.cs \
+            src/client/quantara_app/lib/features/auto_trade/application/read_only_support_session.dart
+          git diff --cached --check
+          git commit -m "fix(supervisor): satisfy MCP build and Flutter format gates"
+          git push origin HEAD:feature/184-chatgpt-readonly-mcp-v2
