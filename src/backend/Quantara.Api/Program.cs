@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Quantara.Api.AutoTrading;
 using Quantara.Api.Cockpit;
+using Quantara.Api.Supervisor;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseKestrel(options => options.AddServerHeader = false);
@@ -18,6 +19,8 @@ builder.Services.AddSingleton<ICockpitSnapshotProvider, DeterministicCockpitSnap
 builder.Services.AddSingleton<IAutoTradeExecutionCapability, DisabledAutoTradeExecutionCapability>();
 builder.Services.AddSingleton<IAutoTradePreflightService, ConfigurationAutoTradePreflightService>();
 builder.Services.AddSingleton<IAutoTradeControlCoordinator, InMemoryAutoTradeControlCoordinator>();
+builder.Services.AddSingleton<SupervisorAnalysisGate>();
+builder.Services.AddHttpClient<ISupervisorAnalysisService, OpenAiSupervisorAnalysisService>();
 
 var allowedOrigins = builder.Configuration["QUANTARA_ALLOWED_ORIGINS"]?
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -34,7 +37,8 @@ if (allowedOrigins.Length > 0)
                 .WithHeaders(
                     "Accept",
                     "Content-Type",
-                    "X-Quantara-Control-Token"));
+                    "X-Quantara-Control-Token",
+                    SupervisorEndpointAuthority.HeaderName));
     });
 }
 
@@ -83,6 +87,7 @@ app.MapGet(
     .Produces<CockpitResponseContract>(StatusCodes.Status200OK);
 
 app.MapAutoTradeEndpoints();
+app.MapSupervisorEndpoints();
 
 app.Run();
 
