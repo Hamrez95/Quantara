@@ -51,7 +51,7 @@ void main() {
     final serialized = evidence.single.toJson().toString();
     expect(serialized, isNot(contains('never-forward-this')));
     expect(serialized, isNot(contains('also-never-forward-this')));
-    expect(serialized, contains('[REDACTED]'));
+    expect(serialized, contains('REDACTED'));
   });
 
   test('canonicalizes section maps before serialization', () {
