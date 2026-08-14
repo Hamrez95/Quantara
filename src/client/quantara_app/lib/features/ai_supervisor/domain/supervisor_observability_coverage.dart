@@ -31,7 +31,8 @@ final class SupervisorCoverageEntry {
 abstract final class SupervisorObservabilityCoverage {
   static const String schemaVersion = '1';
 
-  static const List<SupervisorCoverageEntry> entries = <SupervisorCoverageEntry>[
+  static const List<SupervisorCoverageEntry>
+  entries = <SupervisorCoverageEntry>[
     SupervisorCoverageEntry(
       surface: 'client.app_state',
       access: SupervisorCoverageAccess.observable,
@@ -47,7 +48,8 @@ abstract final class SupervisorObservabilityCoverage {
     SupervisorCoverageEntry(
       surface: 'runtime.lifecycle',
       access: SupervisorCoverageAccess.observable,
-      reason: 'Scanner, reconciliation and lifecycle evidence without credentials.',
+      reason:
+          'Scanner, reconciliation and lifecycle evidence without credentials.',
       domain: SupervisorEvidenceDomain.runtime,
     ),
     SupervisorCoverageEntry(
@@ -105,12 +107,14 @@ abstract final class SupervisorObservabilityCoverage {
     SupervisorCoverageEntry(
       surface: 'credentials.signatures_private_keys_and_signing_material',
       access: SupervisorCoverageAccess.excludedSecret,
-      reason: 'Request signatures, private keys and signing material are excluded.',
+      reason:
+          'Request signatures, private keys and signing material are excluded.',
     ),
     SupervisorCoverageEntry(
       surface: 'credentials.raw_secret_environment_and_stores',
       access: SupervisorCoverageAccess.excludedSecret,
-      reason: 'Secret environment values and raw credential stores are excluded.',
+      reason:
+          'Secret environment values and raw credential stores are excluded.',
     ),
   ];
 

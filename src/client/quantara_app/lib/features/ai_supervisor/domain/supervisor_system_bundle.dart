@@ -10,7 +10,9 @@ final class SupervisorSystemBundle {
     required DateTime capturedAtUtc,
     required SupervisorEvidenceLedger ledger,
   }) : capturedAtUtc = capturedAtUtc.toUtc(),
-       evidence = List<SupervisorSystemEvidence>.unmodifiable(ledger.snapshot());
+       evidence = List<SupervisorSystemEvidence>.unmodifiable(
+         ledger.snapshot(),
+       );
 
   static const String schemaVersion = '1';
 

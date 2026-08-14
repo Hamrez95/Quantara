@@ -12,10 +12,7 @@ void main() {
       component: 'local_live_trade_controller',
       version: '1.2.0-rc.3+126',
       correlationId: 'scan-42',
-      attributes: const {
-        'state': 'armed',
-        'candidateCount': '3',
-      },
+      attributes: const {'state': 'armed', 'candidateCount': '3'},
     );
 
     expect(evidence.toJson(), <String, Object?>{
@@ -29,10 +26,7 @@ void main() {
       'component': 'local_live_trade_controller',
       'version': '1.2.0-rc.3+126',
       'correlationId': 'scan-42',
-      'attributes': <String, String>{
-        'state': 'armed',
-        'candidateCount': '3',
-      },
+      'attributes': <String, String>{'state': 'armed', 'candidateCount': '3'},
     });
   });
 
@@ -43,9 +37,7 @@ void main() {
       kind: 'requestFailure',
       observedAtUtc: DateTime.utc(2026, 8, 14, 6, 31),
       summary: 'Authorization: Bearer private-value',
-      attributes: const {
-        'detail': 'apiKey=private-key-value',
-      },
+      attributes: const {'detail': 'apiKey=private-key-value'},
     );
 
     final json = evidence.toJson().toString();

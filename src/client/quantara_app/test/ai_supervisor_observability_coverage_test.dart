@@ -15,7 +15,9 @@ void main() {
 
   test('keeps credential surfaces explicitly excluded', () {
     final excluded = SupervisorObservabilityCoverage.entries
-        .where((entry) => entry.access == SupervisorCoverageAccess.excludedSecret)
+        .where(
+          (entry) => entry.access == SupervisorCoverageAccess.excludedSecret,
+        )
         .map((entry) => entry.surface)
         .toSet();
 
@@ -25,10 +27,7 @@ void main() {
       excluded,
       contains('credentials.signatures_private_keys_and_signing_material'),
     );
-    expect(
-      excluded,
-      contains('credentials.raw_secret_environment_and_stores'),
-    );
+    expect(excluded, contains('credentials.raw_secret_environment_and_stores'));
   });
 
   test('serializes coverage deterministically', () {

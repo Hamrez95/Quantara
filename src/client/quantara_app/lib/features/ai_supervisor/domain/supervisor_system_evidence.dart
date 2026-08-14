@@ -62,8 +62,7 @@ final class SupervisorSystemEvidence {
     'observedAtUtc': observedAtUtc.toUtc().toIso8601String(),
     'summary': SupervisorSafeText.sanitize(summary),
     'severity': severity.name,
-    if (component != null)
-      'component': SupervisorSafeText.sanitize(component!),
+    if (component != null) 'component': SupervisorSafeText.sanitize(component!),
     if (version != null) 'version': SupervisorSafeText.sanitize(version!),
     if (correlationId != null)
       'correlationId': SupervisorSafeText.sanitize(correlationId!),
