@@ -64,8 +64,8 @@ public sealed record SupervisorReviewContract(
     string InsufficientEvidenceReason,
     string AuditId,
     string Model,
-    string PromptVersion,
-    SupervisorUsageContract Usage);
+    string PromptVersion = "quantara-supervisor-v1",
+    SupervisorUsageContract? Usage = null);
 
 public enum SupervisorAnalysisCode
 {
