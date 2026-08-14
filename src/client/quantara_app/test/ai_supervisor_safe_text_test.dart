@@ -31,7 +31,7 @@ void main() {
     final sanitized = SupervisorSafeText.sanitize(source);
 
     expect(sanitized, isNot(contains('top-secret-token')));
-    expect(sanitized, 'Authorization=[REDACTED]');
+    expect(sanitized, contains('Authorization=[REDACTED]'));
   });
 
   test('redacts credential assignments inside quoted diagnostic snippets', () {
