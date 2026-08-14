@@ -76,16 +76,20 @@ public sealed class SupervisorAnalysisTests
                 ["QUANTARA_SUPERVISOR_REQUESTS_PER_MINUTE"] = "10",
                 ["QUANTARA_SUPERVISOR_MAX_CONCURRENCY"] = "2"
             });
-        var service = new OpenAiSupervisorAnalysisService(
-            client,
-            configuration,
-            new SupervisorAnalysisGate(new FixedTimeProvider(), configuration));
+        using var gate = new SupervisorAnalysisGate(new FixedTimeProvider(), configuration);
+        var service = new OpenAiSupervisorAnalysisService(client, configuration, gate);
 
         var result = await service.ReviewAsync(ValidRequest(), CancellationToken.None);
 
         Assert.Equal(SupervisorAnalysisCode.Completed, result.Code);
         Assert.NotNull(result.Review);
         Assert.Equal("runtime.scan.42", Assert.Single(result.Review.Facts).EvidenceIds.Single());
+        Assert.Equal("quantara-supervisor-v1", result.Review.PromptVersion);
+        Assert.NotNull(result.Review.Usage);
+        Assert.Equal(123, result.Review.Usage.InputTokens);
+        Assert.Equal(45, result.Review.Usage.OutputTokens);
+        Assert.Equal(168, result.Review.Usage.TotalTokens);
+        Assert.True(result.Review.Usage.LatencyMilliseconds >= 0);
         Assert.NotNull(handler.LastRequest);
         Assert.Equal(HttpMethod.Post, handler.LastRequest.Method);
         Assert.Equal("https://api.openai.com/v1/responses", handler.LastRequest.RequestUri?.ToString());
@@ -96,6 +100,7 @@ public sealed class SupervisorAnalysisTests
         Assert.Contains("\"store\":false", handler.LastBody, StringComparison.Ordinal);
         Assert.Contains("\"type\":\"json_schema\"", handler.LastBody, StringComparison.Ordinal);
         Assert.Contains("\"strict\":true", handler.LastBody, StringComparison.Ordinal);
+        Assert.Contains("Prompt version: quantara-supervisor-v1", handler.LastBody, StringComparison.Ordinal);
         Assert.DoesNotContain("place_order", handler.LastBody, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -111,10 +116,8 @@ public sealed class SupervisorAnalysisTests
             {
                 ["OPENAI_API_KEY"] = "sk-test-supervisor-0123456789abcdef"
             });
-        var service = new OpenAiSupervisorAnalysisService(
-            client,
-            configuration,
-            new SupervisorAnalysisGate(new FixedTimeProvider(), configuration));
+        using var gate = new SupervisorAnalysisGate(new FixedTimeProvider(), configuration);
+        var service = new OpenAiSupervisorAnalysisService(client, configuration, gate);
 
         var result = await service.ReviewAsync(ValidRequest(), CancellationToken.None);
 
@@ -128,10 +131,8 @@ public sealed class SupervisorAnalysisTests
         var handler = new CapturingHandler(HttpStatusCode.OK, CompletedResponse("runtime.scan.42"));
         using var client = new HttpClient(handler);
         var configuration = Configuration(new Dictionary<string, string?>());
-        var service = new OpenAiSupervisorAnalysisService(
-            client,
-            configuration,
-            new SupervisorAnalysisGate(new FixedTimeProvider(), configuration));
+        using var gate = new SupervisorAnalysisGate(new FixedTimeProvider(), configuration);
+        var service = new OpenAiSupervisorAnalysisService(client, configuration, gate);
 
         var result = await service.ReviewAsync(ValidRequest(), CancellationToken.None);
 
@@ -195,6 +196,12 @@ public sealed class SupervisorAnalysisTests
             new
             {
                 status = "completed",
+                usage = new
+                {
+                    input_tokens = 123,
+                    output_tokens = 45,
+                    total_tokens = 168
+                },
                 output = new[]
                 {
                     new
