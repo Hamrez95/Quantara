@@ -404,6 +404,8 @@ class _LocalLiveTradeControlCardState
 
   String _t(String fa, String en) => _fa ? fa : en;
 
+  void _supervisorSetState(VoidCallback callback) => setState(callback);
+
   @override
   void initState() {
     super.initState();
@@ -734,6 +736,8 @@ class _LocalLiveTradeControlCardState
             const SizedBox(height: 12),
           ],
           _buildLocalLiveConfigurationSummary(serviceActive: serviceActive),
+          const SizedBox(height: 12),
+          _buildSupervisorSupportSessionCard(),
           if (status.managedPositions.isNotEmpty ||
               exchangeOpenPositions.isNotEmpty) ...[
             const SizedBox(height: 12),

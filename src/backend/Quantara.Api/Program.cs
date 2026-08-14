@@ -20,6 +20,9 @@ builder.Services.AddSingleton<IAutoTradeExecutionCapability, DisabledAutoTradeEx
 builder.Services.AddSingleton<IAutoTradePreflightService, ConfigurationAutoTradePreflightService>();
 builder.Services.AddSingleton<IAutoTradeControlCoordinator, InMemoryAutoTradeControlCoordinator>();
 builder.Services.AddSingleton<SupervisorAnalysisGate>();
+builder.Services.AddSingleton<SupervisorSupportSessionRegistry>();
+builder.Services.AddSingleton<SupervisorMcpAuditLedger>();
+builder.Services.AddSingleton<SupervisorMcpRateLimiter>();
 builder.Services.AddHttpClient<ISupervisorAnalysisService, OpenAiSupervisorAnalysisService>();
 
 var allowedOrigins = builder.Configuration["QUANTARA_ALLOWED_ORIGINS"]?
@@ -33,10 +36,12 @@ if (allowedOrigins.Length > 0)
             "quantara-client",
             policy => policy
                 .WithOrigins(allowedOrigins)
-                .WithMethods("GET", "POST")
+                .WithMethods("GET", "POST", "DELETE")
                 .WithHeaders(
                     "Accept",
+                    "Authorization",
                     "Content-Type",
+                    "Origin",
                     "X-Quantara-Control-Token",
                     SupervisorEndpointAuthority.HeaderName));
     });
@@ -88,6 +93,7 @@ app.MapGet(
 
 app.MapAutoTradeEndpoints();
 app.MapSupervisorEndpoints();
+app.MapSupervisorMcpEndpoints();
 
 app.Run();
 
