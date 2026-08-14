@@ -163,7 +163,7 @@ public static partial class SupervisorEvidenceValidator
     private static partial Regex AuthorizationCredentialRegex();
 
     [GeneratedRegex(
-        @"(?i)\b(?:api[_-]?(?:key|secret)|secret[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|password|private[_-]?key|signature|authorization)\s*[:=]\s*[\"']?[^\s,;}\"']{4,}",
+        "(?i)\\b(?:api[_-]?(?:key|secret)|secret[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|password|private[_-]?key|signature|authorization)\\s*[:=]\\s*[\\\"']?[^\\s,;}\\\"']{4,}",
         RegexOptions.CultureInvariant)]
     private static partial Regex CredentialAssignmentRegex();
 }
