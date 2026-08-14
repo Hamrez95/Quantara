@@ -661,83 +661,10 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
   ) async {
     final generatedAt = DateTime.now().toUtc();
     try {
-      final snapshot = widget.accountController.snapshot;
-      final reconciliation = widget.accountController.reconciliation;
-      final journalLedger = await DatabaseTradingJournalStore().load();
-      final persisted = <String, Object?>{
-        'configuration': await _storedJson(localLiveConfigurationKey),
-        'status': await _storedJson(localLiveStatusKey),
-        'managedPositions': await _storedJson(localLiveManagedPositionsKey),
-        'pendingJournalClosures': await _storedJson(
-          localLivePendingJournalClosuresKey,
-        ),
-        'executedSetupIds': await _storedJson(localLiveExecutedSetupIdsKey),
-        'audit': await _storedJson(localLiveAuditKey),
-        'sessionId': await _storedValue<String>(localLiveSessionIdKey),
-        'sessionStartedAt': await _storedValue<String>(
-          localLiveSessionStartedAtKey,
-        ),
-        'sessionPositionIds': await _storedJson(localLiveSessionPositionIdsKey),
-        'sessionStartEquity': await _storedValue<double>(
-          localLiveSessionStartEquityKey,
-        ),
-      };
-      final preferences = _currentPreferences;
+      final sections = await _buildLocalLiveDiagnosticSections(events);
       final json = LocalLiveDiagnosticBundle.encode(
         generatedAt: generatedAt,
-        sections: {
-          'configuration': {
-            'symbols': preferences.symbols,
-            'timeframes': preferences.timeframes.toList(growable: false),
-            'strategies': preferences.strategies
-                .map((item) => item.name)
-                .toList(growable: false),
-            'leverage': preferences.leverage,
-            'riskPercent': preferences.riskPercent,
-            'dailyLossLimitPercent': preferences.dailyLossLimitPercent,
-            'maximumConcurrentPositions':
-                preferences.maximumConcurrentPositions,
-            'targetAllocation': preferences.targetAllocation.toJson(),
-            'cadence': widget.analysisController.cadence.name,
-          },
-          'localLiveStatus': widget.controller.status.toJson(),
-          'privateAccountReconciliation': {
-            'health': reconciliation.health.name,
-            'cycleId': reconciliation.cycleId,
-            'completedAt': reconciliation.completedAt
-                ?.toUtc()
-                .toIso8601String(),
-            'lastAttemptAt': reconciliation.lastAttemptAt
-                ?.toUtc()
-                .toIso8601String(),
-            'refreshing': reconciliation.refreshing,
-            'warning': reconciliation.warning,
-            'localLiveOpenPositionCount':
-                reconciliation.localLiveOpenPositionCount,
-            'localLiveObservedAt': reconciliation.localLiveObservedAt
-                ?.toUtc()
-                .toIso8601String(),
-          },
-          'accountSnapshot': snapshot == null
-              ? null
-              : _accountSnapshotDiagnostic(snapshot),
-          'analysisRuntime': {
-            'watchlist': widget.analysisController.symbols,
-            'selectedSymbol': widget.analysisController.selectedSymbol,
-            'selectedTimeframe': widget.analysisController.selectedTimeframe,
-            'primaryStrategy': widget.analysisController.strategy.name,
-            'cadence': widget.analysisController.cadence.name,
-            'languageCode': widget.analysisController.languageCode,
-          },
-          'auditEvents': events.map((item) => item.toJson()).toList(),
-          'tradingJournal': journalLedger.toJson(),
-          'tradeEvidencePackets': TradingJournalEvidencePacketBuilder.buildAll(
-            journalLedger,
-          ),
-          'supportSessionFoundation':
-              ReadOnlySupportSessionManager.architectureDescriptor(),
-          'persistedLocalServiceState': persisted,
-        },
+        sections: sections,
       );
       final stamp = generatedAt.toIso8601String().replaceAll(
         RegExp(r'[:.]'),
@@ -869,5 +796,439 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
     } on FormatException {
       return raw;
     }
+  }
+}
+
+// AI Supervisor support-session transport — Issue #184.
+final Expando<_SupervisorSupportUiState> _supervisorSupportUiStates =
+    Expando<_SupervisorSupportUiState>();
+
+final class _SupervisorSupportUiState {
+  final manager = ReadOnlySupportSessionManager();
+  final transport = const ReadOnlySupportSessionTransport();
+  ReadOnlySupportSessionGrant? grant;
+  ReadOnlySupportRemoteSnapshot? remote;
+  Uri? baseUrl;
+  bool busy = false;
+  String? error;
+}
+
+extension _LocalLiveSupervisorSupportTools on _LocalLiveTradeControlCardState {
+  _SupervisorSupportUiState get _supervisorSupportUi =>
+      _supervisorSupportUiStates[this] ??= _SupervisorSupportUiState();
+
+  Widget _buildSupervisorSupportSessionCard() {
+    final state = _supervisorSupportUi;
+    final local = state.manager.current;
+    final remote = state.remote;
+    final now = DateTime.now().toUtc();
+    final active =
+        local != null && remote != null && now.isBefore(remote.expiresAtUtc);
+    final color = active ? QuantaraColors.success : QuantaraColors.violet;
+    final endpoint = state.baseUrl?.resolve('/mcp/quantara');
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(QuantaraRadius.card),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.psychology_alt_outlined, color: color),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _t('ناظر هوشمند Quantara', 'Quantara AI Supervisor'),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      Text(
+                        _t(
+                          'دسترسی موقت و فقط‌خواندنی ChatGPT به وضعیت، استراتژی، ریسک، ژورنال و خطاها؛ API Key و Secret هرگز ارسال نمی‌شوند.',
+                          'Temporary read-only ChatGPT access to runtime, strategy, risk, journal and diagnostics; API keys and secrets are never sent.',
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                StatusPill(
+                  label: active ? _t('فعال', 'Active') : _t('خاموش', 'Off'),
+                  color: color,
+                  icon: active
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'این اتصال هیچ مجوز ثبت/لغو سفارش، تغییر لوریج، SL/TP، انتقال وجه یا تغییر خودکار استراتژی زنده ندارد. Session حداکثر ۴۵ دقیقه فعال است و هر لحظه قابل لغو است.',
+                'This connection has no authority to place/cancel orders, change leverage, SL/TP, transfer funds, or silently mutate live strategy. The session lasts at most 45 minutes and can be revoked at any time.',
+              ),
+              color: QuantaraColors.cyan,
+            ),
+            if (active && remote != null) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  StatusPill(
+                    label: '${remote.evidenceCount} evidence',
+                    color: QuantaraColors.cyan,
+                    icon: Icons.dataset_outlined,
+                  ),
+                  StatusPill(
+                    label: 'ID ${remote.tokenFingerprint}',
+                    color: QuantaraColors.violet,
+                    icon: Icons.fingerprint_rounded,
+                  ),
+                  StatusPill(
+                    label: _t(
+                      'انقضا ${remote.expiresAtUtc.toLocal().hour.toString().padLeft(2, '0')}:${remote.expiresAtUtc.toLocal().minute.toString().padLeft(2, '0')}',
+                      'Expires ${remote.expiresAtUtc.toLocal().hour.toString().padLeft(2, '0')}:${remote.expiresAtUtc.toLocal().minute.toString().padLeft(2, '0')}',
+                    ),
+                    color: QuantaraColors.warning,
+                    icon: Icons.timer_outlined,
+                  ),
+                ],
+              ),
+              if (endpoint != null) ...[
+                const SizedBox(height: 8),
+                SelectableText(
+                  endpoint.toString(),
+                  textDirection: TextDirection.ltr,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+            if (state.error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                state.error!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: QuantaraColors.danger),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: active
+                  ? [
+                      FilledButton.tonalIcon(
+                        onPressed: state.busy
+                            ? null
+                            : _refreshSupervisorSupportSession,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: Text(_t('تازه‌سازی شواهد', 'Refresh evidence')),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: state.busy || endpoint == null
+                            ? null
+                            : () => _copySupervisorConnection(endpoint),
+                        icon: const Icon(Icons.link_rounded),
+                        label: Text(_t('کپی MCP URL', 'Copy MCP URL')),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: state.busy || state.grant == null
+                            ? null
+                            : _copyTemporarySupportToken,
+                        icon: const Icon(Icons.key_outlined),
+                        label: Text(
+                          _t('کپی توکن موقت', 'Copy temporary token'),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: state.busy
+                            ? null
+                            : _revokeSupervisorSupportSession,
+                        icon: const Icon(Icons.link_off_rounded),
+                        label: Text(_t('لغو دسترسی', 'Revoke access')),
+                      ),
+                    ]
+                  : [
+                      FilledButton.icon(
+                        onPressed: state.busy
+                            ? null
+                            : _enableSupervisorSupportSession,
+                        icon: state.busy
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.visibility_outlined),
+                        label: Text(
+                          _t(
+                            'فعال‌سازی دسترسی ChatGPT',
+                            'Enable ChatGPT access',
+                          ),
+                        ),
+                      ),
+                    ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _enableSupervisorSupportSession() async {
+    final state = _supervisorSupportUi;
+    setState(() {
+      state.busy = true;
+      state.error = null;
+    });
+    try {
+      final serverConfig = await const SecureAutoTradeServerConfigStore()
+          .load();
+      if (serverConfig == null) {
+        throw StateError(
+          _t(
+            'ابتدا تنظیمات سرور Quantara را در بخش سرور ثبت کن.',
+            'Configure the Quantara server connection first.',
+          ),
+        );
+      }
+      final events = await widget.controller.loadAudit();
+      final sections = await _buildLocalLiveDiagnosticSections(events);
+      final grant = state.manager.enable(ttl: const Duration(minutes: 45));
+      final fingerprint = state.manager.current!.tokenFingerprint;
+      final evidence = ReadOnlySupportSessionEvidence.fromDiagnosticSections(
+        bundleId: 'support-$fingerprint',
+        observedAtUtc: DateTime.now().toUtc(),
+        sections: sections,
+      );
+      if (evidence.isEmpty) {
+        state.manager.revoke();
+        throw StateError(
+          _t('شواهد کافی ساخته نشد.', 'No reviewable evidence was produced.'),
+        );
+      }
+      try {
+        final remote = await state.transport.register(
+          serverConfig: serverConfig,
+          grant: grant,
+          evidence: evidence,
+        );
+        if (!mounted) return;
+        setState(() {
+          state.grant = grant;
+          state.remote = remote;
+          state.baseUrl = serverConfig.baseUrl;
+        });
+      } on Object {
+        state.manager.revoke();
+        rethrow;
+      }
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        state.error = error is StateError
+            ? error.message.toString()
+            : _t(
+                'فعال‌سازی Supervisor انجام نشد (${error.runtimeType}).',
+                'Supervisor activation failed (${error.runtimeType}).',
+              );
+      });
+    } finally {
+      if (mounted) setState(() => state.busy = false);
+    }
+  }
+
+  Future<void> _refreshSupervisorSupportSession() async {
+    final state = _supervisorSupportUi;
+    final grant = state.grant;
+    final baseUrl = state.baseUrl;
+    if (grant == null || baseUrl == null || state.manager.current == null) {
+      return;
+    }
+    setState(() {
+      state.busy = true;
+      state.error = null;
+    });
+    try {
+      final events = await widget.controller.loadAudit();
+      final sections = await _buildLocalLiveDiagnosticSections(events);
+      final fingerprint = state.manager.current!.tokenFingerprint;
+      final evidence = ReadOnlySupportSessionEvidence.fromDiagnosticSections(
+        bundleId: 'support-$fingerprint',
+        observedAtUtc: DateTime.now().toUtc(),
+        sections: sections,
+      );
+      final remote = await state.transport.refreshEvidence(
+        baseUrl: baseUrl,
+        supportToken: grant.token,
+        evidence: evidence,
+      );
+      if (!mounted) return;
+      setState(() => state.remote = remote);
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        state.error = _t(
+          'تازه‌سازی شواهد انجام نشد (${error.runtimeType}).',
+          'Evidence refresh failed (${error.runtimeType}).',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => state.busy = false);
+    }
+  }
+
+  Future<void> _revokeSupervisorSupportSession() async {
+    final state = _supervisorSupportUi;
+    final grant = state.grant;
+    final baseUrl = state.baseUrl;
+    if (grant == null || baseUrl == null) return;
+    setState(() {
+      state.busy = true;
+      state.error = null;
+    });
+    try {
+      await state.transport.revoke(baseUrl: baseUrl, supportToken: grant.token);
+      state.manager.revoke();
+      if (!mounted) return;
+      setState(() {
+        state.grant = null;
+        state.remote = null;
+        state.baseUrl = null;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        state.error = _t(
+          'لغو سمت سرور تأیید نشد؛ Session تا تأیید لغو یا زمان انقضا فعال فرض می‌شود (${error.runtimeType}).',
+          'Server-side revoke was not confirmed; treat the session as active until revoke succeeds or it expires (${error.runtimeType}).',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => state.busy = false);
+    }
+  }
+
+  Future<void> _copySupervisorConnection(Uri endpoint) async {
+    await Clipboard.setData(ClipboardData(text: endpoint.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(_t('MCP URL کپی شد.', 'MCP URL copied.'))),
+    );
+  }
+
+  Future<void> _copyTemporarySupportToken() async {
+    final grant = _supervisorSupportUi.grant;
+    if (grant == null) return;
+    await Clipboard.setData(ClipboardData(text: grant.token));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _t(
+            'توکن موقت فقط برای اتصال read-only کپی شد؛ آن را عمومی نکن و بعد از تست دسترسی را لغو کن.',
+            'Temporary read-only token copied. Keep it private and revoke access after testing.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<Map<String, Object?>> _buildLocalLiveDiagnosticSections(
+    List<LocalLiveAuditEvent> events,
+  ) async {
+    final snapshot = widget.accountController.snapshot;
+    final reconciliation = widget.accountController.reconciliation;
+    final journalLedger = await DatabaseTradingJournalStore().load();
+    final persisted = <String, Object?>{
+      'configuration': await _storedJson(localLiveConfigurationKey),
+      'status': await _storedJson(localLiveStatusKey),
+      'managedPositions': await _storedJson(localLiveManagedPositionsKey),
+      'pendingJournalClosures': await _storedJson(
+        localLivePendingJournalClosuresKey,
+      ),
+      'executedSetupIds': await _storedJson(localLiveExecutedSetupIdsKey),
+      'audit': await _storedJson(localLiveAuditKey),
+      'sessionId': await _storedValue<String>(localLiveSessionIdKey),
+      'sessionStartedAt': await _storedValue<String>(
+        localLiveSessionStartedAtKey,
+      ),
+      'sessionPositionIds': await _storedJson(localLiveSessionPositionIdsKey),
+      'sessionStartEquity': await _storedValue<double>(
+        localLiveSessionStartEquityKey,
+      ),
+    };
+    final preferences = _currentPreferences;
+    return <String, Object?>{
+      'configuration': <String, Object?>{
+        'symbols': preferences.symbols,
+        'timeframes': preferences.timeframes.toList(growable: false),
+        'strategies': preferences.strategies
+            .map((item) => item.name)
+            .toList(growable: false),
+        'leverage': preferences.leverage,
+        'riskPercent': preferences.riskPercent,
+        'dailyLossLimitPercent': preferences.dailyLossLimitPercent,
+        'maximumConcurrentPositions': preferences.maximumConcurrentPositions,
+        'targetAllocation': preferences.targetAllocation.toJson(),
+        'cadence': widget.analysisController.cadence.name,
+      },
+      'localLiveStatus': widget.controller.status.toJson(),
+      'privateAccountReconciliation': <String, Object?>{
+        'health': reconciliation.health.name,
+        'cycleId': reconciliation.cycleId,
+        'completedAt': reconciliation.completedAt?.toUtc().toIso8601String(),
+        'lastAttemptAt': reconciliation.lastAttemptAt
+            ?.toUtc()
+            .toIso8601String(),
+        'refreshing': reconciliation.refreshing,
+        'warning': reconciliation.warning,
+        'localLiveOpenPositionCount': reconciliation.localLiveOpenPositionCount,
+        'localLiveObservedAt': reconciliation.localLiveObservedAt
+            ?.toUtc()
+            .toIso8601String(),
+      },
+      'accountSnapshot': snapshot == null
+          ? null
+          : _accountSnapshotDiagnostic(snapshot),
+      'analysisRuntime': <String, Object?>{
+        'watchlist': widget.analysisController.symbols,
+        'selectedSymbol': widget.analysisController.selectedSymbol,
+        'selectedTimeframe': widget.analysisController.selectedTimeframe,
+        'primaryStrategy': widget.analysisController.strategy.name,
+        'cadence': widget.analysisController.cadence.name,
+        'languageCode': widget.analysisController.languageCode,
+      },
+      'auditEvents': events
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'tradingJournal': journalLedger.toJson(),
+      'tradeEvidencePackets': TradingJournalEvidencePacketBuilder.buildAll(
+        journalLedger,
+      ),
+      'supportSessionFoundation':
+          ReadOnlySupportSessionManager.architectureDescriptor(),
+      'persistedLocalServiceState': persisted,
+    };
   }
 }
