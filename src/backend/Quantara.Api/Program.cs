@@ -22,6 +22,7 @@ builder.Services.AddSingleton<IAutoTradeControlCoordinator, InMemoryAutoTradeCon
 builder.Services.AddSingleton<SupervisorAnalysisGate>();
 builder.Services.AddSingleton<SupervisorSupportSessionRegistry>();
 builder.Services.AddSingleton<SupervisorMcpAuditLedger>();
+builder.Services.AddSingleton<SupervisorMcpRateLimiter>();
 builder.Services.AddHttpClient<ISupervisorAnalysisService, OpenAiSupervisorAnalysisService>();
 
 var allowedOrigins = builder.Configuration["QUANTARA_ALLOWED_ORIGINS"]?
