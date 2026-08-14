@@ -50,7 +50,10 @@ void main() {
     );
 
     expect(review.hasSufficientEvidence, isFalse);
-    expect(review.toJson()['insufficientEvidenceReason'], 'exchange truth is stale');
+    expect(
+      review.toJson()['insufficientEvidenceReason'],
+      'exchange truth is stale',
+    );
   });
 
   test('finding confidence must stay in the normalized range', () {
