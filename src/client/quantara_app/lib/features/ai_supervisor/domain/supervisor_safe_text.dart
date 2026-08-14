@@ -25,4 +25,7 @@ abstract final class SupervisorSafeText {
     sanitized = sanitized.replaceAll(_bearerToken, 'Bearer $redacted');
     return sanitized;
   }
+
+  static List<String> sanitizeAll(Iterable<String> values) =>
+      values.map(sanitize).toList(growable: false);
 }
