@@ -16,8 +16,9 @@ void main() {
         candidatesRejected: 7,
         candidatesAdmitted: 2,
         lastScanAtUtc: DateTime.parse('2026-08-14T03:29:55+03:30'),
-        lastSuccessfulExchangeSyncAtUtc:
-            DateTime.parse('2026-08-14T03:29:50+03:30'),
+        lastSuccessfulExchangeSyncAtUtc: DateTime.parse(
+          '2026-08-14T03:29:50+03:30',
+        ),
       ),
       risk: const SupervisorRiskObservation(
         portfolioRiskConsumed: 0.5,
@@ -38,7 +39,8 @@ void main() {
         SupervisorLifecycleEvidence(
           evidenceId: 'event-1',
           kind: 'candidateRejected',
-          summary: 'portfolio slot remained available; candidate failed risk gate',
+          summary:
+              'portfolio slot remained available; candidate failed risk gate',
           occurredAtUtc: DateTime.parse('2026-08-14T03:29:54+03:30'),
         ),
       ],
