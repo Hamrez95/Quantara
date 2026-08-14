@@ -1,0 +1,38 @@
+name: Format 184 Support Transport
+
+on:
+  push:
+    branches:
+      - feature/184-chatgpt-readonly-mcp-v2
+    paths:
+      - .github/workflows/format-184-support-transport.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/184-chatgpt-readonly-mcp-v2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format Supervisor support transport
+        run: dart format src/client/quantara_app/lib/features/auto_trade/application/read_only_support_session.dart
+      - name: Commit formatting if needed
+        run: |
+          git config user.name "Quantara CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/auto_trade/application/read_only_support_session.dart
+          if git diff --cached --quiet; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git diff --cached --check
+          git commit -m "style(supervisor): format support-session transport"
+          git push origin HEAD:feature/184-chatgpt-readonly-mcp-v2
