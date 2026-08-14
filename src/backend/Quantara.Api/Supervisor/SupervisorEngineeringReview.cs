@@ -84,6 +84,13 @@ public static partial class SupervisorEngineeringReviewValidator
             return false;
         }
 
+        if (ContainsCredentialLikeMaterial(proposal.Title)
+            || ContainsCredentialLikeMaterial(proposal.Rationale))
+        {
+            error = "credential_like_engineering_proposal_rejected";
+            return false;
+        }
+
         if (!proposal.IsDraft || !proposal.RequiresHumanReview)
         {
             error = "engineering_proposal_must_remain_draft";
