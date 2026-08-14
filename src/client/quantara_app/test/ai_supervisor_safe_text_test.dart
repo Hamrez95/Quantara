@@ -25,6 +25,15 @@ void main() {
     expect(sanitized, contains('Bearer [REDACTED]'));
   });
 
+  test('redacts complete authorization bearer header value', () {
+    const source = 'Authorization: Bearer top-secret-token';
+
+    final sanitized = SupervisorSafeText.sanitize(source);
+
+    expect(sanitized, isNot(contains('top-secret-token')));
+    expect(sanitized, 'Authorization=[REDACTED]');
+  });
+
   test('leaves ordinary diagnostic text unchanged', () {
     const source = 'portfolio slot available; candidate failed risk gate';
 
