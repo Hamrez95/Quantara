@@ -53,8 +53,9 @@ final class SupervisorRuntimeObservation {
     if (lastScanAtUtc != null)
       'lastScanAtUtc': lastScanAtUtc!.toUtc().toIso8601String(),
     if (lastSuccessfulExchangeSyncAtUtc != null)
-      'lastSuccessfulExchangeSyncAtUtc':
-          lastSuccessfulExchangeSyncAtUtc!.toUtc().toIso8601String(),
+      'lastSuccessfulExchangeSyncAtUtc': lastSuccessfulExchangeSyncAtUtc!
+          .toUtc()
+          .toIso8601String(),
     if (topBlockReason != null) 'topBlockReason': topBlockReason,
   };
 }
