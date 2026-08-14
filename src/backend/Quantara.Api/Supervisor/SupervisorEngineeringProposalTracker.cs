@@ -245,7 +245,7 @@ public sealed class SupervisorEngineeringProposalTracker
         evidenceIds is { Count: > 0 and <= 128 }
         && evidenceIds.All(id => !string.IsNullOrWhiteSpace(id) && id.Length <= 256);
 
-    private static IReadOnlyList<string> NormalizeEvidence(IEnumerable<string> evidenceIds) =>
+    private static string[] NormalizeEvidence(IEnumerable<string> evidenceIds) =>
         evidenceIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
     private void TrimIfNeeded()
