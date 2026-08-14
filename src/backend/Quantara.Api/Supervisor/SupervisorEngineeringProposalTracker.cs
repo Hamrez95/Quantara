@@ -183,8 +183,61 @@ public sealed class SupervisorEngineeringProposalTracker
 
         lock (_sync)
         {
+            return TryCompleteValidationLocked(
+                proposalId,
+                passed,
+                afterEvidenceIds,
+                outcomeSummary,
+                out lifecycle,
+                out error);
+        }
+    }
+
+    public bool TryCompleteValidationFromBundles(
+        string proposalId,
+        bool passed,
+        SupervisorAnalysisRequestContract? before,
+        SupervisorAnalysisRequestContract? after,
+        string outcomeSummary,
+        out SupervisorProposalLifecycleContract? lifecycle,
+        out SupervisorEngineeringValidationComparisonContract? comparison,
+        out string error)
+    {
+        lifecycle = null;
+        comparison = null;
+        if (string.IsNullOrWhiteSpace(outcomeSummary) || outcomeSummary.Length > 4_096)
+        {
+            error = "invalid_after_validation_evidence";
+            return false;
+        }
+
+        if (!SupervisorEngineeringValidationComparison.TryCreate(
+                before,
+                after,
+                out comparison,
+                out error))
+        {
+            return false;
+        }
+
+        var comparisonBeforeEvidenceIds = NormalizeEvidence(
+            comparison.Domains.SelectMany(domain => domain.BeforeEvidenceIds));
+        var comparisonAfterEvidenceIds = NormalizeEvidence(
+            comparison.Domains.SelectMany(domain => domain.AfterEvidenceIds));
+
+        if (!ValidEvidenceIds(comparisonBeforeEvidenceIds)
+            || !ValidEvidenceIds(comparisonAfterEvidenceIds))
+        {
+            comparison = null;
+            error = "invalid_engineering_validation_comparison_evidence";
+            return false;
+        }
+
+        lock (_sync)
+        {
             if (!_items.TryGetValue(proposalId, out var current))
             {
+                comparison = null;
                 error = "engineering_proposal_not_found";
                 return false;
             }
@@ -192,29 +245,26 @@ public sealed class SupervisorEngineeringProposalTracker
             if (current.State != SupervisorProposalValidationState.ValidationRunning
                 || current.Validation is null)
             {
+                comparison = null;
                 error = "invalid_engineering_validation_transition";
                 return false;
             }
 
-            var validation = current.Validation with
+            if (!current.Validation.BeforeEvidenceIds.SequenceEqual(comparisonBeforeEvidenceIds))
             {
-                AfterEvidenceIds = NormalizeEvidence(afterEvidenceIds),
-                OutcomeSummary = outcomeSummary
-            };
-            var updated = current with
-            {
-                State = passed
-                    ? SupervisorProposalValidationState.Validated
-                    : SupervisorProposalValidationState.Rejected,
-                Validation = validation,
-                UpdatedAtUtc = _timeProvider.GetUtcNow()
-            };
-            _items[proposalId] = updated;
-            lifecycle = updated;
-        }
+                comparison = null;
+                error = "engineering_validation_before_evidence_mismatch";
+                return false;
+            }
 
-        error = string.Empty;
-        return true;
+            return TryCompleteValidationLocked(
+                proposalId,
+                passed,
+                comparisonAfterEvidenceIds,
+                outcomeSummary,
+                out lifecycle,
+                out error);
+        }
     }
 
     public SupervisorProposalLifecycleContract? Get(string proposalId)
@@ -223,6 +273,47 @@ public sealed class SupervisorEngineeringProposalTracker
         {
             return _items.GetValueOrDefault(proposalId);
         }
+    }
+
+    private bool TryCompleteValidationLocked(
+        string proposalId,
+        bool passed,
+        IReadOnlyList<string> afterEvidenceIds,
+        string outcomeSummary,
+        out SupervisorProposalLifecycleContract? lifecycle,
+        out string error)
+    {
+        lifecycle = null;
+        if (!_items.TryGetValue(proposalId, out var current))
+        {
+            error = "engineering_proposal_not_found";
+            return false;
+        }
+
+        if (current.State != SupervisorProposalValidationState.ValidationRunning
+            || current.Validation is null)
+        {
+            error = "invalid_engineering_validation_transition";
+            return false;
+        }
+
+        var validation = current.Validation with
+        {
+            AfterEvidenceIds = NormalizeEvidence(afterEvidenceIds),
+            OutcomeSummary = outcomeSummary
+        };
+        var updated = current with
+        {
+            State = passed
+                ? SupervisorProposalValidationState.Validated
+                : SupervisorProposalValidationState.Rejected,
+            Validation = validation,
+            UpdatedAtUtc = _timeProvider.GetUtcNow()
+        };
+        _items[proposalId] = updated;
+        lifecycle = updated;
+        error = string.Empty;
+        return true;
     }
 
     private static bool TryValidateFeatureBranch(string branchName, out string error)
