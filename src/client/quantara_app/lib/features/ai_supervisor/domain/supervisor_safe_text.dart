@@ -7,8 +7,7 @@ abstract final class SupervisorSafeText {
   static const String redacted = '[REDACTED]';
 
   static final RegExp _credentialAssignment = RegExp(
-    r'\b(api[_-]?key|api[_-]?secret|authorization|token|password|'
-    r'private[_-]?key|signature)\b\s*[:=]\s*([^\s,;]+)',
+    r'''["']?\b(api[_-]?key|api[_-]?secret|authorization|token|password|private[_-]?key|signature)\b["']?\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)''',
     caseSensitive: false,
   );
 
