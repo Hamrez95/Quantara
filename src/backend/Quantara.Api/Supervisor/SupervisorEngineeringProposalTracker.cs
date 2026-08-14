@@ -88,14 +88,19 @@ public sealed class SupervisorEngineeringProposalTracker
 
     public bool TryAttachDraftPullRequest(
         string proposalId,
-        int pullRequestNumber,
+        SupervisorEngineeringReviewTargetContract? target,
         out SupervisorProposalLifecycleContract? lifecycle,
         out string error)
     {
         lifecycle = null;
-        if (pullRequestNumber <= 0)
+        if (!SupervisorEngineeringReviewTargetValidator.TryValidate(target, out error))
         {
-            error = "invalid_draft_pull_request_number";
+            return false;
+        }
+
+        if (target is null)
+        {
+            error = "engineering_review_target_required";
             return false;
         }
 
@@ -107,9 +112,21 @@ public sealed class SupervisorEngineeringProposalTracker
                 return false;
             }
 
+            if (!string.Equals(current.BranchName, target.BranchName, StringComparison.Ordinal))
+            {
+                error = "engineering_review_target_branch_mismatch";
+                return false;
+            }
+
+            if (current.PullRequestNumber is not null)
+            {
+                error = "engineering_review_target_already_attached";
+                return false;
+            }
+
             var updated = current with
             {
-                PullRequestNumber = pullRequestNumber,
+                PullRequestNumber = target.PullRequestNumber,
                 UpdatedAtUtc = _timeProvider.GetUtcNow()
             };
             _items[proposalId] = updated;
@@ -144,6 +161,12 @@ public sealed class SupervisorEngineeringProposalTracker
             if (current.State != SupervisorProposalValidationState.Draft)
             {
                 error = "invalid_engineering_validation_transition";
+                return false;
+            }
+
+            if (current.PullRequestNumber is null)
+            {
+                error = "engineering_review_target_not_attached";
                 return false;
             }
 
