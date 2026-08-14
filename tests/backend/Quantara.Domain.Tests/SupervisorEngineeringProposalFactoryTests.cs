@@ -4,8 +4,16 @@ namespace Quantara.Domain.Tests;
 
 public sealed class SupervisorEngineeringProposalFactoryTests
 {
+    private static readonly string[] StrategyEvidenceIds = ["strategy-1"];
+    private static readonly string[] StrategyAndUnknownEvidenceIds = ["strategy-1", "unknown-1"];
+    private static readonly string[] ReplayValidationPlan = ["Run deterministic replay and compare the scorecard."];
+    private static readonly string[] ReplayValidationPlanShort = ["Run deterministic replay."];
+    private static readonly string[] ReplayRollbackCriteria = ["Discard the candidate when replay quality regresses."];
+    private static readonly string[] ReplayRollbackCriteriaShort = ["Discard the candidate on regression."];
+    private static readonly string[] RegressionRollbackCriteria = ["Discard on regression."];
+
     [Fact]
-    public void CreateExperimentDrafts_CreatesValidatedDraftLinkedToKnownEvidence()
+    public void CreateExperimentDraftsCreatesValidatedDraftLinkedToKnownEvidence()
     {
         var bundle = CreateBundle();
         var review = CreateReview(
@@ -13,9 +21,9 @@ public sealed class SupervisorEngineeringProposalFactoryTests
             new SupervisorExperimentContract(
                 "Compare candidate strategy offline",
                 "Measure whether the candidate improves deterministic replay outcomes.",
-                new[] { "strategy-1" },
-                new[] { "Run deterministic replay and compare the scorecard." },
-                new[] { "Discard the candidate when replay quality regresses." }));
+                StrategyEvidenceIds,
+                ReplayValidationPlan,
+                ReplayRollbackCriteria));
 
         var drafts = SupervisorEngineeringProposalFactory.CreateExperimentDrafts(bundle, review);
 
@@ -23,12 +31,12 @@ public sealed class SupervisorEngineeringProposalFactoryTests
         Assert.True(draft.Proposal.IsDraft);
         Assert.True(draft.Proposal.RequiresHumanReview);
         Assert.Equal(SupervisorProposalKind.StrategyExperiment, draft.Proposal.Kind);
-        Assert.Equal(new[] { "strategy-1" }, draft.Proposal.EvidenceIds);
+        Assert.Equal(StrategyEvidenceIds, draft.Proposal.EvidenceIds);
         Assert.True(SupervisorEngineeringReviewValidator.TryValidate(draft, out var error), error);
     }
 
     [Fact]
-    public void CreateExperimentDrafts_DropsUnknownEvidenceAndUnsafeModelMaterial()
+    public void CreateExperimentDraftsDropsUnknownEvidenceAndUnsafeModelMaterial()
     {
         var bundle = CreateBundle();
         var review = CreateReview(
@@ -36,9 +44,9 @@ public sealed class SupervisorEngineeringProposalFactoryTests
             new SupervisorExperimentContract(
                 "Unsafe candidate",
                 "authorization=not-safe-material",
-                new[] { "strategy-1", "unknown-1" },
-                new[] { "Run deterministic replay." },
-                new[] { "Discard the candidate on regression." }));
+                StrategyAndUnknownEvidenceIds,
+                ReplayValidationPlanShort,
+                ReplayRollbackCriteriaShort));
 
         var drafts = SupervisorEngineeringProposalFactory.CreateExperimentDrafts(bundle, review);
 
@@ -46,7 +54,7 @@ public sealed class SupervisorEngineeringProposalFactoryTests
     }
 
     [Fact]
-    public void CreateExperimentDrafts_ReturnsNothingWhenReviewReportsInsufficientEvidence()
+    public void CreateExperimentDraftsReturnsNothingWhenReviewReportsInsufficientEvidence()
     {
         var bundle = CreateBundle();
         var review = CreateReview(
@@ -54,9 +62,9 @@ public sealed class SupervisorEngineeringProposalFactoryTests
             new SupervisorExperimentContract(
                 "Candidate",
                 "Evaluate offline.",
-                new[] { "strategy-1" },
-                new[] { "Run deterministic replay." },
-                new[] { "Discard on regression." }));
+                StrategyEvidenceIds,
+                ReplayValidationPlanShort,
+                RegressionRollbackCriteria));
 
         Assert.Empty(SupervisorEngineeringProposalFactory.CreateExperimentDrafts(bundle, review));
     }
@@ -65,8 +73,7 @@ public sealed class SupervisorEngineeringProposalFactoryTests
         new(
             "bundle-1",
             DateTimeOffset.UtcNow,
-            new[]
-            {
+            [
                 new SupervisorEvidenceContract(
                     "strategy-1",
                     "strategy",
@@ -78,7 +85,7 @@ public sealed class SupervisorEngineeringProposalFactoryTests
                     "1",
                     "corr-1",
                     null)
-            },
+            ],
             "Find reviewable engineering experiments.");
 
     private static SupervisorReviewContract CreateReview(
@@ -91,7 +98,7 @@ public sealed class SupervisorEngineeringProposalFactoryTests
             Array.Empty<SupervisorHypothesisContract>(),
             Array.Empty<SupervisorAnomalyContract>(),
             Array.Empty<SupervisorStrategyFindingContract>(),
-            new[] { experiment },
+            [experiment],
             insufficientEvidence,
             insufficientEvidence ? "More evidence is required." : string.Empty,
             "audit-1",
