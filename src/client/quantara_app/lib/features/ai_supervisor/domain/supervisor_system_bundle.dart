@@ -4,6 +4,7 @@ import 'supervisor_safe_text.dart';
 import 'supervisor_system_evidence.dart';
 
 /// Deterministic, sanitized payload boundary for system-wide AI review.
+/// Only evidence already admitted to the bounded Supervisor ledger is emitted.
 final class SupervisorSystemBundle {
   SupervisorSystemBundle({
     required this.bundleId,
