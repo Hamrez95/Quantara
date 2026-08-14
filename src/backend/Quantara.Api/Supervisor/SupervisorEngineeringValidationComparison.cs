@@ -28,6 +28,8 @@ public static class SupervisorEngineeringValidationComparison
         out string error)
     {
         comparison = null;
+        error = string.Empty;
+
         if (before is null || !SupervisorEvidenceValidator.TryValidate(before, out error))
         {
             error = string.IsNullOrWhiteSpace(error) ? "invalid_before_validation_bundle" : error;
@@ -55,7 +57,6 @@ public static class SupervisorEngineeringValidationComparison
             before.BundleId,
             after.BundleId,
             domains);
-        error = string.Empty;
         return true;
     }
 
