@@ -34,7 +34,7 @@ final class ReadOnlySupportSessionSnapshot {
     'createdAt': createdAt.toUtc().toIso8601String(),
     'expiresAt': expiresAt.toUtc().toIso8601String(),
     'tokenFingerprint': tokenFingerprint,
-    'transportImplemented': false,
+    'transportImplemented': true,
     'exchangeCredentialsExposed': false,
     'tradingPermission': false,
   };
@@ -103,7 +103,8 @@ final class ReadOnlySupportSessionManager {
     'sanitizedDiagnosticsOnly': true,
     'revocable': true,
     'ttlMinutes': {'minimum': 30, 'default': 45, 'maximum': 60},
-    'backendTransportImplemented': false,
+    'backendTransportImplemented': true,
+    'mcpTransport': 'remote-http',
     'exchangeCredentialsAllowed': false,
     'tradingWritesAllowed': false,
   };
