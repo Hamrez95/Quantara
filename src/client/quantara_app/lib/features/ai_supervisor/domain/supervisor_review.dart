@@ -6,10 +6,7 @@ enum SupervisorFindingKind {
 }
 
 final class SupervisorEvidenceRef {
-  const SupervisorEvidenceRef({
-    required this.id,
-    required this.source,
-  });
+  const SupervisorEvidenceRef({required this.id, required this.source});
 
   final String id;
   final String source;
