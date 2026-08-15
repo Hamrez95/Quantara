@@ -32,53 +32,54 @@ void main() {
         universe.streams.map((stream) => stream.symbol).toSet(),
         symbols.toSet(),
       );
+      expect(universe.streams.map((stream) => stream.interval).toSet(), {
+        BitunixKlineInterval.fiveMinutes,
+        BitunixKlineInterval.fifteenMinutes,
+        BitunixKlineInterval.oneHour,
+      });
       expect(
-        universe.streams.map((stream) => stream.interval).toSet(),
-        {
-          BitunixKlineInterval.fiveMinutes,
-          BitunixKlineInterval.fifteenMinutes,
-          BitunixKlineInterval.oneHour,
-        },
-      );
-      expect(
-        universe.streams
-            .where((stream) => stream.interval == BitunixKlineInterval.thirtyMinutes),
+        universe.streams.where(
+          (stream) => stream.interval == BitunixKlineInterval.thirtyMinutes,
+        ),
         isEmpty,
       );
     });
 
-    test('fingerprint ignores ordering but changes with the monitored universe', () {
-      const first = LocalLivePreferences(
-        symbols: ['BTCUSDT', 'ETHUSDT'],
-        timeframes: {'15m', '1h'},
-        leverage: 5,
-        riskPercent: 0.25,
-        dailyLossLimitPercent: 1,
-      );
-      const reordered = LocalLivePreferences(
-        symbols: ['ETHUSDT', 'BTCUSDT'],
-        timeframes: {'1h', '15m'},
-        leverage: 25,
-        riskPercent: 0.5,
-        dailyLossLimitPercent: 2,
-      );
-      const changed = LocalLivePreferences(
-        symbols: ['ETHUSDT', 'BTCUSDT', 'SOLUSDT'],
-        timeframes: {'1h', '15m'},
-        leverage: 25,
-        riskPercent: 0.5,
-        dailyLossLimitPercent: 2,
-      );
+    test(
+      'fingerprint ignores ordering but changes with the monitored universe',
+      () {
+        const first = LocalLivePreferences(
+          symbols: ['BTCUSDT', 'ETHUSDT'],
+          timeframes: {'15m', '1h'},
+          leverage: 5,
+          riskPercent: 0.25,
+          dailyLossLimitPercent: 1,
+        );
+        const reordered = LocalLivePreferences(
+          symbols: ['ETHUSDT', 'BTCUSDT'],
+          timeframes: {'1h', '15m'},
+          leverage: 25,
+          riskPercent: 0.5,
+          dailyLossLimitPercent: 2,
+        );
+        const changed = LocalLivePreferences(
+          symbols: ['ETHUSDT', 'BTCUSDT', 'SOLUSDT'],
+          timeframes: {'1h', '15m'},
+          leverage: 25,
+          riskPercent: 0.5,
+          dailyLossLimitPercent: 2,
+        );
 
-      expect(
-        LocalLiveRealtimeUniverse.fingerprint(first),
-        LocalLiveRealtimeUniverse.fingerprint(reordered),
-      );
-      expect(
-        LocalLiveRealtimeUniverse.fingerprint(first),
-        isNot(LocalLiveRealtimeUniverse.fingerprint(changed)),
-      );
-    });
+        expect(
+          LocalLiveRealtimeUniverse.fingerprint(first),
+          LocalLiveRealtimeUniverse.fingerprint(reordered),
+        );
+        expect(
+          LocalLiveRealtimeUniverse.fingerprint(first),
+          isNot(LocalLiveRealtimeUniverse.fingerprint(changed)),
+        );
+      },
+    );
 
     test('rejects a universe with no supported timeframe', () {
       const preferences = LocalLivePreferences(

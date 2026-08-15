@@ -135,13 +135,12 @@ class _QuantaraAppState extends State<QuantaraApp> {
       return;
     }
 
-    final replacement =
-        await PlatformLocalLiveRealtimeMarketHostFactory.create(
-          ownerSettings: ownerSettings,
-          localLivePreferences: localPreferences,
-          opportunityStateStore: _opportunityStateStore,
-          languageCode: _locale.languageCode,
-        );
+    final replacement = await PlatformLocalLiveRealtimeMarketHostFactory.create(
+      ownerSettings: ownerSettings,
+      localLivePreferences: localPreferences,
+      opportunityStateStore: _opportunityStateStore,
+      languageCode: _locale.languageCode,
+    );
     if (!mounted) {
       replacement.dispose();
       return;

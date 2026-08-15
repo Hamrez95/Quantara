@@ -27,18 +27,20 @@ abstract final class LocalLiveRealtimeUniverse {
   };
 
   static RealtimeMarketUniverse build(LocalLivePreferences preferences) {
-    final symbols = preferences.symbols
-        .map((value) => value.trim().toUpperCase())
-        .where((value) => RegExp(r'^[A-Z0-9]{5,24}$').hasMatch(value))
-        .toSet()
-        .take(LocalLivePreferences.maximumSymbolCount)
-        .toList(growable: false)
-      ..sort();
-    final timeframes = preferences.timeframes
-        .where(_intervalByTimeframe.containsKey)
-        .toSet()
-        .toList(growable: false)
-      ..sort();
+    final symbols =
+        preferences.symbols
+            .map((value) => value.trim().toUpperCase())
+            .where((value) => RegExp(r'^[A-Z0-9]{5,24}$').hasMatch(value))
+            .toSet()
+            .take(LocalLivePreferences.maximumSymbolCount)
+            .toList(growable: false)
+          ..sort();
+    final timeframes =
+        preferences.timeframes
+            .where(_intervalByTimeframe.containsKey)
+            .toSet()
+            .toList(growable: false)
+          ..sort();
     if (symbols.isEmpty) {
       throw StateError('Local Live realtime universe has no valid symbols.');
     }
@@ -60,11 +62,12 @@ abstract final class LocalLiveRealtimeUniverse {
   }
 
   static String fingerprint(LocalLivePreferences preferences) {
-    final symbols = preferences.symbols
-        .map((value) => value.trim().toUpperCase())
-        .toSet()
-        .toList(growable: false)
-      ..sort();
+    final symbols =
+        preferences.symbols
+            .map((value) => value.trim().toUpperCase())
+            .toSet()
+            .toList(growable: false)
+          ..sort();
     final timeframes = preferences.timeframes.toList(growable: false)..sort();
     return '${symbols.join(',')}|${timeframes.join(',')}';
   }
