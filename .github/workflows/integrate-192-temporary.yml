@@ -94,13 +94,28 @@ jobs:
           PY
       - name: Format ranking changes
         working-directory: src/client/quantara_app
-        run: dart format lib/features/decision_core/domain/economic_opportunity_models.dart lib/features/decision_core/application/economic_opportunity_ranker.dart lib/features/auto_trade/application/local_live_economic_ranking.dart lib/features/auto_trade/application/local_live_trade_service.dart
+        run: dart format lib/features/decision_core/domain/economic_opportunity_models.dart lib/features/decision_core/application/economic_opportunity_ranker.dart lib/features/auto_trade/application/local_live_economic_ranking.dart lib/features/auto_trade/application/local_live_trade_service.dart lib/features/trading_lab/application/trading_lab_opportunity_ranking.dart test/economic_opportunity_ranker_test.dart
       - name: Restore packages
         working-directory: src/client/quantara_app
         run: flutter pub get
       - name: Strict analyze
+        id: analyze
+        continue-on-error: true
         working-directory: src/client/quantara_app
-        run: flutter analyze --fatal-infos
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter analyze --fatal-infos 2>&1 | tee /tmp/analyze-192.log
+      - name: Upload analyzer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analyze-192-${{ github.run_id }}
+          path: /tmp/analyze-192.log
+          if-no-files-found: error
+      - name: Enforce analyze result
+        if: steps.analyze.outcome != 'success'
+        run: exit 1
       - name: Existing Local Live safety tests
         working-directory: src/client/quantara_app
         run: flutter test test/local_live_trade_service_test.dart test/canonical_decision_pipeline_test.dart test/canonical_runtime_integration_test.dart test/local_live_portfolio_atomic_concurrency_test.dart test/local_live_portfolio_atomic_rollback_test.dart
@@ -110,7 +125,7 @@ jobs:
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+Hamrez95@users.noreply.github.com
-          git add src/client/quantara_app/lib/features/decision_core/domain/economic_opportunity_models.dart src/client/quantara_app/lib/features/decision_core/application/economic_opportunity_ranker.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_economic_ranking.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart
+          git add src/client/quantara_app/lib/features/decision_core/domain/economic_opportunity_models.dart src/client/quantara_app/lib/features/decision_core/application/economic_opportunity_ranker.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_economic_ranking.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart src/client/quantara_app/lib/features/trading_lab/application/trading_lab_opportunity_ranking.dart src/client/quantara_app/test/economic_opportunity_ranker_test.dart
           git diff --cached --quiet && exit 0
           git commit -m "feat(ranking): integrate economic utility into Local Live"
           git push origin HEAD:feat/192-economic-opportunity-ranking
