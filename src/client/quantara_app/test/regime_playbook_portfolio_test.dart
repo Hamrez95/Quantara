@@ -40,63 +40,72 @@ void main() {
       }
     });
 
-    test('feature flags disable a playbook without disabling the portfolio', () {
-      final fixture = _analysisFixture('1h');
-      final snapshot = RegimePlaybookPortfolioEngine.evaluate(
-        analysis: fixture.analysis,
-        capital: 1000,
-        riskPercent: 1,
-        languageCode: 'en',
-        cadence: SignalCadence.balanced,
-        runtime: RegimePlaybookRuntimeContext(
-          evaluatedAtUtc: fixture.evaluatedAt,
-          higherTimeframeDirection: ChartDirection.bullish,
-          higherTimeframeFresh: true,
-          liquidityVerified: true,
-          processingLatency: const Duration(milliseconds: 50),
-        ),
-        flags: const RegimePlaybookFeatureFlags(
-          failedBreakoutReversal: false,
-        ),
-      );
+    test(
+      'feature flags disable a playbook without disabling the portfolio',
+      () {
+        final fixture = _analysisFixture('1h');
+        final snapshot = RegimePlaybookPortfolioEngine.evaluate(
+          analysis: fixture.analysis,
+          capital: 1000,
+          riskPercent: 1,
+          languageCode: 'en',
+          cadence: SignalCadence.balanced,
+          runtime: RegimePlaybookRuntimeContext(
+            evaluatedAtUtc: fixture.evaluatedAt,
+            higherTimeframeDirection: ChartDirection.bullish,
+            higherTimeframeFresh: true,
+            liquidityVerified: true,
+            processingLatency: const Duration(milliseconds: 50),
+          ),
+          flags: const RegimePlaybookFeatureFlags(
+            failedBreakoutReversal: false,
+          ),
+        );
 
-      final failedBreak = snapshot.evaluations.singleWhere(
-        (item) => item.playbook == RegimePlaybookId.failedBreakoutReversal,
-      );
-      expect(failedBreak.enabled, isFalse);
-      expect(failedBreak.state, PlaybookCandidateState.inactive);
-      expect(
-        snapshot.evaluations
-            .where((item) => item.playbook != RegimePlaybookId.failedBreakoutReversal)
-            .every((item) => item.enabled),
-        isTrue,
-      );
-    });
+        final failedBreak = snapshot.evaluations.singleWhere(
+          (item) => item.playbook == RegimePlaybookId.failedBreakoutReversal,
+        );
+        expect(failedBreak.enabled, isFalse);
+        expect(failedBreak.state, PlaybookCandidateState.inactive);
+        expect(
+          snapshot.evaluations
+              .where(
+                (item) =>
+                    item.playbook != RegimePlaybookId.failedBreakoutReversal,
+              )
+              .every((item) => item.enabled),
+          isTrue,
+        );
+      },
+    );
 
-    test('5m momentum remains inactive without HTF liquidity and latency gates', () {
-      final fixture = _analysisFixture('5m');
-      final snapshot = RegimePlaybookPortfolioEngine.evaluate(
-        analysis: fixture.analysis,
-        capital: 1000,
-        riskPercent: 1,
-        languageCode: 'en',
-        cadence: SignalCadence.active,
-        runtime: RegimePlaybookRuntimeContext(
-          evaluatedAtUtc: fixture.evaluatedAt,
-          higherTimeframeFresh: false,
-          liquidityVerified: false,
-          processingLatency: const Duration(seconds: 2),
-        ),
-      );
+    test(
+      '5m momentum remains inactive without HTF liquidity and latency gates',
+      () {
+        final fixture = _analysisFixture('5m');
+        final snapshot = RegimePlaybookPortfolioEngine.evaluate(
+          analysis: fixture.analysis,
+          capital: 1000,
+          riskPercent: 1,
+          languageCode: 'en',
+          cadence: SignalCadence.active,
+          runtime: RegimePlaybookRuntimeContext(
+            evaluatedAtUtc: fixture.evaluatedAt,
+            higherTimeframeFresh: false,
+            liquidityVerified: false,
+            processingLatency: const Duration(seconds: 2),
+          ),
+        );
 
-      final momentum = snapshot.evaluations.singleWhere(
-        (item) => item.playbook == RegimePlaybookId.momentumExpansionScalp,
-      );
-      expect(momentum.state, PlaybookCandidateState.inactive);
-      expect(momentum.reasonCodes, contains('higherTimeframeFresh:false'));
-      expect(momentum.reasonCodes, contains('liquidityVerified:false'));
-      expect(momentum.reasonCodes, contains('latencyHealthy:false'));
-    });
+        final momentum = snapshot.evaluations.singleWhere(
+          (item) => item.playbook == RegimePlaybookId.momentumExpansionScalp,
+        );
+        expect(momentum.state, PlaybookCandidateState.inactive);
+        expect(momentum.reasonCodes, contains('higherTimeframeFresh:false'));
+        expect(momentum.reasonCodes, contains('liquidityVerified:false'));
+        expect(momentum.reasonCodes, contains('latencyHealthy:false'));
+      },
+    );
 
     test('rejects an unfinished candle and therefore prevents look-ahead', () {
       final fixture = _analysisFixture('15m');
@@ -142,62 +151,67 @@ void main() {
       expect(resolution.selected, isNull);
     });
 
-    test('selects the stronger side only with an explicit quality advantage', () {
-      final long = _armedEvaluation(
-        id: RegimePlaybookId.trendPullbackContinuation,
-        direction: TradeDirection.long,
-        quality: 84,
-      );
-      final short = _armedEvaluation(
-        id: RegimePlaybookId.failedBreakoutReversal,
-        direction: TradeDirection.short,
-        quality: 68,
-      );
+    test(
+      'selects the stronger side only with an explicit quality advantage',
+      () {
+        final long = _armedEvaluation(
+          id: RegimePlaybookId.trendPullbackContinuation,
+          direction: TradeDirection.long,
+          quality: 84,
+        );
+        final short = _armedEvaluation(
+          id: RegimePlaybookId.failedBreakoutReversal,
+          direction: TradeDirection.short,
+          quality: 68,
+        );
 
-      final resolution = RegimePlaybookConflictResolver.resolve([long, short]);
-      expect(
-        resolution.outcome,
-        PlaybookConflictOutcome.selectedHighestQuality,
-      );
-      expect(resolution.selected?.playbook, long.playbook);
-    });
+        final resolution = RegimePlaybookConflictResolver.resolve([
+          long,
+          short,
+        ]);
+        expect(
+          resolution.outcome,
+          PlaybookConflictOutcome.selectedHighestQuality,
+        );
+        expect(resolution.selected?.playbook, long.playbook);
+      },
+    );
   });
 
-  test('backtest fixture reports signals expectancy drawdown and missed rate per playbook', () {
-    final start = DateTime.utc(2026, 7, 1);
-    final samples = <PlaybookOutcomeSample>[];
-    for (final id in RegimePlaybookId.values) {
-      samples.addAll([
-        PlaybookOutcomeSample(
-          playbook: id,
-          resolvedAtUtc: start,
-          pnlR: 1.5,
-        ),
-        PlaybookOutcomeSample(
-          playbook: id,
-          resolvedAtUtc: start.add(const Duration(days: 3)),
-          pnlR: -1,
-        ),
-        PlaybookOutcomeSample(
-          playbook: id,
-          resolvedAtUtc: start.add(const Duration(days: 8)),
-          pnlR: 2,
-          missed: true,
-        ),
-      ]);
-    }
+  test(
+    'backtest fixture reports signals expectancy drawdown and missed rate per playbook',
+    () {
+      final start = DateTime.utc(2026, 7, 1);
+      final samples = <PlaybookOutcomeSample>[];
+      for (final id in RegimePlaybookId.values) {
+        samples.addAll([
+          PlaybookOutcomeSample(playbook: id, resolvedAtUtc: start, pnlR: 1.5),
+          PlaybookOutcomeSample(
+            playbook: id,
+            resolvedAtUtc: start.add(const Duration(days: 3)),
+            pnlR: -1,
+          ),
+          PlaybookOutcomeSample(
+            playbook: id,
+            resolvedAtUtc: start.add(const Duration(days: 8)),
+            pnlR: 2,
+            missed: true,
+          ),
+        ]);
+      }
 
-    final report = PlaybookPerformanceReporter.summarize(samples);
-    expect(report.length, RegimePlaybookId.values.length);
-    for (final id in RegimePlaybookId.values) {
-      final metrics = report[id]!;
-      expect(metrics.sampleCount, 3);
-      expect(metrics.expectancyR, closeTo(2.5 / 3, 0.000001));
-      expect(metrics.maximumDrawdownR, closeTo(1, 0.000001));
-      expect(metrics.missedRate, closeTo(1 / 3, 0.000001));
-      expect(metrics.signalsPerWeek, greaterThan(0));
-    }
-  });
+      final report = PlaybookPerformanceReporter.summarize(samples);
+      expect(report.length, RegimePlaybookId.values.length);
+      for (final id in RegimePlaybookId.values) {
+        final metrics = report[id]!;
+        expect(metrics.sampleCount, 3);
+        expect(metrics.expectancyR, closeTo(2.5 / 3, 0.000001));
+        expect(metrics.maximumDrawdownR, closeTo(1, 0.000001));
+        expect(metrics.missedRate, closeTo(1 / 3, 0.000001));
+        expect(metrics.signalsPerWeek, greaterThan(0));
+      }
+    },
+  );
 }
 
 ({TimeframeChartAnalysis analysis, DateTime evaluatedAt}) _analysisFixture(

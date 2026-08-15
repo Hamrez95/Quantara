@@ -8,15 +8,16 @@ import '../../market_analysis/domain/market_regime_models.dart';
 import '../domain/owner_alpha_models.dart';
 import '../domain/regime_playbook_models.dart';
 import 'professional_strategy_engine.dart';
+import 'regime_playbook_conflict_resolver.dart';
 import 'trade_idea_factory.dart';
 
 abstract final class RegimePlaybookPortfolioEngine {
   static const version = 'regime-playbook-portfolio/1.0';
   static const Map<RegimePlaybookId, String> playbookVersions = {
-    RegimePlaybookId.trendPullbackContinuation: 'trend-pullback-continuation/2.0',
+    RegimePlaybookId.trendPullbackContinuation:
+        'trend-pullback-continuation/2.0',
     RegimePlaybookId.rangeEdgeSweepReclaim: 'range-edge-sweep-reclaim/2.0',
-    RegimePlaybookId.breakoutAcceptanceRetest:
-        'breakout-acceptance-retest/2.0',
+    RegimePlaybookId.breakoutAcceptanceRetest: 'breakout-acceptance-retest/2.0',
     RegimePlaybookId.failedBreakoutReversal: 'failed-breakout-reversal/1.0',
     RegimePlaybookId.momentumExpansionScalp: 'momentum-expansion-scalp/1.0',
   };
@@ -72,7 +73,6 @@ abstract final class RegimePlaybookPortfolioEngine {
         riskPercent: riskPercent,
         languageCode: languageCode,
         cadence: cadence,
-        runtime: runtime,
         enabled: flags.enabled(RegimePlaybookId.rangeEdgeSweepReclaim),
         confluence: confluence,
         context: effectiveContext,
@@ -84,7 +84,6 @@ abstract final class RegimePlaybookPortfolioEngine {
         riskPercent: riskPercent,
         languageCode: languageCode,
         cadence: cadence,
-        runtime: runtime,
         enabled: flags.enabled(RegimePlaybookId.breakoutAcceptanceRetest),
         confluence: confluence,
         context: effectiveContext,
@@ -96,7 +95,6 @@ abstract final class RegimePlaybookPortfolioEngine {
         capital: capital,
         riskPercent: riskPercent,
         languageCode: languageCode,
-        runtime: runtime,
         enabled: flags.enabled(RegimePlaybookId.failedBreakoutReversal),
         context: effectiveContext,
       ),
@@ -113,7 +111,7 @@ abstract final class RegimePlaybookPortfolioEngine {
       ),
     ];
 
-    final resolution = _resolve(evaluations);
+    final resolution = RegimePlaybookConflictResolver.resolve(evaluations);
     return RegimePlaybookPortfolioSnapshot(
       evaluations: evaluations,
       contextual: contextual,
@@ -144,7 +142,11 @@ abstract final class RegimePlaybookPortfolioEngine {
         contextual.volume.pullbackContraction ||
         contextual.volume.reExpansion ||
         contextual.momentum.rsiReset;
-    final higherAligned = _higherAligned(contextual.structure.bias, runtime);
+    final higherAligned = _higherAligned(
+      contextual.structure.bias,
+      runtime,
+      parentRequired: _parentTimeframe(analysis.timeframe) != null,
+    );
     final quality = _quality(
       contextual,
       bonuses: [if (resetEvidence) 7, if (higherAligned) 7],
@@ -204,7 +206,6 @@ abstract final class RegimePlaybookPortfolioEngine {
     required double riskPercent,
     required String languageCode,
     required SignalCadence cadence,
-    required RegimePlaybookRuntimeContext runtime,
     required bool enabled,
     required Map<String, ChartDirection> confluence,
     required ProfessionalStrategyContext context,
@@ -288,7 +289,6 @@ abstract final class RegimePlaybookPortfolioEngine {
     required double riskPercent,
     required String languageCode,
     required SignalCadence cadence,
-    required RegimePlaybookRuntimeContext runtime,
     required bool enabled,
     required Map<String, ChartDirection> confluence,
     required ProfessionalStrategyContext context,
@@ -307,11 +307,7 @@ abstract final class RegimePlaybookPortfolioEngine {
     final compression = contextual.zone.compressionQuality >= 0.35;
     final quality = _quality(
       contextual,
-      bonuses: [
-        if (expansion) 9,
-        if (acceptance) 7,
-        if (compression) 5,
-      ],
+      bonuses: [if (expansion) 9, if (acceptance) 7, if (compression) 5],
       penalties: [if (!acceptance) 12],
     );
     final forming =
@@ -368,7 +364,6 @@ abstract final class RegimePlaybookPortfolioEngine {
     required double capital,
     required double riskPercent,
     required String languageCode,
-    required RegimePlaybookRuntimeContext runtime,
     required bool enabled,
     required ProfessionalStrategyContext context,
   }) {
@@ -387,11 +382,7 @@ abstract final class RegimePlaybookPortfolioEngine {
     final direction = contextual.structure.bias;
     final quality = _quality(
       contextual,
-      bonuses: [
-        if (failed) 10,
-        if (volumeConfirmation) 8,
-        if (reclaim) 7,
-      ],
+      bonuses: [if (failed) 10, if (volumeConfirmation) 8, if (reclaim) 7],
       penalties: [if (!failed) 25],
     );
     final forming =
@@ -453,7 +444,11 @@ abstract final class RegimePlaybookPortfolioEngine {
     if (!enabled) return _disabled(id, contextual);
     final isFiveMinute = analysis.timeframe == '5m';
     final direction = contextual.structure.bias;
-    final higherAligned = _higherAligned(direction, runtime);
+    final higherAligned = _higherAligned(
+      direction,
+      runtime,
+      parentRequired: true,
+    );
     final hardRuntimeGate =
         isFiveMinute &&
         runtime.higherTimeframeFresh &&
@@ -483,7 +478,6 @@ abstract final class RegimePlaybookPortfolioEngine {
             context: context,
             direction: direction,
             minimumRiskReward: 1.35,
-            validityOverride: const Duration(minutes: 10),
           )
         : null;
     final armed = idea != null && idea.isActionable && quality >= 68;
@@ -528,7 +522,6 @@ abstract final class RegimePlaybookPortfolioEngine {
     required ProfessionalStrategyContext context,
     required ChartDirection direction,
     required double minimumRiskReward,
-    Duration? validityOverride,
   }) {
     if (direction == ChartDirection.sideways || !context.valid) return null;
     final long = direction == ChartDirection.bullish;
@@ -581,8 +574,14 @@ abstract final class RegimePlaybookPortfolioEngine {
     final target3 = long
         ? conservativeEntry + riskPerUnit * (minimumRiskReward + 1.35)
         : conservativeEntry - riskPerUnit * (minimumRiskReward + 1.35);
+    if ([
+      target1,
+      target2,
+      target3,
+    ].any((value) => !value.isFinite || value <= 0)) {
+      return null;
+    }
     final closedAt = latest.openTime.add(_durationFor(analysis.timeframe));
-    final validity = validityOverride ?? _validityFor(analysis.timeframe);
     final setupId = [
       analysis.symbol,
       analysis.timeframe,
@@ -632,7 +631,6 @@ abstract final class RegimePlaybookPortfolioEngine {
       trigger: contextual.trigger,
       contextVersion: contextual.version,
       evidenceBreakdown: contextual.scoreBreakdown,
-      validityOverride: validity,
     );
   }
 
@@ -698,30 +696,6 @@ abstract final class RegimePlaybookPortfolioEngine {
     reasonCodes: ['disabled:${id.name}'],
   );
 
-  static _Resolution _resolve(List<RegimePlaybookEvaluation> evaluations) {
-    final armed = evaluations.where((item) => item.isArmed).toList()
-      ..sort((left, right) => right.qualityScore.compareTo(left.qualityScore));
-    if (armed.isEmpty) {
-      return const _Resolution(PlaybookConflictOutcome.none, null);
-    }
-    final directions = armed.map((item) => item.direction).toSet();
-    if (directions.length <= 1) {
-      return _Resolution(PlaybookConflictOutcome.none, armed.first);
-    }
-    final top = armed.first;
-    final runnerUp = armed[1];
-    if (top.qualityScore - runnerUp.qualityScore >= 10) {
-      return _Resolution(
-        PlaybookConflictOutcome.selectedHighestQuality,
-        top,
-      );
-    }
-    return const _Resolution(
-      PlaybookConflictOutcome.ambiguousOpposingSignals,
-      null,
-    );
-  }
-
   static List<String> _coverageGaps(
     MarketRegime regime,
     RegimePlaybookFeatureFlags flags,
@@ -743,16 +717,12 @@ abstract final class RegimePlaybookPortfolioEngine {
       MarketRegime.disorder => const <RegimePlaybookId>[],
     };
     if (supported.isEmpty) {
-      return [
-        'regime:${regime.name}:observe-only-until-structure-resolves',
-      ];
+      return ['regime:${regime.name}:observe-only-until-structure-resolves'];
     }
     final enabledCount = supported.where(flags.enabled).length;
     return enabledCount >= 2
         ? const []
-        : [
-            'regime:${regime.name}:enabled-playbook-coverage=$enabledCount/2',
-          ];
+        : ['regime:${regime.name}:enabled-playbook-coverage=$enabledCount/2'];
   }
 
   static int _quality(
@@ -768,22 +738,22 @@ abstract final class RegimePlaybookPortfolioEngine {
 
   static bool _higherAligned(
     ChartDirection direction,
-    RegimePlaybookRuntimeContext runtime,
-  ) {
+    RegimePlaybookRuntimeContext runtime, {
+    required bool parentRequired,
+  }) {
     if (direction == ChartDirection.sideways) return false;
-    if (_parentRequired(runtime) && !runtime.higherTimeframeFresh) return false;
+    if (parentRequired && !runtime.higherTimeframeFresh) return false;
     final higher = runtime.higherTimeframeDirection;
+    if (parentRequired && higher == null) return false;
     return higher == null || higher == direction;
   }
 
-  static bool _parentRequired(RegimePlaybookRuntimeContext runtime) =>
-      runtime.higherTimeframeDirection != null || runtime.higherTimeframeFresh;
-
-  static TradeDirection _tradeDirection(ChartDirection value) => switch (value) {
-    ChartDirection.bullish => TradeDirection.long,
-    ChartDirection.bearish => TradeDirection.short,
-    ChartDirection.sideways => TradeDirection.wait,
-  };
+  static TradeDirection _tradeDirection(ChartDirection value) =>
+      switch (value) {
+        ChartDirection.bullish => TradeDirection.long,
+        ChartDirection.bearish => TradeDirection.short,
+        ChartDirection.sideways => TradeDirection.wait,
+      };
 
   static ChartDirection _rangeDirection(
     TimeframeChartAnalysis analysis,
@@ -793,9 +763,10 @@ abstract final class RegimePlaybookPortfolioEngine {
     return switch (zone.role) {
       ChartZoneRole.support => ChartDirection.bullish,
       ChartZoneRole.resistance => ChartDirection.bearish,
-      ChartZoneRole.pivot => analysis.latestCandle.isBullish
-          ? ChartDirection.bullish
-          : ChartDirection.bearish,
+      ChartZoneRole.pivot =>
+        analysis.latestCandle.isBullish
+            ? ChartDirection.bullish
+            : ChartDirection.bearish,
     };
   }
 
@@ -820,7 +791,9 @@ abstract final class RegimePlaybookPortfolioEngine {
     if (!evaluatedAtUtc.isUtc || analysis.candles.isEmpty) return false;
     final duration = _durationFor(analysis.timeframe);
     if (duration == Duration.zero) return false;
-    return !analysis.latestCandle.openTime.add(duration).isAfter(evaluatedAtUtc);
+    return !analysis.latestCandle.openTime
+        .add(duration)
+        .isAfter(evaluatedAtUtc);
   }
 
   static String? _parentTimeframe(String timeframe) => switch (timeframe) {
@@ -840,24 +813,8 @@ abstract final class RegimePlaybookPortfolioEngine {
     _ => Duration.zero,
   };
 
-  static Duration _validityFor(String timeframe) => switch (timeframe) {
-    '5m' => const Duration(minutes: 15),
-    '15m' => const Duration(minutes: 45),
-    '1h' => const Duration(hours: 3),
-    '4h' => const Duration(hours: 12),
-    '1D' => const Duration(days: 3),
-    _ => Duration.zero,
-  };
-
   static double _roundDown(double value, int decimals) {
     final factor = math.pow(10, decimals).toDouble();
     return (value * factor).floorToDouble() / factor;
   }
-}
-
-final class _Resolution {
-  const _Resolution(this.outcome, this.selected);
-
-  final PlaybookConflictOutcome outcome;
-  final RegimePlaybookEvaluation? selected;
 }

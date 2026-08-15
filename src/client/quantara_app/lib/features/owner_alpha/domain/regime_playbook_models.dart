@@ -162,9 +162,7 @@ final class RegimePlaybookPortfolioSnapshot {
     required this.conflictOutcome,
     required Iterable<String> coverageGaps,
     this.selected,
-  }) : evaluations = UnmodifiableListView(
-         evaluations.toList(growable: false),
-       ),
+  }) : evaluations = UnmodifiableListView(evaluations.toList(growable: false)),
        coverageGaps = UnmodifiableListView(
          coverageGaps.toList(growable: false),
        );
@@ -247,7 +245,9 @@ abstract final class PlaybookPerformanceReporter {
         missedRate: 0,
       );
     }
-    values.sort((left, right) => left.resolvedAtUtc.compareTo(right.resolvedAtUtc));
+    values.sort(
+      (left, right) => left.resolvedAtUtc.compareTo(right.resolvedAtUtc),
+    );
     final expectancy =
         values.fold<double>(0, (sum, item) => sum + item.pnlR) / values.length;
     var cumulative = 0.0;
@@ -259,7 +259,9 @@ abstract final class PlaybookPerformanceReporter {
       final drawdown = peak - cumulative;
       if (drawdown > maximumDrawdown) maximumDrawdown = drawdown;
     }
-    final elapsed = values.last.resolvedAtUtc.difference(values.first.resolvedAtUtc);
+    final elapsed = values.last.resolvedAtUtc.difference(
+      values.first.resolvedAtUtc,
+    );
     final normalizedDays = elapsed.inSeconds / Duration.secondsPerDay;
     final denominatorDays = normalizedDays < 7 ? 7.0 : normalizedDays;
     final signalsPerWeek = values.length * 7 / denominatorDays;
