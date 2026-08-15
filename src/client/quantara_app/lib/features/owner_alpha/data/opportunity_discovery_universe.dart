@@ -99,15 +99,14 @@ abstract interface class OpportunityDiscoveryUniverseSource {
 final class BitunixOpportunityDiscoveryUniverseSource
     implements OpportunityDiscoveryUniverseSource {
   BitunixOpportunityDiscoveryUniverseSource({
-    required http.Client client,
+    required this._client,
     this.policy = const OpportunityUniversePolicy(),
     this.timeout = const Duration(seconds: 10),
     this.depthBatchSize = 5,
     this.depthBatchSpacing = const Duration(milliseconds: 550),
     DateTime Function()? now,
     Future<void> Function(Duration)? delay,
-  }) : _client = client,
-       _now = now ?? DateTime.now,
+  }) : _now = now ?? DateTime.now,
        _delay = delay ?? Future<void>.delayed {
     policy.validate();
     if (timeout <= Duration.zero || timeout > const Duration(seconds: 30)) {
@@ -240,9 +239,9 @@ final class BitunixOpportunityDiscoveryUniverseSource
       }
     }
 
-    if (eligible.isEmpty) {
+    if (eligible.length < policy.targetSymbolCount) {
       throw StateError(
-        'No Bitunix Futures symbols passed discovery eligibility.',
+        'Only ${eligible.length}/${policy.targetSymbolCount} Bitunix Futures symbols passed discovery eligibility.',
       );
     }
     return OpportunityUniverseSnapshot(
@@ -516,9 +515,9 @@ final class _DiscoveryIdeaCatalog {
   ) => '$symbol|$timeframe|${strategy.name}';
 }
 
-final class OpportunityDiscoveryRealtimeAnalyzer
+final class _OpportunityDiscoveryRealtimeAnalyzer
     implements RealtimeContextualMarketAnalyzer {
-  OpportunityDiscoveryRealtimeAnalyzer({
+  _OpportunityDiscoveryRealtimeAnalyzer({
     required this.settings,
     required Iterable<AnalysisStrategy> strategies,
     required this.catalog,
@@ -710,7 +709,7 @@ abstract final class PlatformOpportunityDiscoveryMarketHostFactory {
       final coverage = OpportunityDiscoveryCoverageTracker(universeSnapshot);
       final catalog = _DiscoveryIdeaCatalog();
       final projectionCatalog = RealtimeIdeaCatalog();
-      final analyzer = OpportunityDiscoveryRealtimeAnalyzer(
+      final analyzer = _OpportunityDiscoveryRealtimeAnalyzer(
         settings: ownerSettings,
         strategies: localLivePreferences.strategies.isEmpty
             ? LocalLivePreferences.recommendedStrategies
