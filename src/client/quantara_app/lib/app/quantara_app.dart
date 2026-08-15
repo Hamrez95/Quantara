@@ -7,14 +7,15 @@ import 'package:http/http.dart' as http;
 import '../core/settings/app_preferences.dart';
 import '../core/theme/quantara_theme.dart';
 import '../features/auto_trade/data/local_live_preferences_store.dart';
+import '../features/owner_alpha/application/owner_alpha_controller.dart';
 import '../features/owner_alpha/data/background_opportunity_scanner.dart';
 import '../features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../features/owner_alpha/data/local_live_realtime_universe.dart';
 import '../features/owner_alpha/data/platform_owner_alpha_settings_store.dart';
 import '../features/owner_alpha/data/platform_opportunity_services.dart';
 import '../features/owner_alpha/data/realtime_production_runtime.dart';
-import '../features/owner_alpha/application/owner_alpha_controller.dart';
 import '../features/owner_alpha/domain/owner_alpha_models.dart';
+import '../features/owner_alpha/domain/realtime_market_runtime_models.dart';
 import '../features/owner_alpha/presentation/owner_alpha_page.dart';
 import '../features/portfolio_risk/presentation/portfolio_risk_panel.dart';
 
@@ -111,7 +112,9 @@ class _QuantaraAppState extends State<QuantaraApp> {
   Future<void> _replaceRealtimeHost(
     LocalLivePreferences? preferenceRevision,
   ) async {
-    if (!mounted || widget.repository != null || widget.realtimeMarketHost != null) {
+    if (!mounted ||
+        widget.repository != null ||
+        widget.realtimeMarketHost != null) {
       return;
     }
     final ownerSettings =
@@ -121,7 +124,8 @@ class _QuantaraAppState extends State<QuantaraApp> {
           capital: 10000,
           riskPercent: 0.5,
         );
-    final localPreferences = preferenceRevision ??
+    final localPreferences =
+        preferenceRevision ??
         await _localLivePreferencesStore.load(
           availableSymbols: ownerSettings.symbols,
         );
@@ -131,12 +135,13 @@ class _QuantaraAppState extends State<QuantaraApp> {
       return;
     }
 
-    final replacement = await PlatformLocalLiveRealtimeMarketHostFactory.create(
-      ownerSettings: ownerSettings,
-      localLivePreferences: localPreferences,
-      opportunityStateStore: _opportunityStateStore,
-      languageCode: _locale.languageCode,
-    );
+    final replacement =
+        await PlatformLocalLiveRealtimeMarketHostFactory.create(
+          ownerSettings: ownerSettings,
+          localLivePreferences: localPreferences,
+          opportunityStateStore: _opportunityStateStore,
+          languageCode: _locale.languageCode,
+        );
     if (!mounted) {
       replacement.dispose();
       return;
