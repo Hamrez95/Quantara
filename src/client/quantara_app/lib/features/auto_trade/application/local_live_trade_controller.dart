@@ -280,9 +280,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
       if (!LocalLiveEntryPreflightPolicy.shouldCheckNewEntryAffordability(
         openPositionCount: account.positions.length,
       )) {
-        // Starting the service must remain possible so a persisted managed
-        // position can be reconciled. The service's one-position gate still
-        // prevents any additional entry while an exchange position is open.
+        // Existing exchange exposure must remain recoverable even if a market
+        // is currently closed. This preflight is only for arming new entries.
         return;
       }
       if (!account.available.isFinite || account.available <= 0) {
@@ -291,40 +290,86 @@ final class LocalLiveTradeController extends ChangeNotifier {
         );
       }
 
-      LocalLiveEntryAffordability? lowestFloor;
-      String? lowestFloorSymbol;
-      for (final symbol in configuration.symbols) {
+      final executableRules = <String, BitunixInstrumentRules>{};
+      final closedSymbols = <String>[];
+      final apiUnsupportedSymbols = <String>[];
+      final unverifiableSymbols = <String>[];
+      for (final rawSymbol in configuration.symbols) {
+        final symbol = rawSymbol.trim().toUpperCase();
         try {
           final rules = await exchange.fetchInstrumentRules(symbol);
-          if (!rules.open ||
-              !rules.apiSupported ||
-              !rules.minimumQuantity.isFinite ||
-              rules.minimumQuantity <= 0) {
+          if (!rules.apiSupported) {
+            apiUnsupportedSymbols.add(symbol);
             continue;
           }
-          final markPrice = await exchange.fetchMarkPrice(symbol);
-          final leverage = configuration.leverage
-              .clamp(rules.minimumLeverage, rules.maximumLeverage)
-              .toInt();
-          final affordability = LocalLiveEntryAffordability.calculate(
-            availableMargin: account.available,
-            markPrice: markPrice,
-            minimumExchangeQuantity: rules.minimumQuantity,
-            leverage: leverage,
-            takeProfitTranches: 1,
-          );
-          if (affordability.affordable) return;
-          if (lowestFloor == null ||
-              affordability.minimumBufferedMargin <
-                  lowestFloor.minimumBufferedMargin) {
-            lowestFloor = affordability;
-            lowestFloorSymbol = symbol;
+          if (!rules.open) {
+            closedSymbols.add(symbol);
+            continue;
           }
+          if (!rules.minimumQuantity.isFinite ||
+              rules.minimumQuantity <= 0 ||
+              !rules.maximumMarketQuantity.isFinite ||
+              rules.maximumMarketQuantity <= 0 ||
+              rules.minimumLeverage < 1 ||
+              rules.maximumLeverage < rules.minimumLeverage) {
+            unverifiableSymbols.add(symbol);
+            continue;
+          }
+          executableRules[symbol] = rules;
         } on LocalLiveTradeSafeException {
-          // Try the remaining allow-listed symbols. Failure to validate every
-          // symbol still fails closed below.
+          unverifiableSymbols.add(symbol);
         } on FormatException {
-          // Malformed public symbol rules are not usable for live execution.
+          unverifiableSymbols.add(symbol);
+        }
+      }
+
+      if (apiUnsupportedSymbols.isNotEmpty) {
+        throw LocalLiveTradeSafeException(
+          'Bitunix Futures API execution is unavailable for selected symbol(s): '
+          '${apiUnsupportedSymbols.join(', ')}. Remove them before starting Local Live.',
+        );
+      }
+      if (closedSymbols.isNotEmpty) {
+        throw LocalLiveTradeSafeException(
+          'Bitunix reports the selected futures market as closed for: '
+          '${closedSymbols.join(', ')}. Local Live will not start with a closed market; '
+          'change the selection or retry after the market reopens.',
+        );
+      }
+      if (unverifiableSymbols.isNotEmpty) {
+        throw LocalLiveTradeSafeException(
+          'Quantara could not verify current Bitunix Futures execution rules for: '
+          '${unverifiableSymbols.join(', ')}. New entries remain fail-closed.',
+        );
+      }
+      if (executableRules.length != configuration.symbols.toSet().length) {
+        throw const LocalLiveTradeSafeException(
+          'The selected Local Live universe could not be verified completely.',
+        );
+      }
+
+      LocalLiveEntryAffordability? lowestFloor;
+      String? lowestFloorSymbol;
+      for (final entry in executableRules.entries) {
+        final symbol = entry.key;
+        final rules = entry.value;
+        final markPrice = await exchange.fetchMarkPrice(symbol);
+        final leverage = configuration.leverage
+            .clamp(rules.minimumLeverage, rules.maximumLeverage)
+            .toInt();
+        final affordability = LocalLiveEntryAffordability.calculate(
+          availableMargin: account.available,
+          markPrice: markPrice,
+          minimumExchangeQuantity: rules.minimumQuantity,
+          leverage: leverage,
+          takeProfitTranches: 1,
+        );
+        if (affordability.affordable) return;
+        if (lowestFloor == null ||
+            affordability.minimumBufferedMargin <
+                lowestFloor.minimumBufferedMargin) {
+          lowestFloor = affordability;
+          lowestFloorSymbol = symbol;
         }
       }
 
