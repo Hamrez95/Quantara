@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -119,6 +121,13 @@ final class SharedPreferencesLocalLivePreferencesStore
   static const _tp1Key = 'quantara.local-live.ui.tp1-fraction.v3';
   static const _tp2Key = 'quantara.local-live.ui.tp2-fraction.v3';
   static const _tp3Key = 'quantara.local-live.ui.tp3-fraction.v3';
+  static final StreamController<LocalLivePreferences> _changes =
+      StreamController<LocalLivePreferences>.broadcast(sync: true);
+
+  /// Emits a revision only after the durable/compatibility save path finishes.
+  /// Consumers compare the universe fingerprint so leverage/risk-only changes
+  /// do not restart public realtime monitoring.
+  static Stream<LocalLivePreferences> get changes => _changes.stream;
 
   @override
   Future<LocalLivePreferences> load({
@@ -151,6 +160,7 @@ final class SharedPreferencesLocalLivePreferencesStore
       // The compatibility mirror below remains available during migration.
     }
     await _saveLegacy(value);
+    _changes.add(value);
   }
 
   static LocalLivePreferences _decode(
