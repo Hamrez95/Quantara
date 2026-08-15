@@ -17,6 +17,8 @@ void main() {
         strategies: const ['trendPullback@v1'],
         feeRateBps: 6,
         slippageBps: 2,
+        latencyPenaltyBps: 3,
+        partialFillRatio: 0.65,
         notes: 'persist me',
       ),
       balance: 497.5,
@@ -34,6 +36,8 @@ void main() {
     expect(restored.manifest.runId, 'lab-roundtrip');
     expect(restored.manifest.startingEquity, 500);
     expect(restored.manifest.maximumConcurrentPositions, 3);
+    expect(restored.manifest.latencyPenaltyBps, 3);
+    expect(restored.manifest.partialFillRatio, 0.65);
     expect(restored.manifest.symbols, ['BTCUSDT', 'ETHUSDT']);
     expect(restored.balance, 497.5);
     expect(restored.currentEquity, 503.25);
