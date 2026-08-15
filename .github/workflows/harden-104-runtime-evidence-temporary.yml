@@ -1,0 +1,94 @@
+name: Temporary #104 runtime evidence hardening
+
+on:
+  push:
+    branches:
+      - feat/104-regime-playbook-portfolio
+    paths:
+      - '.github/workflows/harden-104-runtime-evidence-temporary.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/104-regime-playbook-portfolio
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Apply runtime evidence hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/client/quantara_app
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('lib/features/owner_alpha/data/opportunity_discovery_universe.dart')
+          text = path.read_text()
+
+          marker = "final class _DiscoveryIdeaCatalog {\n"
+          evidence = """final class _DirectionEvidence {\n  const _DirectionEvidence({\n    required this.direction,\n    required this.evaluatedAtUtc,\n  });\n\n  final ChartDirection direction;\n  final DateTime evaluatedAtUtc;\n\n  bool isFreshAt(DateTime nowUtc, {required Duration maximumAge}) {\n    if (!nowUtc.isUtc || !evaluatedAtUtc.isUtc || maximumAge <= Duration.zero) {\n      return false;\n    }\n    final age = nowUtc.difference(evaluatedAtUtc);\n    return !age.isNegative && age <= maximumAge;\n  }\n}\n\n"""
+          if marker not in text:
+              raise SystemExit('catalog marker not found')
+          text = text.replace(marker, evidence + marker, 1)
+
+          publish_marker = "  void recordAnalysis(RealtimeCandleAnalysisContext context) {\n"
+          liquidity_method = """  static const liquidityEvidenceMaximumAge = Duration(minutes: 30);\n\n  bool liquidityEligibilityVerified(String symbol, DateTime evaluatedAtUtc) {\n    if (!evaluatedAtUtc.isUtc) return false;\n    final normalized = symbol.trim().toUpperCase();\n    if (!_universe.symbols.contains(normalized)) return false;\n    final age = evaluatedAtUtc.difference(_universe.generatedAtUtc);\n    return !age.isNegative && age <= liquidityEvidenceMaximumAge;\n  }\n\n"""
+          if publish_marker not in text:
+              raise SystemExit('coverage marker not found')
+          text = text.replace(publish_marker, liquidity_method + publish_marker, 1)
+
+          old_map = "  final Map<String, Map<String, ChartDirection>> _directionsBySymbol = {};\n"
+          new_map = "  final Map<String, Map<String, _DirectionEvidence>> _directionsBySymbol = {};\n"
+          if old_map not in text:
+              raise SystemExit('direction map not found')
+          text = text.replace(old_map, new_map, 1)
+
+          flags_end = """  void setLanguage(String languageCode) {\n"""
+          helper = """  static Duration _maximumParentEvidenceAge(String timeframe) =>\n      switch (timeframe) {\n        '15m' => const Duration(minutes: 45),\n        '1h' => const Duration(hours: 3),\n        '4h' => const Duration(hours: 12),\n        '1D' => const Duration(days: 3),\n        _ => Duration.zero,\n      };\n\n"""
+          if flags_end not in text:
+              raise SystemExit('language marker not found')
+          text = text.replace(flags_end, helper + flags_end, 1)
+
+          old_runtime = """    final directions = _directionsBySymbol.putIfAbsent(\n      context.key.symbol,\n      () => <String, ChartDirection>{},\n    );\n    directions[analysis.timeframe] = analysis.direction;\n    final parent = switch (analysis.timeframe) {\n      '5m' => '15m',\n      '15m' => '1h',\n      '1h' => '4h',\n      '4h' => '1D',\n      _ => null,\n    };\n    final latency = context.processedAtUtc.difference(context.receivedAtUtc);\n    final safeLatency = latency.isNegative ? Duration.zero : latency;\n"""
+          new_runtime = """    final directions = _directionsBySymbol.putIfAbsent(\n      context.key.symbol,\n      () => <String, _DirectionEvidence>{},\n    );\n    directions[analysis.timeframe] = _DirectionEvidence(\n      direction: analysis.direction,\n      evaluatedAtUtc: context.processedAtUtc,\n    );\n    final parent = switch (analysis.timeframe) {\n      '5m' => '15m',\n      '15m' => '1h',\n      '1h' => '4h',\n      '4h' => '1D',\n      _ => null,\n    };\n    final parentEvidence = parent == null ? null : directions[parent];\n    final parentFresh =\n        parent == null ||\n        (parentEvidence?.isFreshAt(\n              context.processedAtUtc,\n              maximumAge: _maximumParentEvidenceAge(parent),\n            ) ??\n            false);\n    final liquidityVerified = coverage.liquidityEligibilityVerified(\n      context.key.symbol,\n      context.processedAtUtc,\n    );\n    final latency = context.processedAtUtc.difference(context.receivedAtUtc);\n    final safeLatency = latency.isNegative ? Duration.zero : latency;\n"""
+          if old_runtime not in text:
+              raise SystemExit('runtime block not found')
+          text = text.replace(old_runtime, new_runtime, 1)
+
+          old_context = """        higherTimeframeDirection: parent == null ? null : directions[parent],\n        higherTimeframeFresh: parent == null || directions.containsKey(parent),\n        liquidityVerified: true,\n"""
+          new_context = """        higherTimeframeDirection: parentEvidence?.direction,\n        higherTimeframeFresh: parentFresh,\n        liquidityVerified: liquidityVerified,\n"""
+          if old_context not in text:
+              raise SystemExit('context block not found')
+          text = text.replace(old_context, new_context, 1)
+          path.write_text(text)
+
+          test_path = Path('test/regime_playbook_discovery_source_test.dart')
+          test = test_path.read_text()
+          test = test.replace(
+              "      expect(source, contains('liquidityVerified: true'));\n",
+              "      expect(source, contains('liquidityEligibilityVerified'));\n      expect(source, contains('liquidityVerified: liquidityVerified'));\n      expect(source, isNot(contains('liquidityVerified: true')));\n      expect(source, contains('_DirectionEvidence'));\n      expect(source, contains('_maximumParentEvidenceAge'));\n",
+          )
+          test_path.write_text(test)
+          PY
+          dart format lib/features/owner_alpha/data/opportunity_discovery_universe.dart test/regime_playbook_discovery_source_test.dart
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test test/regime_playbook_portfolio_test.dart test/regime_playbook_discovery_source_test.dart test/opportunity_discovery_universe_test.dart
+      - name: Commit validated runtime evidence hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/owner_alpha/data/opportunity_discovery_universe.dart src/client/quantara_app/test/regime_playbook_discovery_source_test.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "fix(playbooks): require fresh runtime evidence"
+          git push origin HEAD:feat/104-regime-playbook-portfolio
