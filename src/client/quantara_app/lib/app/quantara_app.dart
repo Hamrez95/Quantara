@@ -6,12 +6,16 @@ import 'package:http/http.dart' as http;
 
 import '../core/settings/app_preferences.dart';
 import '../core/theme/quantara_theme.dart';
+import '../features/auto_trade/data/local_live_preferences_store.dart';
+import '../features/owner_alpha/application/owner_alpha_controller.dart';
 import '../features/owner_alpha/data/background_opportunity_scanner.dart';
 import '../features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
+import '../features/owner_alpha/data/local_live_realtime_universe.dart';
 import '../features/owner_alpha/data/platform_owner_alpha_settings_store.dart';
 import '../features/owner_alpha/data/platform_opportunity_services.dart';
 import '../features/owner_alpha/data/realtime_production_runtime.dart';
 import '../features/owner_alpha/domain/owner_alpha_models.dart';
+import '../features/owner_alpha/domain/realtime_market_runtime_models.dart';
 import '../features/owner_alpha/presentation/owner_alpha_page.dart';
 import '../features/portfolio_risk/presentation/portfolio_risk_panel.dart';
 
@@ -48,6 +52,9 @@ class _QuantaraAppState extends State<QuantaraApp> {
   late Locale _locale = widget.initialLocale;
   http.Client? _ownedClient;
   RealtimeMarketHost? _realtimeMarketHost;
+  StreamSubscription<LocalLivePreferences>? _localLivePreferencesSubscription;
+  Future<void> _realtimeTransitionTail = Future<void>.value();
+  String? _realtimeUniverseFingerprint;
   int _preferencesRevision = 0;
   late final OwnerAlphaRepository _repository;
   late final OwnerAlphaSettingsStore _settingsStore =
@@ -56,6 +63,8 @@ class _QuantaraAppState extends State<QuantaraApp> {
       widget.preferencesStore ?? const PlatformAppPreferencesStore();
   late final OpportunityStateStore _opportunityStateStore =
       widget.opportunityStateStore ?? const PlatformOpportunityStateStore();
+  late final LocalLivePreferencesStore _localLivePreferencesStore =
+      const SharedPreferencesLocalLivePreferencesStore();
 
   @override
   void initState() {
@@ -74,29 +83,94 @@ class _QuantaraAppState extends State<QuantaraApp> {
       _realtimeMarketHost = injectedHost;
       unawaited(injectedHost.initialize());
     } else if (widget.repository == null) {
-      unawaited(_initializeRealtime());
+      _localLivePreferencesSubscription =
+          SharedPreferencesLocalLivePreferencesStore.changes.listen(
+            (preferences) => _scheduleRealtimeReplacement(preferences),
+          );
+      _scheduleRealtimeReplacement();
     }
   }
 
   @override
   void dispose() {
+    unawaited(_localLivePreferencesSubscription?.cancel());
     _realtimeMarketHost?.dispose();
     _ownedClient?.close();
     super.dispose();
   }
 
-  Future<void> _initializeRealtime() async {
-    final host = await PlatformRealtimeMarketHostFactory.create(
-      settingsStore: _settingsStore,
+  void _scheduleRealtimeReplacement([LocalLivePreferences? preferences]) {
+    final next = _realtimeTransitionTail.then(
+      (_) => _replaceRealtimeHost(preferences),
+    );
+    _realtimeTransitionTail = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+  }
+
+  Future<void> _replaceRealtimeHost(
+    LocalLivePreferences? preferenceRevision,
+  ) async {
+    if (!mounted ||
+        widget.repository != null ||
+        widget.realtimeMarketHost != null) {
+      return;
+    }
+    final ownerSettings =
+        await _settingsStore.load() ??
+        const OwnerAlphaSettings(
+          symbols: OwnerAlphaController.defaultSymbols,
+          capital: 10000,
+          riskPercent: 0.5,
+        );
+    final localPreferences =
+        preferenceRevision ??
+        await _localLivePreferencesStore.load(
+          availableSymbols: ownerSettings.symbols,
+        );
+    final fingerprint = LocalLiveRealtimeUniverse.fingerprint(localPreferences);
+    if (_realtimeMarketHost != null &&
+        fingerprint == _realtimeUniverseFingerprint) {
+      return;
+    }
+
+    final replacement = await PlatformLocalLiveRealtimeMarketHostFactory.create(
+      ownerSettings: ownerSettings,
+      localLivePreferences: localPreferences,
       opportunityStateStore: _opportunityStateStore,
       languageCode: _locale.languageCode,
     );
     if (!mounted) {
-      host.dispose();
+      replacement.dispose();
       return;
     }
-    setState(() => _realtimeMarketHost = host);
-    await host.initialize();
+
+    final previous = _realtimeMarketHost;
+    if (previous != null) {
+      try {
+        final state = previous.runtime.state;
+        if (state != RealtimeMarketRuntimeState.idle &&
+            state != RealtimeMarketRuntimeState.paused &&
+            state != RealtimeMarketRuntimeState.stopped) {
+          await previous.runtime.pause();
+        }
+        await previous.runtime.stop();
+      } on Object {
+        replacement.dispose();
+        rethrow;
+      }
+      previous.dispose();
+    }
+    if (!mounted) {
+      replacement.dispose();
+      return;
+    }
+    setState(() {
+      _realtimeMarketHost = replacement;
+      _realtimeUniverseFingerprint = fingerprint;
+    });
+    await replacement.initialize();
   }
 
   Future<void> _loadPreferences() async {
