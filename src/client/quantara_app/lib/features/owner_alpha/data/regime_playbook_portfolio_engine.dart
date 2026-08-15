@@ -213,7 +213,8 @@ abstract final class RegimePlaybookPortfolioEngine {
     if (!enabled) return _disabled(id, contextual);
     final latest = analysis.latestCandle;
     final zone = contextual.zone.zone;
-    final atEdge = zone != null &&
+    final atEdge =
+        zone != null &&
         (latest.low <= zone.upper || latest.high >= zone.lower) &&
         contextual.zone.roomToTarget >= 0.25;
     final reclaim =
@@ -248,7 +249,13 @@ abstract final class RegimePlaybookPortfolioEngine {
         idea != null &&
         idea.isActionable &&
         idea.strategyVersion.contains('rangeReversal');
-    final direction = armed ? idea!.direction : _rangeDirection(analysis, zone);
+    final ChartDirection direction = armed
+        ? switch (idea!.direction) {
+            TradeDirection.long => ChartDirection.bullish,
+            TradeDirection.short => ChartDirection.bearish,
+            TradeDirection.wait => ChartDirection.sideways,
+          }
+        : _rangeDirection(analysis, zone);
     return _evaluation(
       id: id,
       contextual: contextual,
@@ -263,7 +270,8 @@ abstract final class RegimePlaybookPortfolioEngine {
       management: PlaybookManagementPolicy.rangeMeanThenOppositeEdge,
       context: 'Range edge only; middle-of-box entries are not eligible.',
       trigger: 'Liquidity sweep/rejection followed by a closed-candle reclaim.',
-      invalidation: 'Acceptance outside the swept range edge invalidates the reversal.',
+      invalidation:
+          'Acceptance outside the swept range edge invalidates the reversal.',
       targets: armed ? idea!.targets : const [],
       reasons: [
         'atRangeEdge:$atEdge',
@@ -306,7 +314,8 @@ abstract final class RegimePlaybookPortfolioEngine {
       ],
       penalties: [if (!acceptance) 12],
     );
-    final forming = breakoutContext && (expansion || compression) && quality >= 52;
+    final forming =
+        breakoutContext && (expansion || compression) && quality >= 52;
     final idea = forming
         ? TradeIdeaFactory.create(
             analysis: analysis,
@@ -339,8 +348,10 @@ abstract final class RegimePlaybookPortfolioEngine {
       direction: contextual.structure.bias,
       management: PlaybookManagementPolicy.breakoutRunner,
       context: 'Compression/build-up followed by structural expansion.',
-      trigger: 'Closed breakout acceptance or retest with volume and momentum expansion.',
-      invalidation: 'Failed acceptance back through the breakout structure invalidates continuation.',
+      trigger:
+          'Closed breakout acceptance or retest with volume and momentum expansion.',
+      invalidation:
+          'Failed acceptance back through the breakout structure invalidates continuation.',
       targets: armed ? idea!.targets : const [],
       reasons: [
         'expansion:$expansion',
@@ -383,7 +394,8 @@ abstract final class RegimePlaybookPortfolioEngine {
       ],
       penalties: [if (!failed) 25],
     );
-    final forming = failed && direction != ChartDirection.sideways && quality >= 50;
+    final forming =
+        failed && direction != ChartDirection.sideways && quality >= 50;
     final idea = forming && volumeConfirmation && reclaim
         ? _customIdea(
             id: id,
@@ -411,9 +423,12 @@ abstract final class RegimePlaybookPortfolioEngine {
       idea: armed ? idea : null,
       direction: direction,
       management: PlaybookManagementPolicy.failedBreakScaleOut,
-      context: 'Level penetration without follow-through, followed by reversal evidence.',
-      trigger: 'Closed-candle reclaim plus effort-vs-result, climax or absorption confirmation.',
-      invalidation: 'Renewed acceptance beyond the swept extreme invalidates the reversal.',
+      context:
+          'Level penetration without follow-through, followed by reversal evidence.',
+      trigger:
+          'Closed-candle reclaim plus effort-vs-result, climax or absorption confirmation.',
+      invalidation:
+          'Renewed acceptance beyond the swept extreme invalidates the reversal.',
       targets: armed ? idea!.targets : const [],
       reasons: [
         'failedBreak:$failed',
@@ -447,7 +462,8 @@ abstract final class RegimePlaybookPortfolioEngine {
         runtime.latencyHealthy;
     final expansion =
         contextual.momentum.expansion &&
-        (contextual.volume.reExpansion || contextual.volume.breakoutExpansion) &&
+        (contextual.volume.reExpansion ||
+            contextual.volume.breakoutExpansion) &&
         indicators.atrExpansionRatio >= 1.08;
     final quality = _quality(
       contextual,
@@ -483,9 +499,12 @@ abstract final class RegimePlaybookPortfolioEngine {
       idea: armed ? idea : null,
       direction: direction,
       management: PlaybookManagementPolicy.momentumQuickExit,
-      context: '5m expansion only with fresh higher-timeframe, liquidity and latency gates.',
-      trigger: 'Closed 5m expansion candle with volume re-expansion and directional momentum.',
-      invalidation: 'Momentum loss, stale context or structural stop invalidates the scalp immediately.',
+      context:
+          '5m expansion only with fresh higher-timeframe, liquidity and latency gates.',
+      trigger:
+          'Closed 5m expansion candle with volume re-expansion and directional momentum.',
+      invalidation:
+          'Momentum loss, stale context or structural stop invalidates the scalp immediately.',
       targets: armed ? idea!.targets : const [],
       reasons: [
         'fiveMinute:$isFiveMinute',
@@ -540,7 +559,8 @@ abstract final class RegimePlaybookPortfolioEngine {
     }
     final quantity = _roundDown(maximumLoss / riskPerUnit, 6);
     final notional = quantity * conservativeEntry;
-    if (quantity < context.minimumQuantity || notional < context.minimumNotional) {
+    if (quantity < context.minimumQuantity ||
+        notional < context.minimumNotional) {
       return null;
     }
     final stopPercent = stopDistance / conservativeEntry;
