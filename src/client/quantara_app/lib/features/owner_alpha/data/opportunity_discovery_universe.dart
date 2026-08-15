@@ -13,6 +13,7 @@ import '../domain/realtime_candidate_models.dart';
 import '../domain/realtime_candle_pipeline_models.dart';
 import '../domain/realtime_market_event_models.dart';
 import '../domain/realtime_market_runtime_models.dart';
+import '../domain/regime_playbook_models.dart';
 import 'bitunix_candle_backfill_source.dart';
 import 'durable_candidate_audit_store.dart';
 import 'realtime_candidate_coordinator.dart';
@@ -20,7 +21,7 @@ import 'realtime_candidate_registry.dart';
 import 'realtime_contextual_market_analysis.dart';
 import 'realtime_market_application.dart';
 import 'realtime_production_runtime.dart';
-import 'trade_idea_factory.dart';
+import 'regime_playbook_portfolio_engine.dart';
 
 enum OpportunityUniverseRejectionReason {
   nonUsdtQuote,
@@ -432,6 +433,16 @@ final class OpportunityDiscoveryCoverageTracker
   final Set<String> _rejectionKeys = {};
   final Map<String, OpportunityStage> _latestStages = {};
 
+  static const liquidityEvidenceMaximumAge = Duration(minutes: 30);
+
+  bool liquidityEligibilityVerified(String symbol, DateTime evaluatedAtUtc) {
+    if (!evaluatedAtUtc.isUtc) return false;
+    final normalized = symbol.trim().toUpperCase();
+    if (!_universe.symbols.contains(normalized)) return false;
+    final age = evaluatedAtUtc.difference(_universe.generatedAtUtc);
+    return !age.isNegative && age <= liquidityEvidenceMaximumAge;
+  }
+
   void recordAnalysis(RealtimeCandleAnalysisContext context) {
     final changed =
         _symbolsScanned.add(context.key.symbol) |
@@ -483,36 +494,54 @@ final class OpportunityDiscoveryCoverageTracker
   }
 }
 
+final class _DirectionEvidence {
+  const _DirectionEvidence({
+    required this.direction,
+    required this.evaluatedAtUtc,
+  });
+
+  final ChartDirection direction;
+  final DateTime evaluatedAtUtc;
+
+  bool isFreshAt(DateTime nowUtc, {required Duration maximumAge}) {
+    if (!nowUtc.isUtc || !evaluatedAtUtc.isUtc || maximumAge <= Duration.zero) {
+      return false;
+    }
+    final age = nowUtc.difference(evaluatedAtUtc);
+    return !age.isNegative && age <= maximumAge;
+  }
+}
+
 final class _DiscoveryIdeaCatalog {
   final Map<String, TradeIdea> _bySetup = {};
-  final Map<String, String> _setupByStreamStrategy = {};
+  final Map<String, String> _setupByStreamPlaybook = {};
 
-  void remember(TradeIdea idea) {
+  void remember(TradeIdea idea, {required RegimePlaybookId playbook}) {
     if (!idea.isActionable) return;
     _bySetup[idea.setupId] = idea;
-    _setupByStreamStrategy[_key(idea.symbol, idea.timeframe, idea.strategy)] =
+    _setupByStreamPlaybook[_key(idea.symbol, idea.timeframe, playbook)] =
         idea.setupId;
     while (_bySetup.length > 4000) {
       final oldest = _bySetup.keys.first;
       _bySetup.remove(oldest);
-      _setupByStreamStrategy.removeWhere((_, setupId) => setupId == oldest);
+      _setupByStreamPlaybook.removeWhere((_, setupId) => setupId == oldest);
     }
   }
 
   TradeIdea? currentFor(
     RealtimeCandleStreamKey key,
-    AnalysisStrategy strategy,
+    RegimePlaybookId playbook,
   ) {
     final setupId =
-        _setupByStreamStrategy[_key(key.symbol, key.timeframe, strategy)];
+        _setupByStreamPlaybook[_key(key.symbol, key.timeframe, playbook)];
     return setupId == null ? null : _bySetup[setupId];
   }
 
   static String _key(
     String symbol,
     String timeframe,
-    AnalysisStrategy strategy,
-  ) => '$symbol|$timeframe|${strategy.name}';
+    RegimePlaybookId playbook,
+  ) => '$symbol|$timeframe|${playbook.name}';
 }
 
 final class _OpportunityDiscoveryRealtimeAnalyzer
@@ -537,6 +566,37 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
   final RealtimeIdeaCatalog projectionCatalog;
   final OpportunityDiscoveryCoverageTracker coverage;
   String _languageCode;
+  final Map<String, Map<String, _DirectionEvidence>> _directionsBySymbol = {};
+
+  RegimePlaybookFeatureFlags get _effectivePlaybookFlags {
+    final environment = RegimePlaybookFeatureFlags.fromEnvironment();
+    return RegimePlaybookFeatureFlags(
+      trendPullbackContinuation:
+          environment.trendPullbackContinuation &&
+          strategies.contains(AnalysisStrategy.trendPullback),
+      rangeEdgeSweepReclaim:
+          environment.rangeEdgeSweepReclaim &&
+          strategies.contains(AnalysisStrategy.structureZones),
+      breakoutAcceptanceRetest:
+          environment.breakoutAcceptanceRetest &&
+          strategies.contains(AnalysisStrategy.momentumContinuation),
+      failedBreakoutReversal:
+          environment.failedBreakoutReversal &&
+          strategies.contains(AnalysisStrategy.structureZones),
+      momentumExpansionScalp:
+          environment.momentumExpansionScalp &&
+          strategies.contains(AnalysisStrategy.momentumContinuation),
+    );
+  }
+
+  static Duration _maximumParentEvidenceAge(String timeframe) =>
+      switch (timeframe) {
+        '15m' => const Duration(minutes: 45),
+        '1h' => const Duration(hours: 3),
+        '4h' => const Duration(hours: 12),
+        '1D' => const Duration(days: 3),
+        _ => Duration.zero,
+      };
 
   void setLanguage(String languageCode) {
     if (languageCode == 'fa' || languageCode == 'en') {
@@ -549,7 +609,7 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
     RealtimeCandleAnalysisContext context,
   ) async {
     coverage.recordAnalysis(context);
-    if (context.closedCandles.length < 30) {
+    if (context.closedCandles.length < 60) {
       return RealtimeCandidateAnalysisBatch();
     }
     final structure = ChartStructureAnalyzer.analyze(context.closedCandles);
@@ -563,63 +623,100 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
       directionStrength: structure.directionStrength,
       volatilityPercent: structure.volatilityPercent,
       summary: _languageCode == 'en'
-          ? 'Closed-candle broad discovery analysis.'
-          : 'تحلیل گسترده فرصت‌ها بر پایه کندل بسته.',
+          ? 'Closed-candle regime playbook portfolio analysis.'
+          : 'تحلیل پرتفوی Playbook بر پایه کندل بسته.',
       generatedAt: context.processedAtUtc,
       fingerprint:
           '${context.key.id}|${context.closedCandles.first.openTime.microsecondsSinceEpoch}|${latestClosed.openTime.microsecondsSinceEpoch}|${latestClosed.close}',
     );
+    final directions = _directionsBySymbol.putIfAbsent(
+      context.key.symbol,
+      () => <String, _DirectionEvidence>{},
+    );
+    directions[analysis.timeframe] = _DirectionEvidence(
+      direction: analysis.direction,
+      evaluatedAtUtc: context.processedAtUtc,
+    );
+    final parent = switch (analysis.timeframe) {
+      '5m' => '15m',
+      '15m' => '1h',
+      '1h' => '4h',
+      '4h' => '1D',
+      _ => null,
+    };
+    final parentEvidence = parent == null ? null : directions[parent];
+    final parentFresh =
+        parent == null ||
+        (parentEvidence?.isFreshAt(
+              context.processedAtUtc,
+              maximumAge: _maximumParentEvidenceAge(parent),
+            ) ??
+            false);
+    final liquidityVerified = coverage.liquidityEligibilityVerified(
+      context.key.symbol,
+      context.processedAtUtc,
+    );
+    final latency = context.processedAtUtc.difference(context.receivedAtUtc);
+    final safeLatency = latency.isNegative ? Duration.zero : latency;
+    final portfolio = RegimePlaybookPortfolioEngine.evaluate(
+      analysis: analysis,
+      capital: settings.capital,
+      riskPercent: settings.riskPercent,
+      languageCode: _languageCode,
+      cadence: settings.cadence,
+      flags: _effectivePlaybookFlags,
+      runtime: RegimePlaybookRuntimeContext(
+        evaluatedAtUtc: context.processedAtUtc,
+        higherTimeframeDirection: parentEvidence?.direction,
+        higherTimeframeFresh: parentFresh,
+        liquidityVerified: liquidityVerified,
+        processingLatency: safeLatency,
+      ),
+    );
 
     final candidates = <RealtimeOpportunityCandidate>[];
     final observations = <RealtimeObservationEnvelope>[];
-    for (final strategy in strategies) {
-      final generated = TradeIdeaFactory.create(
-        analysis: analysis,
-        capital: settings.capital,
-        riskPercent: settings.riskPercent,
-        confluence: {analysis.timeframe: analysis.direction},
-        languageCode: _languageCode,
-        strategy: strategy,
-        cadence: settings.cadence,
+    final selected = portfolio.selected;
+    if (selected?.idea case final selectedIdea?) {
+      catalog.remember(selectedIdea, playbook: selected!.playbook);
+      projectionCatalog.remember(selectedIdea);
+      candidates.add(
+        RealtimeOpportunityCandidate.fromIdea(
+          selectedIdea,
+          detectedAtUtc: selectedIdea.createdAt.toUtc(),
+          playbookId: '${selected.playbook.name}@${selected.version}',
+        ),
       );
-      TradeIdea? tracked;
-      if (generated.isActionable) {
-        catalog.remember(generated);
-        projectionCatalog.remember(generated);
-        tracked = generated;
-        candidates.add(
-          RealtimeOpportunityCandidate.fromIdea(
-            generated,
-            detectedAtUtc: generated.createdAt.toUtc(),
-            playbookId: generated.strategyVersion,
-          ),
-        );
-      } else {
-        coverage.recordRejection(
-          context: context,
-          strategy: strategy,
-          reason: generated.rejectionReason,
-        );
-        tracked = catalog.currentFor(context.key, strategy);
-      }
-      if (tracked == null) continue;
+    }
 
+    final conflict =
+        portfolio.conflictOutcome ==
+        PlaybookConflictOutcome.ambiguousOpposingSignals;
+    for (final evaluation in portfolio.evaluations) {
+      final tracked =
+          evaluation.idea ??
+          catalog.currentFor(context.key, evaluation.playbook);
+      if (tracked == null) continue;
       final triggerPrice = context.triggersClosedCandleAnalysis
           ? latestClosed.close
           : context.workingCandle?.close ?? latestClosed.close;
+      final selectedNow = selected?.playbook == evaluation.playbook;
       final triggerConfirmed =
+          selectedNow &&
           context.triggersClosedCandleAnalysis &&
           triggerPrice >= tracked.entryLower! &&
           triggerPrice <= tracked.entryUpper!;
-      final structureValid = switch (tracked.direction) {
-        TradeDirection.long => triggerPrice > tracked.stopLoss!,
-        TradeDirection.short => triggerPrice < tracked.stopLoss!,
-        TradeDirection.wait => false,
-      };
+      final structureValid =
+          !conflict &&
+          switch (tracked.direction) {
+            TradeDirection.long => triggerPrice > tracked.stopLoss!,
+            TradeDirection.short => triggerPrice < tracked.stopLoss!,
+            TradeDirection.wait => false,
+          };
       observations.add(
         RealtimeObservationEnvelope(
           eventId:
-              '${context.key.id}|${strategy.name}|${context.disposition.name}|${context.exchangeTimestampUtc.microsecondsSinceEpoch}|${triggerPrice.toStringAsPrecision(12)}',
+              '${context.key.id}|${evaluation.playbook.name}|${context.disposition.name}|${context.exchangeTimestampUtc.microsecondsSinceEpoch}|${triggerPrice.toStringAsPrecision(12)}',
           setupId: tracked.setupId,
           symbol: tracked.symbol,
           timeframe: tracked.timeframe,
@@ -628,7 +725,9 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
             receivedAtUtc: context.receivedAtUtc,
             evaluatedAtUtc: context.processedAtUtc,
             lastPrice: triggerPrice,
-            qualityScore: tracked.confidencePercent,
+            qualityScore: evaluation.qualityScore > 0
+                ? evaluation.qualityScore
+                : tracked.displayQualityScore,
             structureValid: structureValid,
             triggerConfirmed: triggerConfirmed,
             triggerCandleClosed: context.triggersClosedCandleAnalysis,

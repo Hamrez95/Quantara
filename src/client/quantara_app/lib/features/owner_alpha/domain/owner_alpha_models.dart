@@ -174,6 +174,47 @@ final class TradeIdea {
     return notionalValue! / leverage;
   }
 
+  TradeIdea copyWithPlaybookMetadata({
+    required String strategyVersion,
+    required int setupQualityScore,
+    required String expectation,
+    required String trigger,
+    required String contextVersion,
+    required Map<String, double> evidenceBreakdown,
+  }) => TradeIdea(
+    symbol: symbol,
+    timeframe: timeframe,
+    direction: direction,
+    confidencePercent: confidencePercent,
+    entryLower: entryLower,
+    entryUpper: entryUpper,
+    stopLoss: stopLoss,
+    targets: targets,
+    riskReward: riskReward,
+    maximumLoss: maximumLoss,
+    positionSize: positionSize,
+    notionalValue: notionalValue,
+    recommendedLeverage: recommendedLeverage,
+    maximumSafeLeverage: maximumSafeLeverage,
+    requiredMargin: requiredMargin,
+    estimatedRoundTripCosts: estimatedRoundTripCosts,
+    setupId: '$setupId|$strategyVersion',
+    candleClosedAt: candleClosedAt,
+    summary: summary,
+    invalidation: invalidation,
+    reasons: reasons,
+    rejectionReason: rejectionReason,
+    strategy: strategy,
+    strategyVersion: strategyVersion,
+    marketRegime: marketRegime,
+    indicatorSnapshot: indicatorSnapshot,
+    setupQualityScore: setupQualityScore,
+    expectation: expectation,
+    trigger: trigger,
+    contextVersion: contextVersion,
+    evidenceBreakdown: evidenceBreakdown,
+  );
+
   static TradeIdea wait({
     required String symbol,
     required String timeframe,

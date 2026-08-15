@@ -64,8 +64,11 @@ final class RealtimeOpportunityCandidate {
         'UTC is required.',
       );
     }
-    if (idea.confidencePercent < 0 || idea.confidencePercent > 100) {
-      throw ArgumentError.value(idea.confidencePercent, 'confidencePercent');
+    if (idea.displayQualityScore < 0 || idea.displayQualityScore > 100) {
+      throw ArgumentError.value(
+        idea.displayQualityScore,
+        'displayQualityScore',
+      );
     }
 
     final lower = idea.entryLower!;
@@ -105,7 +108,7 @@ final class RealtimeOpportunityCandidate {
       validUntilUtc: validUntil,
       detectedAtUtc: detectedAtUtc,
       lastUpdatedAtUtc: detectedAtUtc,
-      qualityScore: idea.confidencePercent,
+      qualityScore: idea.displayQualityScore,
       stage: OpportunityStage.detected,
       transitionReason: OpportunityTransitionReason.created,
       lastPrice: null,
