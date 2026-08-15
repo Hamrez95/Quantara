@@ -82,6 +82,7 @@ final class RealtimeMarketHealthSnapshot {
     required this.configuredStreams,
     this.activeStreams = 0,
     this.quarantinedStreams = 0,
+    this.quarantinedStreamReasons = const {},
     required this.activeShards,
     required this.liveShards,
     required this.eventsReceived,
@@ -106,6 +107,7 @@ final class RealtimeMarketHealthSnapshot {
   final int configuredStreams;
   final int activeStreams;
   final int quarantinedStreams;
+  final Map<String, String> quarantinedStreamReasons;
   final int activeShards;
   final int liveShards;
   final int eventsReceived;
