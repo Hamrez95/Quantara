@@ -77,7 +77,8 @@ abstract final class PrivateTruthAccountSnapshotBuilder {
     final orders = <AutoTradeOrder>[];
     for (final hot in projection.orders.values) {
       if (hot.isTerminal) continue;
-      final baseline = baselineOrdersById[hot.orderId.trim()] ??
+      final baseline =
+          baselineOrdersById[hot.orderId.trim()] ??
           baselineOrdersByClient[hot.clientId.trim()];
       orders.add(
         AutoTradeOrder(
@@ -110,11 +111,14 @@ abstract final class PrivateTruthAccountSnapshotBuilder {
         )
         .toList(growable: false);
 
-    final verificationAt = projection.restVerifiedAtUtc ?? projection.updatedAtUtc;
+    final verificationAt =
+        projection.restVerifiedAtUtc ?? projection.updatedAtUtc;
     final protectionVerifications = <String, AutoTradeProtectionVerification>{};
     for (final position in positions) {
-      final baseline = restBaseline.protectionVerifications[position.positionId];
-      protectionVerifications[position.positionId] = baseline ??
+      final baseline =
+          restBaseline.protectionVerifications[position.positionId];
+      protectionVerifications[position.positionId] =
+          baseline ??
           AutoTradeProtectionVerification.unverified(
             asOf: verificationAt,
             reason:

@@ -45,9 +45,7 @@ void main() {
               ]
             : const [],
         protectionVerifications: includePosition
-            ? {
-                'p-1': AutoTradeProtectionVerification.verified(asOf: now),
-              }
+            ? {'p-1': AutoTradeProtectionVerification.verified(asOf: now)}
             : const {},
         syncedAt: now,
       );
@@ -107,31 +105,37 @@ void main() {
         metrics: const PrivateTruthMetrics(),
       );
 
-  test('hot deltas replace current values while REST keeps immutable fields', () {
-    final view = PrivateTruthAccountSnapshotBuilder.build(
-      projection: projection(),
-      restBaseline: baseline(),
-    );
+  test(
+    'hot deltas replace current values while REST keeps immutable fields',
+    () {
+      final view = PrivateTruthAccountSnapshotBuilder.build(
+        projection: projection(),
+        restBaseline: baseline(),
+      );
 
-    expect(view.completeForNewEntry, isTrue);
-    expect(view.snapshot.available, 895);
-    expect(view.snapshot.positions.single.unrealizedPnl, 7);
-    expect(view.snapshot.positions.single.averageOpenPrice, 100000);
-    expect(view.snapshot.positions.single.liquidationPrice, 70000);
-    expect(view.snapshot.positions.single.funding, -0.02);
-    expect(view.snapshot.syncedAt, now.add(const Duration(seconds: 1)));
-  });
+      expect(view.completeForNewEntry, isTrue);
+      expect(view.snapshot.available, 895);
+      expect(view.snapshot.positions.single.unrealizedPnl, 7);
+      expect(view.snapshot.positions.single.averageOpenPrice, 100000);
+      expect(view.snapshot.positions.single.liquidationPrice, 70000);
+      expect(view.snapshot.positions.single.funding, -0.02);
+      expect(view.snapshot.syncedAt, now.add(const Duration(seconds: 1)));
+    },
+  );
 
-  test('new WS position stays visible but blocks another entry until REST sees it', () {
-    final view = PrivateTruthAccountSnapshotBuilder.build(
-      projection: projection(positionId: 'p-new'),
-      restBaseline: baseline(includePosition: false),
-    );
+  test(
+    'new WS position stays visible but blocks another entry until REST sees it',
+    () {
+      final view = PrivateTruthAccountSnapshotBuilder.build(
+        projection: projection(positionId: 'p-new'),
+        restBaseline: baseline(includePosition: false),
+      );
 
-    expect(view.snapshot.positions.single.positionId, 'p-new');
-    expect(view.completeForNewEntry, isFalse);
-    expect(view.missingBaselinePositionIds, ['p-new']);
-  });
+      expect(view.snapshot.positions.single.positionId, 'p-new');
+      expect(view.completeForNewEntry, isFalse);
+      expect(view.missingBaselinePositionIds, ['p-new']);
+    },
+  );
 
   test('terminal fill truth is not misrepresented as a pending order', () {
     final baseProjection = projection();

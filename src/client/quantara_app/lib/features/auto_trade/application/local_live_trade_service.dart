@@ -14,6 +14,7 @@ import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../../trading_journal/application/local_live_journal_observer.dart';
 import '../../trading_journal/domain/trading_journal_models.dart';
 import '../data/bitunix_local_live_api_client.dart';
+import '../data/bitunix_private_websocket_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_management_only_after_flat.dart';
@@ -26,6 +27,8 @@ import 'local_live_canonical_decision.dart';
 import 'local_live_economic_ranking.dart';
 import 'local_live_orphan_recovery.dart';
 import 'local_live_portfolio_execution_guard.dart';
+import 'private_truth_account_snapshot.dart';
+import 'private_truth_coordinator.dart';
 import 'profit_lock_promotion_executor.dart';
 
 const localLiveConfigurationKey = 'quantara.local-live.configuration.v1';
@@ -81,6 +84,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   final Map<String, DateTime> _auditFingerprintSeenAt = {};
   final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();
   LocalLivePortfolioExecutionGuard? _portfolioGuard;
+  PrivateTruthCoordinator? _privateTruth;
+  http.Client? _coldHttpClient;
+  BitunixLocalLiveApiClient? _coldExchange;
+  TradingPnlProjection? _coldPnlProjection;
+  bool _coldPnlRefreshRunning = false;
+  DateTime? _lastColdPnlRefresh;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -128,9 +137,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _destroyed = true;
+    await _privateTruth?.dispose();
+    _privateTruth = null;
     _httpClient?.close();
     _httpClient = null;
     _exchange = null;
+    _coldHttpClient?.close();
+    _coldHttpClient = null;
+    _coldExchange = null;
     _credentials = null;
     await _publish(
       LocalLiveTradeState.stopped,
@@ -179,6 +193,17 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _httpClient?.close();
         _httpClient = http.Client();
         _exchange = BitunixLocalLiveApiClient(client: _httpClient!);
+        _coldHttpClient?.close();
+        _coldHttpClient = http.Client();
+        _coldExchange = BitunixLocalLiveApiClient(client: _coldHttpClient!);
+        await _privateTruth?.dispose();
+        final privateTruth = PrivateTruthCoordinator(
+          BitunixPrivateWebSocketClient(),
+          (value) => _exchange!.fetchCurrentAccountSnapshot(value),
+        );
+        _privateTruth = privateTruth;
+        await privateTruth.start(_credentials!);
+        unawaited(_refreshColdPnl());
         _userRequestedEntries = message['entriesEnabled'] == true;
         if (_userRequestedEntries && _managementOnlyAfterFlat) {
           await _setManagementOnlyAfterFlat(
@@ -270,7 +295,24 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     }
     _cycleRunning = true;
     try {
-      final account = await exchange.fetchAccountSnapshot(credentials);
+      final privateTruth = _privateTruth;
+      final restBaseline = privateTruth?.latestRestSnapshot;
+      if (privateTruth == null || restBaseline == null) {
+        _entriesEnabled = false;
+        _entryBlockReason = 'privateAccountState';
+        await _publish(
+          LocalLiveTradeState.managingOnly,
+          'Private WebSocket truth is waiting for bounded REST verification. New entries remain blocked.',
+        );
+        return;
+      }
+      _scheduleColdPnlRefresh();
+      final hotAccount = PrivateTruthAccountSnapshotBuilder.build(
+        projection: privateTruth.current,
+        restBaseline: restBaseline,
+        coldPnlProjection: _coldPnlProjection,
+      );
+      final account = hotAccount.snapshot;
       final positions = account.positions
           .map(
             (position) => BitunixLivePosition(
@@ -294,15 +336,20 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .where((position) => position.quantity > 0)
           .toList(growable: false);
       _exchangeOpenPositionCount = openExchangePositions.length;
-      _lastExchangeSync = DateTime.now().toUtc();
+      _lastExchangeSync = privateTruth.current.updatedAtUtc;
+      final privateTruthReady =
+          privateTruth.canAdmitNewEntries && hotAccount.completeForNewEntry;
       _entriesEnabled =
           LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(
             userRequestedEntries: _userRequestedEntries,
             managementOnlyAfterFlat: _managementOnlyAfterFlat,
-          );
+          ) &&
+          privateTruthReady;
       _entryBlockReason = _managementOnlyAfterFlat
           ? 'managementOnlyAfterFlat'
-          : null;
+          : privateTruthReady
+          ? null
+          : 'privateAccountState:${privateTruth.current.lagReason.name}';
       _sessionStartEquity ??= account.estimatedEquity;
       if (_sessionStartEquity != null) {
         await FlutterForegroundTask.saveData(
@@ -1897,6 +1944,34 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       hash = (hash * 0x01000193) & 0xffffffff;
     }
     return 'q-local-${hash.toRadixString(16).padLeft(8, '0')}';
+  }
+
+  void _scheduleColdPnlRefresh() {
+    final last = _lastColdPnlRefresh;
+    if (_coldPnlRefreshRunning ||
+        (last != null &&
+            DateTime.now().toUtc().difference(last) <
+                const Duration(minutes: 5))) {
+      return;
+    }
+    unawaited(_refreshColdPnl());
+  }
+
+  Future<void> _refreshColdPnl() async {
+    if (_coldPnlRefreshRunning) return;
+    final exchange = _coldExchange;
+    final credentials = _credentials;
+    if (exchange == null || credentials == null) return;
+    _coldPnlRefreshRunning = true;
+    try {
+      final snapshot = await exchange.fetchAccountSnapshot(credentials);
+      _coldPnlProjection = snapshot.authoritativePnl;
+      _lastColdPnlRefresh = DateTime.now().toUtc();
+    } on Object catch (error) {
+      _auditEvent('cold_pnl_refresh_deferred', _safeError(error));
+    } finally {
+      _coldPnlRefreshRunning = false;
+    }
   }
 
   Future<void> _restoreNonSecretState() async {
