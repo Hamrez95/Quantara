@@ -344,6 +344,11 @@ final class SignalJournalEntry {
     required this.selectedLeverage,
     required this.summary,
     required this.invalidation,
+    this.setupQualityScore,
+    this.expectation = '',
+    this.trigger = '',
+    this.contextVersion = '',
+    this.evidenceBreakdown = const {},
     this.confidencePercent = 0,
     this.riskReward,
     this.marketRegime = MarketRegime.transition,
@@ -384,6 +389,11 @@ final class SignalJournalEntry {
     selectedLeverage: idea.recommendedLeverage!,
     summary: idea.summary,
     invalidation: idea.invalidation,
+    setupQualityScore: idea.setupQualityScore,
+    expectation: idea.expectation,
+    trigger: idea.trigger,
+    contextVersion: idea.contextVersion,
+    evidenceBreakdown: idea.evidenceBreakdown,
     confidencePercent: idea.confidencePercent,
     riskReward: idea.riskReward,
     marketRegime: idea.marketRegime,
@@ -411,6 +421,11 @@ final class SignalJournalEntry {
   final int selectedLeverage;
   final String summary;
   final String invalidation;
+  final int? setupQualityScore;
+  final String expectation;
+  final String trigger;
+  final String contextVersion;
+  final Map<String, double> evidenceBreakdown;
   final int confidencePercent;
   final double? riskReward;
   final MarketRegime marketRegime;
@@ -487,6 +502,11 @@ final class SignalJournalEntry {
     selectedLeverage: selectedLeverage ?? this.selectedLeverage,
     summary: summary,
     invalidation: invalidation,
+    setupQualityScore: setupQualityScore,
+    expectation: expectation,
+    trigger: trigger,
+    contextVersion: contextVersion,
+    evidenceBreakdown: evidenceBreakdown,
     confidencePercent: confidencePercent,
     riskReward: riskReward,
     marketRegime: marketRegime,
@@ -524,6 +544,11 @@ final class SignalJournalEntry {
     'selectedLeverage': selectedLeverage,
     'summary': summary,
     'invalidation': invalidation,
+    'setupQualityScore': setupQualityScore,
+    'expectation': expectation,
+    'trigger': trigger,
+    'contextVersion': contextVersion,
+    'evidenceBreakdown': evidenceBreakdown,
     'confidencePercent': confidencePercent,
     'riskReward': riskReward,
     'marketRegime': marketRegime.name,
@@ -597,6 +622,11 @@ final class SignalJournalEntry {
             .toInt(),
         summary: value['summary'] as String,
         invalidation: value['invalidation'] as String,
+        setupQualityScore: _tryBoundedQuality(value['setupQualityScore']),
+        expectation: (value['expectation'] as String?) ?? '',
+        trigger: (value['trigger'] as String?) ?? '',
+        contextVersion: (value['contextVersion'] as String?) ?? '',
+        evidenceBreakdown: _tryEvidenceBreakdown(value['evidenceBreakdown']),
         confidencePercent: ((value['confidencePercent'] as num?)?.toInt() ?? 0)
             .clamp(0, 100)
             .toInt(),
@@ -621,6 +651,24 @@ final class SignalJournalEntry {
     } on Object {
       return null;
     }
+  }
+
+  static int? _tryBoundedQuality(Object? value) {
+    if (value is! num) return null;
+    final quality = value.toInt();
+    return quality < 0 || quality > 100 ? null : quality;
+  }
+
+  static Map<String, double> _tryEvidenceBreakdown(Object? value) {
+    if (value is! Map<Object?, Object?>) return const {};
+    final result = <String, double>{};
+    for (final entry in value.entries) {
+      if (entry.key is! String || entry.value is! num) continue;
+      final number = (entry.value as num).toDouble();
+      if (!number.isFinite || number < 0 || number > 20) continue;
+      result[entry.key as String] = number;
+    }
+    return Map.unmodifiable(result);
   }
 
   static DateTime? _tryDate(Object? value) {
