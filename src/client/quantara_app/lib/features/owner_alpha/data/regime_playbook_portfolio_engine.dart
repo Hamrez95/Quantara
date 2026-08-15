@@ -48,10 +48,12 @@ abstract final class RegimePlaybookPortfolioEngine {
         ProfessionalStrategyContext(evaluatedAt: runtime.evaluatedAtUtc);
     final confluence = <String, ChartDirection>{
       analysis.timeframe: analysis.direction,
-      if (_parentTimeframe(analysis.timeframe) case final parent?)
-        if (runtime.higherTimeframeDirection case final direction?)
-          parent: direction,
     };
+    final parent = _parentTimeframe(analysis.timeframe);
+    final higherDirection = runtime.higherTimeframeDirection;
+    if (parent != null && higherDirection != null) {
+      confluence[parent] = higherDirection;
+    }
 
     final evaluations = <RegimePlaybookEvaluation>[
       _trendPullback(
@@ -190,7 +192,7 @@ abstract final class RegimePlaybookPortfolioEngine {
           'Closed-candle rejection after pullback with volume contraction/re-expansion or momentum reset.',
       invalidation:
           'Protected trend swing or structural stop fails on a closed candle.',
-      targets: armed ? idea!.targets : const [],
+      targets: armed ? idea.targets : const [],
       reasons: [
         'regime:${contextual.regime.name}',
         'higherTimeframeAligned:$higherAligned',
@@ -251,7 +253,7 @@ abstract final class RegimePlaybookPortfolioEngine {
         idea.isActionable &&
         idea.strategyVersion.contains('rangeReversal');
     final ChartDirection direction = armed
-        ? switch (idea!.direction) {
+        ? switch (idea.direction) {
             TradeDirection.long => ChartDirection.bullish,
             TradeDirection.short => ChartDirection.bearish,
             TradeDirection.wait => ChartDirection.sideways,
@@ -266,14 +268,14 @@ abstract final class RegimePlaybookPortfolioEngine {
           ? PlaybookCandidateState.forming
           : PlaybookCandidateState.inactive,
       quality: quality,
-      idea: armed ? _versionIdea(idea!, id, contextual) : null,
+      idea: armed ? _versionIdea(idea, id, contextual) : null,
       direction: direction,
       management: PlaybookManagementPolicy.rangeMeanThenOppositeEdge,
       context: 'Range edge only; middle-of-box entries are not eligible.',
       trigger: 'Liquidity sweep/rejection followed by a closed-candle reclaim.',
       invalidation:
           'Acceptance outside the swept range edge invalidates the reversal.',
-      targets: armed ? idea!.targets : const [],
+      targets: armed ? idea.targets : const [],
       reasons: [
         'atRangeEdge:$atEdge',
         'reclaimOrAbsorption:$reclaim',
@@ -340,7 +342,7 @@ abstract final class RegimePlaybookPortfolioEngine {
           ? PlaybookCandidateState.forming
           : PlaybookCandidateState.inactive,
       quality: quality,
-      idea: armed ? _versionIdea(idea!, id, contextual) : null,
+      idea: armed ? _versionIdea(idea, id, contextual) : null,
       direction: contextual.structure.bias,
       management: PlaybookManagementPolicy.breakoutRunner,
       context: 'Compression/build-up followed by structural expansion.',
@@ -348,7 +350,7 @@ abstract final class RegimePlaybookPortfolioEngine {
           'Closed breakout acceptance or retest with volume and momentum expansion.',
       invalidation:
           'Failed acceptance back through the breakout structure invalidates continuation.',
-      targets: armed ? idea!.targets : const [],
+      targets: armed ? idea.targets : const [],
       reasons: [
         'expansion:$expansion',
         'acceptance:$acceptance',
@@ -420,7 +422,7 @@ abstract final class RegimePlaybookPortfolioEngine {
           'Closed-candle reclaim plus effort-vs-result, climax or absorption confirmation.',
       invalidation:
           'Renewed acceptance beyond the swept extreme invalidates the reversal.',
-      targets: armed ? idea!.targets : const [],
+      targets: armed ? idea.targets : const [],
       reasons: [
         'failedBreak:$failed',
         'volumeConfirmation:$volumeConfirmation',
@@ -499,7 +501,7 @@ abstract final class RegimePlaybookPortfolioEngine {
           'Closed 5m expansion candle with volume re-expansion and directional momentum.',
       invalidation:
           'Momentum loss, stale context or structural stop invalidates the scalp immediately.',
-      targets: armed ? idea!.targets : const [],
+      targets: armed ? idea.targets : const [],
       reasons: [
         'fiveMinute:$isFiveMinute',
         'higherTimeframeFresh:${runtime.higherTimeframeFresh}',
@@ -731,8 +733,12 @@ abstract final class RegimePlaybookPortfolioEngine {
     Iterable<int> penalties = const [],
   }) {
     var value = contextual.setupQualityScore;
-    for (final bonus in bonuses) value += bonus;
-    for (final penalty in penalties) value -= penalty;
+    for (final bonus in bonuses) {
+      value += bonus;
+    }
+    for (final penalty in penalties) {
+      value -= penalty;
+    }
     return value.clamp(0, 100).toInt();
   }
 
