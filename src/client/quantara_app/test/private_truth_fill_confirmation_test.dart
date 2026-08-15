@@ -81,76 +81,82 @@ void main() {
     return coordinator;
   }
 
-  test('requires both exchange FILLED order and matching open position', () async {
-    final transport = _FillTransport();
-    final coordinator = await activeCoordinator(transport);
-    final future = coordinator.waitForFullFill(
-      orderId: 'ord-1',
-      clientId: 'client-1',
-      symbol: 'BTCUSDT',
-      timeout: const Duration(seconds: 1),
-    );
+  test(
+    'requires both exchange FILLED order and matching open position',
+    () async {
+      final transport = _FillTransport();
+      final coordinator = await activeCoordinator(transport);
+      final future = coordinator.waitForFullFill(
+        orderId: 'ord-1',
+        clientId: 'client-1',
+        symbol: 'BTCUSDT',
+        timeout: const Duration(seconds: 1),
+      );
 
-    transport.emit(<String, Object?>{
-      'ch': 'order',
-      'ts': 1786795200123,
-      'data': <String, Object?>{
-        'event': 'UPDATE',
-        'orderId': 'ord-1',
-        'clientId': 'client-1',
-        'symbol': 'BTCUSDT',
-        'side': 'BUY',
-        'type': 'MARKET',
-        'orderStatus': 'FILLED',
-        'qty': '0.01',
-        'dealAmount': '0.01',
-        'averagePrice': '120000',
-        'fee': '0.72',
-        'mtime': 1786795200120,
-      },
-    });
-    await _flush(2);
+      transport.emit(<String, Object?>{
+        'ch': 'order',
+        'ts': 1786795200123,
+        'data': <String, Object?>{
+          'event': 'UPDATE',
+          'orderId': 'ord-1',
+          'clientId': 'client-1',
+          'symbol': 'BTCUSDT',
+          'side': 'BUY',
+          'type': 'MARKET',
+          'orderStatus': 'FILLED',
+          'qty': '0.01',
+          'dealAmount': '0.01',
+          'averagePrice': '120000',
+          'fee': '0.72',
+          'mtime': 1786795200120,
+        },
+      });
+      await _flush(2);
 
-    transport.emit(<String, Object?>{
-      'ch': 'position',
-      'ts': 1786795200124,
-      'data': <String, Object?>{
-        'event': 'UPDATE',
-        'positionId': 'pos-1',
-        'symbol': 'BTCUSDT',
-        'side': 'LONG',
-        'marginMode': 'ISOLATION',
-        'positionMode': 'ONE_WAY',
-        'leverage': '3',
-        'margin': '400',
-        'qty': '0.01',
-        'realizedPNL': '0',
-        'unrealizedPNL': '0',
-        'funding': '0',
-        'fee': '0.72',
-      },
-    });
+      transport.emit(<String, Object?>{
+        'ch': 'position',
+        'ts': 1786795200124,
+        'data': <String, Object?>{
+          'event': 'UPDATE',
+          'positionId': 'pos-1',
+          'symbol': 'BTCUSDT',
+          'side': 'LONG',
+          'marginMode': 'ISOLATION',
+          'positionMode': 'ONE_WAY',
+          'leverage': '3',
+          'margin': '400',
+          'qty': '0.01',
+          'realizedPNL': '0',
+          'unrealizedPNL': '0',
+          'funding': '0',
+          'fee': '0.72',
+        },
+      });
 
-    final confirmation = await future;
-    expect(confirmation, isNotNull);
-    expect(confirmation!.order.orderId, 'ord-1');
-    expect(confirmation.position.positionId, 'pos-1');
-    expect(confirmation.order.orderStatus, 'FILLED');
-    await coordinator.dispose();
-  });
+      final confirmation = await future;
+      expect(confirmation, isNotNull);
+      expect(confirmation!.order.orderId, 'ord-1');
+      expect(confirmation.position.positionId, 'pos-1');
+      expect(confirmation.order.orderStatus, 'FILLED');
+      await coordinator.dispose();
+    },
+  );
 
-  test('submission without exchange fill evidence times out fail-closed', () async {
-    final transport = _FillTransport();
-    final coordinator = await activeCoordinator(transport);
+  test(
+    'submission without exchange fill evidence times out fail-closed',
+    () async {
+      final transport = _FillTransport();
+      final coordinator = await activeCoordinator(transport);
 
-    final confirmation = await coordinator.waitForFullFill(
-      orderId: 'missing',
-      clientId: 'client-missing',
-      symbol: 'ETHUSDT',
-      timeout: const Duration(milliseconds: 20),
-    );
+      final confirmation = await coordinator.waitForFullFill(
+        orderId: 'missing',
+        clientId: 'client-missing',
+        symbol: 'ETHUSDT',
+        timeout: const Duration(milliseconds: 20),
+      );
 
-    expect(confirmation, isNull);
-    await coordinator.dispose();
-  });
+      expect(confirmation, isNull);
+      await coordinator.dispose();
+    },
+  );
 }

@@ -20,6 +20,7 @@ import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_management_only_after_flat.dart';
 import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/private_truth_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/remaining_target_protection_policy.dart';
 import '../domain/trading_pnl_projection.dart';
@@ -588,6 +589,16 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     final configuration = _configuration!;
     final credentials = _credentials!;
     final exchange = _exchange!;
+    final privateTruth = _privateTruth;
+    if (privateTruth == null || !privateTruth.isRunning) {
+      _entriesEnabled = false;
+      _entryBlockReason = 'privateAccountState';
+      _auditEvent(
+        'private_truth_entry_block',
+        'Private WebSocket truth is not active; no new order can be submitted.',
+      );
+      return;
+    }
     final client = http.Client();
     try {
       final repository = BitunixOwnerAlphaRepository(client: client);
@@ -814,20 +825,35 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           );
           BitunixOrderDetail? detail;
           BitunixLivePosition? position;
-          for (var attempt = 0; attempt < 10; attempt++) {
-            await Future<void>.delayed(const Duration(milliseconds: 750));
-            detail = await exchange.fetchOrderDetail(
-              orderId: placed.orderId,
-              credentials: credentials,
-            );
-            final matches = await exchange.fetchPositions(
-              credentials,
+          final hotFill = await privateTruth.waitForFullFill(
+            orderId: placed.orderId,
+            clientId: placed.clientId,
+            symbol: idea.symbol,
+          );
+          if (hotFill != null) {
+            detail = _orderDetailFromPrivateFill(hotFill);
+            position = _livePositionFromPrivateFill(hotFill);
+            _auditEvent(
+              'entry_fill_ws_confirmed',
+              'Entry fill and position were confirmed by the authenticated private WebSocket.',
               symbol: idea.symbol,
             );
-            position = matches.firstOrNull;
-            if (detail.fullyFilled && position != null) break;
+          } else {
+            final fallback = await _fetchEntryRestState(
+              exchange: exchange,
+              credentials: credentials,
+              orderId: placed.orderId,
+              symbol: idea.symbol,
+            );
+            detail = fallback.detail;
+            position = fallback.position;
+            _auditEvent(
+              'entry_fill_rest_fallback',
+              'Private WebSocket fill confirmation timed out; one bounded REST reconciliation was used.',
+              symbol: idea.symbol,
+            );
           }
-          if (detail == null || !detail.fullyFilled || position == null) {
+          if (!detail.fullyFilled || position == null) {
             _entriesEnabled = false;
             _auditEvent(
               'entry_reconciliation',
@@ -848,21 +874,16 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                 symbol: idea.symbol,
               );
             }
-            for (var attempt = 0; attempt < 10; attempt++) {
-              await Future<void>.delayed(const Duration(milliseconds: 750));
-              detail = await exchange.fetchOrderDetail(
-                orderId: placed.orderId,
-                credentials: credentials,
-              );
-              final matches = await exchange.fetchPositions(
-                credentials,
-                symbol: idea.symbol,
-              );
-              position = matches.firstOrNull;
-              if (detail.fullyFilled && position != null) break;
-              if (detail.status == 'CANCELED') break;
-            }
-            if (detail == null || !detail.fullyFilled || position == null) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+            final cleanupState = await _fetchEntryRestState(
+              exchange: exchange,
+              credentials: credentials,
+              orderId: placed.orderId,
+              symbol: idea.symbol,
+            );
+            detail = cleanupState.detail;
+            position = cleanupState.position;
+            if (!detail.fullyFilled || position == null) {
               if (position != null && position.quantity > 0) {
                 await portfolioGuard.recordFill(
                   reservationId: activeReservationId,
@@ -882,7 +903,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   symbol: idea.symbol,
                 );
               }
-              if (position == null && detail?.status == 'CANCELED') {
+              if (position == null && detail.status == 'CANCELED') {
                 await portfolioGuard.releaseNoExposure(
                   reservationId: activeReservationId,
                   evidence: 'entry-canceled-without-position',
@@ -1124,6 +1145,52 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       client.close();
     }
   }
+
+  Future<({BitunixOrderDetail detail, BitunixLivePosition? position})>
+  _fetchEntryRestState({
+    required BitunixLocalLiveApiClient exchange,
+    required BitunixApiCredentials credentials,
+    required String orderId,
+    required String symbol,
+  }) async {
+    final values = await Future.wait<Object>([
+      exchange.fetchOrderDetail(orderId: orderId, credentials: credentials),
+      exchange.fetchPositions(credentials, symbol: symbol),
+    ]);
+    final detail = values[0] as BitunixOrderDetail;
+    final positions = values[1] as List<BitunixLivePosition>;
+    return (detail: detail, position: positions.firstOrNull);
+  }
+
+  BitunixOrderDetail _orderDetailFromPrivateFill(
+    PrivateTruthFillConfirmation confirmation,
+  ) => BitunixOrderDetail(
+    orderId: confirmation.order.orderId,
+    clientId: confirmation.order.clientId,
+    symbol: confirmation.order.symbol,
+    quantity: confirmation.order.quantity,
+    filledQuantity: confirmation.order.dealAmount,
+    status: confirmation.order.orderStatus.toUpperCase(),
+    fee: confirmation.order.fee,
+    realizedPnl: 0,
+  );
+
+  BitunixLivePosition _livePositionFromPrivateFill(
+    PrivateTruthFillConfirmation confirmation,
+  ) => BitunixLivePosition(
+    positionId: confirmation.position.positionId,
+    symbol: confirmation.position.symbol,
+    quantity: confirmation.position.quantity,
+    side: confirmation.position.side,
+    marginMode: confirmation.position.marginMode,
+    positionMode: confirmation.position.positionMode,
+    leverage: confirmation.position.leverage,
+    averageOpenPrice: confirmation.order.averagePrice,
+    realizedPnl: confirmation.position.realizedPnl,
+    unrealizedPnl: confirmation.position.unrealizedPnl,
+    fee: confirmation.position.fee + confirmation.order.fee,
+    funding: confirmation.position.funding,
+  );
 
   Future<void> _recoverVerifiedQuantaraOrphans(
     AutoTradeAccountSnapshot account,

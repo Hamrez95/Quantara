@@ -180,6 +180,16 @@ final class PrivateTruthEvent {
       processedAtUtc.difference(exchangeTimestampUtc);
 }
 
+final class PrivateTruthFillConfirmation {
+  const PrivateTruthFillConfirmation({
+    required this.order,
+    required this.position,
+  });
+
+  final PrivateOrderUpdate order;
+  final PrivatePositionUpdate position;
+}
+
 final class PrivateTruthMetrics {
   const PrivateTruthMetrics({
     this.acceptedEvents = 0,

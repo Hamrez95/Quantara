@@ -24,7 +24,7 @@ final class PrivateTruthCoordinator {
          (clock ?? (() => DateTime.now().toUtc()))().toUtc(),
        );
 
-  final BitunixPrivateWebSocketClient _socketClient;
+  final PrivateTruthStreamClient _socketClient;
   final PrivateTruthRestFetcher _fetchRestSnapshot;
   final PrivateTruthClock _clock;
   final Duration restVerificationInterval;
@@ -148,6 +148,54 @@ final class PrivateTruthCoordinator {
             ),
           );
         }
+    }
+  }
+
+  Future<PrivateTruthFillConfirmation?> waitForFullFill({
+    required String orderId,
+    required String clientId,
+    required String symbol,
+    Duration timeout = const Duration(milliseconds: 3500),
+  }) async {
+    PrivateTruthFillConfirmation? match(PrivateTruthProjection projection) {
+      final normalizedOrderId = orderId.trim();
+      final normalizedClientId = clientId.trim();
+      final normalizedSymbol = symbol.trim().toUpperCase();
+      final matchingOrders = projection.orders.values.where(
+        (order) =>
+            order.symbol.toUpperCase() == normalizedSymbol &&
+            ((normalizedOrderId.isNotEmpty &&
+                    order.orderId.trim() == normalizedOrderId) ||
+                (normalizedClientId.isNotEmpty &&
+                    order.clientId.trim() == normalizedClientId)),
+      );
+      final order = matchingOrders
+          .where((item) => item.orderStatus.toUpperCase() == 'FILLED')
+          .firstOrNull;
+      if (order == null || order.dealAmount <= 0) return null;
+      final position = projection.positions.values
+          .where(
+            (item) =>
+                !item.closed &&
+                item.symbol.toUpperCase() == normalizedSymbol &&
+                item.quantity + 1e-9 >= order.dealAmount,
+          )
+          .firstOrNull;
+      if (position == null) return null;
+      return PrivateTruthFillConfirmation(order: order, position: position);
+    }
+
+    final immediate = match(_projection);
+    if (immediate != null) return immediate;
+    try {
+      return await projections
+          .map(match)
+          .where((item) => item != null)
+          .cast<PrivateTruthFillConfirmation>()
+          .first
+          .timeout(timeout);
+    } on TimeoutException {
+      return null;
     }
   }
 

@@ -70,7 +70,17 @@ Future<PrivateWsTransport> connectBitunixPrivateWebSocket(Uri uri) async {
   return transport;
 }
 
-final class BitunixPrivateWebSocketClient {
+abstract interface class PrivateTruthStreamClient {
+  Stream<PrivateTruthEvent> get events;
+  Stream<PrivateWsClientStatus> get statuses;
+  bool get isRunning;
+
+  Future<void> start(BitunixApiCredentials credentials);
+  Future<void> stop();
+  Future<void> dispose();
+}
+
+final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   BitunixPrivateWebSocketClient({
     PrivateWsConnector? connector,
     PrivateWsDelay? delay,
@@ -111,10 +121,14 @@ final class BitunixPrivateWebSocketClient {
   int _generation = 0;
   int _reconnectAttempt = 0;
 
+  @override
   Stream<PrivateTruthEvent> get events => _events.stream;
+  @override
   Stream<PrivateWsClientStatus> get statuses => _status.stream;
+  @override
   bool get isRunning => _running;
 
+  @override
   Future<void> start(BitunixApiCredentials credentials) async {
     if (_disposed) throw StateError('Private WebSocket client is disposed.');
     if (!_credentialsValid(credentials)) {
@@ -127,6 +141,7 @@ final class BitunixPrivateWebSocketClient {
     await _connect();
   }
 
+  @override
   Future<void> stop() async {
     _running = false;
     _generation++;
@@ -140,6 +155,7 @@ final class BitunixPrivateWebSocketClient {
     _emitStatus(PrivateWsClientState.stopped);
   }
 
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     await stop();
