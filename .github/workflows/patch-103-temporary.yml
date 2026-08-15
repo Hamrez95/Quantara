@@ -15,57 +15,52 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feat/103-contextual-price-action-v3
-      - name: Integrate contextual evidence into trade ideas
+      - name: Persist contextual evidence in journal
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          path = Path('src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart')
+          text = path.read_text()
 
-          models = Path('src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart')
-          text = models.read_text()
-          if 'this.setupQualityScore' not in text:
-              marker = '    this.indicatorSnapshot = const {},\n'
-              assert marker in text
-              text = text.replace(marker, marker + "    this.setupQualityScore,\n    this.expectation = '',\n    this.trigger = '',\n    this.contextVersion = '',\n    this.evidenceBreakdown = const {},\n", 1)
-          if 'final int? setupQualityScore;' not in text:
-              marker = '  final Map<String, double> indicatorSnapshot;\n'
-              assert marker in text
-              text = text.replace(marker, marker + "  final int? setupQualityScore;\n  final String expectation;\n  final String trigger;\n  final String contextVersion;\n  final Map<String, double> evidenceBreakdown;\n\n  int get displayQualityScore => setupQualityScore ?? confidencePercent;\n", 1)
-          models.write_text(text)
+          ctor_anchor = "    required this.invalidation,\n    this.confidencePercent = 0,\n"
+          if "this.contextVersion = ''" not in text[text.index('final class SignalJournalEntry'):]:
+              assert ctor_anchor in text
+              text = text.replace(ctor_anchor, "    required this.invalidation,\n    this.setupQualityScore,\n    this.expectation = '',\n    this.trigger = '',\n    this.contextVersion = '',\n    this.evidenceBreakdown = const {},\n    this.confidencePercent = 0,\n", 1)
 
-          engine = Path('src/client/quantara_app/lib/features/owner_alpha/data/professional_strategy_engine.dart')
-          text = engine.read_text()
-          if "contextual_price_action_engine.dart" not in text:
-              marker = "import '../../market_analysis/data/technical_indicator_engine.dart';\n"
-              assert marker in text
-              text = text.replace(marker, "import '../../market_analysis/data/contextual_price_action_engine.dart';\n" + marker + "import '../../market_analysis/domain/contextual_price_action_models.dart';\n", 1)
-          if 'final contextual = ContextualPriceActionEngine.analyze' not in text:
-              marker = '    final kind = _kindFor(strategy, analysis, indicators);\n'
-              assert marker in text
-              text = text.replace(marker, "    final contextual = ContextualPriceActionEngine.analyze(\n      analysis: analysis,\n      indicators: indicators,\n    );\n" + marker, 1)
-          call_start = text.index('    return _buildIdea(')
-          call_end = text.index('    );', call_start) + 7
-          call = text[call_start:call_end]
-          if 'contextual: contextual' not in call:
-              marker = '      indicators: indicators,\n'
-              assert marker in call
-              call = call.replace(marker, marker + '      contextual: contextual,\n', 1)
-              text = text[:call_start] + call + text[call_end:]
-          build_start = text.index('  static TradeIdea _buildIdea({')
-          build_body = text[build_start:]
-          if 'required ContextualPriceActionAssessment contextual' not in build_body[:1200]:
-              marker = '    required TechnicalIndicatorSnapshot indicators,\n'
-              assert marker in build_body[:1200]
-              build_body = build_body.replace(marker, marker + '    required ContextualPriceActionAssessment contextual,\n', 1)
-              text = text[:build_start] + build_body
-          if "Setup Quality ${contextual.setupQualityScore}" not in text:
-              marker = '        ...(fa ? setup.reasonsFa : setup.reasonsEn),\n'
-              assert marker in text
-              text = text.replace(marker, marker + "        'Setup Quality ${contextual.setupQualityScore}/100 — ${contextual.version}.',\n        'Expectation: ${contextual.expectation}',\n        'Trigger: ${contextual.trigger}',\n        'Context invalidation: ${contextual.invalidation}',\n", 1)
-          if 'setupQualityScore: contextual.setupQualityScore' not in text:
-              marker = '      indicatorSnapshot: _indicatorSnapshot(indicators),\n'
-              assert marker in text
-              text = text.replace(marker, marker + "      setupQualityScore: contextual.setupQualityScore,\n      expectation: contextual.expectation,\n      trigger: contextual.trigger,\n      contextVersion: contextual.version,\n      evidenceBreakdown: contextual.scoreBreakdown,\n", 1)
-          engine.write_text(text)
+          from_idea_anchor = "    invalidation: idea.invalidation,\n    confidencePercent: idea.confidencePercent,\n"
+          if 'setupQualityScore: idea.setupQualityScore' not in text:
+              assert from_idea_anchor in text
+              text = text.replace(from_idea_anchor, "    invalidation: idea.invalidation,\n    setupQualityScore: idea.setupQualityScore,\n    expectation: idea.expectation,\n    trigger: idea.trigger,\n    contextVersion: idea.contextVersion,\n    evidenceBreakdown: idea.evidenceBreakdown,\n    confidencePercent: idea.confidencePercent,\n", 1)
+
+          fields_anchor = "  final String invalidation;\n  final int confidencePercent;\n"
+          journal_start = text.index('final class SignalJournalEntry')
+          journal_tail = text[journal_start:]
+          if 'final int? setupQualityScore;' not in journal_tail:
+              assert fields_anchor in text
+              text = text.replace(fields_anchor, "  final String invalidation;\n  final int? setupQualityScore;\n  final String expectation;\n  final String trigger;\n  final String contextVersion;\n  final Map<String, double> evidenceBreakdown;\n  final int confidencePercent;\n", 1)
+
+          copy_anchor = "    invalidation: invalidation,\n    confidencePercent: confidencePercent,\n"
+          if 'setupQualityScore: setupQualityScore' not in text[text.index('SignalJournalEntry copyWith'):]:
+              assert copy_anchor in text
+              text = text.replace(copy_anchor, "    invalidation: invalidation,\n    setupQualityScore: setupQualityScore,\n    expectation: expectation,\n    trigger: trigger,\n    contextVersion: contextVersion,\n    evidenceBreakdown: evidenceBreakdown,\n    confidencePercent: confidencePercent,\n", 1)
+
+          json_anchor = "    'invalidation': invalidation,\n    'confidencePercent': confidencePercent,\n"
+          if "'evidenceBreakdown': evidenceBreakdown" not in text:
+              assert json_anchor in text
+              text = text.replace(json_anchor, "    'invalidation': invalidation,\n    'setupQualityScore': setupQualityScore,\n    'expectation': expectation,\n    'trigger': trigger,\n    'contextVersion': contextVersion,\n    'evidenceBreakdown': evidenceBreakdown,\n    'confidencePercent': confidencePercent,\n", 1)
+
+          restore_anchor = "        invalidation: value['invalidation'] as String,\n        confidencePercent: ((value['confidencePercent'] as num?)?.toInt() ?? 0)\n"
+          if 'setupQualityScore: _tryBoundedQuality' not in text:
+              assert restore_anchor in text
+              text = text.replace(restore_anchor, "        invalidation: value['invalidation'] as String,\n        setupQualityScore: _tryBoundedQuality(value['setupQualityScore']),\n        expectation: (value['expectation'] as String?) ?? '',\n        trigger: (value['trigger'] as String?) ?? '',\n        contextVersion: (value['contextVersion'] as String?) ?? '',\n        evidenceBreakdown: _tryEvidenceBreakdown(value['evidenceBreakdown']),\n        confidencePercent: ((value['confidencePercent'] as num?)?.toInt() ?? 0)\n", 1)
+
+          helper_anchor = "  static DateTime? _tryDate(Object? value) {\n"
+          if 'static int? _tryBoundedQuality' not in text:
+              assert helper_anchor in text
+              helpers = "  static int? _tryBoundedQuality(Object? value) {\n    if (value is! num) return null;\n    final quality = value.toInt();\n    return quality < 0 || quality > 100 ? null : quality;\n  }\n\n  static Map<String, double> _tryEvidenceBreakdown(Object? value) {\n    if (value is! Map<Object?, Object?>) return const {};\n    final result = <String, double>{};\n    for (final entry in value.entries) {\n      if (entry.key is! String || entry.value is! num) continue;\n      final number = (entry.value as num).toDouble();\n      if (!number.isFinite || number < 0 || number > 20) continue;\n      result[entry.key as String] = number;\n    }\n    return Map.unmodifiable(result);\n  }\n\n"
+              text = text.replace(helper_anchor, helpers + helper_anchor, 1)
+
+          path.write_text(text)
           PY
       - uses: subosito/flutter-action@v2
         with:
@@ -76,11 +71,11 @@ jobs:
         run: |
           cd src/client/quantara_app
           dart format lib test
-      - name: Commit integration
+      - name: Commit journal evidence
         run: |
           if git diff --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/client/quantara_app/lib src/client/quantara_app/test
-          git commit -m "feat(price-action): attach contextual evidence to signals"
+          git commit -m "feat(price-action): persist contextual evidence in journal"
           git push origin HEAD:feat/103-contextual-price-action-v3
