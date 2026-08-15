@@ -1,3 +1,4 @@
+# rerun-after-source-contract-fix
 name: Validate 192 full temporary
 on:
   push:
