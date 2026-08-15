@@ -1,0 +1,126 @@
+name: Fix 192 temporary
+
+on:
+  push:
+    branches:
+      - feat/192-economic-opportunity-ranking
+    paths:
+      - .github/workflows/fix-192-temporary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/192-economic-opportunity-ranking
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Apply semantic ranking fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          ranker = Path('src/client/quantara_app/lib/features/decision_core/application/economic_opportunity_ranker.dart')
+          s = ranker.read_text()
+          s = s.replace("      if (expectedGrossR != null) 'expectedGrossR': expectedGrossR,\n      if (expectedNetR != null) 'expectedNetR': expectedNetR,", "      'expectedGrossR': ?expectedGrossR,\n      'expectedNetR': ?expectedNetR,")
+          ranker.write_text(s)
+
+          models = Path('src/client/quantara_app/lib/features/trading_lab/domain/trading_lab_models.dart')
+          s = models.read_text()
+          s = s.replace("    required this.confidencePercent,\n    required this.riskReward,", "    required this.confidencePercent,\n    this.setupQualityScore,\n    required this.riskReward,", 1)
+          s = s.replace("  final int confidencePercent;\n  final double riskReward;", "  final int confidencePercent;\n  final int? setupQualityScore;\n  final double riskReward;", 1)
+          s = s.replace("    'confidencePercent': confidencePercent,\n    'riskReward': riskReward,", "    'confidencePercent': confidencePercent,\n    'setupQualityScore': setupQualityScore,\n    'riskReward': riskReward,", 1)
+          s = s.replace("        confidencePercent: _int(json['confidencePercent']),\n        riskReward: _double(json['riskReward']),", "        confidencePercent: _int(json['confidencePercent']),\n        setupQualityScore: json['setupQualityScore'] == null\n            ? null\n            : _int(json['setupQualityScore']),\n        riskReward: _double(json['riskReward']),", 1)
+          identity_guard = """    if (!observedAtUtc.isUtc ||
+        !validUntilUtc.isUtc ||
+        !signalCandleOpenTimeUtc.isUtc) {"""
+          replacement_guard = """    if (setupQualityScore != null &&
+        (setupQualityScore! < 0 || setupQualityScore! > 100)) {
+      throw const FormatException('Trading Lab setup quality is invalid.');
+    }
+    if (!observedAtUtc.isUtc ||
+        !validUntilUtc.isUtc ||
+        !signalCandleOpenTimeUtc.isUtc) {"""
+          if identity_guard not in s:
+              raise SystemExit('TradingLabPendingCandidate guard anchor missing')
+          s = s.replace(identity_guard, replacement_guard, 1)
+          models.write_text(s)
+
+          broker = Path('src/client/quantara_app/lib/features/trading_lab/application/trading_lab_paper_broker.dart')
+          s = broker.read_text()
+          target = "          confidencePercent: idea.confidencePercent,\n          riskReward: idea.riskReward!,"
+          replacement = "          confidencePercent: idea.confidencePercent,\n          setupQualityScore: idea.setupQualityScore,\n          riskReward: idea.riskReward!,"
+          if target not in s:
+              raise SystemExit('Paper broker pending candidate anchor missing')
+          s = s.replace(target, replacement, 1)
+          broker.write_text(s)
+
+          adapter = Path('src/client/quantara_app/lib/features/trading_lab/application/trading_lab_opportunity_ranking.dart')
+          s = adapter.read_text()
+          target = '      setupQualityScore: pending.confidencePercent,'
+          replacement = '      setupQualityScore: pending.setupQualityScore ?? pending.confidencePercent,'
+          if target not in s:
+              raise SystemExit('Trading Lab ranking quality anchor missing')
+          s = s.replace(target, replacement, 1)
+          adapter.write_text(s)
+          PY
+      - name: Format ranking implementation and tests
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/decision_core/domain/economic_opportunity_models.dart
+          lib/features/decision_core/application/economic_opportunity_ranker.dart
+          lib/features/auto_trade/application/local_live_economic_ranking.dart
+          lib/features/trading_lab/application/trading_lab_opportunity_ranking.dart
+          lib/features/trading_lab/domain/trading_lab_models.dart
+          lib/features/trading_lab/application/trading_lab_paper_broker.dart
+          test/economic_opportunity_ranker_test.dart
+          test/local_live_economic_ranking_test.dart
+          test/trading_lab_opportunity_ranking_test.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Ranking and safety tests
+        working-directory: src/client/quantara_app
+        run: >-
+          flutter test
+          test/economic_opportunity_ranker_test.dart
+          test/local_live_economic_ranking_test.dart
+          test/trading_lab_opportunity_ranking_test.dart
+          test/local_live_trade_service_test.dart
+          test/canonical_decision_pipeline_test.dart
+          test/canonical_runtime_integration_test.dart
+          test/local_live_portfolio_atomic_concurrency_test.dart
+          test/local_live_portfolio_atomic_rollback_test.dart
+          test/trading_lab_model_roundtrip_test.dart
+      - name: Commit validated semantic fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
+          git add \
+            src/client/quantara_app/lib/features/decision_core/domain/economic_opportunity_models.dart \
+            src/client/quantara_app/lib/features/decision_core/application/economic_opportunity_ranker.dart \
+            src/client/quantara_app/lib/features/auto_trade/application/local_live_economic_ranking.dart \
+            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_opportunity_ranking.dart \
+            src/client/quantara_app/lib/features/trading_lab/domain/trading_lab_models.dart \
+            src/client/quantara_app/lib/features/trading_lab/application/trading_lab_paper_broker.dart \
+            src/client/quantara_app/test/economic_opportunity_ranker_test.dart \
+            src/client/quantara_app/test/local_live_economic_ranking_test.dart \
+            src/client/quantara_app/test/trading_lab_opportunity_ranking_test.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(ranking): preserve setup quality in Trading Lab"
+          git push origin HEAD:feat/192-economic-opportunity-ranking
