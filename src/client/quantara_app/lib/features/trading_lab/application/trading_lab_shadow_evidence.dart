@@ -1,8 +1,11 @@
 import 'dart:convert';
 
+import '../../decision_core/application/canonical_decision_pipeline.dart';
+import '../../decision_core/domain/canonical_decision_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
+import 'trading_lab_canonical_replay.dart';
 import 'trading_lab_review_bundle.dart';
 
 Map<String, Object?> buildTradingLabShadowEvidence(
@@ -89,7 +92,21 @@ Map<String, Object?> buildTradingLabShadowEvidence(
     );
   });
 
+  final canonicalShadowDecisions =
+      replayTradingLabEvidenceThroughCanonicalPipeline(
+        run,
+        entries,
+        environment: DecisionEnvironment.shadow,
+      );
+
   return {
+    'canonicalPipeline': {
+      'version': CanonicalDecisionPipeline.version,
+      'environment': DecisionEnvironment.shadow.name,
+      'decisions': canonicalShadowDecisions
+          .map((decision) => decision.toJson())
+          .toList(growable: false),
+    },
     'summary': {
       'signalsTracked': entries.length,
       'activatedSignals': activatedCount,
