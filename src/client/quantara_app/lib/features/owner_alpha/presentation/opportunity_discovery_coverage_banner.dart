@@ -32,7 +32,10 @@ class OpportunityDiscoveryCoverageBanner extends StatelessWidget {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
                 child: Row(
                   children: [
                     Icon(

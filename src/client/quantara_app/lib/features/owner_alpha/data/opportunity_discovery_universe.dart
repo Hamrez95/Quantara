@@ -45,7 +45,9 @@ final class OpportunityUniverseSnapshot {
       throw ArgumentError.value(generatedAtUtc, 'generatedAtUtc');
     }
     if (this.symbols.isEmpty) {
-      throw ArgumentError('At least one eligible discovery symbol is required.');
+      throw ArgumentError(
+        'At least one eligible discovery symbol is required.',
+      );
     }
   }
 
@@ -53,7 +55,8 @@ final class OpportunityUniverseSnapshot {
   final Map<OpportunityUniverseRejectionReason, int> rejections;
   final DateTime generatedAtUtc;
 
-  int get rejectedTotal => rejections.values.fold(0, (sum, value) => sum + value);
+  int get rejectedTotal =>
+      rejections.values.fold(0, (sum, value) => sum + value);
 
   String get fingerprint => symbols.join(',');
 }
@@ -140,7 +143,9 @@ final class BitunixOpportunityDiscoveryUniverseSource
     final pairData = pairRoot['data'];
     final tickerData = tickerRoot['data'];
     if (pairData is! List<Object?> || tickerData is! List<Object?>) {
-      throw const FormatException('Bitunix universe payload must contain lists.');
+      throw const FormatException(
+        'Bitunix universe payload must contain lists.',
+      );
     }
 
     final rejectionCounts = <OpportunityUniverseRejectionReason, int>{};
@@ -203,18 +208,22 @@ final class BitunixOpportunityDiscoveryUniverseSource
 
     final pool = candidates.take(policy.probePoolSize).toList(growable: false);
     final eligible = <String>[];
-    for (var offset = 0;
-        offset < pool.length && eligible.length < policy.targetSymbolCount;
-        offset += depthBatchSize) {
+    for (
+      var offset = 0;
+      offset < pool.length && eligible.length < policy.targetSymbolCount;
+      offset += depthBatchSize
+    ) {
       final proposedEnd = offset + depthBatchSize;
       final end = proposedEnd < pool.length ? proposedEnd : pool.length;
       final batch = pool.sublist(offset, end);
       final spreads = await Future.wait(
         batch.map((ticker) => _tryLoadSpreadBps(ticker.symbol)),
       );
-      for (var index = 0;
-          index < batch.length && eligible.length < policy.targetSymbolCount;
-          index++) {
+      for (
+        var index = 0;
+        index < batch.length && eligible.length < policy.targetSymbolCount;
+        index++
+      ) {
         final spread = spreads[index];
         if (spread == null) {
           reject(OpportunityUniverseRejectionReason.spreadUnavailable);
@@ -232,7 +241,9 @@ final class BitunixOpportunityDiscoveryUniverseSource
     }
 
     if (eligible.isEmpty) {
-      throw StateError('No Bitunix Futures symbols passed discovery eligibility.');
+      throw StateError(
+        'No Bitunix Futures symbols passed discovery eligibility.',
+      );
     }
     return OpportunityUniverseSnapshot(
       symbols: eligible,
@@ -244,9 +255,9 @@ final class BitunixOpportunityDiscoveryUniverseSource
   Future<double?> _tryLoadSpreadBps(String symbol) async {
     try {
       final root = await _getJson(
-        Uri.parse('$_origin/api/v1/futures/market/depth').replace(
-          queryParameters: {'symbol': symbol, 'limit': '1'},
-        ),
+        Uri.parse(
+          '$_origin/api/v1/futures/market/depth',
+        ).replace(queryParameters: {'symbol': symbol, 'limit': '1'}),
       );
       final data = _object(root['data']);
       final bids = data['bids'];
@@ -276,7 +287,9 @@ final class BitunixOpportunityDiscoveryUniverseSource
         .get(uri, headers: const {'Accept': 'application/json'})
         .timeout(timeout);
     if (response.statusCode != 200) {
-      throw StateError('Bitunix discovery returned HTTP ${response.statusCode}.');
+      throw StateError(
+        'Bitunix discovery returned HTTP ${response.statusCode}.',
+      );
     }
     if (response.bodyBytes.length > _maximumResponseBytes) {
       throw const FormatException('Bitunix discovery response is too large.');
@@ -358,14 +371,11 @@ abstract final class OpportunityDiscoveryRealtimeUniverse {
   ];
 
   static RealtimeMarketUniverse build(OpportunityUniverseSnapshot snapshot) {
-    return RealtimeMarketUniverse(
-      [
-        for (final symbol in snapshot.symbols)
-          for (final interval in intervals)
-            RealtimeCandleStreamKey(symbol: symbol, interval: interval),
-      ],
-      maximumStreams: 1000,
-    );
+    return RealtimeMarketUniverse([
+      for (final symbol in snapshot.symbols)
+        for (final interval in intervals)
+          RealtimeCandleStreamKey(symbol: symbol, interval: interval),
+    ], maximumStreams: 1000);
   }
 }
 
@@ -424,7 +434,8 @@ final class OpportunityDiscoveryCoverageTracker
   final Map<String, OpportunityStage> _latestStages = {};
 
   void recordAnalysis(RealtimeCandleAnalysisContext context) {
-    final changed = _symbolsScanned.add(context.key.symbol) |
+    final changed =
+        _symbolsScanned.add(context.key.symbol) |
         _streamsAnalyzed.add(context.key.id);
     if (changed) _publish(context.processedAtUtc);
   }
@@ -493,11 +504,8 @@ final class _DiscoveryIdeaCatalog {
     RealtimeCandleStreamKey key,
     AnalysisStrategy strategy,
   ) {
-    final setupId = _setupByStreamStrategy[_key(
-      key.symbol,
-      key.timeframe,
-      strategy,
-    )];
+    final setupId =
+        _setupByStreamStrategy[_key(key.symbol, key.timeframe, strategy)];
     return setupId == null ? null : _bySetup[setupId];
   }
 
@@ -656,7 +664,8 @@ final class OpportunityDiscoveryCoverageProjection
     required CandidateCoordinationOutcome outcome,
     required CandidateAuditPersistenceDecision persistenceDecision,
   }) async {
-    if (candidate != null && outcome == CandidateCoordinationOutcome.committed) {
+    if (candidate != null &&
+        outcome == CandidateCoordinationOutcome.committed) {
       coverage.recordCandidate(candidate);
     }
     await delegate.apply(

@@ -93,12 +93,12 @@ class _QuantaraAppState extends State<QuantaraApp> {
       unawaited(injectedHost.initialize());
     } else if (widget.repository == null) {
       _localLivePreferencesSubscription =
-          SharedPreferencesLocalLivePreferencesStore.changes.listen(
-            (preferences) {
-              _scheduleRealtimeReplacement(preferences);
-              _scheduleOpportunityDiscoveryReplacement(preferences);
-            },
-          );
+          SharedPreferencesLocalLivePreferencesStore.changes.listen((
+            preferences,
+          ) {
+            _scheduleRealtimeReplacement(preferences);
+            _scheduleOpportunityDiscoveryReplacement(preferences);
+          });
       _scheduleRealtimeReplacement();
       _scheduleOpportunityDiscoveryReplacement();
       _opportunityDiscoveryRefreshTimer = Timer.periodic(
@@ -232,8 +232,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
       languageCode: _locale.languageCode,
     );
     final strategyFingerprint =
-        localPreferences.strategies.map((value) => value.name).toList()
-          ..sort();
+        localPreferences.strategies.map((value) => value.name).toList()..sort();
     final fingerprint = [
       revision.universe.fingerprint,
       strategyFingerprint.join(','),

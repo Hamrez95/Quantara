@@ -9,130 +9,139 @@ import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart
 import 'package:quantara_app/features/owner_alpha/domain/realtime_candidate_models.dart';
 
 void main() {
-  test('eligible Bitunix universe selects 100 symbols across five timeframes', () async {
-    final validSymbols = List.generate(
-      105,
-      (index) => 'COIN${index.toString().padLeft(3, '0')}USDT',
-    );
-    final pairs = <Map<String, Object?>>[
-      for (final symbol in validSymbols)
+  test(
+    'eligible Bitunix universe selects 100 symbols across five timeframes',
+    () async {
+      final validSymbols = List.generate(
+        105,
+        (index) => 'COIN${index.toString().padLeft(3, '0')}USDT',
+      );
+      final pairs = <Map<String, Object?>>[
+        for (final symbol in validSymbols)
+          {
+            'symbol': symbol,
+            'quote': 'USDT',
+            'symbolStatus': 'OPEN',
+            'isApiSupported': true,
+          },
         {
-          'symbol': symbol,
+          'symbol': 'WIDEUSDT',
           'quote': 'USDT',
           'symbolStatus': 'OPEN',
           'isApiSupported': true,
         },
-      {
-        'symbol': 'WIDEUSDT',
-        'quote': 'USDT',
-        'symbolStatus': 'OPEN',
-        'isApiSupported': true,
-      },
-      {
-        'symbol': 'CLOSEDUSDT',
-        'quote': 'USDT',
-        'symbolStatus': 'STOP',
-        'isApiSupported': true,
-      },
-      {
-        'symbol': 'NOAPIUSDT',
-        'quote': 'USDT',
-        'symbolStatus': 'OPEN',
-        'isApiSupported': false,
-      },
-      {
-        'symbol': 'LOWVOLUSDT',
-        'quote': 'USDT',
-        'symbolStatus': 'OPEN',
-        'isApiSupported': true,
-      },
-      {
-        'symbol': 'BTCUSD',
-        'quote': 'USD',
-        'symbolStatus': 'OPEN',
-        'isApiSupported': true,
-      },
-    ];
-    final tickers = <Map<String, Object?>>[
-      for (var index = 0; index < validSymbols.length; index++)
         {
-          'symbol': validSymbols[index],
-          'lastPrice': '100',
-          'quoteVol': '${2000000 - index * 1000}',
+          'symbol': 'CLOSEDUSDT',
+          'quote': 'USDT',
+          'symbolStatus': 'STOP',
+          'isApiSupported': true,
         },
-      {'symbol': 'WIDEUSDT', 'lastPrice': '100', 'quoteVol': '9999999'},
-      {'symbol': 'CLOSEDUSDT', 'lastPrice': '100', 'quoteVol': '9000000'},
-      {'symbol': 'NOAPIUSDT', 'lastPrice': '100', 'quoteVol': '8000000'},
-      {'symbol': 'LOWVOLUSDT', 'lastPrice': '100', 'quoteVol': '100'},
-      {'symbol': 'BTCUSD', 'lastPrice': '100', 'quoteVol': '7000000'},
-    ];
-    var depthRequests = 0;
-    final client = MockClient((request) async {
-      switch (request.url.path) {
-        case '/api/v1/futures/market/trading_pairs':
-          return _jsonResponse({'code': 0, 'data': pairs});
-        case '/api/v1/futures/market/tickers':
-          return _jsonResponse({'code': 0, 'data': tickers});
-        case '/api/v1/futures/market/depth':
-          depthRequests++;
-          final symbol = request.url.queryParameters['symbol'];
-          return _jsonResponse({
-            'code': 0,
-            'data': {
-              'bids': [
-                ['100', '10'],
-              ],
-              'asks': [
-                [symbol == 'WIDEUSDT' ? '101' : '100.01', '10'],
-              ],
-            },
-          });
-        default:
-          return http.Response('not found', 404);
-      }
-    });
-    final source = BitunixOpportunityDiscoveryUniverseSource(
-      client: client,
-      delay: (_) async {},
-      now: () => DateTime.utc(2026, 8, 15, 8),
-    );
+        {
+          'symbol': 'NOAPIUSDT',
+          'quote': 'USDT',
+          'symbolStatus': 'OPEN',
+          'isApiSupported': false,
+        },
+        {
+          'symbol': 'LOWVOLUSDT',
+          'quote': 'USDT',
+          'symbolStatus': 'OPEN',
+          'isApiSupported': true,
+        },
+        {
+          'symbol': 'BTCUSD',
+          'quote': 'USD',
+          'symbolStatus': 'OPEN',
+          'isApiSupported': true,
+        },
+      ];
+      final tickers = <Map<String, Object?>>[
+        for (var index = 0; index < validSymbols.length; index++)
+          {
+            'symbol': validSymbols[index],
+            'lastPrice': '100',
+            'quoteVol': '${2000000 - index * 1000}',
+          },
+        {'symbol': 'WIDEUSDT', 'lastPrice': '100', 'quoteVol': '9999999'},
+        {'symbol': 'CLOSEDUSDT', 'lastPrice': '100', 'quoteVol': '9000000'},
+        {'symbol': 'NOAPIUSDT', 'lastPrice': '100', 'quoteVol': '8000000'},
+        {'symbol': 'LOWVOLUSDT', 'lastPrice': '100', 'quoteVol': '100'},
+        {'symbol': 'BTCUSD', 'lastPrice': '100', 'quoteVol': '7000000'},
+      ];
+      var depthRequests = 0;
+      final client = MockClient((request) async {
+        switch (request.url.path) {
+          case '/api/v1/futures/market/trading_pairs':
+            return _jsonResponse({'code': 0, 'data': pairs});
+          case '/api/v1/futures/market/tickers':
+            return _jsonResponse({'code': 0, 'data': tickers});
+          case '/api/v1/futures/market/depth':
+            depthRequests++;
+            final symbol = request.url.queryParameters['symbol'];
+            return _jsonResponse({
+              'code': 0,
+              'data': {
+                'bids': [
+                  ['100', '10'],
+                ],
+                'asks': [
+                  [symbol == 'WIDEUSDT' ? '101' : '100.01', '10'],
+                ],
+              },
+            });
+          default:
+            return http.Response('not found', 404);
+        }
+      });
+      final source = BitunixOpportunityDiscoveryUniverseSource(
+        client: client,
+        delay: (_) async {},
+        now: () => DateTime.utc(2026, 8, 15, 8),
+      );
 
-    final snapshot = await source.load();
-    final universe = OpportunityDiscoveryRealtimeUniverse.build(snapshot);
+      final snapshot = await source.load();
+      final universe = OpportunityDiscoveryRealtimeUniverse.build(snapshot);
 
-    expect(snapshot.symbols, hasLength(100));
-    expect(snapshot.symbols, isNot(contains('WIDEUSDT')));
-    expect(
-      snapshot.rejections[OpportunityUniverseRejectionReason.marketClosed],
-      1,
-    );
-    expect(
-      snapshot.rejections[OpportunityUniverseRejectionReason.apiUnsupported],
-      1,
-    );
-    expect(
-      snapshot.rejections[
-        OpportunityUniverseRejectionReason.insufficientLiquidity
-      ],
-      1,
-    );
-    expect(
-      snapshot.rejections[OpportunityUniverseRejectionReason.spreadTooWide],
-      1,
-    );
-    expect(depthRequests, greaterThanOrEqualTo(101));
-    expect(universe.streams, hasLength(500));
-    expect(universe.streams.where((stream) => stream.timeframe == '1D'), hasLength(100));
-    expect(universe.streams.where((stream) => stream.timeframe == '30m'), isEmpty);
-  });
+      expect(snapshot.symbols, hasLength(100));
+      expect(snapshot.symbols, isNot(contains('WIDEUSDT')));
+      expect(
+        snapshot.rejections[OpportunityUniverseRejectionReason.marketClosed],
+        1,
+      );
+      expect(
+        snapshot.rejections[OpportunityUniverseRejectionReason.apiUnsupported],
+        1,
+      );
+      expect(
+        snapshot.rejections[OpportunityUniverseRejectionReason
+            .insufficientLiquidity],
+        1,
+      );
+      expect(
+        snapshot.rejections[OpportunityUniverseRejectionReason.spreadTooWide],
+        1,
+      );
+      expect(depthRequests, greaterThanOrEqualTo(101));
+      expect(universe.streams, hasLength(500));
+      expect(
+        universe.streams.where((stream) => stream.timeframe == '1D'),
+        hasLength(100),
+      );
+      expect(
+        universe.streams.where((stream) => stream.timeframe == '30m'),
+        isEmpty,
+      );
+    },
+  );
 
   test('coverage tracker keeps lifecycle funnel counts distinct', () {
     final tracker = OpportunityDiscoveryCoverageTracker(
       OpportunityUniverseSnapshot(
-        symbols: List.generate(100, (index) => 'A${index.toString().padLeft(3, '0')}USDT'),
-        rejections: const {
-          OpportunityUniverseRejectionReason.marketClosed: 2,
-        },
+        symbols: List.generate(
+          100,
+          (index) => 'A${index.toString().padLeft(3, '0')}USDT',
+        ),
+        rejections: const {OpportunityUniverseRejectionReason.marketClosed: 2},
         generatedAtUtc: DateTime.utc(2026, 8, 15, 8),
       ),
     );
