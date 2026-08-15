@@ -85,54 +85,63 @@ void main() {
     }
   });
 
-  test('Trading Lab expands fee funding spread slippage and latency separately', () {
-    final rankedCandidate = TradingLabOpportunityRanking.candidate(
-      run: run(),
-      pending: pending(id: 'btc', symbol: 'BTCUSDT'),
-      marketPrice: 100,
-    );
+  test(
+    'Trading Lab expands fee funding spread slippage and latency separately',
+    () {
+      final rankedCandidate = TradingLabOpportunityRanking.candidate(
+        run: run(),
+        pending: pending(id: 'btc', symbol: 'BTCUSDT'),
+        marketPrice: 100,
+      );
 
-    expect(rankedCandidate.costs.feeR, greaterThan(0));
-    expect(rankedCandidate.costs.fundingR, greaterThan(0));
-    expect(rankedCandidate.costs.spreadR, greaterThan(0));
-    expect(rankedCandidate.costs.slippageR, greaterThan(0));
-    expect(rankedCandidate.costs.latencyR, greaterThan(0));
-    expect(rankedCandidate.costs.unknownComponents, isEmpty);
-    expect(rankedCandidate.fillProbability, 0.8);
-  });
+      expect(rankedCandidate.costs.feeR, greaterThan(0));
+      expect(rankedCandidate.costs.fundingR, greaterThan(0));
+      expect(rankedCandidate.costs.spreadR, greaterThan(0));
+      expect(rankedCandidate.costs.slippageR, greaterThan(0));
+      expect(rankedCandidate.costs.latencyR, greaterThan(0));
+      expect(rankedCandidate.costs.unknownComponents, isEmpty);
+      expect(rankedCandidate.fillProbability, 0.8);
+    },
+  );
 
-  test('worse execution assumptions reduce economic utility on identical setup', () {
-    final setup = pending(id: 'btc', symbol: 'BTCUSDT');
-    final cheap = TradingLabOpportunityRanking.comparePolicies(
-      run: run(
-        fee: 1,
-        spread: 0.5,
-        slippage: 0.5,
-        funding: 0,
-        latency: 0,
-        partialFill: 1,
-      ),
-      pendingCandidates: [setup],
-      marketPrices: const {'BTCUSDT': 100},
-      evaluatedAtUtc: now,
-    )[OpportunityRankingPolicy.economicUtility]!.single;
-    final expensive = TradingLabOpportunityRanking.comparePolicies(
-      run: run(
-        fee: 20,
-        spread: 10,
-        slippage: 15,
-        funding: 0.005,
-        latency: 20,
-        partialFill: 0.4,
-      ),
-      pendingCandidates: [setup],
-      marketPrices: const {'BTCUSDT': 100},
-      evaluatedAtUtc: now,
-    )[OpportunityRankingPolicy.economicUtility]!.single;
+  test(
+    'worse execution assumptions reduce economic utility on identical setup',
+    () {
+      final setup = pending(id: 'btc', symbol: 'BTCUSDT');
+      final cheap = TradingLabOpportunityRanking.comparePolicies(
+        run: run(
+          fee: 1,
+          spread: 0.5,
+          slippage: 0.5,
+          funding: 0,
+          latency: 0,
+          partialFill: 1,
+        ),
+        pendingCandidates: [setup],
+        marketPrices: const {'BTCUSDT': 100},
+        evaluatedAtUtc: now,
+      )[OpportunityRankingPolicy.economicUtility]!.single;
+      final expensive = TradingLabOpportunityRanking.comparePolicies(
+        run: run(
+          fee: 20,
+          spread: 10,
+          slippage: 15,
+          funding: 0.005,
+          latency: 20,
+          partialFill: 0.4,
+        ),
+        pendingCandidates: [setup],
+        marketPrices: const {'BTCUSDT': 100},
+        evaluatedAtUtc: now,
+      )[OpportunityRankingPolicy.economicUtility]!.single;
 
-    expect(expensive.utility.executionCostR, greaterThan(cheap.utility.executionCostR));
-    expect(expensive.utility.score, lessThan(cheap.utility.score));
-  });
+      expect(
+        expensive.utility.executionCostR,
+        greaterThan(cheap.utility.executionCostR),
+      );
+      expect(expensive.utility.score, lessThan(cheap.utility.score));
+    },
+  );
 
   test('Trading Lab ranking adapter has no live or order authority', () {
     final source = File(

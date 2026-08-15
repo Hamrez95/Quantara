@@ -47,56 +47,61 @@ void main() {
     setupQualityScore: quality,
   );
 
-  test('preferred timeframe and conflict resolution happen before economics', () {
-    final btc4h = idea(
-      id: 'btc-4h',
-      symbol: 'BTCUSDT',
-      timeframe: '4h',
-      quality: 95,
-      costs: 0.1,
-    );
-    final btc1h = idea(
-      id: 'btc-1h',
-      symbol: 'BTCUSDT',
-      timeframe: '1h',
-      quality: 72,
-      costs: 1.5,
-    );
-    final eth1h = idea(
-      id: 'eth-1h',
-      symbol: 'ETHUSDT',
-      timeframe: '1h',
-      quality: 82,
-      costs: 0.1,
-    );
-    final solLong = idea(
-      id: 'sol-long',
-      symbol: 'SOLUSDT',
-      timeframe: '1h',
-      direction: TradeDirection.long,
-    );
-    final solShort = idea(
-      id: 'sol-short',
-      symbol: 'SOLUSDT',
-      timeframe: '1h',
-      direction: TradeDirection.short,
-    );
+  test(
+    'preferred timeframe and conflict resolution happen before economics',
+    () {
+      final btc4h = idea(
+        id: 'btc-4h',
+        symbol: 'BTCUSDT',
+        timeframe: '4h',
+        quality: 95,
+        costs: 0.1,
+      );
+      final btc1h = idea(
+        id: 'btc-1h',
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        quality: 72,
+        costs: 1.5,
+      );
+      final eth1h = idea(
+        id: 'eth-1h',
+        symbol: 'ETHUSDT',
+        timeframe: '1h',
+        quality: 82,
+        costs: 0.1,
+      );
+      final solLong = idea(
+        id: 'sol-long',
+        symbol: 'SOLUSDT',
+        timeframe: '1h',
+        direction: TradeDirection.long,
+      );
+      final solShort = idea(
+        id: 'sol-short',
+        symbol: 'SOLUSDT',
+        timeframe: '1h',
+        direction: TradeDirection.short,
+      );
 
-    final ranked = LocalLiveEconomicRanking.rank(
-      ideas: [btc4h, btc1h, eth1h, solLong, solShort],
-      lastPrices: const {
-        'BTCUSDT': 100,
-        'ETHUSDT': 100,
-        'SOLUSDT': 100,
-      },
-      evaluatedAtUtc: now,
-    );
+      final ranked = LocalLiveEconomicRanking.rank(
+        ideas: [btc4h, btc1h, eth1h, solLong, solShort],
+        lastPrices: const {'BTCUSDT': 100, 'ETHUSDT': 100, 'SOLUSDT': 100},
+        evaluatedAtUtc: now,
+      );
 
-    expect(ranked.map((item) => item.idea.setupId), contains('btc-1h'));
-    expect(ranked.map((item) => item.idea.setupId), isNot(contains('btc-4h')));
-    expect(ranked.map((item) => item.idea.symbol), isNot(contains('SOLUSDT')));
-    expect(ranked.first.idea.setupId, 'eth-1h');
-  });
+      expect(ranked.map((item) => item.idea.setupId), contains('btc-1h'));
+      expect(
+        ranked.map((item) => item.idea.setupId),
+        isNot(contains('btc-4h')),
+      );
+      expect(
+        ranked.map((item) => item.idea.symbol),
+        isNot(contains('SOLUSDT')),
+      );
+      expect(ranked.first.idea.setupId, 'eth-1h');
+    },
+  );
 
   test('concentration cost can reorder without changing the trade plan', () {
     final crowded = idea(
@@ -139,22 +144,28 @@ void main() {
     expect(combined, isNot(contains('privateapi')));
   });
 
-  test('Local Live source continues after deterministic candidate rejection', () {
-    final source = File(
-      'lib/features/auto_trade/application/local_live_trade_service.dart',
-    ).readAsStringSync();
-    final loop = source.indexOf('for (final rankedIdea in rankedIdeas)');
-    final canonical = source.indexOf('if (!canonical.eligible)', loop);
-    final reservation = source.indexOf(
-      'if (!reservation.decision.allowed',
-      canonical,
-    );
-    final canonicalContinue = source.indexOf('continue;', canonical);
-    final reservationContinue = source.indexOf('continue;', reservation);
+  test(
+    'Local Live source continues after deterministic candidate rejection',
+    () {
+      final source = File(
+        'lib/features/auto_trade/application/local_live_trade_service.dart',
+      ).readAsStringSync();
+      final loop = source.indexOf('for (final rankedIdea in rankedIdeas)');
+      final canonical = source.indexOf('if (!canonical.eligible)', loop);
+      final reservation = source.indexOf(
+        'if (!reservation.decision.allowed',
+        canonical,
+      );
+      final canonicalContinue = source.indexOf('continue;', canonical);
+      final reservationContinue = source.indexOf('continue;', reservation);
 
-    expect(loop, greaterThanOrEqualTo(0));
-    expect(canonical, greaterThan(loop));
-    expect(canonicalContinue, allOf(greaterThan(canonical), lessThan(reservation)));
-    expect(reservationContinue, greaterThan(reservation));
-  });
+      expect(loop, greaterThanOrEqualTo(0));
+      expect(canonical, greaterThan(loop));
+      expect(
+        canonicalContinue,
+        allOf(greaterThan(canonical), lessThan(reservation)),
+      );
+      expect(reservationContinue, greaterThan(reservation));
+    },
+  );
 }

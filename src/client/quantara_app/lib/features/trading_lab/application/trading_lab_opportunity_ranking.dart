@@ -9,12 +9,15 @@ abstract final class TradingLabOpportunityRanking {
     required TradingLabPendingCandidate pending,
     required double marketPrice,
     OpportunityCalibrationEvidence? calibration,
-    OpportunityRankingConfiguration config = const OpportunityRankingConfiguration(),
+    OpportunityRankingConfiguration config =
+        const OpportunityRankingConfiguration(),
   }) {
     final referenceEntry = (pending.entryLower + pending.entryUpper) / 2;
     final riskPerUnit = (referenceEntry - pending.stopLoss).abs();
     if (!riskPerUnit.isFinite || riskPerUnit <= 0) {
-      throw const FormatException('Trading Lab candidate risk distance is invalid.');
+      throw const FormatException(
+        'Trading Lab candidate risk distance is invalid.',
+      );
     }
     double rateToR(double rate) => referenceEntry * rate / riskPerUnit;
     final feeR = rateToR(run.manifest.feeRateBps * 2 / 10000);
@@ -45,7 +48,7 @@ abstract final class TradingLabOpportunityRanking {
       marketRegime: regime,
       createdAtUtc: pending.observedAtUtc,
       validUntilUtc: pending.validUntilUtc,
-      setupQualityScore: pending.confidencePercent,
+      setupQualityScore: pending.setupQualityScore ?? pending.confidencePercent,
       riskReward: pending.riskReward,
       riskBudget: riskBudget,
       requiredMargin: null,
@@ -72,13 +75,15 @@ abstract final class TradingLabOpportunityRanking {
     );
   }
 
-  static Map<OpportunityRankingPolicy, List<RankedOpportunity>> comparePolicies({
+  static Map<OpportunityRankingPolicy, List<RankedOpportunity>>
+  comparePolicies({
     required TradingLabRun run,
     required Iterable<TradingLabPendingCandidate> pendingCandidates,
     required Map<String, double> marketPrices,
     required DateTime evaluatedAtUtc,
     Map<String, OpportunityCalibrationEvidence> calibrationBySetupId = const {},
-    OpportunityRankingConfiguration config = const OpportunityRankingConfiguration(),
+    OpportunityRankingConfiguration config =
+        const OpportunityRankingConfiguration(),
   }) {
     final candidates = <OpportunityRankingCandidate>[];
     for (final pending in pendingCandidates) {

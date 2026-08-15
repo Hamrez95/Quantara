@@ -15,9 +15,8 @@ void main() {
     double currentPrice = 100,
     double entryLower = 99.5,
     double entryUpper = 100.5,
-    OpportunityExecutionCostEvidence costs = const OpportunityExecutionCostEvidence(
-      aggregateCostR: 0.1,
-    ),
+    OpportunityExecutionCostEvidence costs =
+        const OpportunityExecutionCostEvidence(aggregateCostR: 0.1),
     double? holdingHours = 6,
     double? liquidity = 0.8,
     double? fill = 0.9,
@@ -74,35 +73,38 @@ void main() {
     expect(second.first.utility.fingerprint, first.first.utility.fingerprint);
   });
 
-  test('lower setup quality can win on lower costs and shorter capital-time', () {
-    final expensive = candidate(
-      id: 'expensive',
-      quality: 92,
-      costs: const OpportunityExecutionCostEvidence(aggregateCostR: 0.65),
-      holdingHours: 24,
-      liquidity: 0.6,
-      fill: 0.7,
-    );
-    final efficient = candidate(
-      id: 'efficient',
-      quality: 82,
-      costs: const OpportunityExecutionCostEvidence(aggregateCostR: 0.05),
-      holdingHours: 1.5,
-      liquidity: 0.9,
-      fill: 0.95,
-    );
+  test(
+    'lower setup quality can win on lower costs and shorter capital-time',
+    () {
+      final expensive = candidate(
+        id: 'expensive',
+        quality: 92,
+        costs: const OpportunityExecutionCostEvidence(aggregateCostR: 0.65),
+        holdingHours: 24,
+        liquidity: 0.6,
+        fill: 0.7,
+      );
+      final efficient = candidate(
+        id: 'efficient',
+        quality: 82,
+        costs: const OpportunityExecutionCostEvidence(aggregateCostR: 0.05),
+        holdingHours: 1.5,
+        liquidity: 0.9,
+        fill: 0.95,
+      );
 
-    final ranked = EconomicOpportunityRanker.rank(
-      candidates: [expensive, efficient],
-      evaluatedAtUtc: now,
-    );
+      final ranked = EconomicOpportunityRanker.rank(
+        candidates: [expensive, efficient],
+        evaluatedAtUtc: now,
+      );
 
-    expect(ranked.first.candidate.setupId, 'efficient');
-    expect(
-      ranked.first.utility.riskAdjustedEdgePerHour,
-      greaterThan(ranked.last.utility.riskAdjustedEdgePerHour),
-    );
-  });
+      expect(ranked.first.candidate.setupId, 'efficient');
+      expect(
+        ranked.first.utility.riskAdjustedEdgePerHour,
+        greaterThan(ranked.last.utility.riskAdjustedEdgePerHour),
+      );
+    },
+  );
 
   test('fee funding spread slippage and latency are explicit rank costs', () {
     OpportunityExecutionCostEvidence cost({

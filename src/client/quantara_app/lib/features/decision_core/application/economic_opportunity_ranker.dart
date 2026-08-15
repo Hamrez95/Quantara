@@ -10,7 +10,8 @@ abstract final class EconomicOpportunityRanker {
     required Iterable<OpportunityRankingCandidate> candidates,
     required DateTime evaluatedAtUtc,
     OpportunityRankingPolicy policy = OpportunityRankingPolicy.economicUtility,
-    OpportunityRankingConfiguration config = const OpportunityRankingConfiguration(),
+    OpportunityRankingConfiguration config =
+        const OpportunityRankingConfiguration(),
   }) {
     if (!evaluatedAtUtc.isUtc || !config.valid) {
       throw const FormatException('Opportunity ranking context is invalid.');
@@ -87,9 +88,9 @@ abstract final class EconomicOpportunityRanker {
             0.0,
             1.0,
           );
-    final chase = (candidate.chaseDistanceFraction /
-            config.maximumChaseDistanceBands)
-        .clamp(0.0, 2.0);
+    final chase =
+        (candidate.chaseDistanceFraction / config.maximumChaseDistanceBands)
+            .clamp(0.0, 2.0);
     final liquidity = _bounded(candidate.liquidityScore, fallback: 0.5);
     final fill = _bounded(candidate.fillProbability, fallback: 0.5);
     final correlation = candidate.correlationPenalty.clamp(0.0, 1.0);
@@ -120,8 +121,8 @@ abstract final class EconomicOpportunityRanker {
       'concentrationPenalty': concentration,
       'tailRiskPenalty': tail,
       'uncertaintyPenalty': uncertainty,
-      if (expectedGrossR != null) 'expectedGrossR': expectedGrossR,
-      if (expectedNetR != null) 'expectedNetR': expectedNetR,
+      'expectedGrossR': ?expectedGrossR,
+      'expectedNetR': ?expectedNetR,
     };
 
     final score = switch (policy) {
@@ -238,7 +239,8 @@ abstract final class OpportunityRankingSensitivity {
   static OpportunityRankingSensitivityResult evaluate({
     required Iterable<OpportunityRankingCandidate> candidates,
     required DateTime evaluatedAtUtc,
-    OpportunityRankingConfiguration config = const OpportunityRankingConfiguration(),
+    OpportunityRankingConfiguration config =
+        const OpportunityRankingConfiguration(),
   }) {
     final values = candidates.toList(growable: false);
     final baseline = EconomicOpportunityRanker.rank(
