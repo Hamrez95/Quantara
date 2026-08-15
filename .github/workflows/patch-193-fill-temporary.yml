@@ -1,0 +1,53 @@
+name: Patch 193 fill temporary
+on:
+  push:
+    branches: [feat/193-private-ws-hot-path-v2]
+    paths: [.github/workflows/patch-193-fill-temporary.yml]
+permissions:
+  contents: write
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/193-private-ws-hot-path-v2
+      - name: Apply WebSocket-first fill patch
+        run: |
+          python3 .github/scripts/patch_193_fill_hot_path.py
+          python3 .github/scripts/patch_193_fill_import.py
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+      - name: Format
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/auto_trade/data/bitunix_private_websocket_client.dart lib/features/auto_trade/domain/private_truth_models.dart lib/features/auto_trade/application/private_truth_coordinator.dart lib/features/auto_trade/application/local_live_trade_service.dart test/private_truth_fill_confirmation_test.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Private truth fill and safety tests
+        working-directory: src/client/quantara_app
+        run: >-
+          flutter test
+          test/bitunix_private_ws_protocol_test.dart
+          test/bitunix_private_websocket_client_test.dart
+          test/private_truth_reducer_test.dart
+          test/private_truth_reconciler_test.dart
+          test/private_truth_coordinator_test.dart
+          test/private_truth_account_snapshot_test.dart
+          test/private_truth_fill_confirmation_test.dart
+      - name: Commit tested product changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/auto_trade/data/bitunix_private_websocket_client.dart src/client/quantara_app/lib/features/auto_trade/domain/private_truth_models.dart src/client/quantara_app/lib/features/auto_trade/application/private_truth_coordinator.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart src/client/quantara_app/test/private_truth_fill_confirmation_test.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(auto-trade): confirm entry fills from private WS truth (#193)"
+          git push origin HEAD:feat/193-private-ws-hot-path-v2
