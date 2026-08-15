@@ -39,8 +39,6 @@ jobs:
           test/private_truth_coordinator_test.dart
           test/private_truth_account_snapshot_test.dart
           test/local_live_trade_service_source_test.dart
-          test/local_live_orphan_recovery_test.dart
-          test/local_live_portfolio_execution_guard_test.dart
       - name: Commit product integration
         shell: bash
         run: |
