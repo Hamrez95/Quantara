@@ -22,31 +22,49 @@ jobs:
 
           models = Path('src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart')
           text = models.read_text()
-          replacements = [
-            ("import '../../market_analysis/domain/market_chart_models.dart';\n", "import '../../market_analysis/domain/market_chart_models.dart';\n"),
-            ("    this.indicatorSnapshot = const {},\n  });", "    this.indicatorSnapshot = const {},\n    this.setupQualityScore,\n    this.expectation = '',\n    this.trigger = '',\n    this.contextVersion = '',\n    this.evidenceBreakdown = const {},\n  });"),
-            ("  final Map<String, double> indicatorSnapshot;\n\n  DateTime get createdAt", "  final Map<String, double> indicatorSnapshot;\n  final int? setupQualityScore;\n  final String expectation;\n  final String trigger;\n  final String contextVersion;\n  final Map<String, double> evidenceBreakdown;\n\n  int get displayQualityScore => setupQualityScore ?? confidencePercent;\n\n  DateTime get createdAt"),
-          ]
-          for old, new in replacements:
-            if old not in text:
-              raise SystemExit(f'owner model patch target missing: {old[:80]!r}')
-            text = text.replace(old, new, 1)
+          if 'this.setupQualityScore' not in text:
+              marker = '    this.indicatorSnapshot = const {},\n'
+              assert marker in text
+              text = text.replace(marker, marker + "    this.setupQualityScore,\n    this.expectation = '',\n    this.trigger = '',\n    this.contextVersion = '',\n    this.evidenceBreakdown = const {},\n", 1)
+          if 'final int? setupQualityScore;' not in text:
+              marker = '  final Map<String, double> indicatorSnapshot;\n'
+              assert marker in text
+              text = text.replace(marker, marker + "  final int? setupQualityScore;\n  final String expectation;\n  final String trigger;\n  final String contextVersion;\n  final Map<String, double> evidenceBreakdown;\n\n  int get displayQualityScore => setupQualityScore ?? confidencePercent;\n", 1)
           models.write_text(text)
 
           engine = Path('src/client/quantara_app/lib/features/owner_alpha/data/professional_strategy_engine.dart')
           text = engine.read_text()
-          replacements = [
-            ("import '../../market_analysis/data/technical_indicator_engine.dart';\n", "import '../../market_analysis/data/contextual_price_action_engine.dart';\nimport '../../market_analysis/data/technical_indicator_engine.dart';\nimport '../../market_analysis/domain/contextual_price_action_models.dart';\n"),
-            ("    final kind = _kindFor(strategy, analysis, indicators);", "    final contextual = ContextualPriceActionEngine.analyze(\n      analysis: analysis,\n      indicators: indicators,\n    );\n    final kind = _kindFor(strategy, analysis, indicators);"),
-            ("      indicators: indicators,\n      fa: fa,", "      indicators: indicators,\n      contextual: contextual,\n      fa: fa,"),
-            ("    required TechnicalIndicatorSnapshot indicators,\n    required bool fa,", "    required TechnicalIndicatorSnapshot indicators,\n    required ContextualPriceActionAssessment contextual,\n    required bool fa,"),
-            ("      reasons: List.unmodifiable([\n        ...(fa ? setup.reasonsFa : setup.reasonsEn),", "      reasons: List.unmodifiable([\n        ...(fa ? setup.reasonsFa : setup.reasonsEn),\n        'Setup Quality ${contextual.setupQualityScore}/100 — ${contextual.version}.',\n        'Expectation: ${contextual.expectation}',\n        'Trigger: ${contextual.trigger}',\n        'Context invalidation: ${contextual.invalidation}',"),
-            ("      marketRegime: setup.regime,\n      indicatorSnapshot: _indicatorSnapshot(indicators),", "      marketRegime: setup.regime,\n      indicatorSnapshot: _indicatorSnapshot(indicators),\n      setupQualityScore: contextual.setupQualityScore,\n      expectation: contextual.expectation,\n      trigger: contextual.trigger,\n      contextVersion: contextual.version,\n      evidenceBreakdown: contextual.scoreBreakdown,"),
-          ]
-          for old, new in replacements:
-            if old not in text:
-              raise SystemExit(f'professional engine patch target missing: {old[:100]!r}')
-            text = text.replace(old, new, 1)
+          if "contextual_price_action_engine.dart" not in text:
+              marker = "import '../../market_analysis/data/technical_indicator_engine.dart';\n"
+              assert marker in text
+              text = text.replace(marker, "import '../../market_analysis/data/contextual_price_action_engine.dart';\n" + marker + "import '../../market_analysis/domain/contextual_price_action_models.dart';\n", 1)
+          if 'final contextual = ContextualPriceActionEngine.analyze' not in text:
+              marker = '    final kind = _kindFor(strategy, analysis, indicators);\n'
+              assert marker in text
+              text = text.replace(marker, "    final contextual = ContextualPriceActionEngine.analyze(\n      analysis: analysis,\n      indicators: indicators,\n    );\n" + marker, 1)
+          call_start = text.index('    return _buildIdea(')
+          call_end = text.index('    );', call_start) + 7
+          call = text[call_start:call_end]
+          if 'contextual: contextual' not in call:
+              marker = '      indicators: indicators,\n'
+              assert marker in call
+              call = call.replace(marker, marker + '      contextual: contextual,\n', 1)
+              text = text[:call_start] + call + text[call_end:]
+          build_start = text.index('  static TradeIdea _buildIdea({')
+          build_body = text[build_start:]
+          if 'required ContextualPriceActionAssessment contextual' not in build_body[:1200]:
+              marker = '    required TechnicalIndicatorSnapshot indicators,\n'
+              assert marker in build_body[:1200]
+              build_body = build_body.replace(marker, marker + '    required ContextualPriceActionAssessment contextual,\n', 1)
+              text = text[:build_start] + build_body
+          if "Setup Quality ${contextual.setupQualityScore}" not in text:
+              marker = '        ...(fa ? setup.reasonsFa : setup.reasonsEn),\n'
+              assert marker in text
+              text = text.replace(marker, marker + "        'Setup Quality ${contextual.setupQualityScore}/100 — ${contextual.version}.',\n        'Expectation: ${contextual.expectation}',\n        'Trigger: ${contextual.trigger}',\n        'Context invalidation: ${contextual.invalidation}',\n", 1)
+          if 'setupQualityScore: contextual.setupQualityScore' not in text:
+              marker = '      indicatorSnapshot: _indicatorSnapshot(indicators),\n'
+              assert marker in text
+              text = text.replace(marker, marker + "      setupQualityScore: contextual.setupQualityScore,\n      expectation: contextual.expectation,\n      trigger: contextual.trigger,\n      contextVersion: contextual.version,\n      evidenceBreakdown: contextual.scoreBreakdown,\n", 1)
           engine.write_text(text)
           PY
       - uses: subosito/flutter-action@v2
@@ -54,15 +72,15 @@ jobs:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Format changed sources
+      - name: Format changed sources and tests
         run: |
           cd src/client/quantara_app
-          dart format lib
+          dart format lib test
       - name: Commit integration
         run: |
           if git diff --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/client/quantara_app/lib
+          git add src/client/quantara_app/lib src/client/quantara_app/test
           git commit -m "feat(price-action): attach contextual evidence to signals"
           git push origin HEAD:feat/103-contextual-price-action-v3
