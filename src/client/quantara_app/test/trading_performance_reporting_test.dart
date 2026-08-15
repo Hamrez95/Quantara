@@ -60,40 +60,46 @@ void main() {
     expect(insights.single.message, contains('do not change live parameters'));
   });
 
-  test('mature segment evidence reports strongest and weakest without auto tuning', () {
-    final projections = <TradingJournalProjection>[
-      ...List.generate(
-        25,
-        (index) => _projection(
-          id: 'trend-$index',
-          strategy: 'trendPullback',
-          net: 3,
-          r: 0.7,
+  test(
+    'mature segment evidence reports strongest and weakest without auto tuning',
+    () {
+      final projections = <TradingJournalProjection>[
+        ...List.generate(
+          25,
+          (index) => _projection(
+            id: 'trend-$index',
+            strategy: 'trendPullback',
+            net: 3,
+            r: 0.7,
+          ),
         ),
-      ),
-      ...List.generate(
-        25,
-        (index) => _projection(
-          id: 'range-$index',
-          strategy: 'rangeSweep',
-          net: -1,
-          r: -0.25,
+        ...List.generate(
+          25,
+          (index) => _projection(
+            id: 'range-$index',
+            strategy: 'rangeSweep',
+            net: -1,
+            r: -0.25,
+          ),
         ),
-      ),
-    ];
-    final report = TradingPerformanceAnalytics.build(
-      projections: projections,
-      generatedAtUtc: DateTime.utc(2026, 8, 15),
-      bootstrapIterations: 300,
-    );
+      ];
+      final report = TradingPerformanceAnalytics.build(
+        projections: projections,
+        generatedAtUtc: DateTime.utc(2026, 8, 15),
+        bootstrapIterations: 300,
+      );
 
-    final insights = TradingPerformanceReporting.evidenceInsights(report);
+      final insights = TradingPerformanceReporting.evidenceInsights(report);
 
-    expect(insights, hasLength(2));
-    expect(insights.first.kind, TradingPerformanceInsightKind.worked);
-    expect(insights.last.kind, TradingPerformanceInsightKind.didNotWork);
-    expect(insights.first.message, contains('not an automatic parameter change'));
-  });
+      expect(insights, hasLength(2));
+      expect(insights.first.kind, TradingPerformanceInsightKind.worked);
+      expect(insights.last.kind, TradingPerformanceInsightKind.didNotWork);
+      expect(
+        insights.first.message,
+        contains('not an automatic parameter change'),
+      );
+    },
+  );
 }
 
 TradingJournalProjection _projection({

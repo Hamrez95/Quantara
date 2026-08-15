@@ -38,7 +38,11 @@ abstract final class TradingPerformanceReporting {
     }
     return switch (period) {
       TradingPerformancePeriod.daily => TradingPerformanceFilter(
-        startedAtUtc: DateTime.utc(anchorUtc.year, anchorUtc.month, anchorUtc.day),
+        startedAtUtc: DateTime.utc(
+          anchorUtc.year,
+          anchorUtc.month,
+          anchorUtc.day,
+        ),
         endedAtUtc: DateTime.utc(
           anchorUtc.year,
           anchorUtc.month,
@@ -71,10 +75,13 @@ abstract final class TradingPerformanceReporting {
       'timeframes': report.filter.timeframes.toList(growable: false)..sort(),
       'strategies': report.filter.strategies.toList(growable: false)..sort(),
       'regimes': report.filter.regimes.toList(growable: false)..sort(),
-      'sources': report.filter.sources.map((item) => item.name).toList(growable: false)
-        ..sort(),
+      'sources':
+          report.filter.sources.map((item) => item.name).toList(growable: false)
+            ..sort(),
       'directions':
-          report.filter.directions.map((item) => item.name).toList(growable: false)
+          report.filter.directions
+              .map((item) => item.name)
+              .toList(growable: false)
             ..sort(),
     },
     'summary': {
@@ -131,7 +138,15 @@ abstract final class TradingPerformanceReporting {
 
   static String toCsv(TradingPerformanceReport report) {
     final rows = <List<Object?>>[
-      ['dimension', 'key', 'trades', 'netPnl', 'expectancyR', 'winRatePercent', 'profitFactor'],
+      [
+        'dimension',
+        'key',
+        'trades',
+        'netPnl',
+        'expectancyR',
+        'winRatePercent',
+        'profitFactor',
+      ],
       ..._csvRows('symbol', report.bySymbol),
       ..._csvRows('timeframe', report.byTimeframe),
       ..._csvRows('strategy', report.byStrategy),
@@ -149,20 +164,23 @@ abstract final class TradingPerformanceReporting {
     if (minimumSamples < 10) {
       throw ArgumentError('Insight minimum sample is too small.');
     }
-    final candidates = <({String dimension, TradingPerformanceGroup group})>[
-      for (final item in report.byStrategy.values)
-        (dimension: 'strategy', group: item),
-      for (final item in report.bySymbol.values)
-        (dimension: 'symbol', group: item),
-      for (final item in report.byTimeframe.values)
-        (dimension: 'timeframe', group: item),
-      for (final item in report.byRegime.values)
-        (dimension: 'regime', group: item),
-      for (final item in report.byDirection.values)
-        (dimension: 'direction', group: item),
-      for (final item in report.byMode.values)
-        (dimension: 'mode', group: item),
-    ].where((item) => item.group.trades >= minimumSamples).toList(growable: false);
+    final candidates =
+        <({String dimension, TradingPerformanceGroup group})>[
+              for (final item in report.byStrategy.values)
+                (dimension: 'strategy', group: item),
+              for (final item in report.bySymbol.values)
+                (dimension: 'symbol', group: item),
+              for (final item in report.byTimeframe.values)
+                (dimension: 'timeframe', group: item),
+              for (final item in report.byRegime.values)
+                (dimension: 'regime', group: item),
+              for (final item in report.byDirection.values)
+                (dimension: 'direction', group: item),
+              for (final item in report.byMode.values)
+                (dimension: 'mode', group: item),
+            ]
+            .where((item) => item.group.trades >= minimumSamples)
+            .toList(growable: false);
 
     if (candidates.isEmpty) {
       return [
@@ -180,7 +198,9 @@ abstract final class TradingPerformanceReporting {
     }
 
     candidates.sort((left, right) {
-      final expectancy = right.group.expectancyR.compareTo(left.group.expectancyR);
+      final expectancy = right.group.expectancyR.compareTo(
+        left.group.expectancyR,
+      );
       if (expectancy != 0) return expectancy;
       return right.group.netPnl.compareTo(left.group.netPnl);
     });
@@ -211,8 +231,14 @@ abstract final class TradingPerformanceReporting {
   }
 
   static TradingPerformanceFilter _weekly(DateTime anchorUtc) {
-    final dayStart = DateTime.utc(anchorUtc.year, anchorUtc.month, anchorUtc.day);
-    final monday = dayStart.subtract(Duration(days: dayStart.weekday - DateTime.monday));
+    final dayStart = DateTime.utc(
+      anchorUtc.year,
+      anchorUtc.month,
+      anchorUtc.day,
+    );
+    final monday = dayStart.subtract(
+      Duration(days: dayStart.weekday - DateTime.monday),
+    );
     return TradingPerformanceFilter(
       startedAtUtc: monday,
       endedAtUtc: monday.add(const Duration(days: 7)),
@@ -232,7 +258,9 @@ abstract final class TradingPerformanceReporting {
             'netPnl': group.netPnl,
             'expectancyR': group.expectancyR,
             'winRatePercent': group.winRatePercent,
-            'profitFactor': group.profitFactor.isFinite ? group.profitFactor : null,
+            'profitFactor': group.profitFactor.isFinite
+                ? group.profitFactor
+                : null,
           },
         )
         .toList(growable: false);
@@ -257,11 +285,13 @@ abstract final class TradingPerformanceReporting {
     }
   }
 
-  static String _csvRow(List<Object?> values) => values.map((value) {
-    final text = value?.toString() ?? '';
-    if (text.contains(',') || text.contains('"') || text.contains('\n')) {
-      return '"${text.replaceAll('"', '""')}"';
-    }
-    return text;
-  }).join(',');
+  static String _csvRow(List<Object?> values) => values
+      .map((value) {
+        final text = value?.toString() ?? '';
+        if (text.contains(',') || text.contains('"') || text.contains('\n')) {
+          return '"${text.replaceAll('"', '""')}"';
+        }
+        return text;
+      })
+      .join(',');
 }
