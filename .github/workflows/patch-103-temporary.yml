@@ -1,0 +1,68 @@
+name: Temporary patch issue 103
+
+on:
+  push:
+    branches:
+      - feat/103-contextual-price-action-v3
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/103-contextual-price-action-v3
+      - name: Integrate contextual evidence into trade ideas
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          models = Path('src/client/quantara_app/lib/features/owner_alpha/domain/owner_alpha_models.dart')
+          text = models.read_text()
+          replacements = [
+            ("import '../../market_analysis/domain/market_chart_models.dart';\n", "import '../../market_analysis/domain/market_chart_models.dart';\n"),
+            ("    this.indicatorSnapshot = const {},\n  });", "    this.indicatorSnapshot = const {},\n    this.setupQualityScore,\n    this.expectation = '',\n    this.trigger = '',\n    this.contextVersion = '',\n    this.evidenceBreakdown = const {},\n  });"),
+            ("  final Map<String, double> indicatorSnapshot;\n\n  DateTime get createdAt", "  final Map<String, double> indicatorSnapshot;\n  final int? setupQualityScore;\n  final String expectation;\n  final String trigger;\n  final String contextVersion;\n  final Map<String, double> evidenceBreakdown;\n\n  int get displayQualityScore => setupQualityScore ?? confidencePercent;\n\n  DateTime get createdAt"),
+          ]
+          for old, new in replacements:
+            if old not in text:
+              raise SystemExit(f'owner model patch target missing: {old[:80]!r}')
+            text = text.replace(old, new, 1)
+          models.write_text(text)
+
+          engine = Path('src/client/quantara_app/lib/features/owner_alpha/data/professional_strategy_engine.dart')
+          text = engine.read_text()
+          replacements = [
+            ("import '../../market_analysis/data/technical_indicator_engine.dart';\n", "import '../../market_analysis/data/contextual_price_action_engine.dart';\nimport '../../market_analysis/data/technical_indicator_engine.dart';\nimport '../../market_analysis/domain/contextual_price_action_models.dart';\n"),
+            ("    final kind = _kindFor(strategy, analysis, indicators);", "    final contextual = ContextualPriceActionEngine.analyze(\n      analysis: analysis,\n      indicators: indicators,\n    );\n    final kind = _kindFor(strategy, analysis, indicators);"),
+            ("      indicators: indicators,\n      fa: fa,", "      indicators: indicators,\n      contextual: contextual,\n      fa: fa,"),
+            ("    required TechnicalIndicatorSnapshot indicators,\n    required bool fa,", "    required TechnicalIndicatorSnapshot indicators,\n    required ContextualPriceActionAssessment contextual,\n    required bool fa,"),
+            ("      reasons: List.unmodifiable([\n        ...(fa ? setup.reasonsFa : setup.reasonsEn),", "      reasons: List.unmodifiable([\n        ...(fa ? setup.reasonsFa : setup.reasonsEn),\n        'Setup Quality ${contextual.setupQualityScore}/100 — ${contextual.version}.',\n        'Expectation: ${contextual.expectation}',\n        'Trigger: ${contextual.trigger}',\n        'Context invalidation: ${contextual.invalidation}',"),
+            ("      marketRegime: setup.regime,\n      indicatorSnapshot: _indicatorSnapshot(indicators),", "      marketRegime: setup.regime,\n      indicatorSnapshot: _indicatorSnapshot(indicators),\n      setupQualityScore: contextual.setupQualityScore,\n      expectation: contextual.expectation,\n      trigger: contextual.trigger,\n      contextVersion: contextual.version,\n      evidenceBreakdown: contextual.scoreBreakdown,"),
+          ]
+          for old, new in replacements:
+            if old not in text:
+              raise SystemExit(f'professional engine patch target missing: {old[:100]!r}')
+            text = text.replace(old, new, 1)
+          engine.write_text(text)
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format changed sources
+        run: |
+          cd src/client/quantara_app
+          dart format lib
+      - name: Commit integration
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib
+          git commit -m "feat(price-action): attach contextual evidence to signals"
+          git push origin HEAD:feat/103-contextual-price-action-v3
