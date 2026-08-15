@@ -1,0 +1,55 @@
+name: Temporary fix issue 103 analyze
+
+on:
+  push:
+    branches:
+      - feat/103-contextual-price-action-v3
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/103-contextual-price-action-v3
+      - name: Apply analyze fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          engine = Path('src/client/quantara_app/lib/features/market_analysis/data/contextual_price_action_engine.dart')
+          text = engine.read_text()
+          old = """    if (effortVsResult)\n      score += structure.event == StructureEvent.failedBreak ? 10 : -8;\n"""
+          new = """    if (effortVsResult) {\n      score += structure.event == StructureEvent.failedBreak ? 10 : -8;\n    }\n"""
+          if new not in text:
+              assert old in text
+              engine.write_text(text.replace(old, new, 1))
+
+          test = Path('src/client/quantara_app/test/contextual_evidence_journal_test.dart')
+          text = test.read_text()
+          old = """      summary: 'context signal',\n      invalidation: 'below protected swing',\n"""
+          new = """      summary: 'context signal',\n      invalidation: 'below protected swing',\n      reasons: const ['closed-candle contextual evidence fixture'],\n"""
+          if new not in text:
+              assert old in text
+              test.write_text(text.replace(old, new, 1))
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format changed Flutter files
+        run: |
+          cd src/client/quantara_app
+          dart format lib/features/market_analysis/data/contextual_price_action_engine.dart test/contextual_evidence_journal_test.dart
+      - name: Commit fixes
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/market_analysis/data/contextual_price_action_engine.dart src/client/quantara_app/test/contextual_evidence_journal_test.dart
+          git commit -m "fix(price-action): satisfy analyze and evidence fixture contract"
+          git push origin HEAD:feat/103-contextual-price-action-v3
