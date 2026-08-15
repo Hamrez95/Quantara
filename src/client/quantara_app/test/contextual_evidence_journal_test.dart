@@ -25,6 +25,7 @@ void main() {
       candleClosedAt: DateTime.utc(2026, 8, 15, 8),
       summary: 'context signal',
       invalidation: 'below protected swing',
+      reasons: const ['closed-candle contextual evidence fixture'],
       strategy: AnalysisStrategy.trendPullback,
       strategyVersion: 'trendPullback/1.0',
       setupQualityScore: 78,

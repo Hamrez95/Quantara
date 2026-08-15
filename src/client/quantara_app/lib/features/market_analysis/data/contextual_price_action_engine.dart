@@ -343,8 +343,9 @@ abstract final class VolumeBehaviorEngine {
     if (pullbackContraction) score += 8;
     if (reExpansion) score += 10;
     if (absorption) score += 8;
-    if (effortVsResult)
+    if (effortVsResult) {
       score += structure.event == StructureEvent.failedBreak ? 10 : -8;
+    }
     if (divergence) score -= 18;
     if (climax && structure.event != StructureEvent.failedBreak) score -= 8;
     return VolumeBehaviorAssessment(
