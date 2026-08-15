@@ -193,10 +193,10 @@ abstract final class EconomicOpportunityRanker {
   static double _stableRandomScore(String setupId, String version) {
     final digest = sha256.convert(utf8.encode('$version|$setupId')).bytes;
     var value = 0;
-    for (final byte in digest.take(7)) {
+    for (final byte in digest.take(6)) {
       value = (value << 8) | byte;
     }
-    return value / 0x00ffffffffffffff;
+    return value / 0x0000ffffffffffff;
   }
 
   static String _fingerprint({
