@@ -4,6 +4,7 @@ import '../data/bitunix_private_websocket_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/private_truth_models.dart';
 import 'private_truth_reconciler.dart';
+import 'private_truth_telemetry.dart';
 import 'private_truth_reducer.dart';
 
 typedef PrivateTruthRestFetcher =
@@ -19,6 +20,7 @@ final class PrivateTruthCoordinator {
     PrivateTruthClock? clock,
     this.restVerificationInterval = const Duration(seconds: 60),
     this.maximumRestVerificationAge = const Duration(seconds: 90),
+    this.restRequestsPerVerification = 4,
   }) : _clock = clock ?? (() => DateTime.now().toUtc()),
        _projection = PrivateTruthProjection.empty(
          (clock ?? (() => DateTime.now().toUtc()))().toUtc(),
@@ -29,6 +31,9 @@ final class PrivateTruthCoordinator {
   final PrivateTruthClock _clock;
   final Duration restVerificationInterval;
   final Duration maximumRestVerificationAge;
+  final int restRequestsPerVerification;
+  final PrivateTruthTelemetryCollector _telemetry =
+      PrivateTruthTelemetryCollector();
 
   final StreamController<PrivateTruthProjection> _projections =
       StreamController<PrivateTruthProjection>.broadcast(sync: true);
@@ -49,6 +54,24 @@ final class PrivateTruthCoordinator {
   PrivateTruthProjection get current => _projection;
   AutoTradeAccountSnapshot? get latestRestSnapshot => _latestRestSnapshot;
   bool get isRunning => _running;
+
+  PrivateTruthTelemetrySnapshot telemetrySnapshot([DateTime? nowUtc]) =>
+      _telemetry.snapshot(
+        projection: _projection,
+        droppedOrMalformedEvents: _socketClient.droppedOrMalformedEvents,
+        nowUtc: (nowUtc ?? _clock()).toUtc(),
+      );
+
+  void recordSupervisorPublish(DateTime publishedAtUtc) {
+    _telemetry.recordSupervisorPublish(
+      projectionUpdatedAtUtc: _projection.updatedAtUtc,
+      publishedAtUtc: publishedAtUtc,
+    );
+  }
+
+  void recordRestRequests(int count, [DateTime? atUtc]) {
+    _telemetry.recordRestRequests(count, (atUtc ?? _clock()).toUtc());
+  }
 
   bool get canAdmitNewEntries {
     if (!_running || !_socketActive || !_projection.canAdmitNewEntries) {
@@ -113,6 +136,7 @@ final class PrivateTruthCoordinator {
 
   void _onEvent(PrivateTruthEvent event) {
     if (!_running) return;
+    _telemetry.recordEvent(event);
     _setProjection(
       PrivateTruthReducer.apply(current: _projection, event: event),
     );
@@ -126,6 +150,7 @@ final class PrivateTruthCoordinator {
         unawaited(_verifyRest());
       case PrivateWsClientState.reconnecting:
         _socketActive = false;
+        _telemetry.recordReconnect(status.atUtc);
         _verificationGeneration++;
         _setProjection(
           PrivateTruthReducer.markReconnect(
@@ -205,6 +230,7 @@ final class PrivateTruthCoordinator {
     if (credentials == null) return;
     _verifying = true;
     final generation = ++_verificationGeneration;
+    recordRestRequests(restRequestsPerVerification);
     try {
       final snapshot = await _fetchRestSnapshot(credentials);
       if (!_running ||
@@ -213,6 +239,7 @@ final class PrivateTruthCoordinator {
         return;
       }
       _latestRestSnapshot = snapshot;
+      _telemetry.recordReconciled(_clock().toUtc());
       _setProjection(
         PrivateTruthReconciler.reconcileRestSnapshot(
           current: _projection,
@@ -235,6 +262,10 @@ final class PrivateTruthCoordinator {
 
   void _setProjection(PrivateTruthProjection next) {
     _projection = next;
+    _telemetry.recordEntryGate(
+      canAdmit: canAdmitNewEntries,
+      atUtc: _clock().toUtc(),
+    );
     if (!_projections.isClosed) _projections.add(next);
   }
 }

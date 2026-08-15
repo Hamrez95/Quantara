@@ -1153,6 +1153,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     required String orderId,
     required String symbol,
   }) async {
+    _privateTruth?.recordRestRequests(2);
     final values = await Future.wait<Object>([
       exchange.fetchOrderDetail(orderId: orderId, credentials: credentials),
       exchange.fetchPositions(credentials, symbol: symbol),
@@ -2274,9 +2275,15 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }
 
   Future<void> _publish(LocalLiveTradeState state, String message) async {
+    final publishAt = DateTime.now().toUtc();
+    final privateTruth = _privateTruth;
+    privateTruth?.recordSupervisorPublish(publishAt);
+    final privateProjection = privateTruth?.current;
+    final privateTelemetry = privateTruth?.telemetrySnapshot(publishAt);
+    final restVerifiedAt = privateProjection?.restVerifiedAtUtc;
     final status = LocalLiveTradeStatus(
       state: state,
-      updatedAt: DateTime.now().toUtc(),
+      updatedAt: publishAt,
       message: message,
       lastScanAt: _lastScanAt,
       lastSuccessfulExchangeSync: _lastExchangeSync,
@@ -2288,6 +2295,21 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       unmanagedPositionCount: _unmanagedSymbols.length,
       unmanagedSymbols: _unmanagedSymbols,
       entryBlockReason: _entryBlockReason,
+      privateTruthHealth: privateProjection?.health.name,
+      privateTruthLagReason: privateProjection?.lagReason.name,
+      privateTruthAgeMs: privateProjection == null
+          ? null
+          : publishAt
+                .difference(privateProjection.updatedAtUtc)
+                .inMilliseconds
+                .clamp(0, 1 << 31),
+      privateTruthRestVerificationAgeMs: restVerifiedAt == null
+          ? null
+          : publishAt
+                .difference(restVerifiedAt)
+                .inMilliseconds
+                .clamp(0, 1 << 31),
+      privateTruthTelemetry: privateTelemetry?.toJson(),
       closedPositionCount: _closedPositionCount,
       realizedPnl: null,
       pnlProjection: _sessionPnlProjection,

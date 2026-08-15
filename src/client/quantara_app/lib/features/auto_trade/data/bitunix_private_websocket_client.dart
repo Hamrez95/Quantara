@@ -74,6 +74,7 @@ abstract interface class PrivateTruthStreamClient {
   Stream<PrivateTruthEvent> get events;
   Stream<PrivateWsClientStatus> get statuses;
   bool get isRunning;
+  int get droppedOrMalformedEvents;
 
   Future<void> start(BitunixApiCredentials credentials);
   Future<void> stop();
@@ -120,6 +121,7 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   bool _disposed = false;
   int _generation = 0;
   int _reconnectAttempt = 0;
+  int _droppedOrMalformedEvents = 0;
 
   @override
   Stream<PrivateTruthEvent> get events => _events.stream;
@@ -127,6 +129,8 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   Stream<PrivateWsClientStatus> get statuses => _status.stream;
   @override
   bool get isRunning => _running;
+  @override
+  int get droppedOrMalformedEvents => _droppedOrMalformedEvents;
 
   @override
   Future<void> start(BitunixApiCredentials credentials) async {
@@ -214,7 +218,10 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
     if (!_running || generation != _generation) return;
     _lastInboundAtUtc = _clock().toUtc();
     final decoded = _decode(raw);
-    if (decoded is! Map<String, Object?>) return;
+    if (decoded is! Map<String, Object?>) {
+      _droppedOrMalformedEvents++;
+      return;
+    }
     final op = decoded['op']?.toString().toLowerCase() ?? '';
     if (op == 'login') {
       if (!_success(decoded)) {
@@ -241,7 +248,11 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
       receivedAtUtc: _clock().toUtc(),
       processedAtUtc: _clock().toUtc(),
     );
-    if (event != null && !_events.isClosed) _events.add(event);
+    if (event != null && !_events.isClosed) {
+      _events.add(event);
+    } else if (event == null) {
+      _droppedOrMalformedEvents++;
+    }
   }
 
   void _startHeartbeat(int generation) {

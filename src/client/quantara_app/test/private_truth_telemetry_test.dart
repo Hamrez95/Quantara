@@ -58,27 +58,30 @@ void main() {
     expect(snapshot.eventToLocalP99Ms, 100);
   });
 
-  test('reports exact rolling REST count and Hot Path history pages as zero', () {
-    final collector = PrivateTruthTelemetryCollector();
-    collector.recordRestRequests(4, now);
-    collector.recordRestRequests(2, now.add(const Duration(seconds: 10)));
+  test(
+    'reports exact rolling REST count and Hot Path history pages as zero',
+    () {
+      final collector = PrivateTruthTelemetryCollector();
+      collector.recordRestRequests(4, now);
+      collector.recordRestRequests(2, now.add(const Duration(seconds: 10)));
 
-    final active = collector.snapshot(
-      projection: projection(),
-      droppedOrMalformedEvents: 3,
-      nowUtc: now.add(const Duration(seconds: 30)),
-    );
-    expect(active.restRequestsLastMinute, 6);
-    expect(active.hotHistoryPagesPerRequest, 0);
-    expect(active.droppedOrMalformedEvents, 3);
+      final active = collector.snapshot(
+        projection: projection(),
+        droppedOrMalformedEvents: 3,
+        nowUtc: now.add(const Duration(seconds: 30)),
+      );
+      expect(active.restRequestsLastMinute, 6);
+      expect(active.hotHistoryPagesPerRequest, 0);
+      expect(active.droppedOrMalformedEvents, 3);
 
-    final expired = collector.snapshot(
-      projection: projection(),
-      droppedOrMalformedEvents: 3,
-      nowUtc: now.add(const Duration(minutes: 2)),
-    );
-    expect(expired.restRequestsLastMinute, 0);
-  });
+      final expired = collector.snapshot(
+        projection: projection(),
+        droppedOrMalformedEvents: 3,
+        nowUtc: now.add(const Duration(minutes: 2)),
+      );
+      expect(expired.restRequestsLastMinute, 0);
+    },
+  );
 
   test('tracks reconnect recovery and current entry-block duration', () {
     final collector = PrivateTruthTelemetryCollector();

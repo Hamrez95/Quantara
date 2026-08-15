@@ -32,38 +32,45 @@ Future<void> _flush([int count = 1]) async {
 }
 
 void main() {
-  test('malformed or unsupported private frames are counted, never promoted', () async {
-    final transport = _MalformedTransport();
-    final now = DateTime.utc(2026, 8, 16, 1);
-    final client = BitunixPrivateWebSocketClient(
-      connector: (_) async => transport,
-      delay: (_) async {},
-      clock: () => now,
-      nonceFactory: () => 'nonce',
-      heartbeatInterval: const Duration(hours: 1),
-      staleAfter: const Duration(hours: 2),
-    );
-    final events = <Object>[];
-    final subscription = client.events.listen(events.add);
-    await client.start(
-      const BitunixApiCredentials(apiKey: 'api', secretKey: 'secret'),
-    );
-    transport.emit(jsonEncode(<String, Object?>{'op': 'login', 'code': 0}));
-    await _flush(2);
-    transport.emit(jsonEncode(<String, Object?>{'op': 'subscribe', 'code': 0}));
-    await _flush(2);
+  test(
+    'malformed or unsupported private frames are counted, never promoted',
+    () async {
+      final transport = _MalformedTransport();
+      final now = DateTime.utc(2026, 8, 16, 1);
+      final client = BitunixPrivateWebSocketClient(
+        connector: (_) async => transport,
+        delay: (_) async {},
+        clock: () => now,
+        nonceFactory: () => 'nonce',
+        heartbeatInterval: const Duration(hours: 1),
+        staleAfter: const Duration(hours: 2),
+      );
+      final events = <Object>[];
+      final subscription = client.events.listen(events.add);
+      await client.start(
+        const BitunixApiCredentials(apiKey: 'api', secretKey: 'secret'),
+      );
+      transport.emit(jsonEncode(<String, Object?>{'op': 'login', 'code': 0}));
+      await _flush(2);
+      transport.emit(
+        jsonEncode(<String, Object?>{'op': 'subscribe', 'code': 0}),
+      );
+      await _flush(2);
 
-    transport.emit('not-json');
-    transport.emit(jsonEncode(<String, Object?>{
-      'ch': 'unsupported',
-      'ts': 1,
-      'data': <String, Object?>{},
-    }));
-    await _flush(3);
+      transport.emit('not-json');
+      transport.emit(
+        jsonEncode(<String, Object?>{
+          'ch': 'unsupported',
+          'ts': 1,
+          'data': <String, Object?>{},
+        }),
+      );
+      await _flush(3);
 
-    expect(client.droppedOrMalformedEvents, 2);
-    expect(events, isEmpty);
-    await subscription.cancel();
-    await client.dispose();
-  });
+      expect(client.droppedOrMalformedEvents, 2);
+      expect(events, isEmpty);
+      await subscription.cancel();
+      await client.dispose();
+    },
+  );
 }
