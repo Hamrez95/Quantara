@@ -41,11 +41,12 @@ CanonicalDecisionRecord evaluateTradingLabCanonicalDecision({
   final economics = CanonicalExecutionEconomics(
     feeRateBpsPerSide: manifest.feeRateBps,
     spreadBpsRoundTrip: manifest.spreadBps,
-    slippageBpsPerSide: manifest.slippageBps,
+    slippageBpsPerSide:
+        manifest.slippageBps + manifest.latencyPenaltyBps,
     fundingReserveBps: 0,
     marginSafetyBufferMultiplier: 1,
     maximumCostToRiskPercent: manifest.maxEstimatedCostToRiskPercent,
-    version: 'trading-lab-${manifest.executionModel.name}/1.0',
+    version: 'trading-lab-${manifest.executionModel.name}/1.1',
   );
   return CanonicalDecisionPipeline.evaluate(
     CanonicalDecisionInput(
@@ -62,6 +63,11 @@ CanonicalDecisionRecord evaluateTradingLabCanonicalDecision({
           manifest.riskPercent,
           manifest.leverage,
           manifest.executionModel.name,
+          manifest.feeRateBps,
+          manifest.spreadBps,
+          manifest.slippageBps,
+          manifest.latencyPenaltyBps,
+          manifest.partialFillRatio,
         ].join('|'),
         sourceBuild: const String.fromEnvironment(
           'QUANTARA_BUILD_SHA',
