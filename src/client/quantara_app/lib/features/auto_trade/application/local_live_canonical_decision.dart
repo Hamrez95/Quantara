@@ -53,9 +53,7 @@ CanonicalDecisionRecord evaluateLocalLiveCanonicalDecision({
           'QUANTARA_BUILD_SHA',
           defaultValue: 'unknown',
         ),
-        versions: CanonicalDecisionVersions(
-          executionModel: economics.version,
-        ),
+        versions: CanonicalDecisionVersions(executionModel: economics.version),
       ),
       marketPrice: markPrice,
       equity: account.estimatedEquity,

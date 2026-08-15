@@ -6,42 +6,41 @@ import 'package:quantara_app/features/trading_lab/application/trading_lab_canoni
 import 'package:quantara_app/features/trading_lab/domain/trading_lab_models.dart';
 
 void main() {
-  test('captured evidence has identical replay and shadow pre-fill decisions', () {
-    final startedAt = DateTime.utc(2026, 8, 10);
-    final run = TradingLabRun(
-      manifest: TradingLabRunManifest(
-        runId: 'canonical-replay-parity',
-        startedAtUtc: startedAt,
-        startingEquity: 500,
-        riskPercent: 1,
-        maximumConcurrentPositions: 3,
-        leverage: 5,
-        symbols: const ['BTCUSDT'],
-        timeframes: const ['1h'],
-        strategies: const ['trendPullback@v1'],
-      ),
-    );
-    final captured = _entry(
-      setupId: 'captured-shadow-1',
-      createdAt: startedAt.add(const Duration(minutes: 10)),
-    );
+  test(
+    'captured evidence has identical replay and shadow pre-fill decisions',
+    () {
+      final startedAt = DateTime.utc(2026, 8, 10);
+      final run = TradingLabRun(
+        manifest: TradingLabRunManifest(
+          runId: 'canonical-replay-parity',
+          startedAtUtc: startedAt,
+          startingEquity: 500,
+          riskPercent: 1,
+          maximumConcurrentPositions: 3,
+          leverage: 5,
+          symbols: const ['BTCUSDT'],
+          timeframes: const ['1h'],
+          strategies: const ['trendPullback@v1'],
+        ),
+      );
+      final captured = _entry(
+        setupId: 'captured-shadow-1',
+        createdAt: startedAt.add(const Duration(minutes: 10)),
+      );
 
-    final shadow = replayTradingLabEvidenceThroughCanonicalPipeline(
-      run,
-      [captured],
-      environment: DecisionEnvironment.shadow,
-    ).single;
-    final replay = replayTradingLabEvidenceThroughCanonicalPipeline(
-      run,
-      [captured],
-      environment: DecisionEnvironment.replay,
-    ).single;
+      final shadow = replayTradingLabEvidenceThroughCanonicalPipeline(run, [
+        captured,
+      ], environment: DecisionEnvironment.shadow).single;
+      final replay = replayTradingLabEvidenceThroughCanonicalPipeline(run, [
+        captured,
+      ], environment: DecisionEnvironment.replay).single;
 
-    expect(shadow.preExecutionFingerprint, replay.preExecutionFingerprint);
-    expect(shadow.parityJson(), replay.parityJson());
-    expect(shadow.provenance.environment, DecisionEnvironment.shadow);
-    expect(replay.provenance.environment, DecisionEnvironment.replay);
-  });
+      expect(shadow.preExecutionFingerprint, replay.preExecutionFingerprint);
+      expect(shadow.parityJson(), replay.parityJson());
+      expect(shadow.provenance.environment, DecisionEnvironment.shadow);
+      expect(replay.provenance.environment, DecisionEnvironment.replay);
+    },
+  );
 
   test('captured evidence replay cannot obtain paper or live authority', () {
     final startedAt = DateTime.utc(2026, 8, 10);
@@ -68,35 +67,33 @@ void main() {
       DecisionEnvironment.live,
     ]) {
       expect(
-        () => replayTradingLabEvidenceThroughCanonicalPipeline(
-          run,
-          [captured],
-          environment: environment,
-        ),
+        () => replayTradingLabEvidenceThroughCanonicalPipeline(run, [
+          captured,
+        ], environment: environment),
         throwsArgumentError,
       );
     }
   });
 
-  test('replay filters evidence outside the experiment window and universe', () {
-    final startedAt = DateTime.utc(2026, 8, 10);
-    final run = TradingLabRun(
-      manifest: TradingLabRunManifest(
-        runId: 'canonical-replay-filtering',
-        startedAtUtc: startedAt,
-        startingEquity: 500,
-        riskPercent: 1,
-        maximumConcurrentPositions: 3,
-        leverage: 5,
-        symbols: const ['BTCUSDT'],
-        timeframes: const ['1h'],
-        strategies: const ['trendPullback@v1'],
-      ),
-    );
+  test(
+    'replay filters evidence outside the experiment window and universe',
+    () {
+      final startedAt = DateTime.utc(2026, 8, 10);
+      final run = TradingLabRun(
+        manifest: TradingLabRunManifest(
+          runId: 'canonical-replay-filtering',
+          startedAtUtc: startedAt,
+          startingEquity: 500,
+          riskPercent: 1,
+          maximumConcurrentPositions: 3,
+          leverage: 5,
+          symbols: const ['BTCUSDT'],
+          timeframes: const ['1h'],
+          strategies: const ['trendPullback@v1'],
+        ),
+      );
 
-    final decisions = replayTradingLabEvidenceThroughCanonicalPipeline(
-      run,
-      [
+      final decisions = replayTradingLabEvidenceThroughCanonicalPipeline(run, [
         _entry(
           setupId: 'inside',
           createdAt: startedAt.add(const Duration(minutes: 10)),
@@ -110,13 +107,12 @@ void main() {
           symbol: 'ETHUSDT',
           createdAt: startedAt.add(const Duration(minutes: 20)),
         ),
-      ],
-      environment: DecisionEnvironment.replay,
-    );
+      ], environment: DecisionEnvironment.replay);
 
-    expect(decisions, hasLength(1));
-    expect(decisions.single.plan.setupId, 'inside');
-  });
+      expect(decisions, hasLength(1));
+      expect(decisions.single.plan.setupId, 'inside');
+    },
+  );
 }
 
 SignalJournalEntry _entry({

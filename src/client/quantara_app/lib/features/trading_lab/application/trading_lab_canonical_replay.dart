@@ -20,15 +20,16 @@ List<CanonicalDecisionRecord> replayTradingLabEvidenceThroughCanonicalPipeline(
     );
   }
 
-  final entries = signalJournal
-      .where(
-        (entry) =>
-            !entry.createdAt.toUtc().isBefore(run.manifest.startedAtUtc) &&
-            run.manifest.symbols.contains(entry.symbol.toUpperCase()) &&
-            run.manifest.timeframes.contains(entry.timeframe),
-      )
-      .toList(growable: false)
-    ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+  final entries =
+      signalJournal
+          .where(
+            (entry) =>
+                !entry.createdAt.toUtc().isBefore(run.manifest.startedAtUtc) &&
+                run.manifest.symbols.contains(entry.symbol.toUpperCase()) &&
+                run.manifest.timeframes.contains(entry.timeframe),
+          )
+          .toList(growable: false)
+        ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
 
   final decisions = <CanonicalDecisionRecord>[];
   for (final entry in entries) {

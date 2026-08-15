@@ -82,21 +82,24 @@ void main() {
     );
   }
 
-  test('replay shadow paper and live share identical pre-execution decision', () {
-    final records = DecisionEnvironment.values.map(evaluate).toList();
+  test(
+    'replay shadow paper and live share identical pre-execution decision',
+    () {
+      final records = DecisionEnvironment.values.map(evaluate).toList();
 
-    expect(records.every((record) => record.eligible), isTrue);
-    final expected = records.first.parityJson();
-    final fingerprint = records.first.preExecutionFingerprint;
-    for (final record in records.skip(1)) {
-      expect(record.parityJson(), equals(expected));
-      expect(record.preExecutionFingerprint, fingerprint);
-    }
-    expect(
-      records.map((record) => record.provenance.environment).toSet(),
-      DecisionEnvironment.values.toSet(),
-    );
-  });
+      expect(records.every((record) => record.eligible), isTrue);
+      final expected = records.first.parityJson();
+      final fingerprint = records.first.preExecutionFingerprint;
+      for (final record in records.skip(1)) {
+        expect(record.parityJson(), equals(expected));
+        expect(record.preExecutionFingerprint, fingerprint);
+      }
+      expect(
+        records.map((record) => record.provenance.environment).toSet(),
+        DecisionEnvironment.values.toSet(),
+      );
+    },
+  );
 
   test('closed-candle event time is a hard parity gate', () {
     final plan = CanonicalOpportunityPlan.fromTradeIdea(idea);
