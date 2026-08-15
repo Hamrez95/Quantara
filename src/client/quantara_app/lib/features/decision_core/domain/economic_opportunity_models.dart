@@ -75,16 +75,11 @@ final class OpportunityExecutionCostEvidence {
   final double? latencyR;
   final double? aggregateCostR;
 
-  double get knownComponentTotalR => [
-    feeR,
-    fundingR,
-    spreadR,
-    slippageR,
-    latencyR,
-  ].whereType<double>().where((value) => value.isFinite && value >= 0).fold(
-    0,
-    (sum, value) => sum + value,
-  );
+  double get knownComponentTotalR =>
+      [feeR, fundingR, spreadR, slippageR, latencyR]
+          .whereType<double>()
+          .where((value) => value.isFinite && value >= 0)
+          .fold(0, (sum, value) => sum + value);
 
   double get totalR {
     final aggregate = aggregateCostR;
@@ -151,7 +146,9 @@ final class OpportunityRankingCandidate {
     this.tailRiskPenalty = 0,
     this.calibration,
     Iterable<String> evidenceTags = const [],
-  }) : evidenceTags = UnmodifiableListView(evidenceTags.toList(growable: false)) {
+  }) : evidenceTags = UnmodifiableListView(
+         evidenceTags.toList(growable: false),
+       ) {
     if (setupId.trim().isEmpty ||
         symbol.trim().isEmpty ||
         timeframe.trim().isEmpty ||
@@ -414,7 +411,9 @@ final class OpportunityUtility {
     required Iterable<String> unknownFields,
     required this.fingerprint,
   }) : componentBreakdown = Map.unmodifiable(componentBreakdown),
-       unknownFields = UnmodifiableListView(unknownFields.toList(growable: false));
+       unknownFields = UnmodifiableListView(
+         unknownFields.toList(growable: false),
+       );
 
   final OpportunityRankingPolicy policy;
   final String version;
@@ -498,7 +497,9 @@ final class OpportunityRankingJournalRecord {
     required Map<String, double> componentBreakdown,
     required Iterable<String> unknownFields,
   }) : componentBreakdown = Map.unmodifiable(componentBreakdown),
-       unknownFields = UnmodifiableListView(unknownFields.toList(growable: false)) {
+       unknownFields = UnmodifiableListView(
+         unknownFields.toList(growable: false),
+       ) {
     if (!recordedAtUtc.isUtc ||
         rank < 1 ||
         setupId.trim().isEmpty ||

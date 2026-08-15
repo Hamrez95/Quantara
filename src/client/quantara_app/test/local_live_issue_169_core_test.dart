@@ -74,33 +74,36 @@ void main() {
     expect(restored.managedPositions.single.direction, TradeDirection.short);
   });
 
-  test('service evaluates all enabled strategies and economic adapter groups by strategy', () {
-    final service = File(
-      'lib/features/auto_trade/application/local_live_trade_service.dart',
-    ).readAsStringSync();
-    final ranking = File(
-      'lib/features/auto_trade/application/local_live_economic_ranking.dart',
-    ).readAsStringSync();
+  test(
+    'service evaluates all enabled strategies and economic adapter groups by strategy',
+    () {
+      final service = File(
+        'lib/features/auto_trade/application/local_live_trade_service.dart',
+      ).readAsStringSync();
+      final ranking = File(
+        'lib/features/auto_trade/application/local_live_economic_ranking.dart',
+      ).readAsStringSync();
 
-    expect(
-      service,
-      contains('for (final strategy in configuration.enabledStrategies)'),
-    );
-    expect(service, contains('ideasBySetupId[idea.setupId] = idea;'));
-    expect(service, contains('LocalLiveEconomicRanking.rank('));
-    expect(
-      ranking,
-      contains(
-        r"final key = '${idea.symbol.trim().toUpperCase()}|${idea.strategy.name}'",
-      ),
-    );
-    expect(ranking, contains('_resolveConflictAndPreferredTimeframe(ideas)'));
-    expect(ranking, contains('EconomicOpportunityRanker.rank('));
-    expect(
-      service,
-      contains('.map(LocalLiveManagedPositionSummary.fromManaged)'),
-    );
-  });
+      expect(
+        service,
+        contains('for (final strategy in configuration.enabledStrategies)'),
+      );
+      expect(service, contains('ideasBySetupId[idea.setupId] = idea;'));
+      expect(service, contains('LocalLiveEconomicRanking.rank('));
+      expect(
+        ranking,
+        contains(
+          r"final key = '${idea.symbol.trim().toUpperCase()}|${idea.strategy.name}'",
+        ),
+      );
+      expect(ranking, contains('_resolveConflictAndPreferredTimeframe(ideas)'));
+      expect(ranking, contains('EconomicOpportunityRanker.rank('));
+      expect(
+        service,
+        contains('.map(LocalLiveManagedPositionSummary.fromManaged)'),
+      );
+    },
+  );
 }
 
 LocalLiveTradeConfiguration _configuration({

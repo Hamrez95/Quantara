@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
 
+import '../../decision_core/domain/economic_opportunity_models.dart';
 import '../../owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../../owner_alpha/data/trade_idea_factory.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
@@ -22,6 +23,7 @@ import '../domain/profit_lock_stop_policy.dart';
 import '../domain/remaining_target_protection_policy.dart';
 import '../domain/trading_pnl_projection.dart';
 import 'local_live_canonical_decision.dart';
+import 'local_live_economic_ranking.dart';
 import 'local_live_orphan_recovery.dart';
 import 'local_live_portfolio_execution_guard.dart';
 import 'profit_lock_promotion_executor.dart';
@@ -31,6 +33,7 @@ const localLiveStatusKey = 'quantara.local-live.status.v1';
 const localLiveManagedPositionsKey = 'quantara.local-live.positions.v1';
 const localLiveExecutedSetupIdsKey = 'quantara.local-live.executed.v1';
 const localLiveAuditKey = 'quantara.local-live.audit.v1';
+const localLiveRankingJournalKey = 'quantara.local-live.ranking-journal.v1';
 const localLiveSessionStartEquityKey = 'quantara.local-live.start-equity.v1';
 const localLiveSessionIdKey = 'quantara.local-live.session-id.v1';
 const localLiveSessionStartedAtKey =
@@ -56,6 +59,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   final List<LocalLiveManagedPosition> _pendingJournalClosures = [];
   final Set<String> _executedSetupIds = {};
   final List<LocalLiveAuditEvent> _audit = [];
+  final List<OpportunityRankingJournalRecord> _rankingJournal = [];
   bool _entriesEnabled = false;
   bool _userRequestedEntries = false;
   bool _managementOnlyAfterFlat = false;
@@ -588,7 +592,26 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         return;
       }
-      final rankedIdeas = _rankPrimaryIdeas(ideas);
+      final lastPrices = <String, double>{
+        for (final result in snapshot.radar)
+          result.quote.symbol.trim().toUpperCase(): result.quote.lastPrice,
+      };
+      final concentrationPenalty = exchangePositions.isEmpty
+          ? 0.0
+          : math.min(
+              0.5,
+              exchangePositions.where((item) => item.quantity > 0).length *
+                  0.12,
+            );
+      final rankedIdeas = LocalLiveEconomicRanking.rank(
+        ideas: ideas,
+        lastPrices: lastPrices,
+        evaluatedAtUtc: DateTime.now().toUtc(),
+        concentrationPenaltyBySymbol: {
+          for (final idea in ideas)
+            idea.symbol.trim().toUpperCase(): concentrationPenalty,
+        },
+      );
       if (rankedIdeas.isEmpty) {
         _auditEvent(
           'scan_skip',
@@ -596,11 +619,22 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         return;
       }
-      for (final idea in rankedIdeas) {
+      for (final rankedIdea in rankedIdeas) {
+        final idea = rankedIdea.idea;
+        await _recordRankingOutcome(
+          rankedIdea,
+          OpportunityRankingOutcome.ranked,
+          'Candidate admitted to deterministic economic ordering.',
+        );
         if (_executedSetupIds.contains(idea.setupId)) {
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.duplicateSkipped,
+            'Setup already executed in local-live history.',
+          );
           _auditEvent(
             'scan_skip',
-            'The highest-ranked setup was already executed in this local-live history.',
+            'The ranked setup was already executed in this local-live history.',
             symbol: idea.symbol,
           );
           continue;
@@ -610,9 +644,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             idea.targets.length < 3 ||
             idea.entryLower == null ||
             idea.entryUpper == null) {
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.staleOrIncomplete,
+            'Ranked setup expired or lacked a complete protected plan.',
+          );
           _auditEvent(
             'scan_skip',
-            'The highest-ranked setup was expired or missing a complete protected plan.',
+            'The ranked setup was expired or missing a complete protected plan.',
             symbol: idea.symbol,
           );
           continue;
@@ -637,6 +676,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           portfolioBudget: _portfolioBudget,
         );
         if (!canonical.eligible) {
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.canonicalRejected,
+            'Canonical decision rejected: ${canonical.rejection.name}.',
+          );
           _auditEvent(
             'canonical_decision_block',
             'Canonical pre-execution decision rejected: ${canonical.rejection.name}.',
@@ -677,6 +721,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         if (!reservation.decision.allowed ||
             !reservation.decision.liveExecutionAllowed) {
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.portfolioRejected,
+            'Portfolio reservation rejected: ${reservation.decision.reason.name}.',
+          );
           _auditEvent(
             'portfolio_reservation_block',
             'Portfolio reservation rejected: ${reservation.decision.reason.name}.',
@@ -697,6 +746,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             credentials: credentials,
           );
           final clientId = _clientId(idea);
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.executionAttempted,
+            'All deterministic pre-order gates passed; protected entry request may start.',
+          );
           orderRequestStarted = true;
           final placed = await exchange.placeMarketEntry(
             symbol: idea.symbol,
@@ -973,6 +1027,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           _executedSetupIds.add(idea.setupId);
           await _persistSessionMetadata();
           await _persistState();
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.entered,
+            'Entry fill and exchange-native protection were confirmed.',
+          );
           _auditEvent(
             'position_protected',
             'Entry fill, full stop and ${effectiveAllocation.activeTargetCount} '
@@ -986,6 +1045,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           );
           return;
         } on Object catch (error) {
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.executionFailed,
+            'Protected entry lifecycle failed: ${error.runtimeType}.',
+          );
           final reservationId = activeReservationId;
           if (reservationId != null) {
             if (orderRequestStarted) {
@@ -1797,40 +1861,32 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     }
   }
 
-  List<TradeIdea> _rankPrimaryIdeas(List<TradeIdea> ideas) {
-    final grouped = <String, List<TradeIdea>>{};
-    for (final idea in ideas) {
-      final key = '${idea.symbol}|${idea.strategy.name}';
-      grouped.putIfAbsent(key, () => []).add(idea);
-    }
-    final candidates = <TradeIdea>[];
-    for (final group in grouped.values) {
-      if (group.map((item) => item.direction).toSet().length != 1) continue;
-      final timeframes = group.map((item) => item.timeframe).toSet();
-      final preferred = timeframes.contains('4h') && timeframes.contains('1h')
-          ? '1h'
-          : timeframes.contains('4h')
-          ? '4h'
-          : timeframes.contains('1h')
-          ? '1h'
-          : timeframes.contains('15m')
-          ? '15m'
-          : '5m';
-      final sameTimeframe =
-          group
-              .where((item) => item.timeframe == preferred)
-              .toList(growable: false)
-            ..sort(
-              (left, right) =>
-                  right.confidencePercent.compareTo(left.confidencePercent),
-            );
-      if (sameTimeframe.isNotEmpty) candidates.add(sameTimeframe.first);
-    }
-    candidates.sort(
-      (left, right) =>
-          right.confidencePercent.compareTo(left.confidencePercent),
+  Future<void> _recordRankingOutcome(
+    LocalLiveRankedIdea rankedIdea,
+    OpportunityRankingOutcome outcome,
+    String reason,
+  ) async {
+    final ranked = rankedIdea.ranked;
+    _rankingJournal.add(
+      OpportunityRankingJournalRecord(
+        recordedAtUtc: DateTime.now().toUtc(),
+        rank: ranked.rank,
+        setupId: ranked.candidate.setupId,
+        symbol: ranked.candidate.symbol,
+        policy: ranked.utility.policy,
+        version: ranked.utility.version,
+        outcome: outcome,
+        reason: reason,
+        utilityFingerprint: ranked.utility.fingerprint,
+        score: ranked.utility.score,
+        componentBreakdown: ranked.utility.componentBreakdown,
+        unknownFields: ranked.utility.unknownFields,
+      ),
     );
-    return List.unmodifiable(candidates);
+    if (_rankingJournal.length > 500) {
+      _rankingJournal.removeRange(0, _rankingJournal.length - 500);
+    }
+    await _persistState();
   }
 
   String _clientId(TradeIdea idea) {
@@ -1855,6 +1911,27 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         }
       } on Object {
         _configuration = null;
+      }
+    }
+    final rankingRaw = await FlutterForegroundTask.getData<String>(
+      key: localLiveRankingJournalKey,
+    );
+    if (rankingRaw != null) {
+      try {
+        final decoded = jsonDecode(rankingRaw);
+        if (decoded is List<Object?>) {
+          _rankingJournal
+            ..clear()
+            ..addAll(
+              decoded.whereType<Map<Object?, Object?>>().map(
+                (item) => OpportunityRankingJournalRecord.fromJson(
+                  item.map((key, value) => MapEntry(key.toString(), value)),
+                ),
+              ),
+            );
+        }
+      } on Object {
+        _rankingJournal.clear();
       }
     }
     final pendingClosuresRaw = await FlutterForegroundTask.getData<String>(
@@ -1988,6 +2065,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }
 
   Future<void> _persistState() async {
+    await FlutterForegroundTask.saveData(
+      key: localLiveRankingJournalKey,
+      value: jsonEncode(_rankingJournal.map((item) => item.toJson()).toList()),
+    );
     await FlutterForegroundTask.saveData(
       key: localLiveManagedPositionsKey,
       value: jsonEncode(_managed.map((item) => item.toJson()).toList()),

@@ -4,10 +4,7 @@ import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 
 final class LocalLiveRankedIdea {
-  const LocalLiveRankedIdea({
-    required this.idea,
-    required this.ranked,
-  });
+  const LocalLiveRankedIdea({required this.idea, required this.ranked});
 
   final TradeIdea idea;
   final RankedOpportunity ranked;
@@ -20,7 +17,8 @@ abstract final class LocalLiveEconomicRanking {
     required DateTime evaluatedAtUtc,
     Map<String, OpportunityCalibrationEvidence> calibrationBySetupId = const {},
     Map<String, double> concentrationPenaltyBySymbol = const {},
-    OpportunityRankingConfiguration config = const OpportunityRankingConfiguration(),
+    OpportunityRankingConfiguration config =
+        const OpportunityRankingConfiguration(),
   }) {
     if (!evaluatedAtUtc.isUtc) {
       throw const FormatException('Local Live ranking time must be UTC.');
@@ -42,7 +40,8 @@ abstract final class LocalLiveEconomicRanking {
           expectedHoldingHours: config.holdingHoursFor(idea.timeframe),
           liquidityScore: liquidityProxy,
           concentrationPenalty:
-              concentrationPenaltyBySymbol[idea.symbol.trim().toUpperCase()] ?? 0,
+              concentrationPenaltyBySymbol[idea.symbol.trim().toUpperCase()] ??
+              0,
           tailRiskPenalty: _tailRiskPenalty(idea.marketRegime),
           calibration: calibrationBySetupId[idea.setupId],
           evidenceTags: [
@@ -88,16 +87,17 @@ abstract final class LocalLiveEconomicRanking {
           : timeframes.contains('15m')
           ? '15m'
           : '5m';
-      final sameTimeframe = group
-          .where((item) => item.timeframe == preferred)
-          .toList(growable: false)
-        ..sort((left, right) {
-          final quality = right.displayQualityScore.compareTo(
-            left.displayQualityScore,
-          );
-          if (quality != 0) return quality;
-          return left.setupId.compareTo(right.setupId);
-        });
+      final sameTimeframe =
+          group
+              .where((item) => item.timeframe == preferred)
+              .toList(growable: false)
+            ..sort((left, right) {
+              final quality = right.displayQualityScore.compareTo(
+                left.displayQualityScore,
+              );
+              if (quality != 0) return quality;
+              return left.setupId.compareTo(right.setupId);
+            });
       if (sameTimeframe.isNotEmpty) candidates.add(sameTimeframe.first);
     }
     return List.unmodifiable(candidates);

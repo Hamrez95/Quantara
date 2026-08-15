@@ -51,7 +51,10 @@ void main() {
       'lib/features/auto_trade/application/local_live_trade_service.dart',
     ).readAsStringSync();
 
-    expect(source, contains('final rankedIdeas = LocalLiveEconomicRanking.rank('));
+    expect(
+      source,
+      contains('final rankedIdeas = LocalLiveEconomicRanking.rank('),
+    );
     expect(source, contains('for (final rankedIdea in rankedIdeas)'));
     expect(source, contains('final idea = rankedIdea.idea;'));
     expect(source, contains('OpportunityRankingOutcome.canonicalRejected'));
