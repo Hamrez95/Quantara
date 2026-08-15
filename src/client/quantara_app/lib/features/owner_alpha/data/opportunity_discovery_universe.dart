@@ -11,6 +11,7 @@ import '../domain/bitunix_public_stream_models.dart';
 import '../domain/owner_alpha_models.dart';
 import '../domain/realtime_candidate_models.dart';
 import '../domain/realtime_candle_pipeline_models.dart';
+import '../domain/realtime_market_event_models.dart';
 import '../domain/realtime_market_runtime_models.dart';
 import 'bitunix_candle_backfill_source.dart';
 import 'durable_candidate_audit_store.dart';
@@ -154,9 +155,7 @@ final class BitunixOpportunityDiscoveryUniverseSource
       if (!_validSymbol(symbol)) continue;
       final last = _tryPositiveNumber(item['lastPrice'] ?? item['last']);
       final quoteVolume = _tryNonNegativeNumber(item['quoteVol']);
-      if (last == null || quoteVolume == null) {
-        continue;
-      }
+      if (last == null || quoteVolume == null) continue;
       tickers[symbol] = _UniverseTicker(
         symbol: symbol,
         lastPrice: last,
@@ -207,7 +206,8 @@ final class BitunixOpportunityDiscoveryUniverseSource
     for (var offset = 0;
         offset < pool.length && eligible.length < policy.targetSymbolCount;
         offset += depthBatchSize) {
-      final end = (offset + depthBatchSize).clamp(0, pool.length);
+      final proposedEnd = offset + depthBatchSize;
+      final end = proposedEnd < pool.length ? proposedEnd : pool.length;
       final batch = pool.sublist(offset, end);
       final spreads = await Future.wait(
         batch.map((ticker) => _tryLoadSpreadBps(ticker.symbol)),
@@ -489,8 +489,6 @@ final class _DiscoveryIdeaCatalog {
     }
   }
 
-  TradeIdea? ideaFor(String setupId) => _bySetup[setupId];
-
   TradeIdea? currentFor(
     RealtimeCandleStreamKey key,
     AnalysisStrategy strategy,
@@ -516,6 +514,7 @@ final class OpportunityDiscoveryRealtimeAnalyzer
     required this.settings,
     required Iterable<AnalysisStrategy> strategies,
     required this.catalog,
+    required this.projectionCatalog,
     required this.coverage,
     String languageCode = 'fa',
   }) : strategies = List.unmodifiable(strategies.toSet()),
@@ -528,6 +527,7 @@ final class OpportunityDiscoveryRealtimeAnalyzer
   final OwnerAlphaSettings settings;
   final List<AnalysisStrategy> strategies;
   final _DiscoveryIdeaCatalog catalog;
+  final RealtimeIdeaCatalog projectionCatalog;
   final OpportunityDiscoveryCoverageTracker coverage;
   String _languageCode;
 
@@ -578,6 +578,7 @@ final class OpportunityDiscoveryRealtimeAnalyzer
       TradeIdea? tracked;
       if (generated.isActionable) {
         catalog.remember(generated);
+        projectionCatalog.remember(generated);
         tracked = generated;
         candidates.add(
           RealtimeOpportunityCandidate.fromIdea(
@@ -699,12 +700,14 @@ abstract final class PlatformOpportunityDiscoveryMarketHostFactory {
       );
       final coverage = OpportunityDiscoveryCoverageTracker(universeSnapshot);
       final catalog = _DiscoveryIdeaCatalog();
+      final projectionCatalog = RealtimeIdeaCatalog();
       final analyzer = OpportunityDiscoveryRealtimeAnalyzer(
         settings: ownerSettings,
         strategies: localLivePreferences.strategies.isEmpty
             ? LocalLivePreferences.recommendedStrategies
             : localLivePreferences.strategies,
         catalog: catalog,
+        projectionCatalog: projectionCatalog,
         coverage: coverage,
         languageCode: languageCode,
       );
@@ -727,7 +730,7 @@ abstract final class PlatformOpportunityDiscoveryMarketHostFactory {
       final projection = OpportunityDiscoveryCoverageProjection(
         delegate: PlatformRealtimeAuditedCandidateProjection(
           stateStore: opportunityStateStore,
-          catalog: _DiscoveryCatalogAdapter(catalog),
+          catalog: projectionCatalog,
           sizingCapital: ownerSettings.capital,
         ),
         coverage: coverage,
@@ -762,13 +765,4 @@ abstract final class PlatformOpportunityDiscoveryMarketHostFactory {
       rethrow;
     }
   }
-}
-
-final class _DiscoveryCatalogAdapter extends RealtimeIdeaCatalog {
-  _DiscoveryCatalogAdapter(this._delegate);
-
-  final _DiscoveryIdeaCatalog _delegate;
-
-  @override
-  TradeIdea? ideaFor(String setupId) => _delegate.ideaFor(setupId);
 }
