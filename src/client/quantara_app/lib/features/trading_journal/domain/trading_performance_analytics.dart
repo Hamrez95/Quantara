@@ -23,16 +23,20 @@ abstract final class TradingPerformanceAnalytics {
       throw ArgumentError('Performance report configuration is invalid.');
     }
 
-    final selected = projections
-        .where((projection) => _matches(projection, effectiveFilter))
-        .where((projection) => projection.state == TradingJournalTradeState.closed)
-        .where((projection) => projection.netPnl != null)
-        .toList(growable: false)
-      ..sort((left, right) {
-        final leftAt = left.closedAt ?? left.decidedAt;
-        final rightAt = right.closedAt ?? right.decidedAt;
-        return leftAt.compareTo(rightAt);
-      });
+    final selected =
+        projections
+            .where((projection) => _matches(projection, effectiveFilter))
+            .where(
+              (projection) =>
+                  projection.state == TradingJournalTradeState.closed,
+            )
+            .where((projection) => projection.netPnl != null)
+            .toList(growable: false)
+          ..sort((left, right) {
+            final leftAt = left.closedAt ?? left.decidedAt;
+            final rightAt = right.closedAt ?? right.decidedAt;
+            return leftAt.compareTo(rightAt);
+          });
 
     final pnl = selected.map((item) => item.netPnl!).toList(growable: false);
     final rValues = selected
@@ -43,7 +47,10 @@ abstract final class TradingPerformanceAnalytics {
     final wins = pnl.where((value) => value > 0).toList(growable: false);
     final losses = pnl.where((value) => value < 0).toList(growable: false);
     final grossProfit = wins.fold<double>(0, (sum, value) => sum + value);
-    final grossLossAbs = losses.fold<double>(0, (sum, value) => sum + value.abs());
+    final grossLossAbs = losses.fold<double>(
+      0,
+      (sum, value) => sum + value.abs(),
+    );
     final grossPnl = selected
         .map((item) => item.grossPnl)
         .whereType<double>()
@@ -59,12 +66,16 @@ abstract final class TradingPerformanceAnalytics {
     final netPnl = pnl.fold<double>(0, (sum, value) => sum + value);
 
     final drawdowns = _drawdowns(pnl);
-    final maximumDrawdown = drawdowns.isEmpty ? 0.0 : drawdowns.reduce(math.max);
+    final maximumDrawdown = drawdowns.isEmpty
+        ? 0.0
+        : drawdowns.reduce(math.max);
     final averageDrawdown = drawdowns.isEmpty
         ? 0.0
         : drawdowns.fold<double>(0, (sum, value) => sum + value) /
               drawdowns.length;
-    final recoveryFactor = maximumDrawdown <= 0 ? 0.0 : netPnl / maximumDrawdown;
+    final recoveryFactor = maximumDrawdown <= 0
+        ? 0.0
+        : netPnl / maximumDrawdown;
 
     final averageWin = wins.isEmpty
         ? 0.0
@@ -100,7 +111,10 @@ abstract final class TradingPerformanceAnalytics {
     for (final item in selected) {
       final move = item.priceMovePercent;
       final maximum = item.mfe;
-      if (move == null || maximum == null || !move.isFinite || !maximum.isFinite) {
+      if (move == null ||
+          maximum == null ||
+          !move.isFinite ||
+          !maximum.isFinite) {
         continue;
       }
       if (maximum > 0) {
@@ -132,7 +146,9 @@ abstract final class TradingPerformanceAnalytics {
         'Small sample: attribution is descriptive only; do not change strategy parameters from this report.',
       if (selected.length < minimumRatioSamples)
         'Sharpe/Sortino-like ratios are hidden until at least $minimumRatioSamples closed trades exist.',
-      if (selected.any((item) => item.integrity == TradingJournalIntegrity.unverified))
+      if (selected.any(
+        (item) => item.integrity == TradingJournalIntegrity.unverified,
+      ))
         'One or more selected trades are unverified; treat aggregate conclusions as provisional.',
       'Entry slippage is attribution only and is not subtracted from net PnL again because confirmed fills already affect gross/net economics.',
     ];
@@ -148,7 +164,9 @@ abstract final class TradingPerformanceAnalytics {
       funding: funding,
       netPnl: netPnl,
       entrySlippageAttribution: entrySlippage,
-      winRatePercent: selected.isEmpty ? 0 : wins.length / selected.length * 100,
+      winRatePercent: selected.isEmpty
+          ? 0
+          : wins.length / selected.length * 100,
       averageWin: averageWin,
       averageLoss: averageLoss,
       payoffRatio: payoffRatio,
@@ -157,8 +175,12 @@ abstract final class TradingPerformanceAnalytics {
       maximumDrawdown: maximumDrawdown,
       averageDrawdown: averageDrawdown,
       recoveryFactor: recoveryFactor,
-      sharpeLike: selected.length < minimumRatioSamples ? null : _sharpe(rValues),
-      sortinoLike: selected.length < minimumRatioSamples ? null : _sortino(rValues),
+      sharpeLike: selected.length < minimumRatioSamples
+          ? null
+          : _sharpe(rValues),
+      sortinoLike: selected.length < minimumRatioSamples
+          ? null
+          : _sortino(rValues),
       maximumWinStreak: streaks.$1,
       maximumLossStreak: streaks.$2,
       totalTimeInMarket: timeInMarket,
@@ -204,7 +226,8 @@ abstract final class TradingPerformanceAnalytics {
         !filter.regimes.contains(projection.plan?.regime ?? 'unknown')) {
       return false;
     }
-    if (filter.sources.isNotEmpty && !filter.sources.contains(projection.source)) {
+    if (filter.sources.isNotEmpty &&
+        !filter.sources.contains(projection.source)) {
       return false;
     }
     if (filter.directions.isNotEmpty &&
@@ -258,7 +281,8 @@ abstract final class TradingPerformanceAnalytics {
       buckets.putIfAbsent(keyOf(item), () => []).add(item);
     }
     return {
-      for (final entry in buckets.entries) entry.key: _group(entry.key, entry.value),
+      for (final entry in buckets.entries)
+        entry.key: _group(entry.key, entry.value),
     };
   }
 
@@ -267,7 +291,10 @@ abstract final class TradingPerformanceAnalytics {
     List<TradingJournalProjection> items,
   ) {
     final pnl = items.map((item) => item.netPnl ?? 0).toList(growable: false);
-    final r = items.map((item) => item.realizedR).whereType<double>().toList(growable: false);
+    final r = items
+        .map((item) => item.realizedR)
+        .whereType<double>()
+        .toList(growable: false);
     final wins = pnl.where((value) => value > 0).toList(growable: false);
     final losses = pnl.where((value) => value < 0).toList(growable: false);
     final grossProfit = wins.fold<double>(0, (sum, value) => sum + value);
@@ -276,7 +303,9 @@ abstract final class TradingPerformanceAnalytics {
       key: key,
       trades: items.length,
       netPnl: pnl.fold<double>(0, (sum, value) => sum + value),
-      expectancyR: r.isEmpty ? 0 : r.fold<double>(0, (sum, value) => sum + value) / r.length,
+      expectancyR: r.isEmpty
+          ? 0
+          : r.fold<double>(0, (sum, value) => sum + value) / r.length,
       winRatePercent: items.isEmpty ? 0 : wins.length / items.length * 100,
       profitFactor: grossLoss <= 0
           ? (grossProfit > 0 ? double.infinity : 0)
@@ -333,8 +362,10 @@ abstract final class TradingPerformanceAnalytics {
 
   static double? _sharpe(List<double> values) {
     if (values.length < 2) return null;
-    final mean = values.fold<double>(0, (sum, value) => sum + value) / values.length;
-    final variance = values.fold<double>(
+    final mean =
+        values.fold<double>(0, (sum, value) => sum + value) / values.length;
+    final variance =
+        values.fold<double>(
           0,
           (sum, value) => sum + math.pow(value - mean, 2),
         ) /
@@ -345,13 +376,12 @@ abstract final class TradingPerformanceAnalytics {
 
   static double? _sortino(List<double> values) {
     if (values.length < 2) return null;
-    final mean = values.fold<double>(0, (sum, value) => sum + value) / values.length;
+    final mean =
+        values.fold<double>(0, (sum, value) => sum + value) / values.length;
     final downside = values.where((value) => value < 0).toList(growable: false);
     if (downside.length < 2) return null;
-    final downsideVariance = downside.fold<double>(
-          0,
-          (sum, value) => sum + value * value,
-        ) /
+    final downsideVariance =
+        downside.fold<double>(0, (sum, value) => sum + value * value) /
         downside.length;
     final deviation = math.sqrt(downsideVariance);
     return deviation <= 0 ? null : mean / deviation;

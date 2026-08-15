@@ -5,26 +5,48 @@ import 'package:quantara_app/features/trading_journal/domain/trading_performance
 import 'package:quantara_app/features/trading_journal/domain/trading_performance_models.dart';
 
 void main() {
-  test('report aggregates ledger net truth without subtracting attribution twice', () {
-    final report = TradingPerformanceAnalytics.build(
-      projections: [
-        _projection(id: 'a', symbol: 'BTCUSDT', net: 8, gross: 10, fees: 1, funding: -1, r: 1.2),
-        _projection(id: 'b', symbol: 'BTCUSDT', net: -5, gross: -4, fees: 1, funding: 0, r: -0.8),
-      ],
-      generatedAtUtc: DateTime.utc(2026, 8, 15),
-      bootstrapIterations: 300,
-    );
+  test(
+    'report aggregates ledger net truth without subtracting attribution twice',
+    () {
+      final report = TradingPerformanceAnalytics.build(
+        projections: [
+          _projection(
+            id: 'a',
+            symbol: 'BTCUSDT',
+            net: 8,
+            gross: 10,
+            fees: 1,
+            funding: -1,
+            r: 1.2,
+          ),
+          _projection(
+            id: 'b',
+            symbol: 'BTCUSDT',
+            net: -5,
+            gross: -4,
+            fees: 1,
+            funding: 0,
+            r: -0.8,
+          ),
+        ],
+        generatedAtUtc: DateTime.utc(2026, 8, 15),
+        bootstrapIterations: 300,
+      );
 
-    expect(report.closedTrades, 2);
-    expect(report.grossPnl, 6);
-    expect(report.fees, 2);
-    expect(report.funding, -1);
-    expect(report.netPnl, 3);
-    expect(report.wins, 1);
-    expect(report.losses, 1);
-    expect(report.expectancyR, closeTo(0.2, 0.000001));
-    expect(report.warnings.any((item) => item.contains('not subtracted')), isTrue);
-  });
+      expect(report.closedTrades, 2);
+      expect(report.grossPnl, 6);
+      expect(report.fees, 2);
+      expect(report.funding, -1);
+      expect(report.netPnl, 3);
+      expect(report.wins, 1);
+      expect(report.losses, 1);
+      expect(report.expectancyR, closeTo(0.2, 0.000001));
+      expect(
+        report.warnings.any((item) => item.contains('not subtracted')),
+        isTrue,
+      );
+    },
+  );
 
   test('the same filter is applied to headline and attribution groups', () {
     final filter = TradingPerformanceFilter(
@@ -36,9 +58,34 @@ void main() {
     );
     final report = TradingPerformanceAnalytics.build(
       projections: [
-        _projection(id: 'included', symbol: 'BTCUSDT', net: 4, gross: 5, fees: 1, funding: 0, r: 0.8),
-        _projection(id: 'wrong-symbol', symbol: 'ETHUSDT', net: 20, gross: 21, fees: 1, funding: 0, r: 3),
-        _projection(id: 'too-early', symbol: 'BTCUSDT', net: 30, gross: 31, fees: 1, funding: 0, r: 4, closedAt: DateTime.utc(2026, 8, 1)),
+        _projection(
+          id: 'included',
+          symbol: 'BTCUSDT',
+          net: 4,
+          gross: 5,
+          fees: 1,
+          funding: 0,
+          r: 0.8,
+        ),
+        _projection(
+          id: 'wrong-symbol',
+          symbol: 'ETHUSDT',
+          net: 20,
+          gross: 21,
+          fees: 1,
+          funding: 0,
+          r: 3,
+        ),
+        _projection(
+          id: 'too-early',
+          symbol: 'BTCUSDT',
+          net: 30,
+          gross: 31,
+          fees: 1,
+          funding: 0,
+          r: 4,
+          closedAt: DateTime.utc(2026, 8, 1),
+        ),
       ],
       filter: filter,
       generatedAtUtc: DateTime.utc(2026, 8, 15),
@@ -103,7 +150,10 @@ void main() {
     );
 
     expect(first.uncertainty.expectancyRP05, second.uncertainty.expectancyRP05);
-    expect(first.uncertainty.expectancyRMedian, second.uncertainty.expectancyRMedian);
+    expect(
+      first.uncertainty.expectancyRMedian,
+      second.uncertainty.expectancyRMedian,
+    );
     expect(first.uncertainty.expectancyRP95, second.uncertainty.expectancyRP95);
     expect(first.sharpeLike, isNotNull);
   });

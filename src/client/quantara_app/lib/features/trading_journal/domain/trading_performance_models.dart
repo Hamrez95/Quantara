@@ -13,16 +13,28 @@ final class TradingPerformanceFilter {
     Iterable<TradingJournalSource> sources = const [],
     Iterable<TradingJournalDirection> directions = const [],
   }) : symbols = UnmodifiableSetView(
-         symbols.map((value) => value.trim().toUpperCase()).where((value) => value.isNotEmpty).toSet(),
+         symbols
+             .map((value) => value.trim().toUpperCase())
+             .where((value) => value.isNotEmpty)
+             .toSet(),
        ),
        timeframes = UnmodifiableSetView(
-         timeframes.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet(),
+         timeframes
+             .map((value) => value.trim())
+             .where((value) => value.isNotEmpty)
+             .toSet(),
        ),
        strategies = UnmodifiableSetView(
-         strategies.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet(),
+         strategies
+             .map((value) => value.trim())
+             .where((value) => value.isNotEmpty)
+             .toSet(),
        ),
        regimes = UnmodifiableSetView(
-         regimes.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet(),
+         regimes
+             .map((value) => value.trim())
+             .where((value) => value.isNotEmpty)
+             .toSet(),
        ),
        sources = UnmodifiableSetView(sources.toSet()),
        directions = UnmodifiableSetView(directions.toSet()) {
