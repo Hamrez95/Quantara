@@ -365,6 +365,7 @@ final class TradingLabPendingCandidate {
     required this.strategyVersion,
     required this.marketRegime,
     required this.confidencePercent,
+    this.setupQualityScore,
     required this.riskReward,
     required this.entryLower,
     required this.entryUpper,
@@ -383,6 +384,10 @@ final class TradingLabPendingCandidate {
         symbol.trim().isEmpty ||
         timeframe.trim().isEmpty) {
       throw const FormatException('Invalid Trading Lab candidate identity.');
+    }
+    if (setupQualityScore != null &&
+        (setupQualityScore! < 0 || setupQualityScore! > 100)) {
+      throw const FormatException('Trading Lab setup quality is invalid.');
     }
     if (!observedAtUtc.isUtc ||
         !validUntilUtc.isUtc ||
@@ -410,6 +415,7 @@ final class TradingLabPendingCandidate {
   final String strategyVersion;
   final String marketRegime;
   final int confidencePercent;
+  final int? setupQualityScore;
   final double riskReward;
   final double entryLower;
   final double entryUpper;
@@ -432,6 +438,7 @@ final class TradingLabPendingCandidate {
     'strategyVersion': strategyVersion,
     'marketRegime': marketRegime,
     'confidencePercent': confidencePercent,
+    'setupQualityScore': setupQualityScore,
     'riskReward': riskReward,
     'entryLower': entryLower,
     'entryUpper': entryUpper,
@@ -459,6 +466,9 @@ final class TradingLabPendingCandidate {
         strategyVersion: json['strategyVersion']?.toString() ?? '',
         marketRegime: json['marketRegime']?.toString() ?? 'transition',
         confidencePercent: _int(json['confidencePercent']),
+        setupQualityScore: json['setupQualityScore'] == null
+            ? null
+            : _int(json['setupQualityScore']),
         riskReward: _double(json['riskReward']),
         entryLower: _double(json['entryLower']),
         entryUpper: _double(json['entryUpper']),

@@ -243,6 +243,7 @@ final class TradingLabPaperBroker {
           strategyVersion: idea.strategyVersion,
           marketRegime: idea.marketRegime.name,
           confidencePercent: idea.confidencePercent,
+          setupQualityScore: idea.setupQualityScore,
           riskReward: idea.riskReward!,
           entryLower: idea.entryLower!,
           entryUpper: idea.entryUpper!,
