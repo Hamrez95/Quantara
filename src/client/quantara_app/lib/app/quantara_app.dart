@@ -11,11 +11,13 @@ import '../features/owner_alpha/application/owner_alpha_controller.dart';
 import '../features/owner_alpha/data/background_opportunity_scanner.dart';
 import '../features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
 import '../features/owner_alpha/data/local_live_realtime_universe.dart';
+import '../features/owner_alpha/data/opportunity_discovery_universe.dart';
 import '../features/owner_alpha/data/platform_owner_alpha_settings_store.dart';
 import '../features/owner_alpha/data/platform_opportunity_services.dart';
 import '../features/owner_alpha/data/realtime_production_runtime.dart';
 import '../features/owner_alpha/domain/owner_alpha_models.dart';
 import '../features/owner_alpha/domain/realtime_market_runtime_models.dart';
+import '../features/owner_alpha/presentation/opportunity_discovery_coverage_banner.dart';
 import '../features/owner_alpha/presentation/owner_alpha_page.dart';
 import '../features/portfolio_risk/presentation/portfolio_risk_panel.dart';
 
@@ -48,13 +50,20 @@ class QuantaraApp extends StatefulWidget {
 }
 
 class _QuantaraAppState extends State<QuantaraApp> {
+  static const _discoveryRefreshInterval = Duration(minutes: 30);
+
   late ThemeMode _themeMode = widget.initialThemeMode;
   late Locale _locale = widget.initialLocale;
   http.Client? _ownedClient;
   RealtimeMarketHost? _realtimeMarketHost;
+  RealtimeMarketHost? _opportunityDiscoveryHost;
+  OpportunityDiscoveryCoverageTracker? _opportunityDiscoveryCoverage;
+  Timer? _opportunityDiscoveryRefreshTimer;
   StreamSubscription<LocalLivePreferences>? _localLivePreferencesSubscription;
   Future<void> _realtimeTransitionTail = Future<void>.value();
+  Future<void> _opportunityDiscoveryTransitionTail = Future<void>.value();
   String? _realtimeUniverseFingerprint;
+  String? _opportunityDiscoveryFingerprint;
   int _preferencesRevision = 0;
   late final OwnerAlphaRepository _repository;
   late final OwnerAlphaSettingsStore _settingsStore =
@@ -84,16 +93,27 @@ class _QuantaraAppState extends State<QuantaraApp> {
       unawaited(injectedHost.initialize());
     } else if (widget.repository == null) {
       _localLivePreferencesSubscription =
-          SharedPreferencesLocalLivePreferencesStore.changes.listen(
-            (preferences) => _scheduleRealtimeReplacement(preferences),
-          );
+          SharedPreferencesLocalLivePreferencesStore.changes.listen((
+            preferences,
+          ) {
+            _scheduleRealtimeReplacement(preferences);
+            _scheduleOpportunityDiscoveryReplacement(preferences);
+          });
       _scheduleRealtimeReplacement();
+      _scheduleOpportunityDiscoveryReplacement();
+      _opportunityDiscoveryRefreshTimer = Timer.periodic(
+        _discoveryRefreshInterval,
+        (_) => _scheduleOpportunityDiscoveryReplacement(),
+      );
     }
   }
 
   @override
   void dispose() {
+    _opportunityDiscoveryRefreshTimer?.cancel();
     unawaited(_localLivePreferencesSubscription?.cancel());
+    _opportunityDiscoveryCoverage?.dispose();
+    _opportunityDiscoveryHost?.dispose();
     _realtimeMarketHost?.dispose();
     _ownedClient?.close();
     super.dispose();
@@ -104,6 +124,18 @@ class _QuantaraAppState extends State<QuantaraApp> {
       (_) => _replaceRealtimeHost(preferences),
     );
     _realtimeTransitionTail = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+  }
+
+  void _scheduleOpportunityDiscoveryReplacement([
+    LocalLivePreferences? preferences,
+  ]) {
+    final next = _opportunityDiscoveryTransitionTail.then(
+      (_) => _replaceOpportunityDiscoveryHost(preferences),
+    );
+    _opportunityDiscoveryTransitionTail = next.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
@@ -173,6 +205,85 @@ class _QuantaraAppState extends State<QuantaraApp> {
     await replacement.initialize();
   }
 
+  Future<void> _replaceOpportunityDiscoveryHost(
+    LocalLivePreferences? preferenceRevision,
+  ) async {
+    if (!mounted ||
+        widget.repository != null ||
+        widget.realtimeMarketHost != null) {
+      return;
+    }
+    final ownerSettings =
+        await _settingsStore.load() ??
+        const OwnerAlphaSettings(
+          symbols: OwnerAlphaController.defaultSymbols,
+          capital: 10000,
+          riskPercent: 0.5,
+        );
+    final localPreferences =
+        preferenceRevision ??
+        await _localLivePreferencesStore.load(
+          availableSymbols: ownerSettings.symbols,
+        );
+    final revision = await PlatformOpportunityDiscoveryMarketHostFactory.create(
+      ownerSettings: ownerSettings,
+      localLivePreferences: localPreferences,
+      opportunityStateStore: _opportunityStateStore,
+      languageCode: _locale.languageCode,
+    );
+    final strategyFingerprint =
+        localPreferences.strategies.map((value) => value.name).toList()..sort();
+    final fingerprint = [
+      revision.universe.fingerprint,
+      strategyFingerprint.join(','),
+      ownerSettings.capital.toStringAsPrecision(12),
+      ownerSettings.riskPercent.toStringAsPrecision(12),
+      ownerSettings.cadence.name,
+    ].join('|');
+    if (!mounted) {
+      revision.coverage.dispose();
+      revision.host.dispose();
+      return;
+    }
+    if (_opportunityDiscoveryHost != null &&
+        fingerprint == _opportunityDiscoveryFingerprint) {
+      revision.coverage.dispose();
+      revision.host.dispose();
+      return;
+    }
+
+    final previousHost = _opportunityDiscoveryHost;
+    final previousCoverage = _opportunityDiscoveryCoverage;
+    if (previousHost != null) {
+      try {
+        final state = previousHost.runtime.state;
+        if (state != RealtimeMarketRuntimeState.idle &&
+            state != RealtimeMarketRuntimeState.paused &&
+            state != RealtimeMarketRuntimeState.stopped) {
+          await previousHost.runtime.pause();
+        }
+        await previousHost.runtime.stop();
+      } on Object {
+        revision.coverage.dispose();
+        revision.host.dispose();
+        rethrow;
+      }
+      previousHost.dispose();
+      previousCoverage?.dispose();
+    }
+    if (!mounted) {
+      revision.coverage.dispose();
+      revision.host.dispose();
+      return;
+    }
+    setState(() {
+      _opportunityDiscoveryHost = revision.host;
+      _opportunityDiscoveryCoverage = revision.coverage;
+      _opportunityDiscoveryFingerprint = fingerprint;
+    });
+    await revision.host.initialize();
+  }
+
   Future<void> _loadPreferences() async {
     final revision = _preferencesRevision;
     final preferences = await _preferencesStore.load();
@@ -203,6 +314,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
     _preferencesRevision++;
     setState(() => _locale = locale);
     _realtimeMarketHost?.setLanguage(locale.languageCode);
+    _opportunityDiscoveryHost?.setLanguage(locale.languageCode);
     unawaited(_savePreferences());
   }
 
@@ -246,24 +358,33 @@ class _QuantaraAppState extends State<QuantaraApp> {
       themeAnimationDuration: const Duration(milliseconds: 220),
       themeAnimationCurve: Curves.easeOutCubic,
       home: Builder(
-        builder: (homeContext) => OwnerAlphaPage(
-          repository: _repository,
-          settingsStore: _settingsStore,
-          opportunityStateStore: _opportunityStateStore,
-          notificationGateway:
-              widget.notificationGateway ??
-              const PlatformSetupNotificationGateway(),
-          backgroundScanGateway:
-              widget.backgroundScanGateway ??
-              (widget.repository == null
-                  ? const WorkmanagerBackgroundScanGateway()
-                  : const NoopBackgroundScanGateway()),
-          themeMode: _themeMode,
-          locale: _locale,
-          onToggleTheme: _toggleTheme,
-          onLocaleChanged: _setLocale,
-          onOpenPortfolioRisk: () => _showPortfolioRisk(homeContext),
-          realtimeMonitor: _realtimeMarketHost,
+        builder: (homeContext) => Column(
+          children: [
+            OpportunityDiscoveryCoverageBanner(
+              coverage: _opportunityDiscoveryCoverage,
+            ),
+            Expanded(
+              child: OwnerAlphaPage(
+                repository: _repository,
+                settingsStore: _settingsStore,
+                opportunityStateStore: _opportunityStateStore,
+                notificationGateway:
+                    widget.notificationGateway ??
+                    const PlatformSetupNotificationGateway(),
+                backgroundScanGateway:
+                    widget.backgroundScanGateway ??
+                    (widget.repository == null
+                        ? const WorkmanagerBackgroundScanGateway()
+                        : const NoopBackgroundScanGateway()),
+                themeMode: _themeMode,
+                locale: _locale,
+                onToggleTheme: _toggleTheme,
+                onLocaleChanged: _setLocale,
+                onOpenPortfolioRisk: () => _showPortfolioRisk(homeContext),
+                realtimeMonitor: _realtimeMarketHost,
+              ),
+            ),
+          ],
         ),
       ),
     );

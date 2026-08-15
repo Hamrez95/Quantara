@@ -9,7 +9,6 @@ import 'bitunix_candle_backfill_source.dart';
 import 'durable_candidate_audit_store.dart';
 import 'realtime_candidate_coordinator.dart';
 import 'realtime_candidate_registry.dart';
-import 'realtime_contextual_market_analysis.dart';
 import 'realtime_market_application.dart';
 import 'realtime_production_runtime.dart';
 
@@ -73,6 +72,23 @@ abstract final class LocalLiveRealtimeUniverse {
   }
 }
 
+/// Local Live owns exact execution-universe health only.
+///
+/// Broad candidate discovery is intentionally performed by the separate
+/// opportunity-discovery runtime. Keeping this gateway analysis-free prevents
+/// duplicate candidate persistence when a Local Live stream also belongs to
+/// the wider discovery universe, while preserving public data health/gap
+/// monitoring required by Local Live safety.
+final class LocalLiveMonitoringOnlyAnalysisGateway
+    implements RealtimeMarketAnalysisGateway {
+  const LocalLiveMonitoringOnlyAnalysisGateway();
+
+  @override
+  Future<RealtimeCandidateAnalysisBatch> analyze(
+    RealtimeCandlePipelineUpdate update,
+  ) async => RealtimeCandidateAnalysisBatch();
+}
+
 /// Builds the production realtime host from one immutable Local Live universe
 /// revision. Reconfiguration is intentionally owned by the application shell:
 /// the old host is stopped before a host for the next revision is initialized.
@@ -85,17 +101,7 @@ abstract final class PlatformLocalLiveRealtimeMarketHostFactory {
   }) async {
     final universe = LocalLiveRealtimeUniverse.build(localLivePreferences);
     final client = http.Client();
-    final catalog = RealtimeIdeaCatalog();
-    final analyzer = ProductionRealtimeContextualAnalyzer(
-      settings: ownerSettings,
-      catalog: catalog,
-      languageCode: languageCode,
-    );
-    final analysisGateway = SnapshottingRealtimeMarketAnalysisGateway(
-      analyzer: analyzer,
-      maximumStreams: universe.maximumStreams,
-      maximumClosedCandlesPerStream: 500,
-    );
+    const analysisGateway = LocalLiveMonitoringOnlyAnalysisGateway();
     final auditStore = DurableCandidateAuditStore(
       keyValueStore: const SharedPreferencesCandidateAuditKeyValueStore(),
     );
@@ -106,11 +112,6 @@ abstract final class PlatformLocalLiveRealtimeMarketHostFactory {
       ),
       auditStore: auditStore,
     );
-    final projection = PlatformRealtimeAuditedCandidateProjection(
-      stateStore: opportunityStateStore,
-      catalog: catalog,
-      sizingCapital: ownerSettings.capital,
-    );
     final application = RealtimeMarketApplication(
       universe: universe,
       backfillSource: BitunixCandleBackfillSource(
@@ -120,7 +121,6 @@ abstract final class PlatformLocalLiveRealtimeMarketHostFactory {
       fleetFactory: const BitunixRealtimePublicStreamFleetFactory(),
       analysisGateway: analysisGateway,
       candidateCoordinator: coordinator,
-      projection: projection,
       closedCandleLimit: 64,
       bootstrapSpacing: const Duration(milliseconds: 120),
       maximumPendingEventsPerStream: 64,
@@ -128,7 +128,6 @@ abstract final class PlatformLocalLiveRealtimeMarketHostFactory {
     );
     return RealtimeMarketHost(
       runtime: RealtimeMarketApplicationLifecycle(application),
-      onLanguageChanged: analyzer.setLanguage,
       onDispose: client.close,
     );
   }
