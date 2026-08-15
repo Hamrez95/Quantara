@@ -1,0 +1,116 @@
+name: Integrate 192 temporary
+
+on:
+  push:
+    branches:
+      - feat/192-economic-opportunity-ranking
+    paths:
+      - .github/workflows/integrate-192-temporary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/192-economic-opportunity-ranking
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Patch Local Live ranking integration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
+          s = p.read_text()
+          s = s.replace("import '../../owner_alpha/data/bitunix_owner_alpha_repository.dart';", "import '../../decision_core/domain/economic_opportunity_models.dart';\nimport '../../owner_alpha/data/bitunix_owner_alpha_repository.dart';")
+          s = s.replace("import 'local_live_canonical_decision.dart';", "import 'local_live_canonical_decision.dart';\nimport 'local_live_economic_ranking.dart';")
+          s = s.replace("const localLiveAuditKey = 'quantara.local-live.audit.v1';", "const localLiveAuditKey = 'quantara.local-live.audit.v1';\nconst localLiveRankingJournalKey = 'quantara.local-live.ranking-journal.v1';")
+          s = s.replace("  final List<LocalLiveAuditEvent> _audit = [];", "  final List<LocalLiveAuditEvent> _audit = [];\n  final List<OpportunityRankingJournalRecord> _rankingJournal = [];")
+          old = """      final rankedIdeas = _rankPrimaryIdeas(ideas);\n      if (rankedIdeas.isEmpty) {"""
+          new = """      final lastPrices = <String, double>{\n        for (final result in snapshot.radar)\n          result.quote.symbol.trim().toUpperCase(): result.quote.lastPrice,\n      };\n      final concentrationPenalty = exchangePositions.isEmpty\n          ? 0.0\n          : math.min(0.5, exchangePositions.where((item) => item.quantity > 0).length * 0.12);\n      final rankedIdeas = LocalLiveEconomicRanking.rank(\n        ideas: ideas,\n        lastPrices: lastPrices,\n        evaluatedAtUtc: DateTime.now().toUtc(),\n        concentrationPenaltyBySymbol: {\n          for (final idea in ideas)\n            idea.symbol.trim().toUpperCase(): concentrationPenalty,\n        },\n      );\n      if (rankedIdeas.isEmpty) {"""
+          if old not in s:
+              raise SystemExit('ranking call target not found')
+          s = s.replace(old, new)
+          s = s.replace("      for (final idea in rankedIdeas) {\n        if (_executedSetupIds.contains(idea.setupId)) {", "      for (final rankedIdea in rankedIdeas) {\n        final idea = rankedIdea.idea;\n        await _recordRankingOutcome(\n          rankedIdea,\n          OpportunityRankingOutcome.ranked,\n          'Candidate admitted to deterministic economic ordering.',\n        );\n        if (_executedSetupIds.contains(idea.setupId)) {\n          await _recordRankingOutcome(\n            rankedIdea,\n            OpportunityRankingOutcome.duplicateSkipped,\n            'Setup already executed in local-live history.',\n          );")
+          s = s.replace("            'The highest-ranked setup was already executed in this local-live history.',", "            'The ranked setup was already executed in this local-live history.',")
+          target = """        if (idea.isExpiredAt(DateTime.now().toUtc()) ||\n            idea.stopLoss == null ||\n            idea.targets.length < 3 ||\n            idea.entryLower == null ||\n            idea.entryUpper == null) {\n          _auditEvent("""
+          repl = """        if (idea.isExpiredAt(DateTime.now().toUtc()) ||\n            idea.stopLoss == null ||\n            idea.targets.length < 3 ||\n            idea.entryLower == null ||\n            idea.entryUpper == null) {\n          await _recordRankingOutcome(\n            rankedIdea,\n            OpportunityRankingOutcome.staleOrIncomplete,\n            'Ranked setup expired or lacked a complete protected plan.',\n          );\n          _auditEvent("""
+          if target not in s:
+              raise SystemExit('expiry target not found')
+          s = s.replace(target, repl)
+          s = s.replace("            'The highest-ranked setup was expired or missing a complete protected plan.',", "            'The ranked setup was expired or missing a complete protected plan.',")
+          target = """        if (!canonical.eligible) {\n          _auditEvent("""
+          repl = """        if (!canonical.eligible) {\n          await _recordRankingOutcome(\n            rankedIdea,\n            OpportunityRankingOutcome.canonicalRejected,\n            'Canonical decision rejected: ${canonical.rejection.name}.',\n          );\n          _auditEvent("""
+          if target not in s:
+              raise SystemExit('canonical target not found')
+          s = s.replace(target, repl, 1)
+          target = """        if (!reservation.decision.allowed ||\n            !reservation.decision.liveExecutionAllowed) {\n          _auditEvent("""
+          repl = """        if (!reservation.decision.allowed ||\n            !reservation.decision.liveExecutionAllowed) {\n          await _recordRankingOutcome(\n            rankedIdea,\n            OpportunityRankingOutcome.portfolioRejected,\n            'Portfolio reservation rejected: ${reservation.decision.reason.name}.',\n          );\n          _auditEvent("""
+          if target not in s:
+              raise SystemExit('reservation target not found')
+          s = s.replace(target, repl, 1)
+          target = """          final clientId = _clientId(idea);\n          orderRequestStarted = true;\n          final placed = await exchange.placeMarketEntry("""
+          repl = """          final clientId = _clientId(idea);\n          await _recordRankingOutcome(\n            rankedIdea,\n            OpportunityRankingOutcome.executionAttempted,\n            'All deterministic pre-order gates passed; protected entry request may start.',\n          );\n          orderRequestStarted = true;\n          final placed = await exchange.placeMarketEntry("""
+          if target not in s:
+              raise SystemExit('attempt target not found')
+          s = s.replace(target, repl, 1)
+          target = """          _auditEvent(\n            'position_protected',"""
+          repl = """          await _recordRankingOutcome(\n            rankedIdea,\n            OpportunityRankingOutcome.entered,\n            'Entry fill and exchange-native protection were confirmed.',\n          );\n          _auditEvent(\n            'position_protected',"""
+          if target not in s:
+              raise SystemExit('entered target not found')
+          s = s.replace(target, repl, 1)
+          target = """        } on Object catch (error) {\n          final reservationId = activeReservationId;"""
+          repl = """        } on Object catch (error) {\n          await _recordRankingOutcome(\n            rankedIdea,\n            OpportunityRankingOutcome.executionFailed,\n            'Protected entry lifecycle failed: ${error.runtimeType}.',\n          );\n          final reservationId = activeReservationId;"""
+          if target not in s:
+              raise SystemExit('failure target not found')
+          s = s.replace(target, repl, 1)
+          start = s.find('  List<TradeIdea> _rankPrimaryIdeas(List<TradeIdea> ideas) {')
+          if start < 0:
+              raise SystemExit('old rank method not found')
+          end = s.find('  String _clientId(TradeIdea idea) {', start)
+          if end < 0:
+              raise SystemExit('clientId boundary not found')
+          helper = """  Future<void> _recordRankingOutcome(\n    LocalLiveRankedIdea rankedIdea,\n    OpportunityRankingOutcome outcome,\n    String reason,\n  ) async {\n    final ranked = rankedIdea.ranked;\n    _rankingJournal.add(\n      OpportunityRankingJournalRecord(\n        recordedAtUtc: DateTime.now().toUtc(),\n        rank: ranked.rank,\n        setupId: ranked.candidate.setupId,\n        symbol: ranked.candidate.symbol,\n        policy: ranked.utility.policy,\n        version: ranked.utility.version,\n        outcome: outcome,\n        reason: reason,\n        utilityFingerprint: ranked.utility.fingerprint,\n        score: ranked.utility.score,\n        componentBreakdown: ranked.utility.componentBreakdown,\n        unknownFields: ranked.utility.unknownFields,\n      ),\n    );\n    if (_rankingJournal.length > 500) {\n      _rankingJournal.removeRange(0, _rankingJournal.length - 500);\n    }\n    await _persistState();\n  }\n\n"""
+          s = s[:start] + helper + s[end:]
+          restore_anchor = """    final pendingClosuresRaw = await FlutterForegroundTask.getData<String>(\n      key: localLivePendingJournalClosuresKey,\n    );"""
+          restore_insert = """    final rankingRaw = await FlutterForegroundTask.getData<String>(\n      key: localLiveRankingJournalKey,\n    );\n    if (rankingRaw != null) {\n      try {\n        final decoded = jsonDecode(rankingRaw);\n        if (decoded is List<Object?>) {\n          _rankingJournal\n            ..clear()\n            ..addAll(\n              decoded.whereType<Map<Object?, Object?>>().map(\n                (item) => OpportunityRankingJournalRecord.fromJson(\n                  item.map((key, value) => MapEntry(key.toString(), value)),\n                ),\n              ),\n            );\n        }\n      } on Object {\n        _rankingJournal.clear();\n      }\n    }\n""" + restore_anchor
+          if restore_anchor not in s:
+              raise SystemExit('restore anchor not found')
+          s = s.replace(restore_anchor, restore_insert, 1)
+          persist_anchor = """  Future<void> _persistState() async {\n    await FlutterForegroundTask.saveData(\n      key: localLiveManagedPositionsKey,"""
+          persist_insert = """  Future<void> _persistState() async {\n    await FlutterForegroundTask.saveData(\n      key: localLiveRankingJournalKey,\n      value: jsonEncode(_rankingJournal.map((item) => item.toJson()).toList()),\n    );\n    await FlutterForegroundTask.saveData(\n      key: localLiveManagedPositionsKey,"""
+          if persist_anchor not in s:
+              raise SystemExit('persist anchor not found')
+          s = s.replace(persist_anchor, persist_insert, 1)
+          p.write_text(s)
+          PY
+      - name: Format ranking changes
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/decision_core/domain/economic_opportunity_models.dart lib/features/decision_core/application/economic_opportunity_ranker.dart lib/features/auto_trade/application/local_live_economic_ranking.dart lib/features/auto_trade/application/local_live_trade_service.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Existing Local Live safety tests
+        working-directory: src/client/quantara_app
+        run: flutter test test/local_live_trade_service_test.dart test/canonical_decision_pipeline_test.dart test/canonical_runtime_integration_test.dart test/local_live_portfolio_atomic_concurrency_test.dart test/local_live_portfolio_atomic_rollback_test.dart
+      - name: Commit validated integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/decision_core/domain/economic_opportunity_models.dart src/client/quantara_app/lib/features/decision_core/application/economic_opportunity_ranker.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_economic_ranking.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(ranking): integrate economic utility into Local Live"
+          git push origin HEAD:feat/192-economic-opportunity-ranking
