@@ -14,7 +14,10 @@ void main() {
     final assessment = ContextualPriceActionEngine.analyze(analysis: analysis);
 
     expect(assessment.version, 'contextual-price-action/3.0');
-    expect(assessment.families.keys.toSet(), ContextualEvidenceFamily.values.toSet());
+    expect(
+      assessment.families.keys.toSet(),
+      ContextualEvidenceFamily.values.toSet(),
+    );
     expect(assessment.setupQualityScore, inInclusiveRange(0, 100));
     expect(assessment.expectation, isNotEmpty);
     expect(assessment.trigger, isNotEmpty);
@@ -54,78 +57,81 @@ void main() {
     expect(zone.score, inInclusiveRange(0, 100));
   });
 
-  test('failed structural break is explicit and does not require candle color', () {
-    final candles = <ChartCandle>[];
-    final base = DateTime.utc(2026, 8, 1);
-    for (var index = 0; index < 39; index++) {
-      final center = 100 + math.sin(index * math.pi / 4) * 1.5;
+  test(
+    'failed structural break is explicit and does not require candle color',
+    () {
+      final candles = <ChartCandle>[];
+      final base = DateTime.utc(2026, 8, 1);
+      for (var index = 0; index < 39; index++) {
+        final center = 100 + math.sin(index * math.pi / 4) * 1.5;
+        candles.add(
+          ChartCandle(
+            openTime: base.add(Duration(hours: index)),
+            open: center - 0.1,
+            high: center + 0.6,
+            low: center - 0.6,
+            close: center + 0.1,
+            volume: 1000,
+          ),
+        );
+      }
       candles.add(
         ChartCandle(
-          openTime: base.add(Duration(hours: index)),
-          open: center - 0.1,
-          high: center + 0.6,
-          low: center - 0.6,
-          close: center + 0.1,
-          volume: 1000,
+          openTime: base.add(const Duration(hours: 39)),
+          open: 102,
+          high: 106,
+          low: 99,
+          close: 100,
+          volume: 2400,
         ),
       );
-    }
-    candles.add(
-      ChartCandle(
-        openTime: base.add(const Duration(hours: 39)),
-        open: 102,
-        high: 106,
-        low: 99,
-        close: 100,
-        volume: 2400,
-      ),
-    );
-    final analysis = TimeframeChartAnalysis(
-      symbol: 'BTCUSDT',
-      timeframe: '1h',
-      candles: candles,
-      zones: const [],
-      direction: ChartDirection.sideways,
-      directionStrength: 0.2,
-      volatilityPercent: 1.2,
-      summary: 'failed break fixture',
-      generatedAt: candles.last.openTime.add(const Duration(hours: 1)),
-      fingerprint: 'failed-break-fixture',
-    );
-    const indicators = TechnicalIndicatorSnapshot(
-      ema20: 100,
-      ema50: 100,
-      ema200: 100,
-      ema20SlopeAtr: 0,
-      ema50SlopeAtr: 0,
-      atr14: 2,
-      atrPercent: 2,
-      atrExpansionRatio: 1.4,
-      rsi14: 50,
-      adx14: 18,
-      plusDi14: 20,
-      minusDi14: 20,
-      relativeVolume20: 2.4,
-      volumeZScore20: 2,
-      previousDonchianHigh20: 104,
-      previousDonchianLow20: 96,
-      bollingerMiddle20: 100,
-      bollingerUpper20: 104,
-      bollingerLower20: 96,
-      bollingerBandwidthPercent: 8,
-      trendEfficiency20: 0.2,
-      recentSwingHigh: 104,
-      recentSwingLow: 96,
-    );
+      final analysis = TimeframeChartAnalysis(
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        candles: candles,
+        zones: const [],
+        direction: ChartDirection.sideways,
+        directionStrength: 0.2,
+        volatilityPercent: 1.2,
+        summary: 'failed break fixture',
+        generatedAt: candles.last.openTime.add(const Duration(hours: 1)),
+        fingerprint: 'failed-break-fixture',
+      );
+      const indicators = TechnicalIndicatorSnapshot(
+        ema20: 100,
+        ema50: 100,
+        ema200: 100,
+        ema20SlopeAtr: 0,
+        ema50SlopeAtr: 0,
+        atr14: 2,
+        atrPercent: 2,
+        atrExpansionRatio: 1.4,
+        rsi14: 50,
+        adx14: 18,
+        plusDi14: 20,
+        minusDi14: 20,
+        relativeVolume20: 2.4,
+        volumeZScore20: 2,
+        previousDonchianHigh20: 104,
+        previousDonchianLow20: 96,
+        bollingerMiddle20: 100,
+        bollingerUpper20: 104,
+        bollingerLower20: 96,
+        bollingerBandwidthPercent: 8,
+        trendEfficiency20: 0.2,
+        recentSwingHigh: 104,
+        recentSwingLow: 96,
+      );
 
-    final structure = StructureExpectationEngine.analyze(
-      analysis: analysis,
-      indicators: indicators,
-    );
+      final structure = StructureExpectationEngine.analyze(
+        analysis: analysis,
+        indicators: indicators,
+      );
 
-    expect(structure.event, StructureEvent.failedBreak);
-    expect(structure.expectedMove, ExpectedMarketMove.failedBreakReversal);
-  });
+      expect(structure.event, StructureEvent.failedBreak);
+      expect(structure.expectedMove, ExpectedMarketMove.failedBreakReversal);
+    },
+  );
 
   test('ADX and DMI remain bounded inside one momentum family', () {
     final analysis = _trendAnalysis();
