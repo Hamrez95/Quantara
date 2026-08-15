@@ -29,10 +29,7 @@ void main() {
       contains('BitunixRealtimePublicStreamFleetFactory'),
     );
     expect(localLiveUniverse, contains('DurableCandidateAuditStore'));
-    expect(
-      app,
-      contains('PlatformLocalLiveRealtimeMarketHostFactory.create'),
-    );
+    expect(app, contains('PlatformLocalLiveRealtimeMarketHostFactory.create'));
     expect(app, contains('realtimeMonitor: _realtimeMarketHost'));
   });
 }
