@@ -90,7 +90,9 @@ void main() {
     expect(service, contains('LocalLiveEconomicRanking.rank('));
     expect(
       ranking,
-      contains("final key = '${idea.symbol.trim().toUpperCase()}|${idea.strategy.name}'"),
+      contains(
+        r"final key = '${idea.symbol.trim().toUpperCase()}|${idea.strategy.name}'",
+      ),
     );
     expect(ranking, contains('_resolveConflictAndPreferredTimeframe(ideas)'));
     expect(ranking, contains('EconomicOpportunityRanker.rank('));
