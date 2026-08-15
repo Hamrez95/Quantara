@@ -7,11 +7,17 @@ void main() {
   test('validation and promotion code has no exchange or live-order authority', () {
     final files = <File>[
       File('lib/features/strategy_lab/data/strategy_validation_engine.dart'),
-      File('lib/features/strategy_lab/data/strategy_validation_stress_engine.dart'),
-      File('lib/features/strategy_lab/data/strategy_promotion_packet_builder.dart'),
+      File(
+        'lib/features/strategy_lab/data/strategy_validation_stress_engine.dart',
+      ),
+      File(
+        'lib/features/strategy_lab/data/strategy_promotion_packet_builder.dart',
+      ),
       File('lib/features/strategy_lab/domain/strategy_validation_models.dart'),
       File('lib/features/strategy_lab/domain/strategy_promotion_models.dart'),
-      File('lib/features/strategy_lab/domain/strategy_validation_stage_policy.dart'),
+      File(
+        'lib/features/strategy_lab/domain/strategy_validation_stage_policy.dart',
+      ),
     ];
     final source = files.map((file) => file.readAsStringSync()).join('\n');
 

@@ -52,25 +52,37 @@ void main() {
     );
 
     expect(decision.allowed, isFalse);
-    expect(decision.blocks, contains(StrategyValidationStageBlock.replayNotPassed));
-    expect(decision.blocks, contains(StrategyValidationStageBlock.shadowNotPassed));
-    expect(decision.blocks, contains(StrategyValidationStageBlock.paperNotPassed));
-  });
-
-  test('healthy evidence can become promotion-eligible without executing anything', () {
-    final decision = StrategyValidationStagePolicy.evaluate(
-      requestedStage: StrategyValidationStage.promotionEligible,
-      packet: _healthyPacket(),
-      replayPassed: true,
-      shadowPassed: true,
-      paperPassed: true,
-      systemStartEnabled: true,
-      capitalGuardianAllowsNewRisk: true,
+    expect(
+      decision.blocks,
+      contains(StrategyValidationStageBlock.replayNotPassed),
     );
-
-    expect(decision.allowed, isTrue);
-    expect(decision.blocks, isEmpty);
+    expect(
+      decision.blocks,
+      contains(StrategyValidationStageBlock.shadowNotPassed),
+    );
+    expect(
+      decision.blocks,
+      contains(StrategyValidationStageBlock.paperNotPassed),
+    );
   });
+
+  test(
+    'healthy evidence can become promotion-eligible without executing anything',
+    () {
+      final decision = StrategyValidationStagePolicy.evaluate(
+        requestedStage: StrategyValidationStage.promotionEligible,
+        packet: _healthyPacket(),
+        replayPassed: true,
+        shadowPassed: true,
+        paperPassed: true,
+        systemStartEnabled: true,
+        capitalGuardianAllowsNewRisk: true,
+      );
+
+      expect(decision.allowed, isTrue);
+      expect(decision.blocks, isEmpty);
+    },
+  );
 }
 
 StrategyPromotionPacket _healthyPacket() {
