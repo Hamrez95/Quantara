@@ -1,0 +1,43 @@
+name: Validate 192 full temporary
+on:
+  push:
+    branches: [feat/192-economic-opportunity-ranking]
+    paths: [.github/workflows/validate-192-full-temporary.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/192-economic-opportunity-ranking
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+      - name: Apply Local Live integration
+        run: python3 .github/scripts/patch_192_local_live.py
+      - name: Format
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/auto_trade/application/local_live_trade_service.dart lib/features/decision_core/domain/economic_opportunity_models.dart lib/features/decision_core/application/economic_opportunity_ranker.dart lib/features/auto_trade/application/local_live_economic_ranking.dart lib/features/trading_lab/application/trading_lab_opportunity_ranking.dart lib/features/trading_lab/domain/trading_lab_models.dart lib/features/trading_lab/application/trading_lab_paper_broker.dart test/economic_opportunity_ranker_test.dart test/local_live_economic_ranking_test.dart test/trading_lab_opportunity_ranking_test.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Full Flutter test suite
+        working-directory: src/client/quantara_app
+        run: flutter test
+      - name: Commit validated Local Live integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart src/client/quantara_app/lib/features/decision_core/domain/economic_opportunity_models.dart src/client/quantara_app/lib/features/decision_core/application/economic_opportunity_ranker.dart src/client/quantara_app/lib/features/auto_trade/application/local_live_economic_ranking.dart src/client/quantara_app/lib/features/trading_lab/application/trading_lab_opportunity_ranking.dart src/client/quantara_app/lib/features/trading_lab/domain/trading_lab_models.dart src/client/quantara_app/lib/features/trading_lab/application/trading_lab_paper_broker.dart src/client/quantara_app/test/economic_opportunity_ranker_test.dart src/client/quantara_app/test/local_live_economic_ranking_test.dart src/client/quantara_app/test/trading_lab_opportunity_ranking_test.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(ranking): integrate economic utility into execution pipeline"
+          git push origin HEAD:feat/192-economic-opportunity-ranking
