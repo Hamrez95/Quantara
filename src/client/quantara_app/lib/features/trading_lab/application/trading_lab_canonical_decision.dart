@@ -41,8 +41,7 @@ CanonicalDecisionRecord evaluateTradingLabCanonicalDecision({
   final economics = CanonicalExecutionEconomics(
     feeRateBpsPerSide: manifest.feeRateBps,
     spreadBpsRoundTrip: manifest.spreadBps,
-    slippageBpsPerSide:
-        manifest.slippageBps + manifest.latencyPenaltyBps,
+    slippageBpsPerSide: manifest.slippageBps + manifest.latencyPenaltyBps,
     fundingReserveBps: 0,
     marginSafetyBufferMultiplier: 1,
     maximumCostToRiskPercent: manifest.maxEstimatedCostToRiskPercent,
