@@ -29,16 +29,34 @@ jobs:
       - name: Restore packages
         working-directory: src/client/quantara_app
         run: flutter pub get
-      - name: Strict analyze
-        working-directory: src/client/quantara_app
-        run: flutter analyze --fatal-infos
-      - name: Targeted safety and parity tests
-        working-directory: src/client/quantara_app
-        run: flutter test test/canonical_decision_pipeline_parity_test.dart test/canonical_decision_authority_source_test.dart test/canonical_decision_runtime_integration_source_test.dart test/canonical_decision_shadow_replay_test.dart test/trading_lab_shadow_canonical_integration_test.dart test/trading_lab_shadow_evidence_test.dart test/trading_lab_paper_broker_test.dart test/local_live_portfolio_admission_test.dart test/portfolio_risk_atomic_concurrency_test.dart test/portfolio_risk_atomic_rollback_test.dart
+      - name: Validate analyze and targeted safety tests
+        id: validation
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cd src/client/quantara_app
+          : > /tmp/validation-196.log
+          flutter analyze --fatal-infos 2>&1 | tee -a /tmp/validation-196.log
+          analyze_status=${PIPESTATUS[0]}
+          if [ "$analyze_status" -eq 0 ]; then
+            flutter test test/canonical_decision_pipeline_parity_test.dart test/canonical_decision_authority_source_test.dart test/canonical_decision_runtime_integration_source_test.dart test/canonical_decision_shadow_replay_test.dart test/trading_lab_shadow_canonical_integration_test.dart test/trading_lab_shadow_evidence_test.dart test/trading_lab_paper_broker_test.dart test/local_live_portfolio_admission_test.dart test/portfolio_risk_atomic_concurrency_test.dart test/portfolio_risk_atomic_rollback_test.dart 2>&1 | tee -a /tmp/validation-196.log
+            exit ${PIPESTATUS[0]}
+          fi
+          exit "$analyze_status"
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-196-diagnostics
+          path: /tmp/validation-196.log
+      - name: Fail when validation failed
+        if: steps.validation.outcome != 'success'
+        run: exit 1
       - name: Commit formatter output when needed
         run: |
           git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
           git add src/client/quantara_app/lib src/client/quantara_app/test
           if git diff --cached --quiet; then
             exit 0
