@@ -30,7 +30,21 @@ List<CanonicalDecisionRecord> replayTradingLabEvidenceThroughCanonicalPipeline(
       .toList(growable: false)
     ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
 
-  return entries.map((entry) {
+  final decisions = <CanonicalDecisionRecord>[];
+  for (final entry in entries) {
+    final riskReward = entry.riskReward;
+    final entryLower = entry.entryLower;
+    final entryUpper = entry.entryUpper;
+    final stopLoss = entry.stopLoss;
+    if (entry.direction == TradeDirection.wait ||
+        riskReward == null ||
+        entryLower == null ||
+        entryUpper == null ||
+        stopLoss == null ||
+        entry.targets.isEmpty) {
+      continue;
+    }
+
     final candidate = TradingLabPendingCandidate(
       decisionKey:
           'captured|${entry.setupId}|${entry.createdAt.toUtc().microsecondsSinceEpoch}',
@@ -42,10 +56,10 @@ List<CanonicalDecisionRecord> replayTradingLabEvidenceThroughCanonicalPipeline(
       strategyVersion: entry.strategyVersion,
       marketRegime: entry.marketRegime.name,
       confidencePercent: entry.confidencePercent,
-      riskReward: entry.riskReward,
-      entryLower: entry.entryLower,
-      entryUpper: entry.entryUpper,
-      stopLoss: entry.stopLoss,
+      riskReward: riskReward,
+      entryLower: entryLower,
+      entryUpper: entryUpper,
+      stopLoss: stopLoss,
       targets: entry.targets,
       recommendedLeverage: entry.recommendedLeverage,
       maximumSafeLeverage: entry.maximumSafeLeverage,
@@ -55,15 +69,18 @@ List<CanonicalDecisionRecord> replayTradingLabEvidenceThroughCanonicalPipeline(
       indicatorSnapshot: const {},
     );
 
-    return evaluateTradingLabCanonicalDecision(
-      environment: environment,
-      run: run,
-      candidate: candidate,
-      eventTimeUtc: entry.createdAt.toUtc(),
-      marketPrice: (entry.entryLower + entry.entryUpper) / 2,
-      availableMargin: run.currentEquity,
-      openRisk: 0,
-      symbolRisk: 0,
+    decisions.add(
+      evaluateTradingLabCanonicalDecision(
+        environment: environment,
+        run: run,
+        candidate: candidate,
+        eventTimeUtc: entry.createdAt.toUtc(),
+        marketPrice: (entryLower + entryUpper) / 2,
+        availableMargin: run.currentEquity,
+        openRisk: 0,
+        symbolRisk: 0,
+      ),
     );
-  }).toList(growable: false);
+  }
+  return List.unmodifiable(decisions);
 }
