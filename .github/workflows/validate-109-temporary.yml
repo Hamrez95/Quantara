@@ -1,0 +1,47 @@
+name: Validate 109 temporary
+
+on:
+  push:
+    branches:
+      - feat/109-performance-analytics
+    paths:
+      - .github/workflows/validate-109-temporary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/109-performance-analytics
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format analytics core
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/trading_journal/domain/trading_performance_models.dart lib/features/trading_journal/domain/trading_performance_analytics.dart test/trading_performance_analytics_test.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Analytics tests
+        working-directory: src/client/quantara_app
+        run: flutter test test/trading_performance_analytics_test.dart test/trading_journal_statistics_test.dart test/trading_journal_exchange_truth_regression_test.dart
+      - name: Commit formatter output when needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/trading_journal/domain/trading_performance_models.dart src/client/quantara_app/lib/features/trading_journal/domain/trading_performance_analytics.dart src/client/quantara_app/test/trading_performance_analytics_test.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "style(analytics): format performance report core"
+          git push origin HEAD:feat/109-performance-analytics
