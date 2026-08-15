@@ -203,6 +203,7 @@ final class RealtimeMarketApplication {
     configuredStreams: universe.streams.length,
     activeStreams: _activeStreams.length,
     quarantinedStreams: _quarantinedStreamFaults.length,
+    quarantinedStreamReasons: Map.unmodifiable(_quarantinedStreamFaults),
     activeShards: _fleet?.shardCount ?? 0,
     liveShards: _shardStates.values
         .where((state) => state == BitunixPublicConnectionState.live)
@@ -601,6 +602,7 @@ final class _RealtimeMarketMetrics {
     required int configuredStreams,
     required int activeStreams,
     required int quarantinedStreams,
+    required Map<String, String> quarantinedStreamReasons,
     required int activeShards,
     required int liveShards,
   }) => RealtimeMarketHealthSnapshot(
@@ -608,6 +610,7 @@ final class _RealtimeMarketMetrics {
     configuredStreams: configuredStreams,
     activeStreams: activeStreams,
     quarantinedStreams: quarantinedStreams,
+    quarantinedStreamReasons: quarantinedStreamReasons,
     activeShards: activeShards,
     liveShards: liveShards,
     eventsReceived: eventsReceived,
