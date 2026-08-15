@@ -13,6 +13,7 @@ final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
   static const _riskKey = 'quantara.owner-alpha.risk-percent';
   static const _strategyKey = 'quantara.owner-alpha.strategy';
   static const _cadenceKey = 'quantara.owner-alpha.cadence';
+  static const _maximumSymbolCount = 30;
 
   @override
   Future<OwnerAlphaSettings?> load() async {
@@ -52,6 +53,7 @@ final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
     final capital = _number(payload['capital']);
     final riskPercent = _number(payload['riskPercent']);
     if (symbols.isEmpty ||
+        symbols.length > _maximumSymbolCount ||
         capital == null ||
         !capital.isFinite ||
         capital <= 0 ||
@@ -62,9 +64,10 @@ final class PlatformOwnerAlphaSettingsStore implements OwnerAlphaSettingsStore {
       return null;
     }
     final normalized = symbols
+        .map((item) => item.trim().toUpperCase())
         .where((item) => RegExp(r'^[A-Z0-9]{5,24}$').hasMatch(item))
         .toSet()
-        .take(12)
+        .take(_maximumSymbolCount)
         .toList(growable: false);
     if (normalized.isEmpty || normalized.length != symbols.length) return null;
     return OwnerAlphaSettings(
