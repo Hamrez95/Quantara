@@ -1,0 +1,158 @@
+name: Validate 110 paper execution temporary
+
+on:
+  push:
+    branches:
+      - feat/110-walk-forward-validation-v2
+    paths:
+      - .github/workflows/validate-110-execution-temporary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/110-walk-forward-validation-v2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Apply deterministic latency and partial-fill model
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/client/quantara_app
+          python3 - <<'PY'
+          from pathlib import Path
+
+          models_path = Path('lib/features/trading_lab/domain/trading_lab_models.dart')
+          text = models_path.read_text()
+          text = text.replace('const tradingLabSchemaVersion = 3;', 'const tradingLabSchemaVersion = 4;', 1)
+          text = text.replace(
+              '    this.spreadBps = 1,\n    this.portfolioRiskPercent = 3,',
+              '    this.spreadBps = 1,\n    this.latencyPenaltyBps = 0,\n    this.partialFillRatio = 1,\n    this.portfolioRiskPercent = 3,',
+              1,
+          )
+          text = text.replace(
+              '  final double spreadBps;\n  final double portfolioRiskPercent;',
+              '  final double spreadBps;\n  final double latencyPenaltyBps;\n  final double partialFillRatio;\n  final double portfolioRiskPercent;',
+              1,
+          )
+          text = text.replace(
+              "    if (!spreadBps.isFinite || spreadBps < 0 || spreadBps > 200) {\n      throw const FormatException(\n        'Trading Lab spread must be between 0 and 200 bps.',\n      );\n    }\n",
+              "    if (!spreadBps.isFinite || spreadBps < 0 || spreadBps > 200) {\n      throw const FormatException(\n        'Trading Lab spread must be between 0 and 200 bps.',\n      );\n    }\n    if (!latencyPenaltyBps.isFinite ||\n        latencyPenaltyBps < 0 ||\n        latencyPenaltyBps > 200) {\n      throw const FormatException(\n        'Trading Lab latency penalty must be between 0 and 200 bps.',\n      );\n    }\n    if (!partialFillRatio.isFinite ||\n        partialFillRatio <= 0 ||\n        partialFillRatio > 1) {\n      throw const FormatException(\n        'Trading Lab partial fill ratio must be in (0, 1].',\n      );\n    }\n",
+              1,
+          )
+          text = text.replace(
+              "    'spreadBps': spreadBps,\n    'portfolioRiskPercent': portfolioRiskPercent,",
+              "    'spreadBps': spreadBps,\n    'latencyPenaltyBps': latencyPenaltyBps,\n    'partialFillRatio': partialFillRatio,\n    'portfolioRiskPercent': portfolioRiskPercent,",
+              1,
+          )
+          text = text.replace(
+              "    spreadBps: _double(json['spreadBps'], fallback: 1),\n    portfolioRiskPercent:",
+              "    spreadBps: _double(json['spreadBps'], fallback: 1),\n    latencyPenaltyBps: _double(json['latencyPenaltyBps']),\n    partialFillRatio: _double(json['partialFillRatio'], fallback: 1),\n    portfolioRiskPercent:",
+              1,
+          )
+          models_path.write_text(text)
+
+          canonical_path = Path('lib/features/trading_lab/application/trading_lab_canonical_decision.dart')
+          text = canonical_path.read_text()
+          text = text.replace(
+              '      slippageBpsPerSide: manifest.slippageBps,',
+              '      slippageBpsPerSide:\n          manifest.slippageBps + manifest.latencyPenaltyBps,',
+              1,
+          )
+          text = text.replace(
+              "      version: 'trading-lab-${manifest.executionModel.name}/1.0',",
+              "      version: 'trading-lab-${manifest.executionModel.name}/1.1',",
+              1,
+          )
+          canonical_path.write_text(text)
+
+          broker_path = Path('lib/features/trading_lab/application/trading_lab_paper_broker.dart')
+          text = broker_path.read_text()
+          text = text.replace(
+              '    final quantity = canonical.quantity;\n    final leverage = canonical.leverage;\n    final margin = canonical.requiredMargin;',
+              '    final plannedQuantity = canonical.quantity;\n    final quantity = plannedQuantity * run.manifest.partialFillRatio;\n    if (!quantity.isFinite || quantity <= 0) return false;\n    final leverage = canonical.leverage;\n    final margin = canonical.requiredMargin * run.manifest.partialFillRatio;',
+              1,
+          )
+          text = text.replace(
+              "    final entry = _applyAdverseSlippage(\n      afterSpread,\n      direction: candidate.direction,\n      opening: true,\n      bps: run.manifest.slippageBps,\n    );",
+              "    final afterSlippage = _applyAdverseSlippage(\n      afterSpread,\n      direction: candidate.direction,\n      opening: true,\n      bps: run.manifest.slippageBps,\n    );\n    final entry = _applyAdverseSlippage(\n      afterSlippage,\n      direction: candidate.direction,\n      opening: true,\n      bps: run.manifest.latencyPenaltyBps,\n    );",
+              1,
+          )
+          text = text.replace(
+              '    final slippageCost = (entry - afterSpread).abs() * quantity;',
+              '    final slippageCost = (afterSlippage - afterSpread).abs() * quantity;\n    final latencyCost = (entry - afterSlippage).abs() * quantity;',
+              1,
+          )
+          text = text.replace(
+              '        (run.manifest.spreadBps / 2 + run.manifest.slippageBps) /',
+              '        (run.manifest.spreadBps / 2 +\n            run.manifest.slippageBps +\n            run.manifest.latencyPenaltyBps) /',
+              1,
+          )
+          text = text.replace(
+              '        slippageCost +\n        estimatedExitExecutionCost;',
+              '        slippageCost +\n        latencyCost +\n        estimatedExitExecutionCost;',
+              1,
+          )
+          text = text.replace(
+              "        'quantity': quantity,\n        'initialRisk': position.initialRisk,",
+              "        'quantity': quantity,\n        'plannedQuantity': plannedQuantity,\n        'partialFillRatio': run.manifest.partialFillRatio,\n        'initialRisk': position.initialRisk,",
+              1,
+          )
+          text = text.replace(
+              "        'slippageCost': slippageCost,\n        'spreadCost': spreadCost,",
+              "        'slippageCost': slippageCost,\n        'latencyCost': latencyCost,\n        'latencyPenaltyBps': run.manifest.latencyPenaltyBps,\n        'spreadCost': spreadCost,",
+              1,
+          )
+          text = text.replace(
+              "      attributes: {'executionModel': run.manifest.executionModel.name},",
+              "      attributes: {\n        'executionModel': run.manifest.executionModel.name,\n        'fillModel': run.manifest.partialFillRatio < 1\n            ? 'deterministic_partial_fill'\n            : 'full_fill',\n      },",
+              1,
+          )
+          broker_path.write_text(text)
+
+          roundtrip_path = Path('test/trading_lab_model_roundtrip_test.dart')
+          text = roundtrip_path.read_text()
+          text = text.replace(
+              '        slippageBps: 2,\n        notes: \'persist me\',',
+              '        slippageBps: 2,\n        latencyPenaltyBps: 3,\n        partialFillRatio: 0.65,\n        notes: \'persist me\',',
+              1,
+          )
+          text = text.replace(
+              "    expect(restored.manifest.maximumConcurrentPositions, 3);\n",
+              "    expect(restored.manifest.maximumConcurrentPositions, 3);\n    expect(restored.manifest.latencyPenaltyBps, 3);\n    expect(restored.manifest.partialFillRatio, 0.65);\n",
+              1,
+          )
+          roundtrip_path.write_text(text)
+
+          source_test = Path('test/trading_lab_execution_realism_source_test.dart')
+          source_test.write_text("""import 'dart:io';\n\nimport 'package:flutter_test/flutter_test.dart';\n\nvoid main() {\n  test('paper execution realizes partial fills and latency after canonical decision', () {\n    final source = File(\n      'lib/features/trading_lab/application/trading_lab_paper_broker.dart',\n    ).readAsStringSync();\n\n    final canonicalIndex = source.indexOf('evaluateTradingLabCanonicalDecision');\n    final partialFillIndex = source.indexOf('manifest.partialFillRatio');\n    final latencyIndex = source.indexOf('manifest.latencyPenaltyBps');\n    expect(canonicalIndex, greaterThanOrEqualTo(0));\n    expect(partialFillIndex, greaterThan(canonicalIndex));\n    expect(latencyIndex, greaterThan(canonicalIndex));\n    expect(source, contains("'plannedQuantity': plannedQuantity"));\n    expect(source, contains("'latencyCost': latencyCost"));\n    expect(source, contains("'fillModel':"));\n  });\n\n  test('live execution path is not modified by Trading Lab fill assumptions', () {\n    final live = File(\n      'lib/features/auto_trade/application/local_live_trade_service.dart',\n    ).readAsStringSync();\n    expect(live, isNot(contains('partialFillRatio')));\n    expect(live, isNot(contains('latencyPenaltyBps')));\n    expect(live, contains('portfolioGuard.reserve'));\n    expect(live, contains('exchange.placeMarketEntry'));\n  });\n}\n""")
+          PY
+          dart format lib/features/trading_lab/domain/trading_lab_models.dart lib/features/trading_lab/application/trading_lab_canonical_decision.dart lib/features/trading_lab/application/trading_lab_paper_broker.dart test/trading_lab_model_roundtrip_test.dart test/trading_lab_execution_realism_source_test.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Execution realism and safety tests
+        working-directory: src/client/quantara_app
+        run: flutter test test/trading_lab_model_roundtrip_test.dart test/trading_lab_execution_realism_source_test.dart test/trading_lab_paper_broker_test.dart test/canonical_decision_pipeline_parity_test.dart test/canonical_decision_runtime_integration_source_test.dart test/portfolio_risk_atomic_concurrency_test.dart test/portfolio_risk_atomic_rollback_test.dart
+      - name: Commit validated execution model
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/trading_lab/domain/trading_lab_models.dart src/client/quantara_app/lib/features/trading_lab/application/trading_lab_canonical_decision.dart src/client/quantara_app/lib/features/trading_lab/application/trading_lab_paper_broker.dart src/client/quantara_app/test/trading_lab_model_roundtrip_test.dart src/client/quantara_app/test/trading_lab_execution_realism_source_test.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(validation): model paper latency and partial fills"
+          git push origin HEAD:feat/110-walk-forward-validation-v2
