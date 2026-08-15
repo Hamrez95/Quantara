@@ -458,12 +458,12 @@ class _SignalJournalCard extends StatelessWidget {
                 color: _outcomeColor(context),
                 icon: _outcomeIcon,
               ),
-              if (entry.confidencePercent > 0)
+              if ((entry.setupQualityScore ?? entry.confidencePercent) > 0)
                 StatusPill(
                   label: _t(
                     context,
-                    'امتیاز ${entry.confidencePercent}',
-                    'Score ${entry.confidencePercent}',
+                    'کیفیت ستاپ ${entry.setupQualityScore ?? entry.confidencePercent}',
+                    'Setup Quality ${entry.setupQualityScore ?? entry.confidencePercent}',
                   ),
                   color: QuantaraColors.cyan,
                 ),
