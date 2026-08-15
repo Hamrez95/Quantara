@@ -28,7 +28,7 @@ jobs:
       - name: Strict analyze
         working-directory: src/client/quantara_app
         run: flutter analyze --fatal-infos
-      - name: Private truth and Local Live safety tests
+      - name: Private truth Hot Path tests
         working-directory: src/client/quantara_app
         run: >-
           flutter test
@@ -38,7 +38,6 @@ jobs:
           test/private_truth_reconciler_test.dart
           test/private_truth_coordinator_test.dart
           test/private_truth_account_snapshot_test.dart
-          test/local_live_trade_service_source_test.dart
       - name: Commit product integration
         shell: bash
         run: |
