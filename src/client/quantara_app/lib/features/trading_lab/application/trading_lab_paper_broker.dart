@@ -1,11 +1,13 @@
 import 'dart:math' as math;
 
 import '../../auto_trade/domain/profit_lock_stop_policy.dart';
+import '../../decision_core/domain/canonical_decision_models.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
+import 'trading_lab_canonical_decision.dart';
 
 final class TradingLabPaperBroker {
   const TradingLabPaperBroker();
@@ -369,6 +371,42 @@ final class TradingLabPaperBroker {
     DateTime now,
   ) {
     final referenceEntry = (candidate.entryLower + candidate.entryUpper) / 2;
+    final canonical = evaluateTradingLabCanonicalDecision(
+      environment: DecisionEnvironment.paper,
+      run: run,
+      candidate: candidate,
+      eventTimeUtc: now,
+      marketPrice: referenceEntry,
+      availableMargin: _virtualAvailableMargin(run),
+      openRisk: _openRisk(run),
+      symbolRisk: _symbolRisk(run, candidate.symbol),
+    );
+    if (!canonical.eligible) {
+      _event(
+        run,
+        TradingLabEventKind.candidateRejected,
+        now,
+        'Paper entry blocked by canonical pre-execution decision: ${canonical.rejection.name}.',
+        candidate: candidate,
+        metrics: {
+          'plannedRisk': canonical.plannedRisk,
+          'estimatedRoundTripExecutionCost': canonical.estimatedRoundTripCosts,
+          'executionCostToRiskPercent': canonical.executionCostToRiskPercent,
+        },
+        attributes: {
+          'rejectionReason':
+              canonical.rejection ==
+                  CanonicalDecisionRejection.executionCostToRiskTooHigh
+              ? 'execution_cost_to_risk_too_high'
+              : 'canonical_${canonical.rejection.name}',
+          'decisionFingerprint': canonical.preExecutionFingerprint,
+        },
+      );
+      return false;
+    }
+    final quantity = canonical.quantity;
+    final leverage = canonical.leverage;
+    final margin = canonical.requiredMargin;
     final afterSpread = _applyAdverseSlippage(
       referenceEntry,
       direction: candidate.direction,
@@ -381,38 +419,8 @@ final class TradingLabPaperBroker {
       opening: true,
       bps: run.manifest.slippageBps,
     );
-    final stopDistance = (entry - candidate.stopLoss).abs();
-    if (stopDistance <= 0 || !stopDistance.isFinite) return false;
-    final riskBudget = run.currentEquity * run.manifest.riskPercent / 100;
-    final quantity = riskBudget / stopDistance;
-    if (!quantity.isFinite || quantity <= 0) return false;
-
-    final maxSafe = math.max(1, candidate.maximumSafeLeverage);
-    final leverage = math.min(run.manifest.leverage, maxSafe);
     final notional = entry * quantity;
-    final margin = notional / leverage;
-    final availableMargin = math
-        .max(
-          0,
-          run.currentEquity -
-              run.openPositions.fold<double>(
-                0,
-                (sum, item) => sum + item.marginReserved,
-              ),
-        )
-        .toDouble();
-    if (margin > availableMargin + 0.0000001) {
-      _event(
-        run,
-        TradingLabEventKind.candidateRejected,
-        now,
-        'Paper entry blocked: insufficient virtual available margin.',
-        candidate: candidate,
-        metrics: {'requiredMargin': margin, 'availableMargin': availableMargin},
-        attributes: {'rejectionReason': 'insufficient_virtual_margin'},
-      );
-      return false;
-    }
+    final riskBudget = canonical.riskBudget;
 
     final fractions = _fractionsForTargets(candidate.targets.length);
     final entryFee = _fee(notional, run.manifest.feeRateBps);
@@ -786,30 +794,6 @@ final class TradingLabPaperBroker {
     )) {
       return 'Paper entry blocked: same-symbol exposure already exists.';
     }
-    final entry = (candidate.entryLower + candidate.entryUpper) / 2;
-    final stopDistance = (entry - candidate.stopLoss).abs();
-    if (stopDistance <= 0) return 'Paper entry blocked: invalid stop distance.';
-    final candidateRisk = run.currentEquity * run.manifest.riskPercent / 100;
-    final riskCap = run.currentEquity * run.manifest.portfolioRiskPercent / 100;
-    final symbolHeatCap =
-        run.currentEquity * run.manifest.symbolHeatPercent / 100;
-    final openRisk = _openRisk(run);
-    final symbolRisk = run.openPositions
-        .where((position) => position.symbol == candidate.symbol)
-        .fold<double>(
-          0,
-          (sum, position) =>
-              sum +
-              position.initialRisk *
-                  (position.remainingQuantity / position.initialQuantity),
-        );
-    if (candidateRisk > symbolHeatCap + 0.0000001 ||
-        symbolRisk + candidateRisk > symbolHeatCap + 0.0000001) {
-      return 'Paper entry blocked: symbol heat budget is exhausted.';
-    }
-    if (openRisk + candidateRisk > riskCap + 0.0000001) {
-      return 'Paper entry blocked: portfolio risk budget is exhausted.';
-    }
     return null;
   }
 
@@ -818,6 +802,17 @@ final class TradingLabPaperBroker {
 
   static double _virtualAvailableMargin(TradingLabRun run) =>
       math.max(0, run.currentEquity - _reservedMargin(run)).toDouble();
+
+  static double _symbolRisk(TradingLabRun run, String symbol) => run
+      .openPositions
+      .where((position) => position.symbol == symbol)
+      .fold<double>(
+        0,
+        (sum, position) =>
+            sum +
+            position.initialRisk *
+                (position.remainingQuantity / position.initialQuantity),
+      );
 
   static double _openRisk(TradingLabRun run) => run.openPositions.fold<double>(
     0,

@@ -21,6 +21,7 @@ import '../domain/local_live_trade_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/remaining_target_protection_policy.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'local_live_canonical_decision.dart';
 import 'local_live_orphan_recovery.dart';
 import 'local_live_portfolio_execution_guard.dart';
 import 'profit_lock_promotion_executor.dart';
@@ -621,53 +622,33 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           targetAllocation: configuration.targetAllocation,
         );
         final markPrice = await exchange.fetchMarkPrice(idea.symbol);
-        final lower = math.min(idea.entryLower!, idea.entryUpper!);
-        final upper = math.max(idea.entryLower!, idea.entryUpper!);
-        if (markPrice < lower || markPrice > upper) {
-          _auditEvent(
-            'scan_skip',
-            'The highest-ranked setup is valid but the live mark price is outside its entry zone.',
-            symbol: idea.symbol,
-          );
-          continue;
-        }
         final rules = await exchange.fetchInstrumentRules(idea.symbol);
-        if (!rules.open || !rules.apiSupported) {
+        final canonical = evaluateLocalLiveCanonicalDecision(
+          idea: idea,
+          configuration: configuration,
+          account: account,
+          rules: rules,
+          markPrice: markPrice,
+          eventTimeUtc: DateTime.now().toUtc(),
+          alreadyExecuted: _executedSetupIds.contains(idea.setupId),
+          symbolOccupied: occupiedSymbols.contains(
+            idea.symbol.trim().toUpperCase(),
+          ),
+          portfolioBudget: _portfolioBudget,
+        );
+        if (!canonical.eligible) {
           _auditEvent(
-            'scan_skip',
-            'The selected instrument is closed or unavailable for API futures execution.',
+            'canonical_decision_block',
+            'Canonical pre-execution decision rejected: ${canonical.rejection.name}.',
             symbol: idea.symbol,
           );
           continue;
         }
-        final leverage = configuration.leverage
-            .clamp(rules.minimumLeverage, rules.maximumLeverage)
-            .toInt();
-        final entryPrice = rules.roundPrice(markPrice);
-        final stopLoss = rules.roundPrice(idea.stopLoss!);
-        final riskPerUnit = (entryPrice - stopLoss).abs() + entryPrice * 0.0017;
-        final riskBudget =
-            account.estimatedEquity * configuration.riskPercent / 100;
-        var quantity = rules.roundQuantityDown(riskBudget / riskPerUnit);
-        if (quantity < rules.minimumQuantity ||
-            quantity > rules.maximumMarketQuantity ||
-            quantity <= 0) {
-          _auditEvent(
-            'scan_skip',
-            'Calculated position size is below the exchange minimum for even one protected target.',
-            symbol: idea.symbol,
-          );
-          continue;
-        }
-        final requiredMargin = quantity * entryPrice / leverage;
-        if (requiredMargin * 1.15 > account.available) {
-          _auditEvent(
-            'scan_skip',
-            'Available margin is below the protected entry requirement including the safety buffer.',
-            symbol: idea.symbol,
-          );
-          continue;
-        }
+        final leverage = canonical.leverage;
+        final entryPrice = canonical.normalizedEntry;
+        final stopLoss = canonical.normalizedStop;
+        var quantity = canonical.quantity;
+        final requiredMargin = canonical.requiredMargin;
         final portfolioGuard = _portfolioGuard;
         if (portfolioGuard == null) {
           _auditEvent(
