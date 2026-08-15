@@ -1,0 +1,224 @@
+name: Temporary #196 shadow replay parity
+
+on:
+  push:
+    branches:
+      - feat/196-unified-decision-path-v2
+    paths:
+      - '.github/workflows/complete-196-shadow-replay-temporary.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/196-unified-decision-path-v2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Wire captured shadow evidence through canonical replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/client/quantara_app
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('lib/features/trading_lab/application/trading_lab_shadow_evidence.dart')
+          text = path.read_text()
+          import_marker = "import '../../owner_alpha/domain/owner_alpha_models.dart';\n"
+          imports = "import '../../decision_core/domain/canonical_decision_models.dart';\n" + import_marker
+          if "../../decision_core/domain/canonical_decision_models.dart" not in text:
+              if import_marker not in text:
+                  raise SystemExit('shadow import marker missing')
+              text = text.replace(import_marker, imports, 1)
+          model_import = "import '../domain/trading_lab_models.dart';\n"
+          adapter_import = "import 'trading_lab_canonical_decision.dart';\n"
+          if adapter_import not in text:
+              if model_import not in text:
+                  raise SystemExit('shadow model import marker missing')
+              text = text.replace(model_import, model_import + adapter_import, 1)
+
+          function_marker = "Map<String, Object?> buildTradingLabShadowEvidence(\n"
+          replay = r'''List<CanonicalDecisionRecord> replayTradingLabEvidenceThroughCanonicalPipeline(
+  TradingLabRun run,
+  Iterable<SignalJournalEntry> signalJournal, {
+  required DecisionEnvironment environment,
+}) {
+  if (environment != DecisionEnvironment.replay &&
+      environment != DecisionEnvironment.shadow) {
+    throw ArgumentError(
+      'Captured Trading Lab evidence can only be replayed as replay or shadow.',
+    );
+  }
+  final entries = signalJournal
+      .where(
+        (entry) =>
+            !entry.createdAt.toUtc().isBefore(run.manifest.startedAtUtc) &&
+            run.manifest.symbols.contains(entry.symbol.toUpperCase()) &&
+            run.manifest.timeframes.contains(entry.timeframe),
+      )
+      .toList(growable: false)
+    ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
+  return entries.map((entry) {
+    final candidate = TradingLabPendingCandidate(
+      decisionKey:
+          'captured|${entry.setupId}|${entry.createdAt.toUtc().microsecondsSinceEpoch}',
+      setupId: entry.setupId,
+      symbol: entry.symbol,
+      timeframe: entry.timeframe,
+      direction: entry.direction,
+      strategy: entry.strategy.name,
+      strategyVersion: entry.strategyVersion,
+      marketRegime: entry.marketRegime.name,
+      confidencePercent: entry.confidencePercent,
+      riskReward: entry.riskReward,
+      entryLower: entry.entryLower,
+      entryUpper: entry.entryUpper,
+      stopLoss: entry.stopLoss,
+      targets: entry.targets,
+      recommendedLeverage: entry.recommendedLeverage,
+      maximumSafeLeverage: entry.maximumSafeLeverage,
+      observedAtUtc: entry.createdAt.toUtc(),
+      validUntilUtc: entry.validUntil.toUtc(),
+      signalCandleOpenTimeUtc: entry.createdAt.toUtc(),
+      indicatorSnapshot: const {},
+    );
+    return evaluateTradingLabCanonicalDecision(
+      environment: environment,
+      run: run,
+      candidate: candidate,
+      eventTimeUtc: entry.createdAt.toUtc(),
+      marketPrice: (entry.entryLower + entry.entryUpper) / 2,
+      availableMargin: run.currentEquity,
+      openRisk: 0,
+      symbolRisk: 0,
+    );
+  }).toList(growable: false);
+}
+
+'''
+          if 'replayTradingLabEvidenceThroughCanonicalPipeline' not in text:
+              if function_marker not in text:
+                  raise SystemExit('shadow function marker missing')
+              text = text.replace(function_marker, replay + function_marker, 1)
+
+          old_return = """  return {\n    'summary': {\n"""
+          new_return = """  final canonicalShadowDecisions =\n      replayTradingLabEvidenceThroughCanonicalPipeline(\n        run,\n        entries,\n        environment: DecisionEnvironment.shadow,\n      );\n\n  return {\n    'canonicalPipeline': {\n      'version': canonicalDecisionPipelineVersion,\n      'environment': DecisionEnvironment.shadow.name,\n      'decisions': canonicalShadowDecisions\n          .map((decision) => decision.toJson())\n          .toList(growable: false),\n    },\n    'summary': {\n"""
+          if "'canonicalPipeline':" not in text:
+              if old_return not in text:
+                  raise SystemExit('shadow return marker missing')
+              text = text.replace(old_return, new_return, 1)
+          path.write_text(text)
+
+          test = Path('test/trading_lab_shadow_evidence_test.dart')
+          source = test.read_text()
+          decision_import = "import 'package:quantara_app/features/decision_core/domain/canonical_decision_models.dart';\n"
+          if decision_import not in source:
+              marker = "import 'package:flutter_test/flutter_test.dart';\n"
+              source = source.replace(marker, marker + decision_import, 1)
+          first_expect = """      expect(summary['signalsTracked'], 1);\n"""
+          expanded = """      final canonical =\n          evidence['canonicalPipeline']! as Map<String, Object?>;\n      final canonicalDecisions = canonical['decisions']! as List<Object?>;\n      expect(canonical['version'], canonicalDecisionPipelineVersion);\n      expect(canonical['environment'], DecisionEnvironment.shadow.name);\n      expect(canonicalDecisions, hasLength(1));\n      expect(\n        ((canonicalDecisions.single! as Map<String, Object?>)['provenance']!\n            as Map<String, Object?>)['environment'],\n        DecisionEnvironment.shadow.name,\n      );\n\n      expect(summary['signalsTracked'], 1);\n"""
+          if "canonicalDecisions = canonical['decisions']" not in source:
+              if first_expect not in source:
+                  raise SystemExit('shadow test insertion marker missing')
+              source = source.replace(first_expect, expanded, 1)
+          close_marker = """  test(\n    'AI review remains useful when paper trades are zero but shadow outcomes exist',\n"""
+          parity_test = r'''  test('captured evidence replay and shadow have identical pre-fill decisions', () {
+    final startedAt = DateTime.utc(2026, 8, 10);
+    final run = TradingLabRun(
+      manifest: TradingLabRunManifest(
+        runId: 'lab-parity',
+        startedAtUtc: startedAt,
+        startingEquity: 500,
+        riskPercent: 1,
+        maximumConcurrentPositions: 3,
+        leverage: 5,
+        symbols: const ['BTCUSDT'],
+        timeframes: const ['1h'],
+        strategies: const ['trendPullback@v1'],
+      ),
+    );
+    final entry = _entry(
+      setupId: 'captured-live-shadow',
+      createdAt: startedAt.add(const Duration(minutes: 10)),
+      outcome: SignalOutcome.tp2,
+      simulatedPnl: 7.5,
+    );
+
+    final shadow = replayTradingLabEvidenceThroughCanonicalPipeline(
+      run,
+      [entry],
+      environment: DecisionEnvironment.shadow,
+    ).single;
+    final replay = replayTradingLabEvidenceThroughCanonicalPipeline(
+      run,
+      [entry],
+      environment: DecisionEnvironment.replay,
+    ).single;
+
+    expect(shadow.preExecutionFingerprint, replay.preExecutionFingerprint);
+    expect(shadow.parityJson(), replay.parityJson());
+    expect(
+      () => replayTradingLabEvidenceThroughCanonicalPipeline(
+        run,
+        [entry],
+        environment: DecisionEnvironment.live,
+      ),
+      throwsArgumentError,
+    );
+  });
+
+'''
+          if 'captured evidence replay and shadow have identical pre-fill decisions' not in source:
+              if close_marker not in source:
+                  raise SystemExit('shadow parity test marker missing')
+              source = source.replace(close_marker, parity_test + close_marker, 1)
+          test.write_text(source)
+          PY
+          dart format lib/features/trading_lab/application/trading_lab_shadow_evidence.dart test/trading_lab_shadow_evidence_test.dart
+          cd ../../../..
+          cat > docs/canonical-decision-pipeline.md <<'MD'
+          # Canonical decision pipeline
+
+          Quantara uses one versioned pre-execution decision contract for replay, realtime shadow, paper and protected live execution.
+
+          `MarketEvent/EventTime -> trusted state -> versioned evidence/playbook -> candidate -> economic/risk decision -> allocation intent -> environment adapter`
+
+          The canonical record owns event-time validation, candidate expiry/invalidation, exchange normalization when rules are known, leverage and risk sizing, estimated execution economics, portfolio/symbol heat gates and a deterministic pre-execution fingerprint. The environment mode is provenance only and is excluded from that fingerprint.
+
+          ## Intentional environment differences
+
+          - **Replay:** no network or order authority; replays captured/versioned evidence and uses simulated execution economics.
+          - **Shadow:** observes realtime evidence but cannot place orders; captured evidence is replayable through the same canonical record.
+          - **Paper:** consumes the same canonical pre-fill quantity/leverage/risk decision, then realizes conservative simulated fills, gaps, same-candle stop/target ambiguity and configured costs.
+          - **Live:** consumes the same canonical pre-fill decision, but atomic portfolio reservation and the protected Bitunix executor remain final authorities. Confirmed fills/fees/funding/slippage are recorded separately and never overwritten by estimates.
+
+          Replay/shadow adapters reject `live` authority explicitly. The canonical decision core contains no exchange client, credential, transfer, withdrawal or order-placement dependency.
+
+          ## Provenance and drift protection
+
+          Every decision records pipeline/model versions, market dataset source/version, strategy configuration identity, build identity and environment. Cross-mode golden tests require identical deterministic inputs to produce identical pre-execution parity JSON and fingerprints. Runtime integration tests ensure Paper and Local Live actually consume the canonical result instead of reimplementing sizing formulas.
+
+          Future ranking (#192), portfolio allocation (#194) and promotion/autonomy (#110/#195) must extend this shared contract rather than fork mode-specific decision logic.
+          MD
+          cd src/client/quantara_app
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test test/canonical_decision_pipeline_parity_test.dart test/canonical_decision_authority_source_test.dart test/canonical_decision_runtime_integration_source_test.dart test/trading_lab_shadow_evidence_test.dart test/trading_lab_paper_broker_test.dart test/local_live_portfolio_admission_test.dart test/portfolio_risk_atomic_concurrency_test.dart test/portfolio_risk_atomic_rollback_test.dart
+      - name: Commit validated shadow/replay parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/trading_lab/application/trading_lab_shadow_evidence.dart src/client/quantara_app/test/trading_lab_shadow_evidence_test.dart docs/canonical-decision-pipeline.md
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(decision): replay shadow evidence through canonical path"
+          git push origin HEAD:feat/196-unified-decision-path-v2
