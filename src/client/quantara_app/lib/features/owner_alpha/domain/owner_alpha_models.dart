@@ -97,6 +97,11 @@ final class TradeIdea {
     this.strategyVersion = '1.1',
     this.marketRegime = MarketRegime.transition,
     this.indicatorSnapshot = const {},
+    this.setupQualityScore,
+    this.expectation = '',
+    this.trigger = '',
+    this.contextVersion = '',
+    this.evidenceBreakdown = const {},
   });
 
   final String symbol;
@@ -125,6 +130,13 @@ final class TradeIdea {
   final String strategyVersion;
   final MarketRegime marketRegime;
   final Map<String, double> indicatorSnapshot;
+  final int? setupQualityScore;
+  final String expectation;
+  final String trigger;
+  final String contextVersion;
+  final Map<String, double> evidenceBreakdown;
+
+  int get displayQualityScore => setupQualityScore ?? confidencePercent;
 
   DateTime get createdAt => candleClosedAt;
 

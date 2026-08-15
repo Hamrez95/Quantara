@@ -29,13 +29,17 @@ abstract final class StructureExpectationEngine {
       }
     }
     final last = candles.last;
-    final previousHigh = highs.isNotEmpty ? highs.last : indicators.recentSwingHigh;
+    final previousHigh = highs.isNotEmpty
+        ? highs.last
+        : indicators.recentSwingHigh;
     final previousLow = lows.isNotEmpty ? lows.last : indicators.recentSwingLow;
-    final bullishSequence = highs.length >= 2 &&
+    final bullishSequence =
+        highs.length >= 2 &&
         lows.length >= 2 &&
         highs.last > highs[highs.length - 2] &&
         lows.last > lows[lows.length - 2];
-    final bearishSequence = highs.length >= 2 &&
+    final bearishSequence =
+        highs.length >= 2 &&
         lows.length >= 2 &&
         highs.last < highs[highs.length - 2] &&
         lows.last < lows[lows.length - 2];
@@ -62,8 +66,8 @@ abstract final class StructureExpectationEngine {
         : closedBelow || bearishSequence || sweptHigh
         ? ChartDirection.bearish
         : ChartDirection.sideways;
-    final disorder = indicators.atrExpansionRatio > 1.7 &&
-        sequence == SwingSequence.mixed;
+    final disorder =
+        indicators.atrExpansionRatio > 1.7 && sequence == SwingSequence.mixed;
     final regime = disorder
         ? MarketRegime.disorder
         : event == StructureEvent.breakOfStructure
@@ -85,7 +89,8 @@ abstract final class StructureExpectationEngine {
         ? ExpectedMarketMove.continuationLower
         : ExpectedMarketMove.observeOnly;
     var score = 35.0;
-    if (sequence == SwingSequence.bullish || sequence == SwingSequence.bearish) {
+    if (sequence == SwingSequence.bullish ||
+        sequence == SwingSequence.bearish) {
       score += 25;
     }
     if (event == StructureEvent.breakOfStructure) score += 18;
@@ -126,10 +131,12 @@ abstract final class ZoneQualityEngine {
     final desiredRole = structure.bias == ChartDirection.bearish
         ? ChartZoneRole.resistance
         : ChartZoneRole.support;
-    final matching = analysis.zones.where((zone) => zone.role == desiredRole).toList()
-      ..sort((a, b) => (latest.close - a.center).abs().compareTo(
+    final matching =
+        analysis.zones.where((zone) => zone.role == desiredRole).toList()..sort(
+          (a, b) => (latest.close - a.center).abs().compareTo(
             (latest.close - b.center).abs(),
-          ));
+          ),
+        );
     final zone = matching.isEmpty ? null : matching.first;
     if (zone == null) {
       return ZoneQualityAssessment(
@@ -141,7 +148,9 @@ abstract final class ZoneQualityEngine {
         compressionQuality: 0,
         roomToTarget: 0,
         score: 0,
-        reasons: const ['No direction-compatible structural zone is available.'],
+        reasons: const [
+          'No direction-compatible structural zone is available.',
+        ],
       );
     }
     final intervalMs = _medianIntervalMs(analysis.candles);
@@ -154,29 +163,40 @@ abstract final class ZoneQualityEngine {
     final departureStrength = ((latest.close - zone.center).abs() / (atr * 3))
         .clamp(0, 1)
         .toDouble();
-    final touchQuality = (1 / math.max(1, zone.touchCount)).clamp(0, 1).toDouble();
+    final touchQuality = (1 / math.max(1, zone.touchCount))
+        .clamp(0, 1)
+        .toDouble();
     final width = math.max(zone.upper - zone.lower, latest.close * 0.00005);
     final penetration = desiredRole == ChartZoneRole.support
         ? (zone.upper - latest.low) / width
         : (latest.high - zone.lower) / width;
-    final penetrationQuality = (1 - penetration.clamp(0, 1)).clamp(0, 1).toDouble();
-    final recent = analysis.candles.skip(math.max(0, analysis.candles.length - 6)).toList();
-    final recentRange = recent
-            .map((c) => c.high - c.low)
-            .fold<double>(0, (a, b) => a + b) /
+    final penetrationQuality = (1 - penetration.clamp(0, 1))
+        .clamp(0, 1)
+        .toDouble();
+    final recent = analysis.candles
+        .skip(math.max(0, analysis.candles.length - 6))
+        .toList();
+    final recentRange =
+        recent.map((c) => c.high - c.low).fold<double>(0, (a, b) => a + b) /
         recent.length;
-    final compressionQuality = (1 - recentRange / (atr * 2.2)).clamp(0, 1).toDouble();
-    final opposing = analysis.zones.where((candidate) =>
-        desiredRole == ChartZoneRole.support
-            ? candidate.role == ChartZoneRole.resistance && candidate.lower > latest.close
-            : candidate.role == ChartZoneRole.support && candidate.upper < latest.close);
+    final compressionQuality = (1 - recentRange / (atr * 2.2))
+        .clamp(0, 1)
+        .toDouble();
+    final opposing = analysis.zones.where(
+      (candidate) => desiredRole == ChartZoneRole.support
+          ? candidate.role == ChartZoneRole.resistance &&
+                candidate.lower > latest.close
+          : candidate.role == ChartZoneRole.support &&
+                candidate.upper < latest.close,
+    );
     final room = opposing.isEmpty
         ? atr * 2
         : opposing
-            .map((candidate) => (candidate.center - latest.close).abs())
-            .reduce(math.min);
+              .map((candidate) => (candidate.center - latest.close).abs())
+              .reduce(math.min);
     final roomToTarget = (room / (atr * 4)).clamp(0, 1).toDouble();
-    final score = 100 *
+    final score =
+        100 *
         (freshness * 0.22 +
             departureStrength * 0.18 +
             touchQuality * 0.14 +
@@ -212,7 +232,9 @@ abstract final class CandleBehaviorEngine {
     final previous = candles[candles.length - 2];
     final range = math.max(latest.high - latest.low, latest.close * 0.000001);
     final body = (latest.close - latest.open).abs();
-    final closeLocation = ((latest.close - latest.low) / range).clamp(0, 1).toDouble();
+    final closeLocation = ((latest.close - latest.low) / range)
+        .clamp(0, 1)
+        .toDouble();
     final bodyFraction = (body / range).clamp(0, 1).toDouble();
     final bullish = structure.bias != ChartDirection.bearish;
     final rejectionWick = bullish
@@ -223,19 +245,26 @@ abstract final class CandleBehaviorEngine {
         ? latest.close > previous.high && latest.open <= previous.close
         : latest.close < previous.low && latest.open >= previous.close;
     final selectedZone = zone.zone;
-    final reclaim = selectedZone != null &&
+    final reclaim =
+        selectedZone != null &&
         (bullish
-            ? latest.low <= selectedZone.upper && latest.close > selectedZone.upper
-            : latest.high >= selectedZone.lower && latest.close < selectedZone.lower);
-    final acceptance = selectedZone != null &&
+            ? latest.low <= selectedZone.upper &&
+                  latest.close > selectedZone.upper
+            : latest.high >= selectedZone.lower &&
+                  latest.close < selectedZone.lower);
+    final acceptance =
+        selectedZone != null &&
         (bullish
             ? latest.close > selectedZone.upper && closeLocation > 0.62
             : latest.close < selectedZone.lower && closeLocation < 0.38);
     final absorption = rejectionStrength >= 0.42 && bodyFraction <= 0.48;
-    final followThrough = candles.length >= 3 &&
+    final followThrough =
+        candles.length >= 3 &&
         (bullish
-            ? latest.close > previous.close && previous.close > candles[candles.length - 3].close
-            : latest.close < previous.close && previous.close < candles[candles.length - 3].close);
+            ? latest.close > previous.close &&
+                  previous.close > candles[candles.length - 3].close
+            : latest.close < previous.close &&
+                  previous.close < candles[candles.length - 3].close);
     final failedBreakout = structure.event == StructureEvent.failedBreak;
     var score = 28.0 + bodyFraction * 18 + rejectionStrength * 22;
     if (engulfing) score += 12;
@@ -279,23 +308,34 @@ abstract final class VolumeBehaviorEngine {
     final baseline = candles.sublist(start, candles.length - 1);
     final average = baseline.isEmpty
         ? 0.0
-        : baseline.fold<double>(0, (sum, c) => sum + c.volume) / baseline.length;
+        : baseline.fold<double>(0, (sum, c) => sum + c.volume) /
+              baseline.length;
     final relativeVolume = average <= 0 ? 0.0 : latest.volume / average;
-    final prior5 = candles.sublist(math.max(0, candles.length - 6), candles.length - 1);
+    final prior5 = candles.sublist(
+      math.max(0, candles.length - 6),
+      candles.length - 1,
+    );
     final priorAverage = prior5.isEmpty
         ? average
         : prior5.fold<double>(0, (sum, c) => sum + c.volume) / prior5.length;
-    final breakoutExpansion = structure.event == StructureEvent.breakOfStructure &&
+    final breakoutExpansion =
+        structure.event == StructureEvent.breakOfStructure &&
         relativeVolume >= 1.2;
-    final pullbackContraction = structure.regime == MarketRegime.directionalTrend &&
+    final pullbackContraction =
+        structure.regime == MarketRegime.directionalTrend &&
         priorAverage < average * 0.9;
-    final reExpansion = relativeVolume >= math.max(1.05, priorAverage / math.max(1, average));
+    final reExpansion =
+        relativeVolume >= math.max(1.05, priorAverage / math.max(1, average));
     final climax = relativeVolume >= 2.2;
     final absorption = relativeVolume >= 1.5 && candle.bodyFraction < 0.35;
-    final effortVsResult = relativeVolume >= 1.35 &&
+    final effortVsResult =
+        relativeVolume >= 1.35 &&
         (latest.close - latest.open).abs() <= indicators.atr14 * 0.3;
-    final lookback = candles.length >= 8 ? candles[candles.length - 8] : candles.first;
-    final priceExpanded = (latest.close - lookback.close).abs() > indicators.atr14 * 1.2;
+    final lookback = candles.length >= 8
+        ? candles[candles.length - 8]
+        : candles.first;
+    final priceExpanded =
+        (latest.close - lookback.close).abs() > indicators.atr14 * 1.2;
     final volumeContracted = latest.volume < lookback.volume * 0.8;
     final divergence = priceExpanded && volumeContracted;
     var score = 35.0 + relativeVolume.clamp(0, 2) * 18;
@@ -303,7 +343,8 @@ abstract final class VolumeBehaviorEngine {
     if (pullbackContraction) score += 8;
     if (reExpansion) score += 10;
     if (absorption) score += 8;
-    if (effortVsResult) score += structure.event == StructureEvent.failedBreak ? 10 : -8;
+    if (effortVsResult)
+      score += structure.event == StructureEvent.failedBreak ? 10 : -8;
     if (divergence) score -= 18;
     if (climax && structure.event != StructureEvent.failedBreak) score -= 8;
     return VolumeBehaviorAssessment(
@@ -344,9 +385,13 @@ abstract final class MomentumContextEngine {
         ? priceDelta > 0 && rsiDelta < -4
         : priceDelta < 0 && rsiDelta > 4;
     final directionalSpread = indicators.plusDi14 - indicators.minusDi14;
-    final directionAligned = bullish ? directionalSpread > 0 : directionalSpread < 0;
-    final momentumLoss = !directionAligned || divergence || indicators.adx14 < 16;
-    final expansion = indicators.adx14 >= 23 &&
+    final directionAligned = bullish
+        ? directionalSpread > 0
+        : directionalSpread < 0;
+    final momentumLoss =
+        !directionAligned || divergence || indicators.adx14 < 16;
+    final expansion =
+        indicators.adx14 >= 23 &&
         directionAligned &&
         indicators.atrExpansionRatio >= 1.05;
     var score = 38.0;
@@ -382,7 +427,8 @@ abstract final class ContextualPriceActionEngine {
     required TimeframeChartAnalysis analysis,
     TechnicalIndicatorSnapshot? indicators,
   }) {
-    final technical = indicators ?? TechnicalIndicatorEngine.analyze(analysis.candles);
+    final technical =
+        indicators ?? TechnicalIndicatorEngine.analyze(analysis.candles);
     final structure = StructureExpectationEngine.analyze(
       analysis: analysis,
       indicators: technical,
@@ -419,30 +465,55 @@ abstract final class ContextualPriceActionEngine {
       reasons: reasons,
     );
     final families = <ContextualEvidenceFamily, EvidenceFamilyScore>{
-      ContextualEvidenceFamily.structure:
-          family(ContextualEvidenceFamily.structure, structure.score, structure.reasons),
-      ContextualEvidenceFamily.zone:
-          family(ContextualEvidenceFamily.zone, zone.score, zone.reasons),
-      ContextualEvidenceFamily.candle:
-          family(ContextualEvidenceFamily.candle, candle.score, candle.reasons),
-      ContextualEvidenceFamily.volume:
-          family(ContextualEvidenceFamily.volume, volume.score, volume.reasons),
-      ContextualEvidenceFamily.momentum:
-          family(ContextualEvidenceFamily.momentum, momentum.score, momentum.reasons),
+      ContextualEvidenceFamily.structure: family(
+        ContextualEvidenceFamily.structure,
+        structure.score,
+        structure.reasons,
+      ),
+      ContextualEvidenceFamily.zone: family(
+        ContextualEvidenceFamily.zone,
+        zone.score,
+        zone.reasons,
+      ),
+      ContextualEvidenceFamily.candle: family(
+        ContextualEvidenceFamily.candle,
+        candle.score,
+        candle.reasons,
+      ),
+      ContextualEvidenceFamily.volume: family(
+        ContextualEvidenceFamily.volume,
+        volume.score,
+        volume.reasons,
+      ),
+      ContextualEvidenceFamily.momentum: family(
+        ContextualEvidenceFamily.momentum,
+        momentum.score,
+        momentum.reasons,
+      ),
     };
-    var quality = families.values.fold<double>(0, (sum, value) => sum + value.cappedScore);
+    var quality = families.values.fold<double>(
+      0,
+      (sum, value) => sum + value.cappedScore,
+    );
     if (structure.regime == MarketRegime.disorder) quality *= 0.55;
     if (momentum.momentumLoss && volume.divergence) quality *= 0.75;
     final score = quality.round().clamp(0, 100).toInt();
     final bias = structure.bias;
     final expectation = switch (structure.expectedMove) {
-      ExpectedMarketMove.continuationHigher => 'Expect continuation toward the next higher structural zone.',
-      ExpectedMarketMove.continuationLower => 'Expect continuation toward the next lower structural zone.',
-      ExpectedMarketMove.rangeRotationHigher => 'Expect rotation from range support toward the range mean/opposite edge.',
-      ExpectedMarketMove.rangeRotationLower => 'Expect rotation from range resistance toward the range mean/opposite edge.',
-      ExpectedMarketMove.breakoutContinuation => 'Expect continuation only if the break is accepted and holds.',
-      ExpectedMarketMove.failedBreakReversal => 'Expect reversal only after the failed break is reclaimed.',
-      ExpectedMarketMove.observeOnly => 'Structure has no directional expectation; observe only.',
+      ExpectedMarketMove.continuationHigher =>
+        'Expect continuation toward the next higher structural zone.',
+      ExpectedMarketMove.continuationLower =>
+        'Expect continuation toward the next lower structural zone.',
+      ExpectedMarketMove.rangeRotationHigher =>
+        'Expect rotation from range support toward the range mean/opposite edge.',
+      ExpectedMarketMove.rangeRotationLower =>
+        'Expect rotation from range resistance toward the range mean/opposite edge.',
+      ExpectedMarketMove.breakoutContinuation =>
+        'Expect continuation only if the break is accepted and holds.',
+      ExpectedMarketMove.failedBreakReversal =>
+        'Expect reversal only after the failed break is reclaimed.',
+      ExpectedMarketMove.observeOnly =>
+        'Structure has no directional expectation; observe only.',
     };
     final trigger = bias == ChartDirection.bullish
         ? 'Require a closed-candle reclaim/acceptance with directional follow-through.'
@@ -476,7 +547,9 @@ int _medianIntervalMs(List<ChartCandle> candles) {
   if (candles.length < 2) return 0;
   final values = <int>[];
   for (var i = 1; i < candles.length; i++) {
-    values.add(candles[i].openTime.difference(candles[i - 1].openTime).inMilliseconds);
+    values.add(
+      candles[i].openTime.difference(candles[i - 1].openTime).inMilliseconds,
+    );
   }
   values.sort();
   return values[values.length ~/ 2];

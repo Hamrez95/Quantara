@@ -3,7 +3,9 @@ import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 
+import '../../market_analysis/data/contextual_price_action_engine.dart';
 import '../../market_analysis/data/technical_indicator_engine.dart';
+import '../../market_analysis/domain/contextual_price_action_models.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/domain/market_regime_models.dart';
 import '../domain/owner_alpha_models.dart';
@@ -139,6 +141,10 @@ abstract final class ProfessionalStrategyEngine {
       );
     }
 
+    final contextual = ContextualPriceActionEngine.analyze(
+      analysis: analysis,
+      indicators: indicators,
+    );
     final kind = _kindFor(strategy, analysis, indicators);
     final parentGate = _parentDirectionGate(
       analysis: analysis,
@@ -203,6 +209,7 @@ abstract final class ProfessionalStrategyEngine {
       strategy: strategy,
       context: effectiveContext,
       indicators: indicators,
+      contextual: contextual,
       fa: fa,
       externalContextAvailable:
           effectiveContext.externalContextState == ExternalContextState.fresh,
@@ -518,6 +525,7 @@ abstract final class ProfessionalStrategyEngine {
     required AnalysisStrategy strategy,
     required ProfessionalStrategyContext context,
     required TechnicalIndicatorSnapshot indicators,
+    required ContextualPriceActionAssessment contextual,
     required bool fa,
     required bool externalContextAvailable,
   }) {
@@ -635,6 +643,10 @@ abstract final class ProfessionalStrategyEngine {
                 : 'A confirmed close above the structural stop invalidates the setup.'),
       reasons: List.unmodifiable([
         ...(fa ? setup.reasonsFa : setup.reasonsEn),
+        'Setup Quality ${contextual.setupQualityScore}/100 — ${contextual.version}.',
+        'Expectation: ${contextual.expectation}',
+        'Trigger: ${contextual.trigger}',
+        'Context invalidation: ${contextual.invalidation}',
         fa ? contextReasonFa : contextReasonEn,
         fa
             ? 'کارمزد، لغزش و ذخیره Funding در زیان حداکثر لحاظ شده‌اند.'
@@ -647,6 +659,11 @@ abstract final class ProfessionalStrategyEngine {
       strategyVersion: '${kind.name}/1.0',
       marketRegime: setup.regime,
       indicatorSnapshot: _indicatorSnapshot(indicators),
+      setupQualityScore: contextual.setupQualityScore,
+      expectation: contextual.expectation,
+      trigger: contextual.trigger,
+      contextVersion: contextual.version,
+      evidenceBreakdown: contextual.scoreBreakdown,
     );
   }
 
