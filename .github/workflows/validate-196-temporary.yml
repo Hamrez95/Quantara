@@ -1,0 +1,47 @@
+name: Validate 196 temporary
+
+on:
+  push:
+    branches:
+      - feat/196-unified-decision-path-v2
+    paths:
+      - .github/workflows/validate-196-temporary.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/196-unified-decision-path-v2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format product changes
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/decision_core lib/features/auto_trade/application/local_live_canonical_decision.dart lib/features/auto_trade/application/local_live_trade_service.dart lib/features/trading_lab/application/trading_lab_canonical_decision.dart lib/features/trading_lab/application/trading_lab_canonical_replay.dart lib/features/trading_lab/application/trading_lab_paper_broker.dart lib/features/trading_lab/application/trading_lab_shadow_evidence.dart test/canonical_decision_authority_source_test.dart test/canonical_decision_pipeline_parity_test.dart test/canonical_decision_runtime_integration_source_test.dart test/canonical_decision_shadow_replay_test.dart test/trading_lab_shadow_canonical_integration_test.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Targeted safety and parity tests
+        working-directory: src/client/quantara_app
+        run: flutter test test/canonical_decision_pipeline_parity_test.dart test/canonical_decision_authority_source_test.dart test/canonical_decision_runtime_integration_source_test.dart test/canonical_decision_shadow_replay_test.dart test/trading_lab_shadow_canonical_integration_test.dart test/trading_lab_shadow_evidence_test.dart test/trading_lab_paper_broker_test.dart test/local_live_portfolio_admission_test.dart test/portfolio_risk_atomic_concurrency_test.dart test/portfolio_risk_atomic_rollback_test.dart
+      - name: Commit formatter output when needed
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/client/quantara_app/lib src/client/quantara_app/test
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "style(decision): format canonical parity changes"
+          git push origin HEAD:feat/196-unified-decision-path-v2
