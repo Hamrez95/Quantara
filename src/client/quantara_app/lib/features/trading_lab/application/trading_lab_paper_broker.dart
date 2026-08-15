@@ -404,20 +404,28 @@ final class TradingLabPaperBroker {
       );
       return false;
     }
-    final quantity = canonical.quantity;
+    final plannedQuantity = canonical.quantity;
+    final quantity = plannedQuantity * run.manifest.partialFillRatio;
+    if (!quantity.isFinite || quantity <= 0) return false;
     final leverage = canonical.leverage;
-    final margin = canonical.requiredMargin;
+    final margin = canonical.requiredMargin * run.manifest.partialFillRatio;
     final afterSpread = _applyAdverseSlippage(
       referenceEntry,
       direction: candidate.direction,
       opening: true,
       bps: run.manifest.spreadBps / 2,
     );
-    final entry = _applyAdverseSlippage(
+    final afterSlippage = _applyAdverseSlippage(
       afterSpread,
       direction: candidate.direction,
       opening: true,
       bps: run.manifest.slippageBps,
+    );
+    final entry = _applyAdverseSlippage(
+      afterSlippage,
+      direction: candidate.direction,
+      opening: true,
+      bps: run.manifest.latencyPenaltyBps,
     );
     final notional = entry * quantity;
     final riskBudget = canonical.riskBudget;
@@ -425,17 +433,21 @@ final class TradingLabPaperBroker {
     final fractions = _fractionsForTargets(candidate.targets.length);
     final entryFee = _fee(notional, run.manifest.feeRateBps);
     final spreadCost = (afterSpread - referenceEntry).abs() * quantity;
-    final slippageCost = (entry - afterSpread).abs() * quantity;
+    final slippageCost = (afterSlippage - afterSpread).abs() * quantity;
+    final latencyCost = (entry - afterSlippage).abs() * quantity;
     final estimatedExitFee = _fee(notional, run.manifest.feeRateBps);
     final estimatedExitExecutionCost =
         notional *
-        (run.manifest.spreadBps / 2 + run.manifest.slippageBps) /
+        (run.manifest.spreadBps / 2 +
+            run.manifest.slippageBps +
+            run.manifest.latencyPenaltyBps) /
         10000;
     final estimatedRoundTripExecutionCost =
         entryFee +
         estimatedExitFee +
         spreadCost +
         slippageCost +
+        latencyCost +
         estimatedExitExecutionCost;
     final executionCostToRiskPercent =
         estimatedRoundTripExecutionCost / riskBudget * 100;
@@ -501,17 +513,26 @@ final class TradingLabPaperBroker {
         'referenceEntry': referenceEntry,
         'stopLoss': candidate.stopLoss,
         'quantity': quantity,
+        'plannedQuantity': plannedQuantity,
+        'partialFillRatio': run.manifest.partialFillRatio,
         'initialRisk': position.initialRisk,
         'marginReserved': margin,
         'leverage': leverage.toDouble(),
         'entryFee': entryFee,
         'slippageCost': slippageCost,
+        'latencyCost': latencyCost,
+        'latencyPenaltyBps': run.manifest.latencyPenaltyBps,
         'spreadCost': spreadCost,
         'portfolioRiskAfter': _openRisk(run),
         'portfolioRiskBudget':
             run.currentEquity * run.manifest.portfolioRiskPercent / 100,
       },
-      attributes: {'executionModel': run.manifest.executionModel.name},
+      attributes: {
+        'executionModel': run.manifest.executionModel.name,
+        'fillModel': run.manifest.partialFillRatio < 1
+            ? 'deterministic_partial_fill'
+            : 'full_fill',
+      },
     );
     return true;
   }

@@ -28,9 +28,24 @@ void main() {
     expect(first.maxDrawdownPercent, greaterThanOrEqualTo(0));
     expect(first.walkForwardFolds, isNotEmpty);
     expect(first.walkForwardFolds.every((fold) => fold.leakFree), isTrue);
+    expect(
+      first.walkForwardFolds.every((fold) => fold.purgedAndEmbargoed),
+      isTrue,
+    );
+    expect(first.lockedHoldoutStartedAt, isNotNull);
+    expect(
+      first.walkForwardFolds.every(
+        (fold) => !fold.testEndedAt.isAfter(first.lockedHoldoutStartedAt!),
+      ),
+      isTrue,
+    );
     expect(first.dataLeakageDetected, isFalse);
     expect(
       first.warnings.any((item) => item.contains('PortfolioEntryCandidate')),
+      isTrue,
+    );
+    expect(
+      first.warnings.any((item) => item.contains('locked holdout')),
       isTrue,
     );
     for (final trade in first.trades) {

@@ -1,6 +1,6 @@
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 
-const tradingLabSchemaVersion = 3;
+const tradingLabSchemaVersion = 4;
 const tradingLabMaximumEvents = 20000;
 const tradingLabMaximumProcessedDecisions = 50000;
 
@@ -39,6 +39,8 @@ final class TradingLabRunManifest {
     this.slippageBps = 2,
     this.fundingRatePerEightHours = 0,
     this.spreadBps = 1,
+    this.latencyPenaltyBps = 0,
+    this.partialFillRatio = 1,
     this.portfolioRiskPercent = 3,
     this.symbolHeatPercent = 1,
     this.scannerIntervalSeconds = 15,
@@ -84,6 +86,8 @@ final class TradingLabRunManifest {
   final double slippageBps;
   final double fundingRatePerEightHours;
   final double spreadBps;
+  final double latencyPenaltyBps;
+  final double partialFillRatio;
   final double portfolioRiskPercent;
   final double symbolHeatPercent;
   final int scannerIntervalSeconds;
@@ -149,6 +153,20 @@ final class TradingLabRunManifest {
         'Trading Lab spread must be between 0 and 200 bps.',
       );
     }
+    if (!latencyPenaltyBps.isFinite ||
+        latencyPenaltyBps < 0 ||
+        latencyPenaltyBps > 200) {
+      throw const FormatException(
+        'Trading Lab latency penalty must be between 0 and 200 bps.',
+      );
+    }
+    if (!partialFillRatio.isFinite ||
+        partialFillRatio <= 0 ||
+        partialFillRatio > 1) {
+      throw const FormatException(
+        'Trading Lab partial fill ratio must be in (0, 1].',
+      );
+    }
     if (!portfolioRiskPercent.isFinite ||
         portfolioRiskPercent < 0.1 ||
         portfolioRiskPercent > 10) {
@@ -205,6 +223,8 @@ final class TradingLabRunManifest {
     'slippageBps': slippageBps,
     'fundingRatePerEightHours': fundingRatePerEightHours,
     'spreadBps': spreadBps,
+    'latencyPenaltyBps': latencyPenaltyBps,
+    'partialFillRatio': partialFillRatio,
     'portfolioRiskPercent': portfolioRiskPercent,
     'symbolHeatPercent': symbolHeatPercent,
     'scannerIntervalSeconds': scannerIntervalSeconds,
@@ -234,6 +254,8 @@ final class TradingLabRunManifest {
     slippageBps: _double(json['slippageBps'], fallback: 2),
     fundingRatePerEightHours: _double(json['fundingRatePerEightHours']),
     spreadBps: _double(json['spreadBps'], fallback: 1),
+    latencyPenaltyBps: _double(json['latencyPenaltyBps']),
+    partialFillRatio: _double(json['partialFillRatio'], fallback: 1),
     portfolioRiskPercent: _double(json['portfolioRiskPercent'], fallback: 3),
     symbolHeatPercent: _double(json['symbolHeatPercent'], fallback: 1),
     scannerIntervalSeconds: _int(json['scannerIntervalSeconds'], fallback: 15),

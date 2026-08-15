@@ -160,6 +160,22 @@ abstract final class StrategyLabRunner {
         .where((trade) => trade.netPnl < 0)
         .fold<double>(0, (sum, trade) => sum + trade.netPnl.abs());
     final netPnl = equity - config.initialCapital;
+    final holdoutStartIndex = _lockedHoldoutStartIndex(
+      config: config,
+      candles: candles,
+      startIndex: startIndex,
+    );
+    final holdoutStartedAt = candles[holdoutStartIndex].openTime;
+    final holdoutTrades = trades
+        .where((trade) => !trade.openedAt.isBefore(holdoutStartedAt))
+        .toList(growable: false);
+    final holdoutNetPnl = holdoutTrades.fold<double>(
+      0,
+      (sum, trade) => sum + trade.netPnl,
+    );
+    final holdoutExpectancy = holdoutTrades.isEmpty
+        ? 0.0
+        : holdoutNetPnl / holdoutTrades.length;
     final folds = _walkForwardFolds(
       config: config,
       candles: candles,
@@ -167,16 +183,20 @@ abstract final class StrategyLabRunner {
       trades: trades,
       candleDuration: candleDuration,
     );
-    final leakageDetected = folds.any((fold) => !fold.leakFree);
+    final leakageDetected = folds.any(
+      (fold) => !fold.leakFree || !fold.purgedAndEmbargoed,
+    );
     final warnings = <String>[
       'Signals use only candles closed at or before their decision time.',
-      'Walk-forward folds use an expanding training window and a strictly later test window; no parameter is optimized on test data.',
+      'Walk-forward folds use expanding training windows with explicit purge and embargo gaps; the final segment is a locked holdout and no parameter is optimized on validation/holdout data.',
       'Every simulated entry is converted to a PortfolioEntryCandidate and atomically admitted against risk and margin before fill.',
       'Intrabar SL/TP ambiguity is resolved conservatively: stop first.',
       'Fees, slippage and a funding reserve are included; liquidation tiers and order-book impact remain unavailable.',
       'Real exchange execution remains disabled.',
       if (trades.length < 20)
         'Small sample: do not promote this strategy from this result.',
+      if (holdoutTrades.length < 20)
+        'Locked holdout sample is small; promotion evidence is incomplete.',
       if (definition.maturity != StrategyMaturity.validatedCandidate)
         'This strategy remains experimental and paper-only.',
       if (candles[startIndex].openTime.isAfter(
@@ -211,6 +231,9 @@ abstract final class StrategyLabRunner {
       reservedEntries: admittedReservations,
       rejectedEntries: rejectedReservations,
       dataLeakageDetected: leakageDetected,
+      lockedHoldoutStartedAt: holdoutStartedAt,
+      lockedHoldoutTradeCount: holdoutTrades.length,
+      lockedHoldoutExpectancy: holdoutExpectancy,
     );
   }
 
@@ -235,6 +258,15 @@ abstract final class StrategyLabRunner {
         config.riskPercent <= 0 ||
         config.riskPercent > 2) {
       throw ArgumentError('Risk percent is invalid.');
+    }
+    if (config.validationPurgeBars < 1 ||
+        config.validationPurgeBars > 24 ||
+        config.validationEmbargoBars < 1 ||
+        config.validationEmbargoBars > 24 ||
+        !config.lockedHoldoutFraction.isFinite ||
+        config.lockedHoldoutFraction < 0.1 ||
+        config.lockedHoldoutFraction > 0.4) {
+      throw ArgumentError('Walk-forward validation policy is invalid.');
     }
     for (var index = 0; index < candles.length; index++) {
       final candle = candles[index];
@@ -395,6 +427,19 @@ abstract final class StrategyLabRunner {
         maximumLeverage: config.maximumLeverage,
       );
 
+  static int _lockedHoldoutStartIndex({
+    required StrategyLabConfig config,
+    required List<ChartCandle> candles,
+    required int startIndex,
+  }) {
+    final evaluationCount = candles.length - startIndex;
+    final holdoutCount = math.max(
+      1,
+      (evaluationCount * config.lockedHoldoutFraction).round(),
+    );
+    return math.max(startIndex + 1, candles.length - holdoutCount);
+  }
+
   static List<StrategyLabFold> _walkForwardFolds({
     required StrategyLabConfig config,
     required List<ChartCandle> candles,
@@ -402,19 +447,46 @@ abstract final class StrategyLabRunner {
     required List<StrategyLabTrade> trades,
     required Duration candleDuration,
   }) {
-    final evaluationCount = candles.length - startIndex;
+    final holdoutStartIndex = _lockedHoldoutStartIndex(
+      config: config,
+      candles: candles,
+      startIndex: startIndex,
+    );
+    final developmentCount = holdoutStartIndex - startIndex;
     final count = config.walkForwardFolds.clamp(2, 6).toInt();
-    if (evaluationCount < count * 2) return const [];
+    final purgeBars = config.validationPurgeBars;
+    final embargoBars = config.validationEmbargoBars;
+    if (developmentCount < count * 2 + purgeBars + embargoBars) {
+      return const [];
+    }
+    final segmentWidth = developmentCount ~/ (count + 1);
+    if (segmentWidth <= purgeBars + embargoBars) return const [];
+
     final folds = <StrategyLabFold>[];
     for (var fold = 0; fold < count; fold++) {
-      final testStart = startIndex + evaluationCount * fold ~/ count;
-      final testEndExclusive =
-          startIndex + evaluationCount * (fold + 1) ~/ count;
-      if (testEndExclusive <= testStart) continue;
+      final testStart = startIndex + segmentWidth * (fold + 1);
+      final rawTestEndExclusive = fold == count - 1
+          ? holdoutStartIndex
+          : startIndex + segmentWidth * (fold + 2);
+      final testEndExclusive = math.min(
+        holdoutStartIndex - embargoBars,
+        rawTestEndExclusive - embargoBars,
+      );
+      final trainingEndExclusive = testStart - purgeBars;
+      if (trainingEndExclusive <= 0 || testEndExclusive <= testStart) continue;
+
+      final trainingEndedAt = candles[trainingEndExclusive - 1].openTime.add(
+        candleDuration,
+      );
       final testStartedAt = candles[testStart].openTime;
       final testEndedAt = candles[testEndExclusive - 1].openTime.add(
         candleDuration,
       );
+      final embargoEndIndex = math.min(
+        holdoutStartIndex,
+        testEndExclusive + embargoBars,
+      );
+      final embargoEndedAt = candles[embargoEndIndex].openTime;
       final foldTrades = trades
           .where(
             (trade) =>
@@ -426,11 +498,13 @@ abstract final class StrategyLabRunner {
         StrategyLabFold(
           index: fold + 1,
           trainingStartedAt: candles.first.openTime,
-          trainingEndedAt: testStartedAt.subtract(
-            const Duration(microseconds: 1),
-          ),
+          trainingEndedAt: trainingEndedAt,
+          purgeStartedAt: trainingEndedAt,
+          purgeEndedAt: testStartedAt,
           testStartedAt: testStartedAt,
           testEndedAt: testEndedAt,
+          embargoStartedAt: testEndedAt,
+          embargoEndedAt: embargoEndedAt,
           tradeCount: foldTrades.length,
           netPnl: foldTrades.fold<double>(
             0,
