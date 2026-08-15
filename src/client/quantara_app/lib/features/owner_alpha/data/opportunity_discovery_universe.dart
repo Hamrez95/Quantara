@@ -433,6 +433,16 @@ final class OpportunityDiscoveryCoverageTracker
   final Set<String> _rejectionKeys = {};
   final Map<String, OpportunityStage> _latestStages = {};
 
+  static const liquidityEvidenceMaximumAge = Duration(minutes: 30);
+
+  bool liquidityEligibilityVerified(String symbol, DateTime evaluatedAtUtc) {
+    if (!evaluatedAtUtc.isUtc) return false;
+    final normalized = symbol.trim().toUpperCase();
+    if (!_universe.symbols.contains(normalized)) return false;
+    final age = evaluatedAtUtc.difference(_universe.generatedAtUtc);
+    return !age.isNegative && age <= liquidityEvidenceMaximumAge;
+  }
+
   void recordAnalysis(RealtimeCandleAnalysisContext context) {
     final changed =
         _symbolsScanned.add(context.key.symbol) |
@@ -481,6 +491,24 @@ final class OpportunityDiscoveryCoverageTracker
       universeRejections: _universe.rejections,
       updatedAtUtc: updatedAtUtc.toUtc(),
     );
+  }
+}
+
+final class _DirectionEvidence {
+  const _DirectionEvidence({
+    required this.direction,
+    required this.evaluatedAtUtc,
+  });
+
+  final ChartDirection direction;
+  final DateTime evaluatedAtUtc;
+
+  bool isFreshAt(DateTime nowUtc, {required Duration maximumAge}) {
+    if (!nowUtc.isUtc || !evaluatedAtUtc.isUtc || maximumAge <= Duration.zero) {
+      return false;
+    }
+    final age = nowUtc.difference(evaluatedAtUtc);
+    return !age.isNegative && age <= maximumAge;
   }
 }
 
@@ -538,7 +566,7 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
   final RealtimeIdeaCatalog projectionCatalog;
   final OpportunityDiscoveryCoverageTracker coverage;
   String _languageCode;
-  final Map<String, Map<String, ChartDirection>> _directionsBySymbol = {};
+  final Map<String, Map<String, _DirectionEvidence>> _directionsBySymbol = {};
 
   RegimePlaybookFeatureFlags get _effectivePlaybookFlags {
     final environment = RegimePlaybookFeatureFlags.fromEnvironment();
@@ -560,6 +588,15 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
           strategies.contains(AnalysisStrategy.momentumContinuation),
     );
   }
+
+  static Duration _maximumParentEvidenceAge(String timeframe) =>
+      switch (timeframe) {
+        '15m' => const Duration(minutes: 45),
+        '1h' => const Duration(hours: 3),
+        '4h' => const Duration(hours: 12),
+        '1D' => const Duration(days: 3),
+        _ => Duration.zero,
+      };
 
   void setLanguage(String languageCode) {
     if (languageCode == 'fa' || languageCode == 'en') {
@@ -594,9 +631,12 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
     );
     final directions = _directionsBySymbol.putIfAbsent(
       context.key.symbol,
-      () => <String, ChartDirection>{},
+      () => <String, _DirectionEvidence>{},
     );
-    directions[analysis.timeframe] = analysis.direction;
+    directions[analysis.timeframe] = _DirectionEvidence(
+      direction: analysis.direction,
+      evaluatedAtUtc: context.processedAtUtc,
+    );
     final parent = switch (analysis.timeframe) {
       '5m' => '15m',
       '15m' => '1h',
@@ -604,6 +644,18 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
       '4h' => '1D',
       _ => null,
     };
+    final parentEvidence = parent == null ? null : directions[parent];
+    final parentFresh =
+        parent == null ||
+        (parentEvidence?.isFreshAt(
+              context.processedAtUtc,
+              maximumAge: _maximumParentEvidenceAge(parent),
+            ) ??
+            false);
+    final liquidityVerified = coverage.liquidityEligibilityVerified(
+      context.key.symbol,
+      context.processedAtUtc,
+    );
     final latency = context.processedAtUtc.difference(context.receivedAtUtc);
     final safeLatency = latency.isNegative ? Duration.zero : latency;
     final portfolio = RegimePlaybookPortfolioEngine.evaluate(
@@ -615,9 +667,9 @@ final class _OpportunityDiscoveryRealtimeAnalyzer
       flags: _effectivePlaybookFlags,
       runtime: RegimePlaybookRuntimeContext(
         evaluatedAtUtc: context.processedAtUtc,
-        higherTimeframeDirection: parent == null ? null : directions[parent],
-        higherTimeframeFresh: parent == null || directions.containsKey(parent),
-        liquidityVerified: true,
+        higherTimeframeDirection: parentEvidence?.direction,
+        higherTimeframeFresh: parentFresh,
+        liquidityVerified: liquidityVerified,
         processingLatency: safeLatency,
       ),
     );

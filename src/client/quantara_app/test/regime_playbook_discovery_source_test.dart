@@ -13,7 +13,11 @@ void main() {
       expect(source, contains('RegimePlaybookPortfolioEngine.evaluate'));
       expect(source, contains('higherTimeframeDirection'));
       expect(source, contains('higherTimeframeFresh'));
-      expect(source, contains('liquidityVerified: true'));
+      expect(source, contains('liquidityEligibilityVerified'));
+      expect(source, contains('liquidityVerified: liquidityVerified'));
+      expect(source, isNot(contains('liquidityVerified: true')));
+      expect(source, contains('_DirectionEvidence'));
+      expect(source, contains('_maximumParentEvidenceAge'));
       expect(source, contains('processingLatency:'));
       expect(source, contains('playbookId:'));
     },
