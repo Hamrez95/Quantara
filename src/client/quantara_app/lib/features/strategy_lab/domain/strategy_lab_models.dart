@@ -80,6 +80,9 @@ final class StrategyLabConfig {
     this.minimumNotional = 5,
     this.maximumLeverage = 10,
     this.walkForwardFolds = 4,
+    this.validationPurgeBars = 2,
+    this.validationEmbargoBars = 2,
+    this.lockedHoldoutFraction = 0.2,
   });
 
   final StrategyKind strategy;
@@ -95,6 +98,9 @@ final class StrategyLabConfig {
   final double minimumNotional;
   final int maximumLeverage;
   final int walkForwardFolds;
+  final int validationPurgeBars;
+  final int validationEmbargoBars;
+  final double lockedHoldoutFraction;
 }
 
 final class StrategyLabTrade {
@@ -138,6 +144,10 @@ final class StrategyLabFold {
     required this.testEndedAt,
     required this.tradeCount,
     required this.netPnl,
+    this.purgeStartedAt,
+    this.purgeEndedAt,
+    this.embargoStartedAt,
+    this.embargoEndedAt,
   });
 
   final int index;
@@ -147,8 +157,30 @@ final class StrategyLabFold {
   final DateTime testEndedAt;
   final int tradeCount;
   final double netPnl;
+  final DateTime? purgeStartedAt;
+  final DateTime? purgeEndedAt;
+  final DateTime? embargoStartedAt;
+  final DateTime? embargoEndedAt;
 
   bool get leakFree => trainingEndedAt.isBefore(testStartedAt);
+
+  bool get purgedAndEmbargoed {
+    final purgeStart = purgeStartedAt;
+    final purgeEnd = purgeEndedAt;
+    final embargoStart = embargoStartedAt;
+    final embargoEnd = embargoEndedAt;
+    if (purgeStart == null ||
+        purgeEnd == null ||
+        embargoStart == null ||
+        embargoEnd == null) {
+      return false;
+    }
+    return !trainingEndedAt.isAfter(purgeStart) &&
+        !purgeStart.isAfter(purgeEnd) &&
+        !purgeEnd.isAfter(testStartedAt) &&
+        !testEndedAt.isAfter(embargoStart) &&
+        !embargoStart.isAfter(embargoEnd);
+  }
 }
 
 final class StrategyLabReport {
@@ -169,6 +201,9 @@ final class StrategyLabReport {
     this.reservedEntries = 0,
     this.rejectedEntries = 0,
     this.dataLeakageDetected = false,
+    this.lockedHoldoutStartedAt,
+    this.lockedHoldoutTradeCount = 0,
+    this.lockedHoldoutExpectancy = 0,
   }) : trades = UnmodifiableListView(trades.toList(growable: false)),
        walkForwardFolds = UnmodifiableListView(
          walkForwardFolds.toList(growable: false),
@@ -190,6 +225,9 @@ final class StrategyLabReport {
   final int reservedEntries;
   final int rejectedEntries;
   final bool dataLeakageDetected;
+  final DateTime? lockedHoldoutStartedAt;
+  final int lockedHoldoutTradeCount;
+  final double lockedHoldoutExpectancy;
 
   int get stopCount => trades
       .where((trade) => trade.exitReason == LabExitReason.stopLoss)
