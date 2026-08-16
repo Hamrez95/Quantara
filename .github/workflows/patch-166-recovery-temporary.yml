@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feat/166-orphan-recovery-v2
-      - name: Apply recovery integration
+      - name: Apply recovery integration v3
         run: |
           python3 .github/scripts/patch_166_recovery_integration.py
           python3 .github/scripts/patch_166_recovery_analyze_fix.py
