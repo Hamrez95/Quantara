@@ -14,11 +14,13 @@ import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../../trading_journal/application/local_live_journal_observer.dart';
 import '../../trading_journal/domain/trading_journal_models.dart';
 import '../data/bitunix_local_live_api_client.dart';
+import '../data/bitunix_private_websocket_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_management_only_after_flat.dart';
 import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/private_truth_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/remaining_target_protection_policy.dart';
 import '../domain/trading_pnl_projection.dart';
@@ -26,6 +28,8 @@ import 'local_live_canonical_decision.dart';
 import 'local_live_economic_ranking.dart';
 import 'local_live_orphan_recovery.dart';
 import 'local_live_portfolio_execution_guard.dart';
+import 'private_truth_account_snapshot.dart';
+import 'private_truth_coordinator.dart';
 import 'profit_lock_promotion_executor.dart';
 
 const localLiveConfigurationKey = 'quantara.local-live.configuration.v1';
@@ -81,6 +85,12 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   final Map<String, DateTime> _auditFingerprintSeenAt = {};
   final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();
   LocalLivePortfolioExecutionGuard? _portfolioGuard;
+  PrivateTruthCoordinator? _privateTruth;
+  http.Client? _coldHttpClient;
+  BitunixLocalLiveApiClient? _coldExchange;
+  TradingPnlProjection? _coldPnlProjection;
+  bool _coldPnlRefreshRunning = false;
+  DateTime? _lastColdPnlRefresh;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -128,9 +138,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _destroyed = true;
+    await _privateTruth?.dispose();
+    _privateTruth = null;
     _httpClient?.close();
     _httpClient = null;
     _exchange = null;
+    _coldHttpClient?.close();
+    _coldHttpClient = null;
+    _coldExchange = null;
     _credentials = null;
     await _publish(
       LocalLiveTradeState.stopped,
@@ -179,6 +194,17 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _httpClient?.close();
         _httpClient = http.Client();
         _exchange = BitunixLocalLiveApiClient(client: _httpClient!);
+        _coldHttpClient?.close();
+        _coldHttpClient = http.Client();
+        _coldExchange = BitunixLocalLiveApiClient(client: _coldHttpClient!);
+        await _privateTruth?.dispose();
+        final privateTruth = PrivateTruthCoordinator(
+          BitunixPrivateWebSocketClient(),
+          (value) => _exchange!.fetchCurrentAccountSnapshot(value),
+        );
+        _privateTruth = privateTruth;
+        await privateTruth.start(_credentials!);
+        unawaited(_refreshColdPnl());
         _userRequestedEntries = message['entriesEnabled'] == true;
         if (_userRequestedEntries && _managementOnlyAfterFlat) {
           await _setManagementOnlyAfterFlat(
@@ -270,7 +296,24 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     }
     _cycleRunning = true;
     try {
-      final account = await exchange.fetchAccountSnapshot(credentials);
+      final privateTruth = _privateTruth;
+      final restBaseline = privateTruth?.latestRestSnapshot;
+      if (privateTruth == null || restBaseline == null) {
+        _entriesEnabled = false;
+        _entryBlockReason = 'privateAccountState';
+        await _publish(
+          LocalLiveTradeState.managingOnly,
+          'Private WebSocket truth is waiting for bounded REST verification. New entries remain blocked.',
+        );
+        return;
+      }
+      _scheduleColdPnlRefresh();
+      final hotAccount = PrivateTruthAccountSnapshotBuilder.build(
+        projection: privateTruth.current,
+        restBaseline: restBaseline,
+        coldPnlProjection: _coldPnlProjection,
+      );
+      final account = hotAccount.snapshot;
       final positions = account.positions
           .map(
             (position) => BitunixLivePosition(
@@ -294,15 +337,20 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .where((position) => position.quantity > 0)
           .toList(growable: false);
       _exchangeOpenPositionCount = openExchangePositions.length;
-      _lastExchangeSync = DateTime.now().toUtc();
+      _lastExchangeSync = privateTruth.current.updatedAtUtc;
+      final privateTruthReady =
+          privateTruth.canAdmitNewEntries && hotAccount.completeForNewEntry;
       _entriesEnabled =
           LocalLiveManagementOnlyAfterFlatPolicy.effectiveEntriesEnabled(
             userRequestedEntries: _userRequestedEntries,
             managementOnlyAfterFlat: _managementOnlyAfterFlat,
-          );
+          ) &&
+          privateTruthReady;
       _entryBlockReason = _managementOnlyAfterFlat
           ? 'managementOnlyAfterFlat'
-          : null;
+          : privateTruthReady
+          ? null
+          : 'privateAccountState:${privateTruth.current.lagReason.name}';
       _sessionStartEquity ??= account.estimatedEquity;
       if (_sessionStartEquity != null) {
         await FlutterForegroundTask.saveData(
@@ -541,6 +589,16 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     final configuration = _configuration!;
     final credentials = _credentials!;
     final exchange = _exchange!;
+    final privateTruth = _privateTruth;
+    if (privateTruth == null || !privateTruth.isRunning) {
+      _entriesEnabled = false;
+      _entryBlockReason = 'privateAccountState';
+      _auditEvent(
+        'private_truth_entry_block',
+        'Private WebSocket truth is not active; no new order can be submitted.',
+      );
+      return;
+    }
     final client = http.Client();
     try {
       final repository = BitunixOwnerAlphaRepository(client: client);
@@ -767,20 +825,35 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           );
           BitunixOrderDetail? detail;
           BitunixLivePosition? position;
-          for (var attempt = 0; attempt < 10; attempt++) {
-            await Future<void>.delayed(const Duration(milliseconds: 750));
-            detail = await exchange.fetchOrderDetail(
-              orderId: placed.orderId,
-              credentials: credentials,
-            );
-            final matches = await exchange.fetchPositions(
-              credentials,
+          final hotFill = await privateTruth.waitForFullFill(
+            orderId: placed.orderId,
+            clientId: placed.clientId,
+            symbol: idea.symbol,
+          );
+          if (hotFill != null) {
+            detail = _orderDetailFromPrivateFill(hotFill);
+            position = _livePositionFromPrivateFill(hotFill);
+            _auditEvent(
+              'entry_fill_ws_confirmed',
+              'Entry fill and position were confirmed by the authenticated private WebSocket.',
               symbol: idea.symbol,
             );
-            position = matches.firstOrNull;
-            if (detail.fullyFilled && position != null) break;
+          } else {
+            final fallback = await _fetchEntryRestState(
+              exchange: exchange,
+              credentials: credentials,
+              orderId: placed.orderId,
+              symbol: idea.symbol,
+            );
+            detail = fallback.detail;
+            position = fallback.position;
+            _auditEvent(
+              'entry_fill_rest_fallback',
+              'Private WebSocket fill confirmation timed out; one bounded REST reconciliation was used.',
+              symbol: idea.symbol,
+            );
           }
-          if (detail == null || !detail.fullyFilled || position == null) {
+          if (!detail.fullyFilled || position == null) {
             _entriesEnabled = false;
             _auditEvent(
               'entry_reconciliation',
@@ -801,21 +874,16 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                 symbol: idea.symbol,
               );
             }
-            for (var attempt = 0; attempt < 10; attempt++) {
-              await Future<void>.delayed(const Duration(milliseconds: 750));
-              detail = await exchange.fetchOrderDetail(
-                orderId: placed.orderId,
-                credentials: credentials,
-              );
-              final matches = await exchange.fetchPositions(
-                credentials,
-                symbol: idea.symbol,
-              );
-              position = matches.firstOrNull;
-              if (detail.fullyFilled && position != null) break;
-              if (detail.status == 'CANCELED') break;
-            }
-            if (detail == null || !detail.fullyFilled || position == null) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+            final cleanupState = await _fetchEntryRestState(
+              exchange: exchange,
+              credentials: credentials,
+              orderId: placed.orderId,
+              symbol: idea.symbol,
+            );
+            detail = cleanupState.detail;
+            position = cleanupState.position;
+            if (!detail.fullyFilled || position == null) {
               if (position != null && position.quantity > 0) {
                 await portfolioGuard.recordFill(
                   reservationId: activeReservationId,
@@ -835,7 +903,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   symbol: idea.symbol,
                 );
               }
-              if (position == null && detail?.status == 'CANCELED') {
+              if (position == null && detail.status == 'CANCELED') {
                 await portfolioGuard.releaseNoExposure(
                   reservationId: activeReservationId,
                   evidence: 'entry-canceled-without-position',
@@ -1077,6 +1145,53 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       client.close();
     }
   }
+
+  Future<({BitunixOrderDetail detail, BitunixLivePosition? position})>
+  _fetchEntryRestState({
+    required BitunixLocalLiveApiClient exchange,
+    required BitunixApiCredentials credentials,
+    required String orderId,
+    required String symbol,
+  }) async {
+    _privateTruth?.recordRestRequests(2);
+    final values = await Future.wait<Object>([
+      exchange.fetchOrderDetail(orderId: orderId, credentials: credentials),
+      exchange.fetchPositions(credentials, symbol: symbol),
+    ]);
+    final detail = values[0] as BitunixOrderDetail;
+    final positions = values[1] as List<BitunixLivePosition>;
+    return (detail: detail, position: positions.firstOrNull);
+  }
+
+  BitunixOrderDetail _orderDetailFromPrivateFill(
+    PrivateTruthFillConfirmation confirmation,
+  ) => BitunixOrderDetail(
+    orderId: confirmation.order.orderId,
+    clientId: confirmation.order.clientId,
+    symbol: confirmation.order.symbol,
+    quantity: confirmation.order.quantity,
+    filledQuantity: confirmation.order.dealAmount,
+    status: confirmation.order.orderStatus.toUpperCase(),
+    fee: confirmation.order.fee,
+    realizedPnl: 0,
+  );
+
+  BitunixLivePosition _livePositionFromPrivateFill(
+    PrivateTruthFillConfirmation confirmation,
+  ) => BitunixLivePosition(
+    positionId: confirmation.position.positionId,
+    symbol: confirmation.position.symbol,
+    quantity: confirmation.position.quantity,
+    side: confirmation.position.side,
+    marginMode: confirmation.position.marginMode,
+    positionMode: confirmation.position.positionMode,
+    leverage: confirmation.position.leverage,
+    averageOpenPrice: confirmation.order.averagePrice,
+    realizedPnl: confirmation.position.realizedPnl,
+    unrealizedPnl: confirmation.position.unrealizedPnl,
+    fee: confirmation.position.fee + confirmation.order.fee,
+    funding: confirmation.position.funding,
+  );
 
   Future<void> _recoverVerifiedQuantaraOrphans(
     AutoTradeAccountSnapshot account,
@@ -1899,6 +2014,34 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     return 'q-local-${hash.toRadixString(16).padLeft(8, '0')}';
   }
 
+  void _scheduleColdPnlRefresh() {
+    final last = _lastColdPnlRefresh;
+    if (_coldPnlRefreshRunning ||
+        (last != null &&
+            DateTime.now().toUtc().difference(last) <
+                const Duration(minutes: 5))) {
+      return;
+    }
+    unawaited(_refreshColdPnl());
+  }
+
+  Future<void> _refreshColdPnl() async {
+    if (_coldPnlRefreshRunning) return;
+    final exchange = _coldExchange;
+    final credentials = _credentials;
+    if (exchange == null || credentials == null) return;
+    _coldPnlRefreshRunning = true;
+    try {
+      final snapshot = await exchange.fetchAccountSnapshot(credentials);
+      _coldPnlProjection = snapshot.authoritativePnl;
+      _lastColdPnlRefresh = DateTime.now().toUtc();
+    } on Object catch (error) {
+      _auditEvent('cold_pnl_refresh_deferred', _safeError(error));
+    } finally {
+      _coldPnlRefreshRunning = false;
+    }
+  }
+
   Future<void> _restoreNonSecretState() async {
     final configRaw = await FlutterForegroundTask.getData<String>(
       key: localLiveConfigurationKey,
@@ -2132,9 +2275,15 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }
 
   Future<void> _publish(LocalLiveTradeState state, String message) async {
+    final publishAt = DateTime.now().toUtc();
+    final privateTruth = _privateTruth;
+    privateTruth?.recordSupervisorPublish(publishAt);
+    final privateProjection = privateTruth?.current;
+    final privateTelemetry = privateTruth?.telemetrySnapshot(publishAt);
+    final restVerifiedAt = privateProjection?.restVerifiedAtUtc;
     final status = LocalLiveTradeStatus(
       state: state,
-      updatedAt: DateTime.now().toUtc(),
+      updatedAt: publishAt,
       message: message,
       lastScanAt: _lastScanAt,
       lastSuccessfulExchangeSync: _lastExchangeSync,
@@ -2146,6 +2295,21 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       unmanagedPositionCount: _unmanagedSymbols.length,
       unmanagedSymbols: _unmanagedSymbols,
       entryBlockReason: _entryBlockReason,
+      privateTruthHealth: privateProjection?.health.name,
+      privateTruthLagReason: privateProjection?.lagReason.name,
+      privateTruthAgeMs: privateProjection == null
+          ? null
+          : publishAt
+                .difference(privateProjection.updatedAtUtc)
+                .inMilliseconds
+                .clamp(0, 1 << 31),
+      privateTruthRestVerificationAgeMs: restVerifiedAt == null
+          ? null
+          : publishAt
+                .difference(restVerifiedAt)
+                .inMilliseconds
+                .clamp(0, 1 << 31),
+      privateTruthTelemetry: privateTelemetry?.toJson(),
       closedPositionCount: _closedPositionCount,
       realizedPnl: null,
       pnlProjection: _sessionPnlProjection,

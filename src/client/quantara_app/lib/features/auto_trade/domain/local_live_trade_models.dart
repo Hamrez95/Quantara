@@ -436,6 +436,11 @@ final class LocalLiveTradeStatus {
     this.unmanagedPositionCount = 0,
     this.unmanagedSymbols = const [],
     this.entryBlockReason,
+    this.privateTruthHealth,
+    this.privateTruthLagReason,
+    this.privateTruthAgeMs,
+    this.privateTruthRestVerificationAgeMs,
+    this.privateTruthTelemetry,
     this.closedPositionCount = 0,
     this.realizedPnl,
     this.pnlProjection,
@@ -461,6 +466,11 @@ final class LocalLiveTradeStatus {
   final int unmanagedPositionCount;
   final List<String> unmanagedSymbols;
   final String? entryBlockReason;
+  final String? privateTruthHealth;
+  final String? privateTruthLagReason;
+  final int? privateTruthAgeMs;
+  final int? privateTruthRestVerificationAgeMs;
+  final Map<String, Object?>? privateTruthTelemetry;
   final int closedPositionCount;
   @Deprecated('Use pnlProjection metrics with source/scope/asOf metadata.')
   final double? realizedPnl;
@@ -499,6 +509,11 @@ final class LocalLiveTradeStatus {
     'unmanagedPositionCount': unmanagedPositionCount,
     'unmanagedSymbols': unmanagedSymbols,
     'entryBlockReason': entryBlockReason,
+    'privateTruthHealth': privateTruthHealth,
+    'privateTruthLagReason': privateTruthLagReason,
+    'privateTruthAgeMs': privateTruthAgeMs,
+    'privateTruthRestVerificationAgeMs': privateTruthRestVerificationAgeMs,
+    'privateTruthTelemetry': privateTruthTelemetry,
     'closedPositionCount': closedPositionCount,
     'realizedPnl': realizedPnl,
     'pnlProjection': pnlProjection?.toJson(),
@@ -546,6 +561,12 @@ final class LocalLiveTradeStatus {
           .where((item) => item.trim().isNotEmpty),
     ),
     entryBlockReason: json['entryBlockReason']?.toString(),
+    privateTruthHealth: json['privateTruthHealth']?.toString(),
+    privateTruthLagReason: json['privateTruthLagReason']?.toString(),
+    privateTruthAgeMs: (json['privateTruthAgeMs'] as num?)?.toInt(),
+    privateTruthRestVerificationAgeMs:
+        (json['privateTruthRestVerificationAgeMs'] as num?)?.toInt(),
+    privateTruthTelemetry: _stringObjectMap(json['privateTruthTelemetry']),
     closedPositionCount: (json['closedPositionCount'] as num?)?.toInt() ?? 0,
     realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
     pnlProjection: _pnlProjectionFromJson(json['pnlProjection']),
@@ -553,6 +574,16 @@ final class LocalLiveTradeStatus {
     consecutiveFailures: (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
     entriesEnabled: json['entriesEnabled'] == true,
   );
+}
+
+Map<String, Object?>? _stringObjectMap(Object? value) {
+  if (value is Map<String, Object?>) return Map.unmodifiable(value);
+  if (value is Map<Object?, Object?>) {
+    return Map.unmodifiable(
+      value.map((key, item) => MapEntry(key.toString(), item)),
+    );
+  }
+  return null;
 }
 
 LocalLivePortfolioBudgetStatus? _portfolioBudgetFromJson(Object? value) {

@@ -203,6 +203,96 @@ final class BitunixLocalLiveApiClient {
     );
   }
 
+  /// Bounded current-state REST verification for the private WebSocket Hot Path.
+  /// Historical fills/settlements intentionally stay out of this method.
+  Future<AutoTradeAccountSnapshot> fetchCurrentAccountSnapshot(
+    BitunixApiCredentials credentials,
+  ) async {
+    final responses = await Future.wait<Object>([
+      _signedGet('/api/v1/futures/account', {
+        'marginCoin': 'USDT',
+      }, credentials),
+      fetchPositions(credentials),
+      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
+        'limit': '100',
+      }, credentials),
+      fetchPendingProtection(credentials),
+    ]);
+    final accountResponse = responses[0] as Map<String, Object?>;
+    final positions = responses[1] as List<BitunixLivePosition>;
+    final ordersResponse = responses[2] as Map<String, Object?>;
+    final protections = responses[3] as List<BitunixPendingProtection>;
+    final account = _firstMap(accountResponse['data']);
+    if (account == null) {
+      throw const LocalLiveTradeSafeException(
+        'Bitunix current account data was empty or malformed.',
+      );
+    }
+    final orderData = ordersResponse['data'];
+    final orderMaps = orderData is Map<String, Object?>
+        ? _mapList(orderData['orderList'])
+        : const <Map<String, Object?>>[];
+    final asOf = _utcNow().toUtc();
+    final protectionOrders = protections
+        .map(
+          (item) => AutoTradeProtectionOrder(
+            exchangeId: item.orderId,
+            positionId: item.positionId,
+            symbol: item.symbol,
+            takeProfitPrice: item.takeProfitPrice > 0
+                ? item.takeProfitPrice
+                : null,
+            takeProfitQuantity: item.takeProfitQuantity > 0
+                ? item.takeProfitQuantity
+                : null,
+            stopLossPrice: item.stopLossPrice > 0 ? item.stopLossPrice : null,
+            stopLossQuantity: item.stopLossQuantity > 0
+                ? item.stopLossQuantity
+                : null,
+          ),
+        )
+        .toList(growable: false);
+    return AutoTradeAccountSnapshot(
+      marginCoin: _string(account['marginCoin'], fallback: 'USDT'),
+      available: _number(account['available']),
+      frozen: _number(account['frozen']),
+      positionMargin: _number(account['margin']),
+      crossUnrealizedPnl: _number(account['crossUnrealizedPNL']),
+      isolatedUnrealizedPnl: _number(account['isolationUnrealizedPNL']),
+      positionMode: _string(account['positionMode'], fallback: 'UNKNOWN'),
+      positions: positions
+          .map(
+            (item) => AutoTradePosition(
+              positionId: item.positionId,
+              symbol: item.symbol,
+              quantity: item.quantity,
+              side: item.side,
+              marginMode: item.marginMode,
+              positionMode: item.positionMode,
+              leverage: item.leverage,
+              margin: 0,
+              unrealizedPnl: item.unrealizedPnl,
+              liquidationPrice: 0,
+              averageOpenPrice: item.averageOpenPrice,
+              realizedPnl: item.realizedPnl,
+              fee: item.fee,
+              funding: item.funding,
+              openedAt: item.openedAt,
+            ),
+          )
+          .toList(growable: false),
+      orders: orderMaps.map(_orderFromJson).toList(growable: false),
+      protectionOrders: protectionOrders,
+      protectionVerifications: {
+        for (final position in positions)
+          position.positionId: AutoTradeProtectionVerification.verified(
+            asOf: asOf,
+          ),
+      },
+      syncedAt: asOf,
+    );
+  }
+
   Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
