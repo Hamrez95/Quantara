@@ -14,7 +14,9 @@ jobs:
         with:
           ref: feat/166-orphan-recovery-v2
       - name: Apply recovery integration
-        run: python3 .github/scripts/patch_166_recovery_integration.py
+        run: |
+          python3 .github/scripts/patch_166_recovery_integration.py
+          python3 .github/scripts/patch_166_recovery_analyze_fix.py
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
