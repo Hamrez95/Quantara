@@ -1,0 +1,67 @@
+name: Patch 166 recovery temporary
+on:
+  push:
+    branches: [feat/166-orphan-recovery-v2]
+    paths: [.github/workflows/patch-166-recovery-temporary.yml]
+permissions:
+  contents: write
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/166-orphan-recovery-v2
+      - name: Apply recovery integration
+        run: python3 .github/scripts/patch_166_recovery_integration.py
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+      - name: Format
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/auto_trade/application/exchange_position_recovery_transaction.dart
+          lib/features/auto_trade/domain/exchange_position_ownership.dart
+          lib/features/auto_trade/domain/local_live_trade_models.dart
+          lib/features/auto_trade/application/local_live_trade_service.dart
+          lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart
+          test/exchange_position_ownership_test.dart
+          test/exchange_position_recovery_transaction_test.dart
+          test/local_live_recovery_status_test.dart
+      - name: Restore packages
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+      - name: Strict analyze
+        working-directory: src/client/quantara_app
+        run: flutter analyze --fatal-infos
+      - name: Recovery and safety tests
+        working-directory: src/client/quantara_app
+        run: >-
+          flutter test
+          test/exchange_position_ownership_test.dart
+          test/exchange_position_recovery_transaction_test.dart
+          test/local_live_recovery_status_test.dart
+          test/local_live_orphan_recovery_test.dart
+          test/local_live_portfolio_risk_runtime_test.dart
+          test/local_live_private_truth_status_test.dart
+      - name: Commit tested product changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+Hamrez95@users.noreply.github.com
+          git add \
+            src/client/quantara_app/lib/features/auto_trade/application/exchange_position_recovery_transaction.dart \
+            src/client/quantara_app/lib/features/auto_trade/domain/exchange_position_ownership.dart \
+            src/client/quantara_app/lib/features/auto_trade/domain/local_live_trade_models.dart \
+            src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
+            src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart \
+            src/client/quantara_app/test/exchange_position_ownership_test.dart \
+            src/client/quantara_app/test/exchange_position_recovery_transaction_test.dart \
+            src/client/quantara_app/test/local_live_recovery_status_test.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(auto-trade): make orphan recovery durable and explicit (#166)"
+          git push origin HEAD:feat/166-orphan-recovery-v2
