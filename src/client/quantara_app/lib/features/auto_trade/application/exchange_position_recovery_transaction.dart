@@ -10,6 +10,7 @@ final class ExchangePositionRecoveryCheckpoint {
     required this.symbol,
     required this.stage,
     required this.updatedAtUtc,
+    required this.managedPlan,
     this.reason = '',
   });
 
@@ -17,6 +18,7 @@ final class ExchangePositionRecoveryCheckpoint {
   final String symbol;
   final ExchangePositionRecoveryStage stage;
   final DateTime updatedAtUtc;
+  final Map<String, Object?> managedPlan;
   final String reason;
 
   ExchangePositionRecoveryCheckpoint advance(
@@ -32,6 +34,7 @@ final class ExchangePositionRecoveryCheckpoint {
       symbol: symbol,
       stage: next,
       updatedAtUtc: atUtc.toUtc(),
+      managedPlan: managedPlan,
       reason: reason,
     );
   }
@@ -41,6 +44,7 @@ final class ExchangePositionRecoveryCheckpoint {
     'symbol': symbol,
     'stage': stage.name,
     'updatedAtUtc': updatedAtUtc.toUtc().toIso8601String(),
+    'managedPlan': managedPlan,
     'reason': reason,
   };
 
@@ -53,7 +57,18 @@ final class ExchangePositionRecoveryCheckpoint {
     final updatedAt = DateTime.tryParse(
       json['updatedAtUtc']?.toString() ?? '',
     )?.toUtc();
-    if (positionId.isEmpty || symbol.isEmpty || updatedAt == null) {
+    final managedPlanRaw = json['managedPlan'];
+    final managedPlan = managedPlanRaw is Map<String, Object?>
+        ? Map<String, Object?>.of(managedPlanRaw)
+        : managedPlanRaw is Map<Object?, Object?>
+        ? managedPlanRaw.map(
+            (key, value) => MapEntry(key.toString(), value),
+          )
+        : const <String, Object?>{};
+    if (positionId.isEmpty ||
+        symbol.isEmpty ||
+        updatedAt == null ||
+        managedPlan.isEmpty) {
       throw const FormatException('Invalid exchange recovery checkpoint.');
     }
     final stage = ExchangePositionRecoveryStage.values.firstWhere(
@@ -67,6 +82,7 @@ final class ExchangePositionRecoveryCheckpoint {
       symbol: symbol,
       stage: stage,
       updatedAtUtc: updatedAt,
+      managedPlan: Map.unmodifiable(managedPlan),
       reason: json['reason']?.toString() ?? '',
     );
   }
@@ -105,7 +121,8 @@ abstract final class ExchangePositionRecoveryTransaction {
   }) async {
     var current = checkpoint;
 
-    if (current.stage.index < ExchangePositionRecoveryStage.journalCommitted.index) {
+    if (current.stage.index <
+        ExchangePositionRecoveryStage.journalCommitted.index) {
       final journalCommitted = await commitJournal();
       if (!journalCommitted) {
         return ExchangePositionRecoveryTransactionResult(
