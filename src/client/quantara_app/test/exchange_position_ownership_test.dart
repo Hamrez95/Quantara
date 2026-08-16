@@ -112,7 +112,7 @@ void main() {
   });
 
   test(
-    'fully protected orphan is not recoverable until history is verified clear',
+    'fully protected orphan is not recoverable until Quantara ownership is verified',
     () {
       final result = ExchangePositionOwnershipClassifier.classify(
         account: account(),
@@ -123,19 +123,19 @@ void main() {
       expect(orphan.kind, ExchangePositionOwnershipKind.externalUnmanaged);
       expect(
         orphan.recoveryBlocks,
-        contains(ExchangePositionRecoveryBlock.exchangeHistoryNotVerifiedClear),
+        contains(ExchangePositionRecoveryBlock.quantaraOwnershipNotVerified),
       );
       expect(result.blocksNewEntries, isTrue);
     },
   );
 
   test(
-    'history-clear isolated fully protected orphan becomes recoverable only',
+    'verified Quantara isolated fully protected orphan becomes recoverable only',
     () {
       final result = ExchangePositionOwnershipClassifier.classify(
         account: account(),
         managedPositions: const [],
-        historyVerifiedClearPositionIds: const ['p-1'],
+        verifiedQuantaraRecoveryPositionIds: const ['p-1'],
       );
 
       final orphan = result.positions.single;
@@ -154,7 +154,7 @@ void main() {
           protectionOrders: fullProtection().take(3).toList(growable: false),
         ),
         managedPositions: const [],
-        historyVerifiedClearPositionIds: const ['p-1'],
+        verifiedQuantaraRecoveryPositionIds: const ['p-1'],
       ).positions.single;
       expect(
         missingTp.recoveryBlocks,
@@ -164,7 +164,7 @@ void main() {
       final unverified = ExchangePositionOwnershipClassifier.classify(
         account: account(verified: false),
         managedPositions: const [],
-        historyVerifiedClearPositionIds: const ['p-1'],
+        verifiedQuantaraRecoveryPositionIds: const ['p-1'],
       ).positions.single;
       expect(
         unverified.recoveryBlocks,
@@ -189,7 +189,7 @@ void main() {
     final withOrder = ExchangePositionOwnershipClassifier.classify(
       account: account(orders: const [pending]),
       managedPositions: const [],
-      historyVerifiedClearPositionIds: const ['p-1'],
+      verifiedQuantaraRecoveryPositionIds: const ['p-1'],
     ).positions.single;
     expect(
       withOrder.recoveryBlocks,
@@ -212,7 +212,7 @@ void main() {
     final crossResult = ExchangePositionOwnershipClassifier.classify(
       account: account(positions: const [cross]),
       managedPositions: const [],
-      historyVerifiedClearPositionIds: const ['p-1'],
+      verifiedQuantaraRecoveryPositionIds: const ['p-1'],
     ).positions.single;
     expect(
       crossResult.recoveryBlocks,
@@ -231,5 +231,35 @@ void main() {
     expect(result.hasContradictoryLocalCount, isTrue);
     expect(result.consumedSlots(3), 1);
     expect(result.freeSlots(3), 2);
+  });
+  test('adaptive one-target Quantara recovery remains recoverable', () {
+    const adaptiveProtection = [
+      AutoTradeProtectionOrder.stopLoss(
+        exchangeId: 'sl-1',
+        positionId: 'p-1',
+        symbol: 'BTCUSDT',
+        price: 95000,
+        quantity: 1,
+      ),
+      AutoTradeProtectionOrder.takeProfit(
+        exchangeId: 'tp-1',
+        positionId: 'p-1',
+        symbol: 'BTCUSDT',
+        price: 103000,
+        quantity: 1,
+      ),
+    ];
+    final result = ExchangePositionOwnershipClassifier.classify(
+      account: account(protectionOrders: adaptiveProtection),
+      managedPositions: const [],
+      verifiedQuantaraRecoveryPositionIds: const ['p-1'],
+    );
+
+    expect(
+      result.positions.single.kind,
+      ExchangePositionOwnershipKind.recoverableOrphan,
+    );
+    expect(result.positions.single.recoverable, isTrue);
+    expect(result.blocksNewEntries, isTrue);
   });
 }

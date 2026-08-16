@@ -16,6 +16,7 @@ import '../../trading_journal/domain/trading_journal_models.dart';
 import '../data/bitunix_local_live_api_client.dart';
 import '../data/bitunix_private_websocket_client.dart';
 import '../domain/auto_trade_models.dart';
+import '../domain/exchange_position_ownership.dart';
 import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_management_only_after_flat.dart';
 import '../domain/local_live_portfolio_admission.dart';
@@ -24,6 +25,7 @@ import '../domain/private_truth_models.dart';
 import '../domain/profit_lock_stop_policy.dart';
 import '../domain/remaining_target_protection_policy.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'exchange_position_recovery_transaction.dart';
 import 'local_live_canonical_decision.dart';
 import 'local_live_economic_ranking.dart';
 import 'local_live_orphan_recovery.dart';
@@ -48,6 +50,8 @@ const localLivePendingJournalClosuresKey =
     'quantara.local-live.pending-journal-closures.v1';
 const localLiveManagementOnlyAfterFlatKey =
     'quantara.local-live.management-only-after-flat.v1';
+const localLiveRecoveryCheckpointsKey =
+    'quantara.local-live.recovery-checkpoints.v1';
 
 @pragma('vm:entry-point')
 void quantaraLocalLiveStartCallback() {
@@ -75,6 +79,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   LocalLivePortfolioBudgetStatus? _portfolioBudget;
   int _exchangeOpenPositionCount = 0;
   List<String> _unmanagedSymbols = const [];
+  List<String> _recoverableOrphanSymbols = const [];
+  List<String> _externalUnmanagedSymbols = const [];
+  final Map<String, ExchangePositionRecoveryCheckpoint> _recoveryCheckpoints =
+      {};
+  final Set<String> _verifiedRecoverablePositionIds = {};
   String? _entryBlockReason;
   String? _sessionId;
   DateTime? _sessionStartedAt;
@@ -364,6 +373,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               _sessionStartEquity! * configuration.dailyLossLimitPercent / 100,
         );
       }
+      _verifiedRecoverablePositionIds.clear();
       await _recoverVerifiedQuantaraOrphans(account, openExchangePositions);
       final sessionId = _sessionId;
       final sessionStartedAt = _sessionStartedAt;
@@ -375,25 +385,39 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               ownedPositionIds: Set.unmodifiable(_sessionPositionIds),
             );
       await _reconcilePendingJournalClosures(account.authoritativePnl);
-      final managedPositionIds = _managed
-          .map((position) => position.positionId)
-          .where((positionId) => positionId.isNotEmpty)
-          .toSet();
-      final unmanagedPositions = openExchangePositions
+      final ownership = ExchangePositionOwnershipClassifier.classify(
+        account: account,
+        managedPositions: _managed,
+        verifiedQuantaraRecoveryPositionIds: _verifiedRecoverablePositionIds,
+      );
+      final recoverable = ownership.positions
           .where(
-            (position) =>
-                !managedPositionIds.contains(position.positionId.trim()),
+            (item) =>
+                item.kind == ExchangePositionOwnershipKind.recoverableOrphan,
           )
           .toList(growable: false);
+      final external = ownership.positions
+          .where(
+            (item) =>
+                item.kind == ExchangePositionOwnershipKind.externalUnmanaged,
+          )
+          .toList(growable: false);
+      List<String> symbolsOf(
+        Iterable<ExchangePositionOwnershipAssessment> assessments,
+      ) =>
+          (assessments
+              .map((item) => item.position.symbol.trim().toUpperCase())
+              .where((item) => item.isNotEmpty)
+              .toSet()
+              .toList(growable: false)
+            ..sort());
+      _recoverableOrphanSymbols = List.unmodifiable(symbolsOf(recoverable));
+      _externalUnmanagedSymbols = List.unmodifiable(symbolsOf(external));
       _unmanagedSymbols = List.unmodifiable(
-        unmanagedPositions
-            .map((position) => position.symbol.trim().toUpperCase())
-            .where((symbol) => symbol.isNotEmpty)
-            .toSet()
-            .toList(growable: false)
-          ..sort(),
+        ({..._recoverableOrphanSymbols, ..._externalUnmanagedSymbols}.toList()
+          ..sort()),
       );
-      final hasUnmanagedExchangeExposure = unmanagedPositions.isNotEmpty;
+      final hasUnmanagedExchangeExposure = ownership.blocksNewEntries;
       final managedHistoryVerified = _managed.every((managed) {
         final positionPnl = account.authoritativePnl.forPositionId(
           managed.positionId,
@@ -1202,10 +1226,16 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     final credentials = _credentials;
     if (guard == null || exchange == null || credentials == null) return;
 
+    final openIds = openPositions
+        .map((item) => item.positionId.trim())
+        .where((item) => item.isNotEmpty)
+        .toSet();
+    await _resumeDurableRecoveryCheckpoints(openIds);
     final ownedIds = _managed
         .map((item) => item.positionId.trim())
         .where((item) => item.isNotEmpty)
         .toSet();
+
     for (final position in openPositions) {
       final positionId = position.positionId.trim();
       if (positionId.isEmpty || ownedIds.contains(positionId)) continue;
@@ -1249,50 +1279,182 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           );
           continue;
         }
-        final journalRecovered = await _journalObserver.recordRecoveredPosition(
-          managed: managed,
-          account: account,
+
+        _verifiedRecoverablePositionIds.add(positionId);
+        var checkpoint = _recoveryCheckpoints[positionId];
+        if (checkpoint == null ||
+            checkpoint.symbol != managed.symbol.trim().toUpperCase()) {
+          checkpoint = ExchangePositionRecoveryCheckpoint(
+            positionId: positionId,
+            symbol: managed.symbol.trim().toUpperCase(),
+            stage: ExchangePositionRecoveryStage.verified,
+            updatedAtUtc: DateTime.now().toUtc(),
+            managedPlan: Map.unmodifiable(managed.toJson()),
+            reason: 'Current exchange truth proves Quantara ownership.',
+          );
+          await _setRecoveryCheckpoint(positionId, checkpoint);
+        }
+
+        final result = await ExchangePositionRecoveryTransaction.resume(
+          checkpoint: checkpoint,
+          clock: () => DateTime.now().toUtc(),
+          commitJournal: () => _journalObserver.recordRecoveredPosition(
+            managed: managed,
+            account: account,
+          ),
+          adoptRisk: () => guard.adoptVerifiedOpenPosition(
+            managed: managed,
+            confirmedStop: managed.originalStopLoss,
+            now: DateTime.now().toUtc(),
+          ),
+          commitManaged: () async {
+            if (!_managed.any((item) => item.positionId == positionId)) {
+              _managed.add(managed);
+            }
+            ownedIds.add(positionId);
+            _sessionPositionIds.add(positionId);
+            _executedSetupIds.add(managed.setupId);
+            await _persistState();
+            await _persistSessionMetadata();
+          },
+          persistCheckpoint: (value) =>
+              _setRecoveryCheckpoint(positionId, value),
         );
-        if (!journalRecovered) {
+        if (result.completed) {
           _auditEvent(
-            'orphan_recovery_deferred',
-            'Verified ownership was found, but the durable journal recovery did not commit.',
+            'orphan_recovery_completed',
+            'A fully protected Quantara position was recovered from verified exchange truth after reinstall.',
             symbol: position.symbol,
           );
-          continue;
+        } else {
+          _entriesEnabled = false;
+          _entryBlockReason = 'orphanRecoveryPending';
+          _auditEvent(
+            'orphan_recovery_deferred',
+            'Verified Quantara recovery is durable at ${result.checkpoint?.stage.name ?? 'verified'}; ${result.reason}.',
+            symbol: position.symbol,
+          );
         }
-        await guard.adoptVerifiedOpenPosition(
-          managed: managed,
-          confirmedStop: managed.originalStopLoss,
-          now: DateTime.now().toUtc(),
-        );
-        if (_managed.any((item) => item.positionId == positionId)) continue;
-        _managed.add(managed);
-        ownedIds.add(positionId);
-        _sessionPositionIds.add(positionId);
-        _executedSetupIds.add(managed.setupId);
-        await _persistState();
-        await _persistSessionMetadata();
-        _auditEvent(
-          'orphan_recovery_completed',
-          'A fully protected Quantara position was recovered from verified exchange truth after reinstall.',
-          symbol: position.symbol,
-        );
       } on LocalLiveTradeSafeException catch (error) {
+        _entriesEnabled = false;
+        _entryBlockReason = 'orphanRecoveryPending';
         _auditEvent(
           'orphan_recovery_blocked',
           error.message,
           symbol: position.symbol,
         );
       } on FormatException catch (error) {
+        _entriesEnabled = false;
+        _entryBlockReason = 'orphanRecoveryPending';
         _auditEvent(
           'orphan_recovery_blocked',
           error.message.toString(),
           symbol: position.symbol,
         );
+      } on Object catch (error) {
+        _entriesEnabled = false;
+        _entryBlockReason = 'orphanRecoveryPending';
+        _auditEvent(
+          'orphan_recovery_deferred',
+          'Durable recovery will retry safely (${_safeError(error)}).',
+          symbol: position.symbol,
+        );
       }
     }
   }
+
+  Future<void> _resumeDurableRecoveryCheckpoints(Set<String> openIds) async {
+    for (final entry
+        in List<MapEntry<String, ExchangePositionRecoveryCheckpoint>>.of(
+          _recoveryCheckpoints.entries,
+        )) {
+      final positionId = entry.key;
+      final checkpoint = entry.value;
+      if (checkpoint.stage == ExchangePositionRecoveryStage.riskAdopted) {
+        try {
+          final managed = LocalLiveManagedPosition.fromJson(
+            checkpoint.managedPlan,
+          );
+          if (managed.positionId.trim() != positionId ||
+              managed.symbol.trim().toUpperCase() != checkpoint.symbol) {
+            throw const FormatException(
+              'Recovery checkpoint managed plan does not match exchange identity.',
+            );
+          }
+          if (!_managed.any((item) => item.positionId == positionId)) {
+            _managed.add(managed);
+          }
+          _sessionPositionIds.add(positionId);
+          _executedSetupIds.add(managed.setupId);
+          await _persistState();
+          await _persistSessionMetadata();
+          await _setRecoveryCheckpoint(positionId, null);
+          _auditEvent(
+            'orphan_recovery_resumed',
+            'Risk adoption was already durable; managed state was resumed after restart.',
+            symbol: checkpoint.symbol,
+          );
+        } on Object catch (error) {
+          _entriesEnabled = false;
+          _entryBlockReason = 'orphanRecoveryPending';
+          _auditEvent(
+            'orphan_recovery_deferred',
+            'Risk-adopted recovery checkpoint could not finalize (${_safeError(error)}).',
+            symbol: checkpoint.symbol,
+          );
+        }
+        continue;
+      }
+
+      if (openIds.contains(positionId)) continue;
+      if (checkpoint.stage == ExchangePositionRecoveryStage.journalCommitted) {
+        try {
+          final managed = LocalLiveManagedPosition.fromJson(
+            checkpoint.managedPlan,
+          );
+          if (!_pendingJournalClosures.any(
+            (item) => item.positionId == positionId,
+          )) {
+            _pendingJournalClosures.add(managed);
+          }
+          await _persistState();
+          await _setRecoveryCheckpoint(positionId, null);
+          _auditEvent(
+            'orphan_recovery_closed_before_risk',
+            'Recovered journal plan is queued for closed-position reconciliation; no open risk was adopted.',
+            symbol: checkpoint.symbol,
+          );
+        } on Object catch (error) {
+          _auditEvent(
+            'orphan_recovery_deferred',
+            'Closed recovery checkpoint remains pending (${_safeError(error)}).',
+            symbol: checkpoint.symbol,
+          );
+        }
+      } else {
+        await _setRecoveryCheckpoint(positionId, null);
+      }
+    }
+  }
+
+  Future<void> _setRecoveryCheckpoint(
+    String positionId,
+    ExchangePositionRecoveryCheckpoint? checkpoint,
+  ) async {
+    if (checkpoint == null) {
+      _recoveryCheckpoints.remove(positionId);
+    } else {
+      _recoveryCheckpoints[positionId] = checkpoint;
+    }
+    await _persistRecoveryCheckpoints();
+  }
+
+  Future<void> _persistRecoveryCheckpoints() => FlutterForegroundTask.saveData(
+    key: localLiveRecoveryCheckpointsKey,
+    value: jsonEncode(
+      _recoveryCheckpoints.values.map((item) => item.toJson()).toList(),
+    ),
+  );
 
   Future<void> _reconcilePendingJournalClosures(
     TradingPnlProjection pnlProjection,
@@ -2098,6 +2260,25 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _pendingJournalClosures.clear();
       }
     }
+    final recoveryRaw = await FlutterForegroundTask.getData<String>(
+      key: localLiveRecoveryCheckpointsKey,
+    );
+    if (recoveryRaw != null) {
+      try {
+        final decoded = jsonDecode(recoveryRaw);
+        if (decoded is List<Object?>) {
+          _recoveryCheckpoints.clear();
+          for (final raw in decoded.whereType<Map<Object?, Object?>>()) {
+            final checkpoint = ExchangePositionRecoveryCheckpoint.fromJson(
+              raw.map((key, value) => MapEntry(key.toString(), value)),
+            );
+            _recoveryCheckpoints[checkpoint.positionId] = checkpoint;
+          }
+        }
+      } on Object {
+        _recoveryCheckpoints.clear();
+      }
+    }
     final managedRaw = await FlutterForegroundTask.getData<String>(
       key: localLiveManagedPositionsKey,
     );
@@ -2294,6 +2475,15 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           .toList(growable: false),
       unmanagedPositionCount: _unmanagedSymbols.length,
       unmanagedSymbols: _unmanagedSymbols,
+      recoverableOrphanCount: _recoverableOrphanSymbols.length,
+      recoverableOrphanSymbols: _recoverableOrphanSymbols,
+      externalUnmanagedPositionCount: _externalUnmanagedSymbols.length,
+      externalUnmanagedSymbols: _externalUnmanagedSymbols,
+      recoveryPendingStages: {
+        for (final entry in _recoveryCheckpoints.entries)
+          if (_verifiedRecoverablePositionIds.contains(entry.key))
+            entry.value.symbol: entry.value.stage.name,
+      },
       entryBlockReason: _entryBlockReason,
       privateTruthHealth: privateProjection?.health.name,
       privateTruthLagReason: privateProjection?.lagReason.name,

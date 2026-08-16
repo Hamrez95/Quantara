@@ -20,7 +20,7 @@ enum ExchangePositionRecoveryBlock {
   protectionUnverified,
   protectionIncomplete,
   conflictingRegularOrders,
-  exchangeHistoryNotVerifiedClear,
+  quantaraOwnershipNotVerified,
 }
 
 final class ExchangePositionOwnershipAssessment {
@@ -91,14 +91,14 @@ abstract final class ExchangePositionOwnershipClassifier {
   static ExchangePositionOwnershipSnapshot classify({
     required AutoTradeAccountSnapshot account,
     required Iterable<LocalLiveManagedPosition> managedPositions,
-    Iterable<String> historyVerifiedClearPositionIds = const [],
+    Iterable<String> verifiedQuantaraRecoveryPositionIds = const [],
   }) {
     final managedById = <String, LocalLiveManagedPosition>{};
     for (final managed in managedPositions) {
       final id = managed.positionId.trim();
       if (id.isNotEmpty) managedById[id] = managed;
     }
-    final historyClear = historyVerifiedClearPositionIds
+    final verifiedRecovery = verifiedQuantaraRecoveryPositionIds
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toSet();
@@ -124,7 +124,7 @@ abstract final class ExchangePositionOwnershipClassifier {
         position: position,
         orders: account.protectionOrders,
         asOf: account.syncedAt,
-        expectedTakeProfitCount: 3,
+        expectedTakeProfitCount: verifiedRecovery.contains(id) ? 1 : 3,
       );
       if (managed != null &&
           managed.symbol.trim().toUpperCase() == symbol &&
@@ -178,10 +178,8 @@ abstract final class ExchangePositionOwnershipClassifier {
       )) {
         blocks.add(ExchangePositionRecoveryBlock.conflictingRegularOrders);
       }
-      if (!historyClear.contains(id)) {
-        blocks.add(
-          ExchangePositionRecoveryBlock.exchangeHistoryNotVerifiedClear,
-        );
+      if (!verifiedRecovery.contains(id)) {
+        blocks.add(ExchangePositionRecoveryBlock.quantaraOwnershipNotVerified);
       }
 
       assessments.add(

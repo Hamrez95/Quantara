@@ -5,12 +5,14 @@ void main() {
   final first = DateTime.utc(2026, 8, 16, 10);
 
   ExchangePositionRecoveryCheckpoint checkpoint({
-    ExchangePositionRecoveryStage stage = ExchangePositionRecoveryStage.verified,
+    ExchangePositionRecoveryStage stage =
+        ExchangePositionRecoveryStage.verified,
   }) => ExchangePositionRecoveryCheckpoint(
     positionId: 'p-1',
     symbol: 'XRPUSDT',
     stage: stage,
     updatedAtUtc: first,
+    managedPlan: const {'positionId': 'p-1', 'symbol': 'XRPUSDT'},
   );
 
   test('checkpoint serialization is stable and cannot regress', () {
@@ -18,7 +20,9 @@ void main() {
       ExchangePositionRecoveryStage.journalCommitted,
       atUtc: first.add(const Duration(seconds: 1)),
     );
-    final restored = ExchangePositionRecoveryCheckpoint.fromJson(value.toJson());
+    final restored = ExchangePositionRecoveryCheckpoint.fromJson(
+      value.toJson(),
+    );
 
     expect(restored.positionId, 'p-1');
     expect(restored.symbol, 'XRPUSDT');
@@ -32,27 +36,30 @@ void main() {
     );
   });
 
-  test('journal failure leaves verified checkpoint and skips later stores', () async {
-    var riskCalls = 0;
-    var managedCalls = 0;
-    final persisted = <ExchangePositionRecoveryCheckpoint?>[];
+  test(
+    'journal failure leaves verified checkpoint and skips later stores',
+    () async {
+      var riskCalls = 0;
+      var managedCalls = 0;
+      final persisted = <ExchangePositionRecoveryCheckpoint?>[];
 
-    final result = await ExchangePositionRecoveryTransaction.resume(
-      checkpoint: checkpoint(),
-      clock: () => first,
-      commitJournal: () async => false,
-      adoptRisk: () async => riskCalls++,
-      commitManaged: () async => managedCalls++,
-      persistCheckpoint: (value) async => persisted.add(value),
-    );
+      final result = await ExchangePositionRecoveryTransaction.resume(
+        checkpoint: checkpoint(),
+        clock: () => first,
+        commitJournal: () async => false,
+        adoptRisk: () async => riskCalls++,
+        commitManaged: () async => managedCalls++,
+        persistCheckpoint: (value) async => persisted.add(value),
+      );
 
-    expect(result.completed, isFalse);
-    expect(result.reason, 'journalCommitPending');
-    expect(result.checkpoint?.stage, ExchangePositionRecoveryStage.verified);
-    expect(riskCalls, 0);
-    expect(managedCalls, 0);
-    expect(persisted, isEmpty);
-  });
+      expect(result.completed, isFalse);
+      expect(result.reason, 'journalCommitPending');
+      expect(result.checkpoint?.stage, ExchangePositionRecoveryStage.verified);
+      expect(riskCalls, 0);
+      expect(managedCalls, 0);
+      expect(persisted, isEmpty);
+    },
+  );
 
   test('risk failure persists journal stage and retry skips journal', () async {
     var journalCalls = 0;
@@ -109,30 +116,33 @@ void main() {
     expect(persisted.last, isNull);
   });
 
-  test('risk-adopted retry commits only managed state then clears checkpoint', () async {
-    var journalCalls = 0;
-    var riskCalls = 0;
-    var managedCalls = 0;
-    ExchangePositionRecoveryCheckpoint? durable = checkpoint(
-      stage: ExchangePositionRecoveryStage.riskAdopted,
-    );
+  test(
+    'risk-adopted retry commits only managed state then clears checkpoint',
+    () async {
+      var journalCalls = 0;
+      var riskCalls = 0;
+      var managedCalls = 0;
+      ExchangePositionRecoveryCheckpoint? durable = checkpoint(
+        stage: ExchangePositionRecoveryStage.riskAdopted,
+      );
 
-    final result = await ExchangePositionRecoveryTransaction.resume(
-      checkpoint: durable!,
-      clock: () => first,
-      commitJournal: () async {
-        journalCalls++;
-        return true;
-      },
-      adoptRisk: () async => riskCalls++,
-      commitManaged: () async => managedCalls++,
-      persistCheckpoint: (value) async => durable = value,
-    );
+      final result = await ExchangePositionRecoveryTransaction.resume(
+        checkpoint: durable,
+        clock: () => first,
+        commitJournal: () async {
+          journalCalls++;
+          return true;
+        },
+        adoptRisk: () async => riskCalls++,
+        commitManaged: () async => managedCalls++,
+        persistCheckpoint: (value) async => durable = value,
+      );
 
-    expect(result.completed, isTrue);
-    expect(journalCalls, 0);
-    expect(riskCalls, 0);
-    expect(managedCalls, 1);
-    expect(durable, isNull);
-  });
+      expect(result.completed, isTrue);
+      expect(journalCalls, 0);
+      expect(riskCalls, 0);
+      expect(managedCalls, 1);
+      expect(durable, isNull);
+    },
+  );
 }

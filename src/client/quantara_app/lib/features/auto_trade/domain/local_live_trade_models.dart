@@ -435,6 +435,11 @@ final class LocalLiveTradeStatus {
     this.managedPositions = const [],
     this.unmanagedPositionCount = 0,
     this.unmanagedSymbols = const [],
+    this.recoverableOrphanCount = 0,
+    this.recoverableOrphanSymbols = const [],
+    this.externalUnmanagedPositionCount = 0,
+    this.externalUnmanagedSymbols = const [],
+    this.recoveryPendingStages = const {},
     this.entryBlockReason,
     this.privateTruthHealth,
     this.privateTruthLagReason,
@@ -465,6 +470,17 @@ final class LocalLiveTradeStatus {
   /// Exchange positions that consume slots but are not yet safely recovered.
   final int unmanagedPositionCount;
   final List<String> unmanagedSymbols;
+
+  /// Exchange positions proven to be Quantara-owned but not yet durably
+  /// committed across Journal, risk ledger and local managed state.
+  final int recoverableOrphanCount;
+  final List<String> recoverableOrphanSymbols;
+
+  /// Open positions whose Quantara ownership cannot be proven. They consume
+  /// slots and block entry, but are never auto-adopted.
+  final int externalUnmanagedPositionCount;
+  final List<String> externalUnmanagedSymbols;
+  final Map<String, String> recoveryPendingStages;
   final String? entryBlockReason;
   final String? privateTruthHealth;
   final String? privateTruthLagReason;
@@ -508,6 +524,11 @@ final class LocalLiveTradeStatus {
     'managedPositions': managedPositions.map((item) => item.toJson()).toList(),
     'unmanagedPositionCount': unmanagedPositionCount,
     'unmanagedSymbols': unmanagedSymbols,
+    'recoverableOrphanCount': recoverableOrphanCount,
+    'recoverableOrphanSymbols': recoverableOrphanSymbols,
+    'externalUnmanagedPositionCount': externalUnmanagedPositionCount,
+    'externalUnmanagedSymbols': externalUnmanagedSymbols,
+    'recoveryPendingStages': recoveryPendingStages,
     'entryBlockReason': entryBlockReason,
     'privateTruthHealth': privateTruthHealth,
     'privateTruthLagReason': privateTruthLagReason,
@@ -560,6 +581,24 @@ final class LocalLiveTradeStatus {
           .map((item) => item.toString())
           .where((item) => item.trim().isNotEmpty),
     ),
+    recoverableOrphanCount:
+        (json['recoverableOrphanCount'] as num?)?.toInt() ?? 0,
+    recoverableOrphanSymbols: List.unmodifiable(
+      (json['recoverableOrphanSymbols'] as List<Object?>? ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.trim().isNotEmpty),
+    ),
+    externalUnmanagedPositionCount:
+        (json['externalUnmanagedPositionCount'] as num?)?.toInt() ??
+        (((json['unmanagedPositionCount'] as num?)?.toInt() ?? 0) -
+                ((json['recoverableOrphanCount'] as num?)?.toInt() ?? 0))
+            .clamp(0, 1 << 31),
+    externalUnmanagedSymbols: List.unmodifiable(
+      (json['externalUnmanagedSymbols'] as List<Object?>? ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.trim().isNotEmpty),
+    ),
+    recoveryPendingStages: _stringStringMap(json['recoveryPendingStages']),
     entryBlockReason: json['entryBlockReason']?.toString(),
     privateTruthHealth: json['privateTruthHealth']?.toString(),
     privateTruthLagReason: json['privateTruthLagReason']?.toString(),
@@ -573,6 +612,13 @@ final class LocalLiveTradeStatus {
     portfolioBudget: _portfolioBudgetFromJson(json['portfolioBudget']),
     consecutiveFailures: (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
     entriesEnabled: json['entriesEnabled'] == true,
+  );
+}
+
+Map<String, String> _stringStringMap(Object? value) {
+  if (value is! Map<Object?, Object?>) return const {};
+  return Map.unmodifiable(
+    value.map((key, item) => MapEntry(key.toString(), item.toString())),
   );
 }
 

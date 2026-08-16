@@ -1,8 +1,4 @@
-enum ExchangePositionRecoveryStage {
-  verified,
-  journalCommitted,
-  riskAdopted,
-}
+enum ExchangePositionRecoveryStage { verified, journalCommitted, riskAdopted }
 
 final class ExchangePositionRecoveryCheckpoint {
   const ExchangePositionRecoveryCheckpoint({
@@ -61,9 +57,7 @@ final class ExchangePositionRecoveryCheckpoint {
     final managedPlan = managedPlanRaw is Map<String, Object?>
         ? Map<String, Object?>.of(managedPlanRaw)
         : managedPlanRaw is Map<Object?, Object?>
-        ? managedPlanRaw.map(
-            (key, value) => MapEntry(key.toString(), value),
-          )
+        ? managedPlanRaw.map((key, value) => MapEntry(key.toString(), value))
         : const <String, Object?>{};
     if (positionId.isEmpty ||
         symbol.isEmpty ||
