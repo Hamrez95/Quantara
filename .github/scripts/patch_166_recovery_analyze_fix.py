@@ -48,7 +48,7 @@ if 'adaptive one-target Quantara recovery remains recoverable' not in text:
     expect(result.blocksNewEntries, isTrue);
   });
 '''
-    final closing = text.rfind('\n}')
+    closing = text.rfind('\n}')
     if closing < 0:
         raise SystemExit('classifier test closing brace missing')
     text = text[:closing] + insertion + text[closing:]
