@@ -213,7 +213,7 @@ abstract final class ExecutionQualityMath {
         filledQuantity > plannedQuantity + 1e-9) {
       throw const FormatException('Execution fill quantities are invalid.');
     }
-    return (filledQuantity / plannedQuantity).clamp(0.0, 1.0);
+    return (filledQuantity / plannedQuantity).clamp(0.0, 1.0).toDouble();
   }
 }
 
