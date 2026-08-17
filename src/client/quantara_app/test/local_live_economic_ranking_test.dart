@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/application/local_live_economic_ranking.dart';
+import 'package:quantara_app/features/auto_trade/domain/execution_quality_models.dart';
 import 'package:quantara_app/features/market_analysis/domain/market_regime_models.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
@@ -45,6 +46,22 @@ void main() {
     marketRegime: MarketRegime.directionalTrend,
     indicatorSnapshot: const {'relativeVolume20': 1.5},
     setupQualityScore: quality,
+  );
+
+  EstimatedExecutionCosts estimate({
+    required double totalCost,
+    DateTime? asOfUtc,
+    ExecutionEvidenceQuality quality = ExecutionEvidenceQuality.observed,
+    String version = 'execution-quality/test',
+  }) => EstimatedExecutionCosts(
+    modelVersion: version,
+    asOfUtc: asOfUtc ?? now,
+    evidenceQuality: quality,
+    fees: totalCost,
+    funding: 0,
+    spread: 0,
+    slippage: 0,
+    latency: 0,
   );
 
   test(
@@ -127,6 +144,98 @@ void main() {
     expect(ranked.first.idea.setupId, 'diverse');
     expect(ranked.last.idea.stopLoss, crowded.stopLoss);
     expect(ranked.last.idea.maximumLoss, crowded.maximumLoss);
+  });
+
+  test('fresh observed execution cost evidence affects economic ranking', () {
+    final expensive = idea(
+      id: 'expensive',
+      symbol: 'BTCUSDT',
+      timeframe: '1h',
+      quality: 85,
+      costs: 0.1,
+    );
+    final cheap = idea(
+      id: 'cheap',
+      symbol: 'ETHUSDT',
+      timeframe: '1h',
+      quality: 85,
+      costs: 0.1,
+    );
+
+    final ranked = LocalLiveEconomicRanking.rank(
+      ideas: [expensive, cheap],
+      lastPrices: const {'BTCUSDT': 100, 'ETHUSDT': 100},
+      evaluatedAtUtc: now,
+      executionCostsBySetupId: {
+        'expensive': estimate(totalCost: 9),
+        'cheap': estimate(totalCost: 0.5),
+      },
+    );
+
+    expect(ranked.first.idea.setupId, 'cheap');
+    final expensiveRanked = ranked.firstWhere(
+      (item) => item.idea.setupId == 'expensive',
+    );
+    expect(expensiveRanked.ranked.utility.executionCostR, closeTo(0.9, 1e-9));
+    expect(
+      expensiveRanked.ranked.candidate.evidenceTags,
+      contains('cost:execution-quality:execution-quality/test'),
+    );
+  });
+
+  test('stale execution estimate falls back to TradeIdea aggregate cost', () {
+    final fallback = idea(
+      id: 'fallback',
+      symbol: 'BTCUSDT',
+      timeframe: '1h',
+      costs: 0.5,
+    );
+
+    final ranked = LocalLiveEconomicRanking.rank(
+      ideas: [fallback],
+      lastPrices: const {'BTCUSDT': 100},
+      evaluatedAtUtc: now,
+      maximumExecutionEstimateAge: const Duration(seconds: 30),
+      executionCostsBySetupId: {
+        'fallback': estimate(
+          totalCost: 9,
+          asOfUtc: now.subtract(const Duration(seconds: 31)),
+        ),
+      },
+    );
+
+    expect(ranked.single.ranked.utility.executionCostR, closeTo(0.05, 1e-9));
+    expect(
+      ranked.single.ranked.candidate.evidenceTags,
+      contains('cost:execution-quality-stale-fallback'),
+    );
+  });
+
+  test('insufficient execution evidence cannot replace conservative fallback', () {
+    final fallback = idea(
+      id: 'insufficient',
+      symbol: 'BTCUSDT',
+      timeframe: '1h',
+      costs: 0.5,
+    );
+
+    final ranked = LocalLiveEconomicRanking.rank(
+      ideas: [fallback],
+      lastPrices: const {'BTCUSDT': 100},
+      evaluatedAtUtc: now,
+      executionCostsBySetupId: {
+        'insufficient': estimate(
+          totalCost: 9,
+          quality: ExecutionEvidenceQuality.insufficient,
+        ),
+      },
+    );
+
+    expect(ranked.single.ranked.utility.executionCostR, closeTo(0.05, 1e-9));
+    expect(
+      ranked.single.ranked.candidate.evidenceTags,
+      contains('cost:execution-quality-insufficient-fallback'),
+    );
   });
 
   test('ranker and adapter contain no live order or transfer authority', () {
