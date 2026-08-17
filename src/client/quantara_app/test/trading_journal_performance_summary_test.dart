@@ -4,133 +4,142 @@ import 'package:quantara_app/features/trading_journal/domain/trading_journal_per
 import 'package:quantara_app/features/trading_journal/domain/trading_journal_projection.dart';
 
 void main() {
-  test('aggregates cost-aware performance and capital-time in one bounded pass', () {
-    final base = DateTime.utc(2026, 8, 17, 12);
-    final summary = TradingJournalPerformanceSummary.calculate([
-      _closed(
-        id: 'win',
-        strategy: 'trend',
-        decidedAt: base,
-        grossPnl: 12,
-        fees: 1,
-        funding: -0.5,
-        netPnl: 10.5,
-        realizedR: 1.05,
-        holdingDuration: const Duration(hours: 2),
-        riskBudget: 10,
-        expectedMargin: 50,
-      ),
-      _closed(
-        id: 'loss',
-        strategy: 'trend',
-        decidedAt: base.add(const Duration(hours: 3)),
-        grossPnl: -4,
-        fees: 1,
-        funding: 0,
-        netPnl: -5,
-        realizedR: -0.5,
-        holdingDuration: const Duration(hours: 1),
-        riskBudget: 10,
-        expectedMargin: 50,
-      ),
-    ]);
+  test(
+    'aggregates cost-aware performance and capital-time in one bounded pass',
+    () {
+      final base = DateTime.utc(2026, 8, 17, 12);
+      final summary = TradingJournalPerformanceSummary.calculate([
+        _closed(
+          id: 'win',
+          strategy: 'trend',
+          decidedAt: base,
+          grossPnl: 12,
+          fees: 1,
+          funding: -0.5,
+          netPnl: 10.5,
+          realizedR: 1.05,
+          holdingDuration: const Duration(hours: 2),
+          riskBudget: 10,
+          expectedMargin: 50,
+        ),
+        _closed(
+          id: 'loss',
+          strategy: 'trend',
+          decidedAt: base.add(const Duration(hours: 3)),
+          grossPnl: -4,
+          fees: 1,
+          funding: 0,
+          netPnl: -5,
+          realizedR: -0.5,
+          holdingDuration: const Duration(hours: 1),
+          riskBudget: 10,
+          expectedMargin: 50,
+        ),
+      ]);
 
-    expect(summary.closedTrades, 2);
-    expect(summary.pricedTrades, 2);
-    expect(summary.economicsPendingTrades, 0);
-    expect(summary.grossPnl, closeTo(8, 1e-9));
-    expect(summary.fees, closeTo(2, 1e-9));
-    expect(summary.funding, closeTo(-0.5, 1e-9));
-    expect(summary.netPnl, closeTo(5.5, 1e-9));
-    expect(summary.averageNetPnl, closeTo(2.75, 1e-9));
-    expect(summary.averageR, closeTo(0.275, 1e-9));
-    expect(summary.averageHoldingDuration, const Duration(minutes: 90));
-    expect(summary.riskHours, closeTo(30, 1e-9));
-    expect(summary.capitalHours, closeTo(150, 1e-9));
-    expect(summary.netPnlPerRiskHour, closeTo(5.5 / 30, 1e-9));
-    expect(summary.netPnlPerCapitalHour, closeTo(5.5 / 150, 1e-9));
-    expect(summary.byStrategy['trend']?.trades, 2);
-    expect(summary.byStrategy['trend']?.netPnl, closeTo(5.5, 1e-9));
-    expect(summary.byStrategy['trend']?.averageR, closeTo(0.275, 1e-9));
-  });
+      expect(summary.closedTrades, 2);
+      expect(summary.pricedTrades, 2);
+      expect(summary.economicsPendingTrades, 0);
+      expect(summary.grossPnl, closeTo(8, 1e-9));
+      expect(summary.fees, closeTo(2, 1e-9));
+      expect(summary.funding, closeTo(-0.5, 1e-9));
+      expect(summary.netPnl, closeTo(5.5, 1e-9));
+      expect(summary.averageNetPnl, closeTo(2.75, 1e-9));
+      expect(summary.averageR, closeTo(0.275, 1e-9));
+      expect(summary.averageHoldingDuration, const Duration(minutes: 90));
+      expect(summary.riskHours, closeTo(30, 1e-9));
+      expect(summary.capitalHours, closeTo(150, 1e-9));
+      expect(summary.netPnlPerRiskHour, closeTo(5.5 / 30, 1e-9));
+      expect(summary.netPnlPerCapitalHour, closeTo(5.5 / 150, 1e-9));
+      expect(summary.byStrategy['trend']?.trades, 2);
+      expect(summary.byStrategy['trend']?.netPnl, closeTo(5.5, 1e-9));
+      expect(summary.byStrategy['trend']?.averageR, closeTo(0.275, 1e-9));
+    },
+  );
 
-  test('pending economics are counted but never treated as zero-PnL trades', () {
-    final base = DateTime.utc(2026, 8, 17, 12);
-    final summary = TradingJournalPerformanceSummary.calculate([
-      _closed(
-        id: 'priced',
-        strategy: 'range',
-        decidedAt: base,
-        grossPnl: 4,
-        fees: 1,
-        funding: 0,
-        netPnl: 3,
-        realizedR: 0.3,
-        holdingDuration: const Duration(hours: 1),
-        riskBudget: 10,
-        expectedMargin: 20,
-      ),
-      TradingJournalProjection(
-        journalTradeId: 'pending',
-        symbol: 'ETHUSDT',
-        timeframe: '15m',
-        strategy: 'range',
-        direction: TradingJournalDirection.long,
-        source: TradingJournalSource.localLive,
-        state: TradingJournalTradeState.closed,
-        timeline: const [],
-        decidedAt: base.add(const Duration(hours: 2)),
-        integrity: TradingJournalIntegrity.verified,
-      ),
-    ]);
+  test(
+    'pending economics are counted but never treated as zero-PnL trades',
+    () {
+      final base = DateTime.utc(2026, 8, 17, 12);
+      final summary = TradingJournalPerformanceSummary.calculate([
+        _closed(
+          id: 'priced',
+          strategy: 'range',
+          decidedAt: base,
+          grossPnl: 4,
+          fees: 1,
+          funding: 0,
+          netPnl: 3,
+          realizedR: 0.3,
+          holdingDuration: const Duration(hours: 1),
+          riskBudget: 10,
+          expectedMargin: 20,
+        ),
+        TradingJournalProjection(
+          journalTradeId: 'pending',
+          symbol: 'ETHUSDT',
+          timeframe: '15m',
+          strategy: 'range',
+          direction: TradingJournalDirection.long,
+          source: TradingJournalSource.localLive,
+          state: TradingJournalTradeState.closed,
+          timeline: const [],
+          decidedAt: base.add(const Duration(hours: 2)),
+          integrity: TradingJournalIntegrity.verified,
+        ),
+      ]);
 
-    expect(summary.closedTrades, 2);
-    expect(summary.pricedTrades, 1);
-    expect(summary.economicsPendingTrades, 1);
-    expect(summary.netPnl, 3);
-    expect(summary.averageNetPnl, 3);
-    expect(summary.byStrategy['range']?.trades, 1);
-  });
+      expect(summary.closedTrades, 2);
+      expect(summary.pricedTrades, 1);
+      expect(summary.economicsPendingTrades, 1);
+      expect(summary.netPnl, 3);
+      expect(summary.averageNetPnl, 3);
+      expect(summary.byStrategy['range']?.trades, 1);
+    },
+  );
 
-  test('analytics window fails closed when the bounded trade budget is exceeded', () {
-    final base = DateTime.utc(2026, 8, 17, 12);
-    final trades = [
-      _closed(
-        id: 'one',
-        strategy: 'trend',
-        decidedAt: base,
-        grossPnl: 1,
-        fees: 0,
-        funding: 0,
-        netPnl: 1,
-        realizedR: 0.1,
-        holdingDuration: const Duration(minutes: 30),
-        riskBudget: 10,
-        expectedMargin: 20,
-      ),
-      _closed(
-        id: 'two',
-        strategy: 'trend',
-        decidedAt: base.add(const Duration(hours: 1)),
-        grossPnl: 1,
-        fees: 0,
-        funding: 0,
-        netPnl: 1,
-        realizedR: 0.1,
-        holdingDuration: const Duration(minutes: 30),
-        riskBudget: 10,
-        expectedMargin: 20,
-      ),
-    ];
+  test(
+    'analytics window fails closed when the bounded trade budget is exceeded',
+    () {
+      final base = DateTime.utc(2026, 8, 17, 12);
+      final trades = [
+        _closed(
+          id: 'one',
+          strategy: 'trend',
+          decidedAt: base,
+          grossPnl: 1,
+          fees: 0,
+          funding: 0,
+          netPnl: 1,
+          realizedR: 0.1,
+          holdingDuration: const Duration(minutes: 30),
+          riskBudget: 10,
+          expectedMargin: 20,
+        ),
+        _closed(
+          id: 'two',
+          strategy: 'trend',
+          decidedAt: base.add(const Duration(hours: 1)),
+          grossPnl: 1,
+          fees: 0,
+          funding: 0,
+          netPnl: 1,
+          realizedR: 0.1,
+          holdingDuration: const Duration(minutes: 30),
+          riskBudget: 10,
+          expectedMargin: 20,
+        ),
+      ];
 
-    expect(
-      () => TradingJournalPerformanceSummary.calculate(
-        trades,
-        maximumClosedTrades: 1,
-      ),
-      throwsStateError,
-    );
-  });
+      expect(
+        () => TradingJournalPerformanceSummary.calculate(
+          trades,
+          maximumClosedTrades: 1,
+        ),
+        throwsStateError,
+      );
+    },
+  );
 }
 
 TradingJournalProjection _closed({
