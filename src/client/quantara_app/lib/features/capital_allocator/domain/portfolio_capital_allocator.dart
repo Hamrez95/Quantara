@@ -191,12 +191,15 @@ final class PortfolioCapitalAllocator {
       ..sort((left, right) {
         final scoreOrder = right.utility.score.compareTo(left.utility.score);
         if (scoreOrder != 0) return scoreOrder;
-        final setupOrder = left.utility.setupId.compareTo(right.utility.setupId);
+        final setupOrder = left.utility.setupId.compareTo(
+          right.utility.setupId,
+        );
         if (setupOrder != 0) return setupOrder;
         return left.id.compareTo(right.id);
       });
 
-    final riskHeldInReserve = budget.availableRisk * configuration.riskReserveFraction;
+    final riskHeldInReserve =
+        budget.availableRisk * configuration.riskReserveFraction;
     final marginHeldInReserve =
         budget.availableMargin * configuration.marginReserveFraction;
     final allocatableRisk = budget.availableRisk - riskHeldInReserve;
@@ -219,7 +222,8 @@ final class PortfolioCapitalAllocator {
         reason = PortfolioAllocationReason.duplicateSymbol;
       } else if (selectionCount >= configuration.maximumSelections) {
         reason = PortfolioAllocationReason.slotCeiling;
-      } else if (riskConsumed + proposal.requestedRisk > allocatableRisk + 1e-9) {
+      } else if (riskConsumed + proposal.requestedRisk >
+          allocatableRisk + 1e-9) {
         reason = PortfolioAllocationReason.riskReserveProtected;
       } else if (marginConsumed + proposal.requestedMargin >
           allocatableMargin + 1e-9) {
@@ -257,12 +261,12 @@ final class PortfolioCapitalAllocator {
       marginConsumed: marginConsumed,
       riskHeldInReserve: riskHeldInReserve,
       marginHeldInReserve: marginHeldInReserve,
-      riskRemainingOutsideReserve:
-          (allocatableRisk - riskConsumed).clamp(0.0, double.infinity).toDouble(),
-      marginRemainingOutsideReserve:
-          (allocatableMargin - marginConsumed)
-              .clamp(0.0, double.infinity)
-              .toDouble(),
+      riskRemainingOutsideReserve: (allocatableRisk - riskConsumed)
+          .clamp(0.0, double.infinity)
+          .toDouble(),
+      marginRemainingOutsideReserve: (allocatableMargin - marginConsumed)
+          .clamp(0.0, double.infinity)
+          .toDouble(),
     );
   }
 }
