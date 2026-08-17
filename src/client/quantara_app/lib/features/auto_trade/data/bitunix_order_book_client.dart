@@ -34,9 +34,13 @@ final class BitunixOrderBookClient {
     if (decoded is! Map<Object?, Object?>) {
       throw const FormatException('Bitunix order book response is invalid.');
     }
-    final payload = decoded.map((key, value) => MapEntry(key.toString(), value));
+    final payload = decoded.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
     final code = payload['code'];
-    final parsedCode = code is num ? code.toInt() : int.tryParse(code.toString());
+    final parsedCode = code is num
+        ? code.toInt()
+        : int.tryParse(code.toString());
     if (parsedCode != 0) {
       throw const FormatException('Bitunix order book request was rejected.');
     }

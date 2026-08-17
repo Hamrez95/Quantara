@@ -31,14 +31,12 @@ void main() {
     );
     final exchangeFailure = BitunixOrderBookClient(
       client: MockClient(
-        (request) async => http.Response('{"code":10001,"msg":"rejected"}', 200),
+        (request) async =>
+            http.Response('{"code":10001,"msg":"rejected"}', 200),
       ),
     );
 
-    expect(
-      () => httpFailure.fetchTopOfBook('BTCUSDT'),
-      throwsFormatException,
-    );
+    expect(() => httpFailure.fetchTopOfBook('BTCUSDT'), throwsFormatException);
     expect(
       () => exchangeFailure.fetchTopOfBook('BTCUSDT'),
       throwsFormatException,
@@ -58,14 +56,8 @@ void main() {
       ),
     );
 
-    expect(
-      () => invalidJson.fetchTopOfBook('BTCUSDT'),
-      throwsFormatException,
-    );
-    expect(
-      () => invalidDepth.fetchTopOfBook('BTCUSDT'),
-      throwsFormatException,
-    );
+    expect(() => invalidJson.fetchTopOfBook('BTCUSDT'), throwsFormatException);
+    expect(() => invalidDepth.fetchTopOfBook('BTCUSDT'), throwsFormatException);
   });
 
   test('empty symbol fails before making a request', () async {
