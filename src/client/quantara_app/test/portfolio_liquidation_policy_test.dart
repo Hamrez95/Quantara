@@ -102,6 +102,73 @@ void main() {
     expect(decision.liquidationCushionFraction, closeTo(0.05, 1e-9));
   });
 
+  test('invalid policy configuration fails closed at runtime', () {
+    const invalidAge = PortfolioLiquidationPolicy(
+      maximumEvidenceAge: Duration.zero,
+    );
+    const invalidCushion = PortfolioLiquidationPolicy(
+      minimumLiquidationCushionFraction: double.nan,
+    );
+    const invalidHeadroom = PortfolioLiquidationPolicy(
+      minimumPostEntryMarginHeadroomFraction: double.nan,
+    );
+
+    for (final policy in [invalidAge, invalidCushion, invalidHeadroom]) {
+      final decision = policy.evaluate(
+        candidate: candidate(),
+        account: account(),
+        baseDecision: allowed(),
+        evidence: evidence(90),
+        nowUtc: now,
+      );
+      expect(decision.allowed, isFalse);
+      expect(decision.reason, PortfolioLiquidationReason.invalidPolicy);
+    }
+  });
+
+  test('nonfinite candidate geometry fails closed before comparison', () {
+    const policy = PortfolioLiquidationPolicy();
+    final decision = policy.evaluate(
+      candidate: candidate(entry: double.nan),
+      account: account(),
+      baseDecision: allowed(),
+      evidence: evidence(90),
+      nowUtc: now,
+    );
+
+    expect(decision.allowed, isFalse);
+    expect(decision.reason, PortfolioLiquidationReason.invalidCandidateInputs);
+  });
+
+  test('nonfinite account or required-margin inputs fail closed', () {
+    const policy = PortfolioLiquidationPolicy();
+    final invalidAccount = policy.evaluate(
+      candidate: candidate(),
+      account: account(freeMargin: double.nan),
+      baseDecision: allowed(),
+      evidence: evidence(90),
+      nowUtc: now,
+    );
+    final invalidMargin = policy.evaluate(
+      candidate: candidate(),
+      account: account(),
+      baseDecision: allowed(requiredMargin: double.nan),
+      evidence: evidence(90),
+      nowUtc: now,
+    );
+
+    expect(invalidAccount.allowed, isFalse);
+    expect(
+      invalidAccount.reason,
+      PortfolioLiquidationReason.invalidAccountInputs,
+    );
+    expect(invalidMargin.allowed, isFalse);
+    expect(
+      invalidMargin.reason,
+      PortfolioLiquidationReason.invalidAccountInputs,
+    );
+  });
+
   test('liquidation price on the wrong side of stop fails closed', () {
     const policy = PortfolioLiquidationPolicy();
     final decision = policy.evaluate(
@@ -133,6 +200,20 @@ void main() {
 
     expect(decision.allowed, isFalse);
     expect(decision.reason, PortfolioLiquidationReason.staleEvidence);
+  });
+
+  test('future-dated liquidation evidence fails closed', () {
+    const policy = PortfolioLiquidationPolicy();
+    final decision = policy.evaluate(
+      candidate: candidate(),
+      account: account(),
+      baseDecision: allowed(),
+      evidence: evidence(90, asOf: now.add(const Duration(milliseconds: 1))),
+      nowUtc: now,
+    );
+
+    expect(decision.allowed, isFalse);
+    expect(decision.reason, PortfolioLiquidationReason.invalidEvidence);
   });
 
   test('small liquidation cushion blocks a new entry', () {
