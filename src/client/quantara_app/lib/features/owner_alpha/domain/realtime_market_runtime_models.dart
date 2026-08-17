@@ -96,9 +96,6 @@ final class RealtimeMarketHealthSnapshot {
     this.bootstrapFaults = 0,
     required this.malformedPayloadFaults,
     required this.backpressureFaults,
-    this.pendingEventCount = 0,
-    this.maximumObservedPendingEventCount = 0,
-    this.maximumObservedPendingPerStream = 0,
     required this.p95TransportLag,
     required this.p95PipelineLatency,
     required this.lastEventAtUtc,
@@ -124,9 +121,6 @@ final class RealtimeMarketHealthSnapshot {
   final int bootstrapFaults;
   final int malformedPayloadFaults;
   final int backpressureFaults;
-  final int pendingEventCount;
-  final int maximumObservedPendingEventCount;
-  final int maximumObservedPendingPerStream;
   final Duration p95TransportLag;
   final Duration p95PipelineLatency;
   final DateTime? lastEventAtUtc;
