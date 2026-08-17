@@ -82,25 +82,28 @@ void main() {
     expect(next.state, AdaptiveManagementState.protected);
   });
 
-  test('terminal state cannot reactivate and persisted revision stays monotonic', () {
-    var snapshot = AdaptiveManagementSnapshot.initial();
-    snapshot = snapshot.apply(event('1', AdaptiveManagementEventKind.arm));
-    snapshot = snapshot.apply(
-      event('2', AdaptiveManagementEventKind.entryConfirmed),
-    );
-    snapshot = snapshot.apply(
-      event('3', AdaptiveManagementEventKind.exitConfirmed),
-    );
-    final revision = snapshot.revision;
+  test(
+    'terminal state cannot reactivate and persisted revision stays monotonic',
+    () {
+      var snapshot = AdaptiveManagementSnapshot.initial();
+      snapshot = snapshot.apply(event('1', AdaptiveManagementEventKind.arm));
+      snapshot = snapshot.apply(
+        event('2', AdaptiveManagementEventKind.entryConfirmed),
+      );
+      snapshot = snapshot.apply(
+        event('3', AdaptiveManagementEventKind.exitConfirmed),
+      );
+      final revision = snapshot.revision;
 
-    final afterTerminal = snapshot.apply(
-      event('4', AdaptiveManagementEventKind.managementActivated),
-    );
+      final afterTerminal = snapshot.apply(
+        event('4', AdaptiveManagementEventKind.managementActivated),
+      );
 
-    expect(afterTerminal.state, AdaptiveManagementState.exited);
-    expect(afterTerminal.revision, revision + 1);
-    expect(afterTerminal.processedEventIds, contains('4'));
-  });
+      expect(afterTerminal.state, AdaptiveManagementState.exited);
+      expect(afterTerminal.revision, revision + 1);
+      expect(afterTerminal.processedEventIds, contains('4'));
+    },
+  );
 
   test('malformed persisted event history fails closed', () {
     expect(
