@@ -142,9 +142,9 @@ void main() {
 
     expect(decision.selected.single.proposalId, 'safe-lower-score');
     expect(
-      decision.items.firstWhere(
-        (item) => item.proposalId == 'unsafe-high-score',
-      ).reason,
+      decision.items
+          .firstWhere((item) => item.proposalId == 'unsafe-high-score')
+          .reason,
       PortfolioAllocationReason.hardRiskRejected,
     );
   });
@@ -230,7 +230,8 @@ void main() {
     expect(decision.selected, isEmpty);
     expect(
       decision.items.every(
-        (item) => item.reason == PortfolioAllocationReason.utilityBelowThreshold,
+        (item) =>
+            item.reason == PortfolioAllocationReason.utilityBelowThreshold,
       ),
       isTrue,
     );
