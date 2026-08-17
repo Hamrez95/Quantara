@@ -82,7 +82,7 @@ void main() {
     expect(next.state, AdaptiveManagementState.protected);
   });
 
-  test('terminal state cannot reactivate', () {
+  test('terminal state cannot reactivate and persisted revision stays monotonic', () {
     var snapshot = AdaptiveManagementSnapshot.initial();
     snapshot = snapshot.apply(event('1', AdaptiveManagementEventKind.arm));
     snapshot = snapshot.apply(
@@ -98,8 +98,29 @@ void main() {
     );
 
     expect(afterTerminal.state, AdaptiveManagementState.exited);
-    expect(afterTerminal.revision, revision);
+    expect(afterTerminal.revision, revision + 1);
     expect(afterTerminal.processedEventIds, contains('4'));
+  });
+
+  test('malformed persisted event history fails closed', () {
+    expect(
+      () => AdaptiveManagementSnapshot.fromJson({
+        'version': 1,
+        'state': 'active',
+        'revision': 3,
+        'processedEventIds': ['valid', 42],
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => AdaptiveManagementSnapshot.fromJson({
+        'version': '1',
+        'state': 'active',
+        'revision': 3,
+        'processedEventIds': const <String>[],
+      }),
+      throwsFormatException,
+    );
   });
 
   test('long stop widening is rejected', () {
