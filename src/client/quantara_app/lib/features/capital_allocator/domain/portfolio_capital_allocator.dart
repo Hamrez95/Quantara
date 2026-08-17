@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import '../../decision_core/domain/economic_opportunity_models.dart';
+import '../../portfolio_risk/domain/portfolio_correlation_policy.dart';
 import '../../portfolio_risk/domain/portfolio_risk_models.dart';
 
 enum PortfolioAllocationReason {
@@ -12,11 +13,12 @@ enum PortfolioAllocationReason {
   slotCeiling,
   riskReserveProtected,
   marginReserveProtected,
+  correlationBucketLimit,
 }
 
 final class PortfolioAllocationConfiguration {
   const PortfolioAllocationConfiguration({
-    this.version = 'portfolio-allocator/1.0',
+    this.version = 'portfolio-allocator/1.1',
     this.maximumSelections = 3,
     this.minimumUtilityScore = 0,
     this.riskReserveFraction = 0.2,
@@ -91,6 +93,16 @@ final class PortfolioAllocationProposal {
       requestedQuantity > 0;
 }
 
+final class PortfolioAllocationCorrelationContext {
+  const PortfolioAllocationCorrelationContext({
+    required this.ledger,
+    required this.policy,
+  });
+
+  final PortfolioRiskLedger ledger;
+  final PortfolioCorrelationPolicy policy;
+}
+
 final class PortfolioAllocationItemDecision {
   const PortfolioAllocationItemDecision({
     required this.proposalId,
@@ -103,6 +115,10 @@ final class PortfolioAllocationItemDecision {
     required this.allocatedMargin,
     required this.requestedQuantity,
     required this.allocatedQuantity,
+    this.correlationBucket,
+    this.correlationRiskBefore,
+    this.correlationRiskAfter,
+    this.correlationRiskLimit,
   });
 
   final String proposalId;
@@ -115,6 +131,10 @@ final class PortfolioAllocationItemDecision {
   final double allocatedMargin;
   final double requestedQuantity;
   final double allocatedQuantity;
+  final String? correlationBucket;
+  final double? correlationRiskBefore;
+  final double? correlationRiskAfter;
+  final double? correlationRiskLimit;
 
   bool get selected => reason == PortfolioAllocationReason.selected;
 
@@ -129,6 +149,13 @@ final class PortfolioAllocationItemDecision {
     'allocatedMargin': allocatedMargin,
     'requestedQuantity': requestedQuantity,
     'allocatedQuantity': allocatedQuantity,
+    if (correlationBucket != null) 'correlationBucket': correlationBucket,
+    if (correlationRiskBefore != null)
+      'correlationRiskBefore': correlationRiskBefore,
+    if (correlationRiskAfter != null)
+      'correlationRiskAfter': correlationRiskAfter,
+    if (correlationRiskLimit != null)
+      'correlationRiskLimit': correlationRiskLimit,
   };
 }
 
@@ -182,6 +209,7 @@ final class PortfolioCapitalAllocator {
     required Iterable<PortfolioAllocationProposal> proposals,
     required PortfolioAllocationBudget budget,
     required DateTime nowUtc,
+    PortfolioAllocationCorrelationContext? correlation,
   }) {
     if (!configuration.valid || !budget.valid || !nowUtc.isUtc) {
       throw const FormatException('Portfolio allocation input is invalid.');
@@ -206,12 +234,32 @@ final class PortfolioCapitalAllocator {
     final allocatableMargin = budget.availableMargin - marginHeldInReserve;
     final selectedSymbols = <String>{};
     final decisions = <PortfolioAllocationItemDecision>[];
+    final correlationRiskByBucket = _initialCorrelationExposure(correlation);
+    final correlationRiskLimit = correlation == null
+        ? null
+        : correlation.ledger.dailyRisk.limit *
+              correlation.policy.maximumBucketRiskFraction;
     var riskConsumed = 0.0;
     var marginConsumed = 0.0;
     var selectionCount = 0;
 
     for (final proposal in ranked) {
       PortfolioAllocationReason reason;
+      _PortfolioAllocationCorrelationImpact? correlationImpact;
+      if (correlation != null && proposal.valid) {
+        final bucket = correlation.policy.bucketFor(
+          symbol: proposal.candidate.symbol,
+          assetGroup: proposal.candidate.assetGroup,
+        );
+        final before = correlationRiskByBucket[bucket] ?? 0;
+        correlationImpact = _PortfolioAllocationCorrelationImpact(
+          bucket: bucket,
+          riskBefore: before,
+          riskAfter: before + proposal.requestedRisk,
+          riskLimit: correlationRiskLimit!,
+        );
+      }
+
       if (!proposal.valid) {
         reason = PortfolioAllocationReason.invalidProposal;
       } else if (!proposal.riskDecision.allowed) {
@@ -228,12 +276,19 @@ final class PortfolioCapitalAllocator {
       } else if (marginConsumed + proposal.requestedMargin >
           allocatableMargin + 1e-9) {
         reason = PortfolioAllocationReason.marginReserveProtected;
+      } else if (correlationImpact != null &&
+          correlationImpact.riskAfter > correlationImpact.riskLimit + 1e-9) {
+        reason = PortfolioAllocationReason.correlationBucketLimit;
       } else {
         reason = PortfolioAllocationReason.selected;
         riskConsumed += proposal.requestedRisk;
         marginConsumed += proposal.requestedMargin;
         selectionCount += 1;
         selectedSymbols.add(proposal.symbol);
+        if (correlationImpact != null) {
+          correlationRiskByBucket[correlationImpact.bucket] =
+              correlationImpact.riskAfter;
+        }
       }
 
       final selected = reason == PortfolioAllocationReason.selected;
@@ -249,6 +304,10 @@ final class PortfolioCapitalAllocator {
           allocatedMargin: selected ? proposal.requestedMargin : 0,
           requestedQuantity: proposal.requestedQuantity,
           allocatedQuantity: selected ? proposal.requestedQuantity : 0,
+          correlationBucket: correlationImpact?.bucket,
+          correlationRiskBefore: correlationImpact?.riskBefore,
+          correlationRiskAfter: correlationImpact?.riskAfter,
+          correlationRiskLimit: correlationImpact?.riskLimit,
         ),
       );
     }
@@ -269,4 +328,37 @@ final class PortfolioCapitalAllocator {
           .toDouble(),
     );
   }
+
+  Map<String, double> _initialCorrelationExposure(
+    PortfolioAllocationCorrelationContext? correlation,
+  ) {
+    if (correlation == null) return <String, double>{};
+    final exposure = <String, double>{};
+    for (final reservation in correlation.ledger.activeReservations) {
+      final bucket = correlation.policy.bucketFor(
+        symbol: reservation.symbol,
+        assetGroup: reservation.assetGroup,
+      );
+      exposure.update(
+        bucket,
+        (current) => current + reservation.maximumLoss,
+        ifAbsent: () => reservation.maximumLoss,
+      );
+    }
+    return exposure;
+  }
+}
+
+final class _PortfolioAllocationCorrelationImpact {
+  const _PortfolioAllocationCorrelationImpact({
+    required this.bucket,
+    required this.riskBefore,
+    required this.riskAfter,
+    required this.riskLimit,
+  });
+
+  final String bucket;
+  final double riskBefore;
+  final double riskAfter;
+  final double riskLimit;
 }
