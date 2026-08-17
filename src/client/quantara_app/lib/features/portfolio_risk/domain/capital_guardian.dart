@@ -201,7 +201,10 @@ final class CapitalGuardianState {
       timezoneOffsetMinutes: timezoneOffsetMinutes,
     );
     final weekChanged = currentWeek.id != weekId;
-    final nextLossCooldown = _activeUntil(lossStreakCooldownUntilUtc, timestamp);
+    final nextLossCooldown = _activeUntil(
+      lossStreakCooldownUntilUtc,
+      timestamp,
+    );
     final nextVolatilityCooldown = _activeUntil(
       volatilityBreakerUntilUtc,
       timestamp,

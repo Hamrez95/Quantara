@@ -100,11 +100,8 @@ void main() {
   PortfolioEntryDecision baseDecision(
     PortfolioRiskLedger source,
     PortfolioEntryCandidate value,
-  ) => basePolicy.evaluate(
-    ledger: source,
-    candidate: value,
-    account: account(),
-  );
+  ) =>
+      basePolicy.evaluate(ledger: source, candidate: value, account: account());
 
   test('weekly realized loss survives daily rollover inside the same week', () {
     var state = CapitalGuardianState.initial(
@@ -119,10 +116,7 @@ void main() {
     );
 
     final tuesday = DateTime.utc(2026, 8, 4, 10);
-    final normalized = state.normalized(
-      now: tuesday,
-      timezoneOffsetMinutes: 0,
-    );
+    final normalized = state.normalized(now: tuesday, timezoneOffsetMinutes: 0);
 
     expect(normalized.weekId, state.weekId);
     expect(normalized.weeklyRealizedLoss, 7);
@@ -152,10 +146,7 @@ void main() {
     expect(blocked.reason, CapitalGuardianBreakerReason.weeklyLossCap);
 
     final nextMonday = DateTime.utc(2026, 8, 10, 10);
-    final reset = state.normalized(
-      now: nextMonday,
-      timezoneOffsetMinutes: 0,
-    );
+    final reset = state.normalized(now: nextMonday, timezoneOffsetMinutes: 0);
     expect(reset.weeklyRealizedLoss, 0);
     expect(reset.weekId, isNot(state.weekId));
   });
@@ -230,16 +221,17 @@ void main() {
     final base = baseDecision(source, value);
     expect(base.allowed, isTrue);
 
-    final state = CapitalGuardianState.initial(
-      now: monday,
-      timezoneOffsetMinutes: 0,
-    ).recordEnvironment(
-      drawdownFraction: 0.06,
-      abnormalVolatility: false,
-      now: monday,
-      timezoneOffsetMinutes: 0,
-      policy: guardianPolicy,
-    );
+    final state =
+        CapitalGuardianState.initial(
+          now: monday,
+          timezoneOffsetMinutes: 0,
+        ).recordEnvironment(
+          drawdownFraction: 0.06,
+          abnormalVolatility: false,
+          now: monday,
+          timezoneOffsetMinutes: 0,
+          policy: guardianPolicy,
+        );
     final guarded = guardianPolicy.evaluate(
       state: state,
       ledger: source,
@@ -254,16 +246,17 @@ void main() {
   });
 
   test('abnormal volatility breaker remains closed until cooldown expires', () {
-    final state = CapitalGuardianState.initial(
-      now: monday,
-      timezoneOffsetMinutes: 0,
-    ).recordEnvironment(
-      drawdownFraction: 0,
-      abnormalVolatility: true,
-      now: monday,
-      timezoneOffsetMinutes: 0,
-      policy: guardianPolicy,
-    );
+    final state =
+        CapitalGuardianState.initial(
+          now: monday,
+          timezoneOffsetMinutes: 0,
+        ).recordEnvironment(
+          drawdownFraction: 0,
+          abnormalVolatility: true,
+          now: monday,
+          timezoneOffsetMinutes: 0,
+          policy: guardianPolicy,
+        );
     final source = ledger();
     final value = candidate('btc', 1);
     final base = baseDecision(source, value);
@@ -291,21 +284,21 @@ void main() {
   });
 
   test('guardian state JSON round-trip preserves safety fields', () {
-    final source = CapitalGuardianState.initial(
-      now: monday,
-      timezoneOffsetMinutes: 0,
-    ).recordClose(
-      exchangeConfirmedNetPnl: -2,
-      now: monday,
-      timezoneOffsetMinutes: 0,
-      policy: guardianPolicy,
-    ).recordEnvironment(
-      drawdownFraction: 0.06,
-      abnormalVolatility: true,
-      now: monday,
-      timezoneOffsetMinutes: 0,
-      policy: guardianPolicy,
-    );
+    final source =
+        CapitalGuardianState.initial(now: monday, timezoneOffsetMinutes: 0)
+            .recordClose(
+              exchangeConfirmedNetPnl: -2,
+              now: monday,
+              timezoneOffsetMinutes: 0,
+              policy: guardianPolicy,
+            )
+            .recordEnvironment(
+              drawdownFraction: 0.06,
+              abnormalVolatility: true,
+              now: monday,
+              timezoneOffsetMinutes: 0,
+              policy: guardianPolicy,
+            );
 
     final restored = CapitalGuardianState.fromJson(source.toJson());
     expect(restored.weeklyRealizedLoss, 2);
@@ -323,9 +316,7 @@ void main() {
     final store = DatabasePortfolioRiskLedgerStore(
       databaseFactory: () async => database,
     );
-    await store.save(
-      ledger(reservations: [openPosition('btc')]),
-    );
+    await store.save(ledger(reservations: [openPosition('btc')]));
     final first = PortfolioRiskCoordinator(
       store: store,
       policy: basePolicy,

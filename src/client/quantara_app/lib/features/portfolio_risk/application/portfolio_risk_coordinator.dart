@@ -39,17 +39,18 @@ final class PortfolioRiskCoordinator {
     final timestamp = (now ?? DateTime.now()).toUtc();
     final combined = _atomicGuardianStore;
     if (combined != null) {
-      return combined.mutateRiskAndGuardian<PortfolioRiskLedger>(
-        (current, guardian) async {
-          final ledger = _normalize(current, timestamp);
-          final nextGuardian = _normalizeGuardian(guardian, ledger, timestamp);
-          return PortfolioRiskAndGuardianMutation(
-            value: ledger,
-            nextLedger: ledger,
-            nextGuardian: nextGuardian,
-          );
-        },
-      );
+      return combined.mutateRiskAndGuardian<PortfolioRiskLedger>((
+        current,
+        guardian,
+      ) async {
+        final ledger = _normalize(current, timestamp);
+        final nextGuardian = _normalizeGuardian(guardian, ledger, timestamp);
+        return PortfolioRiskAndGuardianMutation(
+          value: ledger,
+          nextLedger: ledger,
+          nextGuardian: nextGuardian,
+        );
+      });
     }
     final atomic = _atomicStore;
     if (atomic != null) {
@@ -74,48 +75,42 @@ final class PortfolioRiskCoordinator {
     final timestamp = (now ?? DateTime.now()).toUtc();
     final combined = _atomicGuardianStore;
     if (combined != null) {
-      return combined.mutateRiskAndGuardian<PortfolioReservationOutcome>(
-        (current, guardian) async {
-          var ledger = _normalize(current, timestamp);
-          final guardianState = _normalizeGuardian(
-            guardian,
-            ledger,
-            timestamp,
-          );
-          final baseDecision = policy.evaluate(
-            ledger: ledger,
+      return combined.mutateRiskAndGuardian<PortfolioReservationOutcome>((
+        current,
+        guardian,
+      ) async {
+        var ledger = _normalize(current, timestamp);
+        final guardianState = _normalizeGuardian(guardian, ledger, timestamp);
+        final baseDecision = policy.evaluate(
+          ledger: ledger,
+          candidate: candidate,
+          account: _withLedgerReservations(account, ledger),
+        );
+        final guardianDecision = guardianPolicy.evaluate(
+          state: guardianState,
+          ledger: ledger,
+          baseDecision: baseDecision,
+          now: timestamp,
+        );
+        final decision = _applyGuardianDecision(baseDecision, guardianDecision);
+        if (decision.allowed) {
+          ledger = ledger.reserve(
             candidate: candidate,
-            account: _withLedgerReservations(account, ledger),
+            decision: decision,
+            createdAt: timestamp,
           );
-          final guardianDecision = guardianPolicy.evaluate(
-            state: guardianState,
+        }
+        return PortfolioRiskAndGuardianMutation(
+          value: PortfolioReservationOutcome(
+            decision: decision,
             ledger: ledger,
-            baseDecision: baseDecision,
-            now: timestamp,
-          );
-          final decision = _applyGuardianDecision(
-            baseDecision,
-            guardianDecision,
-          );
-          if (decision.allowed) {
-            ledger = ledger.reserve(
-              candidate: candidate,
-              decision: decision,
-              createdAt: timestamp,
-            );
-          }
-          return PortfolioRiskAndGuardianMutation(
-            value: PortfolioReservationOutcome(
-              decision: decision,
-              ledger: ledger,
-              snapshot: ledger.snapshot(account),
-              guardianDecision: guardianDecision,
-            ),
-            nextLedger: ledger,
-            nextGuardian: guardianState,
-          );
-        },
-      );
+            snapshot: ledger.snapshot(account),
+            guardianDecision: guardianDecision,
+          ),
+          nextLedger: ledger,
+          nextGuardian: guardianState,
+        );
+      });
     }
 
     final atomic = _atomicStore;
@@ -139,10 +134,7 @@ final class PortfolioRiskCoordinator {
           baseDecision: baseDecision,
           now: timestamp,
         );
-        final decision = _applyGuardianDecision(
-          baseDecision,
-          guardianDecision,
-        );
+        final decision = _applyGuardianDecision(baseDecision, guardianDecision);
         if (decision.allowed) {
           ledger = ledger.reserve(
             candidate: candidate,
@@ -181,10 +173,7 @@ final class PortfolioRiskCoordinator {
         baseDecision: baseDecision,
         now: timestamp,
       );
-      final decision = _applyGuardianDecision(
-        baseDecision,
-        guardianDecision,
-      );
+      final decision = _applyGuardianDecision(baseDecision, guardianDecision);
       if (decision.allowed) {
         ledger = ledger.reserve(
           candidate: candidate,
@@ -263,40 +252,36 @@ final class PortfolioRiskCoordinator {
     final timestamp = (now ?? DateTime.now()).toUtc();
     final combined = _atomicGuardianStore;
     if (combined != null) {
-      return combined.mutateRiskAndGuardian<PortfolioRiskLedger>(
-        (current, guardian) async {
-          final ledger = _normalize(current, timestamp);
-          final guardianState = _normalizeGuardian(
-            guardian,
-            ledger,
-            timestamp,
-          );
-          final shouldRecord =
-              !ledger.processedEventIds.contains(eventId) &&
-              ledger.reservations.any(
-                (item) => item.open && item.positionId == positionId,
-              );
-          final nextLedger = ledger.closePosition(
-            positionId: positionId,
-            eventId: eventId,
-            exchangeConfirmedNetPnl: exchangeConfirmedNetPnl,
-          );
-          final nextGuardian = shouldRecord
-              ? guardianState.recordClose(
-                  exchangeConfirmedNetPnl: exchangeConfirmedNetPnl,
-                  now: timestamp,
-                  timezoneOffsetMinutes:
-                      ledger.tradingDay.timezoneOffsetMinutes,
-                  policy: guardianPolicy,
-                )
-              : guardianState;
-          return PortfolioRiskAndGuardianMutation(
-            value: nextLedger,
-            nextLedger: nextLedger,
-            nextGuardian: nextGuardian,
-          );
-        },
-      );
+      return combined.mutateRiskAndGuardian<PortfolioRiskLedger>((
+        current,
+        guardian,
+      ) async {
+        final ledger = _normalize(current, timestamp);
+        final guardianState = _normalizeGuardian(guardian, ledger, timestamp);
+        final shouldRecord =
+            !ledger.processedEventIds.contains(eventId) &&
+            ledger.reservations.any(
+              (item) => item.open && item.positionId == positionId,
+            );
+        final nextLedger = ledger.closePosition(
+          positionId: positionId,
+          eventId: eventId,
+          exchangeConfirmedNetPnl: exchangeConfirmedNetPnl,
+        );
+        final nextGuardian = shouldRecord
+            ? guardianState.recordClose(
+                exchangeConfirmedNetPnl: exchangeConfirmedNetPnl,
+                now: timestamp,
+                timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
+                policy: guardianPolicy,
+              )
+            : guardianState;
+        return PortfolioRiskAndGuardianMutation(
+          value: nextLedger,
+          nextLedger: nextLedger,
+          nextGuardian: nextGuardian,
+        );
+      });
     }
 
     return _mutate(
@@ -338,24 +323,25 @@ final class PortfolioRiskCoordinator {
     final timestamp = (now ?? DateTime.now()).toUtc();
     final combined = _atomicGuardianStore;
     if (combined != null) {
-      return combined.mutateRiskAndGuardian<CapitalGuardianState>(
-        (current, guardian) async {
-          final ledger = _normalize(current, timestamp);
-          final base = _normalizeGuardian(guardian, ledger, timestamp);
-          final next = base.recordEnvironment(
-            drawdownFraction: drawdownFraction,
-            abnormalVolatility: abnormalVolatility,
-            now: timestamp,
-            timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
-            policy: guardianPolicy,
-          );
-          return PortfolioRiskAndGuardianMutation(
-            value: next,
-            nextLedger: ledger,
-            nextGuardian: next,
-          );
-        },
-      );
+      return combined.mutateRiskAndGuardian<CapitalGuardianState>((
+        current,
+        guardian,
+      ) async {
+        final ledger = _normalize(current, timestamp);
+        final base = _normalizeGuardian(guardian, ledger, timestamp);
+        final next = base.recordEnvironment(
+          drawdownFraction: drawdownFraction,
+          abnormalVolatility: abnormalVolatility,
+          now: timestamp,
+          timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
+          policy: guardianPolicy,
+        );
+        return PortfolioRiskAndGuardianMutation(
+          value: next,
+          nextLedger: ledger,
+          nextGuardian: next,
+        );
+      });
     }
     return _serialValue(() async {
       final ledger = await _loadUnlocked(timestamp);
@@ -380,24 +366,21 @@ final class PortfolioRiskCoordinator {
     final timestamp = (now ?? DateTime.now()).toUtc();
     final combined = _atomicGuardianStore;
     if (combined != null) {
-      return combined.mutateRiskAndGuardian<CapitalGuardianState>(
-        (current, guardian) async {
-          final ledger = _normalize(current, timestamp);
-          final next = _normalizeGuardian(guardian, ledger, timestamp);
-          return PortfolioRiskAndGuardianMutation(
-            value: next,
-            nextLedger: ledger,
-            nextGuardian: next,
-          );
-        },
-      );
+      return combined.mutateRiskAndGuardian<CapitalGuardianState>((
+        current,
+        guardian,
+      ) async {
+        final ledger = _normalize(current, timestamp);
+        final next = _normalizeGuardian(guardian, ledger, timestamp);
+        return PortfolioRiskAndGuardianMutation(
+          value: next,
+          nextLedger: ledger,
+          nextGuardian: next,
+        );
+      });
     }
     final ledger = await load(now: timestamp);
-    final next = _normalizeGuardian(
-      _fallbackGuardianState,
-      ledger,
-      timestamp,
-    );
+    final next = _normalizeGuardian(_fallbackGuardianState, ledger, timestamp);
     _fallbackGuardianState = next;
     return next;
   }
@@ -494,7 +477,8 @@ final class PortfolioRiskCoordinator {
     PortfolioRiskLedger ledger,
     DateTime now,
   ) {
-    final state = current ??
+    final state =
+        current ??
         CapitalGuardianState.initial(
           now: now,
           timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,

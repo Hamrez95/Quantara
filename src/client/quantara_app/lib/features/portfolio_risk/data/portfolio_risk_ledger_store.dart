@@ -134,11 +134,7 @@ final class DatabasePortfolioRiskLedgerStore
       if (_sameLedger(current, ledger)) return;
     }
     await database.put(
-      _recordFor(
-        ledger,
-        (existing?.revision ?? 0) + 1,
-        guardian: guardian,
-      ),
+      _recordFor(ledger, (existing?.revision ?? 0) + 1, guardian: guardian),
     );
   }
 
@@ -216,12 +212,9 @@ final class DatabasePortfolioRiskLedgerStore
         if (currentLedger != null && result.nextLedger != null) {
           _validateProgress(current: currentLedger, incoming: nextLedger);
         }
-        final ledgerChanged = currentLedger == null ||
-            !_sameLedger(currentLedger, nextLedger);
-        final guardianChanged = !_sameGuardian(
-          currentGuardian,
-          nextGuardian,
-        );
+        final ledgerChanged =
+            currentLedger == null || !_sameLedger(currentLedger, nextLedger);
+        final guardianChanged = !_sameGuardian(currentGuardian, nextGuardian);
         if (!ledgerChanged && !guardianChanged) {
           return QuantaraAtomicRecordMutation<T>(value: result.value);
         }
