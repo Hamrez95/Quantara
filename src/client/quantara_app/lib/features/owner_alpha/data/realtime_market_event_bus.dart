@@ -53,8 +53,7 @@ final class RealtimeMarketEventBus {
 
   int get maximumObservedPendingEventCount => _maximumObservedPendingEventCount;
 
-  int get maximumObservedPendingPerStream =>
-      _maximumObservedPendingPerStream;
+  int get maximumObservedPendingPerStream => _maximumObservedPendingPerStream;
 
   int get deliveredCount => _deliveredCount;
 
