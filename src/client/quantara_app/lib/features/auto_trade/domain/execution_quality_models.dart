@@ -31,10 +31,13 @@ final class PlannedExecutionCosts {
 
   double get total => fees + funding + spread + slippage + latency;
 
-  void validate() => _validateNonNegativeFinite(
-    [fees, funding, spread, slippage, latency],
-    'Planned execution costs are invalid.',
-  );
+  void validate() => _validateNonNegativeFinite([
+    fees,
+    funding,
+    spread,
+    slippage,
+    latency,
+  ], 'Planned execution costs are invalid.');
 }
 
 final class EstimatedExecutionCosts {
@@ -64,10 +67,13 @@ final class EstimatedExecutionCosts {
     if (modelVersion.trim().isEmpty || !asOfUtc.isUtc) {
       throw const FormatException('Execution estimate identity is invalid.');
     }
-    _validateNonNegativeFinite(
-      [fees, funding, spread, slippage, latency],
-      'Estimated execution costs are invalid.',
-    );
+    _validateNonNegativeFinite([
+      fees,
+      funding,
+      spread,
+      slippage,
+      latency,
+    ], 'Estimated execution costs are invalid.');
   }
 }
 
@@ -88,10 +94,13 @@ final class ConfirmedExecutionCosts {
 
   double get total => entryFees + exitFees + funding + spread + slippage;
 
-  void validate() => _validateNonNegativeFinite(
-    [entryFees, exitFees, funding, spread, slippage],
-    'Confirmed execution costs are invalid.',
-  );
+  void validate() => _validateNonNegativeFinite([
+    entryFees,
+    exitFees,
+    funding,
+    spread,
+    slippage,
+  ], 'Confirmed execution costs are invalid.');
 }
 
 final class ExecutionLifecycleTiming {
@@ -122,13 +131,17 @@ final class ExecutionLifecycleTiming {
       finalFillAtUtc,
     ];
     if (timestamps.whereType<DateTime>().any((value) => !value.isUtc)) {
-      throw const FormatException('Execution lifecycle timestamps must be UTC.');
+      throw const FormatException(
+        'Execution lifecycle timestamps must be UTC.',
+      );
     }
     var previous = decisionAtUtc;
     for (final value in timestamps) {
       if (value == null) continue;
       if (value.isBefore(previous)) {
-        throw const FormatException('Execution lifecycle timestamps are out of order.');
+        throw const FormatException(
+          'Execution lifecycle timestamps are out of order.',
+        );
       }
       previous = value;
     }
