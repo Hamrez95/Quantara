@@ -55,7 +55,8 @@ final class PortfolioCorrelationPolicy {
               bucket,
         )
         .fold<double>(0, (sum, item) => sum + item.maximumLoss);
-    final after = before + (baseDecision.allowed ? baseDecision.maximumLoss : 0);
+    final after =
+        before + (baseDecision.allowed ? baseDecision.maximumLoss : 0);
 
     if (!baseDecision.allowed) {
       return PortfolioCorrelationDecision(
