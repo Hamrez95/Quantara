@@ -1,6 +1,8 @@
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../portfolio_risk/application/portfolio_risk_coordinator.dart';
 import '../../portfolio_risk/data/portfolio_risk_ledger_store.dart';
+import '../../portfolio_risk/domain/capital_guardian.dart';
+import '../../portfolio_risk/domain/portfolio_correlation_policy.dart';
 import '../../portfolio_risk/domain/portfolio_risk_models.dart';
 import '../../portfolio_risk/domain/portfolio_risk_transitions.dart';
 import '../domain/local_live_portfolio_admission.dart';
@@ -52,11 +54,23 @@ final class LocalLivePortfolioRiskRuntime {
     required PortfolioAccountTruth account,
     required DateTime now,
   }) async {
-    final store = _atomicStore;
-    return store.mutate<PortfolioReservationOutcome>((current) async {
-      var ledger = _normalize(current, now.toUtc());
+    if (!maximumAssetGroupRiskFraction.isFinite ||
+        maximumAssetGroupRiskFraction <= 0 ||
+        maximumAssetGroupRiskFraction > 1) {
+      throw const LocalLiveTradeSafeException(
+        'Local Live correlation risk configuration is invalid.',
+      );
+    }
+    final timestamp = now.toUtc();
+    final store = _atomicGuardianStore;
+    return store.mutateRiskAndGuardian<PortfolioReservationOutcome>((
+      current,
+      guardian,
+    ) async {
+      var ledger = _normalize(current, timestamp);
       final accountWithReservations = _withLedgerReservations(account, ledger);
-      var decision =
+      final guardianState = _normalizeGuardian(guardian, ledger, timestamp);
+      final baseDecision =
           const PortfolioRiskPolicy(
             emergencyTechnicalCeiling:
                 LocalLivePortfolioAdmission.maximumSupportedConcurrentPositions,
@@ -65,20 +79,30 @@ final class LocalLivePortfolioRiskRuntime {
             candidate: candidate,
             account: accountWithReservations,
           );
+      final guardianDecision = const CapitalGuardianPolicy().evaluate(
+        state: guardianState,
+        ledger: ledger,
+        baseDecision: baseDecision,
+        now: timestamp,
+      );
+      var decision = _applyGuardianDecision(baseDecision, guardianDecision);
       if (decision.allowed) {
-        final sameAssetGroupRisk = ledger.activeReservations
-            .where((item) => item.assetGroup == candidate.assetGroup)
-            .fold<double>(0, (sum, item) => sum + item.maximumLoss);
-        if (sameAssetGroupRisk + decision.maximumLoss >
-            ledger.dailyRisk.limit * maximumAssetGroupRiskFraction + 1e-9) {
+        final correlationDecision = PortfolioCorrelationPolicy(
+          maximumBucketRiskFraction: maximumAssetGroupRiskFraction,
+        ).evaluate(
+          ledger: ledger,
+          candidate: candidate,
+          baseDecision: decision,
+        );
+        if (!correlationDecision.allowed) {
           decision = PortfolioEntryDecision(
             allowed: false,
             liveExecutionAllowed: false,
             reason: PortfolioEntryBlockReason.directionConcentration,
             maximumLoss: decision.maximumLoss,
             requiredMargin: decision.requiredMargin,
-            availableRiskBefore: ledger.dailyRisk.available,
-            availableRiskAfter: ledger.dailyRisk.available,
+            availableRiskBefore: decision.availableRiskBefore,
+            availableRiskAfter: decision.availableRiskBefore,
             availableMarginAfter:
                 accountWithReservations.marginBudget.spendable,
           );
@@ -98,16 +122,18 @@ final class LocalLivePortfolioRiskRuntime {
         ledger = ledger.reserve(
           candidate: candidate,
           decision: decision,
-          createdAt: now.toUtc(),
+          createdAt: timestamp,
         );
       }
-      return PortfolioRiskLedgerMutation(
+      return PortfolioRiskAndGuardianMutation(
         value: PortfolioReservationOutcome(
           decision: decision,
           ledger: ledger,
           snapshot: ledger.snapshot(account),
+          guardianDecision: guardianDecision,
         ),
         nextLedger: ledger,
+        nextGuardian: guardianState,
       );
     });
   }
@@ -324,6 +350,16 @@ final class LocalLivePortfolioRiskRuntime {
     return store as AtomicPortfolioRiskLedgerStore;
   }
 
+  AtomicPortfolioRiskAndGuardianStore get _atomicGuardianStore {
+    final store = _store;
+    if (store is! AtomicPortfolioRiskAndGuardianStore) {
+      throw StateError(
+        'Local Live portfolio risk requires atomic Guardian storage.',
+      );
+    }
+    return store as AtomicPortfolioRiskAndGuardianStore;
+  }
+
   PortfolioRiskLedger _normalize(PortfolioRiskLedger? current, DateTime now) {
     if (current == null) {
       return PortfolioRiskLedger.initial(
@@ -353,6 +389,40 @@ final class LocalLivePortfolioRiskRuntime {
       realizedProfit: rolled.realizedProfit,
       reservations: rolled.reservations,
       processedEventIds: rolled.processedEventIds,
+    );
+  }
+
+  CapitalGuardianState _normalizeGuardian(
+    CapitalGuardianState? current,
+    PortfolioRiskLedger ledger,
+    DateTime now,
+  ) {
+    final state =
+        current ??
+        CapitalGuardianState.initial(
+          now: now,
+          timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
+        );
+    return state.normalized(
+      now: now,
+      timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
+    );
+  }
+
+  PortfolioEntryDecision _applyGuardianDecision(
+    PortfolioEntryDecision base,
+    CapitalGuardianDecision guardian,
+  ) {
+    if (!base.allowed || guardian.allowed) return base;
+    return PortfolioEntryDecision(
+      allowed: false,
+      liveExecutionAllowed: false,
+      reason: PortfolioEntryBlockReason.riskBudgetInsufficient,
+      maximumLoss: base.maximumLoss,
+      requiredMargin: base.requiredMargin,
+      availableRiskBefore: base.availableRiskBefore,
+      availableRiskAfter: base.availableRiskBefore,
+      availableMarginAfter: base.availableMarginAfter,
     );
   }
 
