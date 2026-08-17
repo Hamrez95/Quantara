@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/capital_allocator/domain/portfolio_capital_allocator.dart';
 import 'package:quantara_app/features/decision_core/domain/economic_opportunity_models.dart';
+import 'package:quantara_app/features/portfolio_risk/domain/portfolio_correlation_policy.dart';
 import 'package:quantara_app/features/portfolio_risk/domain/portfolio_risk_models.dart';
 
 void main() {
@@ -89,6 +90,24 @@ void main() {
     candidate: candidate(id, symbol: symbol),
     riskDecision: riskDecision(allowed: allowed, risk: risk, margin: margin),
     evidenceAsOfUtc: now,
+  );
+
+  PortfolioRiskLedger emptyLedger({double dailyRiskLimit = 10}) =>
+      PortfolioRiskLedger.initial(
+        tradingDay: TradingDayId.start(
+          now: now,
+          timezoneOffsetMinutes: 0,
+        ),
+        dailyRiskLimit: dailyRiskLimit,
+      );
+
+  const correlationPolicy = PortfolioCorrelationPolicy(
+    maximumBucketRiskFraction: 0.6,
+    bucketBySymbol: {
+      'BTCUSDT': 'majors',
+      'ETHUSDT': 'majors',
+      'XRPUSDT': 'alts',
+    },
   );
 
   test('selection is deterministic by economic utility, not input order', () {
@@ -292,5 +311,84 @@ void main() {
       decision.items.firstWhere((item) => item.proposalId == 'b').reason,
       PortfolioAllocationReason.slotCeiling,
     );
+  });
+
+  test(
+    'correlation-aware marginal selection skips correlated candidate and admits independent lower rank',
+    () {
+      const allocator = PortfolioCapitalAllocator(
+        configuration: PortfolioAllocationConfiguration(
+          maximumSelections: 2,
+          riskReserveFraction: 0,
+          marginReserveFraction: 0,
+        ),
+      );
+
+      final decision = allocator.allocate(
+        proposals: [
+          proposal('btc', symbol: 'BTCUSDT', score: 9, risk: 4),
+          proposal('eth', symbol: 'ETHUSDT', score: 8, risk: 4),
+          proposal('xrp', symbol: 'XRPUSDT', score: 7, risk: 4),
+        ],
+        budget: const PortfolioAllocationBudget(
+          availableRisk: 20,
+          availableMargin: 20,
+        ),
+        nowUtc: now,
+        correlation: PortfolioAllocationCorrelationContext(
+          ledger: emptyLedger(),
+          policy: correlationPolicy,
+        ),
+      );
+
+      expect(decision.selected.map((item) => item.proposalId), ['btc', 'xrp']);
+      final eth = decision.items.firstWhere(
+        (item) => item.proposalId == 'eth',
+      );
+      expect(eth.reason, PortfolioAllocationReason.correlationBucketLimit);
+      expect(eth.correlationBucket, 'majors');
+      expect(eth.correlationRiskBefore, 4);
+      expect(eth.correlationRiskAfter, 8);
+      expect(eth.correlationRiskLimit, 6);
+    },
+  );
+
+  test('correlation context includes existing active reservation exposure', () {
+    const allocator = PortfolioCapitalAllocator(
+      configuration: PortfolioAllocationConfiguration(
+        maximumSelections: 2,
+        riskReserveFraction: 0,
+        marginReserveFraction: 0,
+      ),
+    );
+    final existing = candidate('existing-btc', symbol: 'BTCUSDT');
+    final ledger = emptyLedger().reserve(
+      candidate: existing,
+      decision: riskDecision(risk: 4),
+      createdAt: now,
+    );
+
+    final decision = allocator.allocate(
+      proposals: [
+        proposal('eth', symbol: 'ETHUSDT', score: 9, risk: 3),
+        proposal('xrp', symbol: 'XRPUSDT', score: 8, risk: 3),
+      ],
+      budget: const PortfolioAllocationBudget(
+        availableRisk: 20,
+        availableMargin: 20,
+      ),
+      nowUtc: now,
+      correlation: PortfolioAllocationCorrelationContext(
+        ledger: ledger,
+        policy: correlationPolicy,
+      ),
+    );
+
+    expect(decision.selected.single.proposalId, 'xrp');
+    final eth = decision.items.firstWhere((item) => item.proposalId == 'eth');
+    expect(eth.reason, PortfolioAllocationReason.correlationBucketLimit);
+    expect(eth.correlationRiskBefore, 4);
+    expect(eth.correlationRiskAfter, 7);
+    expect(eth.correlationRiskLimit, 6);
   });
 }
