@@ -36,7 +36,7 @@ void main() {
     },
   );
 
-  test('duplicate event id is idempotent', () {
+  test('exact duplicate event replay is idempotent', () {
     final armed = AdaptiveManagementSnapshot.initial().apply(
       event('arm-1', AdaptiveManagementEventKind.arm),
     );
@@ -47,7 +47,20 @@ void main() {
     expect(identical(duplicate, armed), isTrue);
     expect(duplicate.state, AdaptiveManagementState.armed);
     expect(duplicate.revision, armed.revision);
-    expect(duplicate.processedEventIds, armed.processedEventIds);
+    expect(duplicate.processedEvents, armed.processedEvents);
+  });
+
+  test('same event id with a different kind fails closed', () {
+    final armed = AdaptiveManagementSnapshot.initial().apply(
+      event('event-1', AdaptiveManagementEventKind.arm),
+    );
+
+    expect(
+      () => armed.apply(
+        event('event-1', AdaptiveManagementEventKind.entryConfirmed),
+      ),
+      throwsStateError,
+    );
   });
 
   test('invalid transition fails closed', () {
@@ -75,7 +88,7 @@ void main() {
 
     expect(restored.state, snapshot.state);
     expect(restored.revision, snapshot.revision);
-    expect(restored.processedEventIds, snapshot.processedEventIds);
+    expect(restored.processedEvents, snapshot.processedEvents);
     final next = restored.apply(
       event('4', AdaptiveManagementEventKind.protectionConfirmed),
     );
@@ -111,16 +124,31 @@ void main() {
         'version': 1,
         'state': 'active',
         'revision': 3,
-        'processedEventIds': ['valid', 42],
+        'processedEvents': [
+          {'id': 'valid', 'kind': 'managementActivated'},
+          {'id': 'bad', 'kind': 'not-a-kind'},
+        ],
       }),
       throwsFormatException,
     );
     expect(
       () => AdaptiveManagementSnapshot.fromJson({
-        'version': '1',
+        'version': 1.0,
         'state': 'active',
         'revision': 3,
-        'processedEventIds': const <String>[],
+        'processedEvents': const <Object?>[],
+      }),
+      throwsFormatException,
+    );
+    expect(
+      () => AdaptiveManagementSnapshot.fromJson({
+        'version': 1,
+        'state': 'active',
+        'revision': 3,
+        'processedEvents': [
+          {'id': 'dup', 'kind': 'arm'},
+          {'id': 'dup', 'kind': 'entryConfirmed'},
+        ],
       }),
       throwsFormatException,
     );
