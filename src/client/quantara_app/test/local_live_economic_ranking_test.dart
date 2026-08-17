@@ -211,32 +211,35 @@ void main() {
     );
   });
 
-  test('insufficient execution evidence cannot replace conservative fallback', () {
-    final fallback = idea(
-      id: 'insufficient',
-      symbol: 'BTCUSDT',
-      timeframe: '1h',
-      costs: 0.5,
-    );
+  test(
+    'insufficient execution evidence cannot replace conservative fallback',
+    () {
+      final fallback = idea(
+        id: 'insufficient',
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        costs: 0.5,
+      );
 
-    final ranked = LocalLiveEconomicRanking.rank(
-      ideas: [fallback],
-      lastPrices: const {'BTCUSDT': 100},
-      evaluatedAtUtc: now,
-      executionCostsBySetupId: {
-        'insufficient': estimate(
-          totalCost: 9,
-          quality: ExecutionEvidenceQuality.insufficient,
-        ),
-      },
-    );
+      final ranked = LocalLiveEconomicRanking.rank(
+        ideas: [fallback],
+        lastPrices: const {'BTCUSDT': 100},
+        evaluatedAtUtc: now,
+        executionCostsBySetupId: {
+          'insufficient': estimate(
+            totalCost: 9,
+            quality: ExecutionEvidenceQuality.insufficient,
+          ),
+        },
+      );
 
-    expect(ranked.single.ranked.utility.executionCostR, closeTo(0.05, 1e-9));
-    expect(
-      ranked.single.ranked.candidate.evidenceTags,
-      contains('cost:execution-quality-insufficient-fallback'),
-    );
-  });
+      expect(ranked.single.ranked.utility.executionCostR, closeTo(0.05, 1e-9));
+      expect(
+        ranked.single.ranked.candidate.evidenceTags,
+        contains('cost:execution-quality-insufficient-fallback'),
+      );
+    },
+  );
 
   test('ranker and adapter contain no live order or transfer authority', () {
     final adapter = File(
