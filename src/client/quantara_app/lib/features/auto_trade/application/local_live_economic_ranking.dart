@@ -2,6 +2,7 @@ import '../../decision_core/application/economic_opportunity_ranker.dart';
 import '../../decision_core/domain/economic_opportunity_models.dart';
 import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
+import '../domain/execution_quality_models.dart';
 
 final class LocalLiveRankedIdea {
   const LocalLiveRankedIdea({required this.idea, required this.ranked});
@@ -17,11 +18,13 @@ abstract final class LocalLiveEconomicRanking {
     required DateTime evaluatedAtUtc,
     Map<String, OpportunityCalibrationEvidence> calibrationBySetupId = const {},
     Map<String, double> concentrationPenaltyBySymbol = const {},
+    Map<String, EstimatedExecutionCosts> executionCostsBySetupId = const {},
+    Duration maximumExecutionEstimateAge = const Duration(seconds: 30),
     OpportunityRankingConfiguration config =
         const OpportunityRankingConfiguration(),
   }) {
-    if (!evaluatedAtUtc.isUtc) {
-      throw const FormatException('Local Live ranking time must be UTC.');
+    if (!evaluatedAtUtc.isUtc || maximumExecutionEstimateAge <= Duration.zero) {
+      throw const FormatException('Local Live ranking time is invalid.');
     }
     final primary = _resolveConflictAndPreferredTimeframe(ideas);
     final bySetupId = {for (final idea in primary) idea.setupId: idea};
@@ -33,10 +36,17 @@ abstract final class LocalLiveEconomicRanking {
       final liquidityProxy = relativeVolume == null || !relativeVolume.isFinite
           ? null
           : (relativeVolume / 2).clamp(0.0, 1.0);
+      final executionEvidence = _rankingExecutionCosts(
+        estimate: executionCostsBySetupId[idea.setupId],
+        maximumLoss: idea.maximumLoss,
+        evaluatedAtUtc: evaluatedAtUtc,
+        maximumAge: maximumExecutionEstimateAge,
+      );
       candidates.add(
         OpportunityRankingCandidate.fromTradeIdea(
           idea: idea,
           currentPrice: price,
+          costs: executionEvidence.costs,
           expectedHoldingHours: config.holdingHoursFor(idea.timeframe),
           liquidityScore: liquidityProxy,
           concentrationPenalty:
@@ -47,7 +57,7 @@ abstract final class LocalLiveEconomicRanking {
           evidenceTags: [
             'holding:timeframe-prior-v1',
             if (liquidityProxy != null) 'liquidity:relative-volume-proxy',
-            'cost:trade-idea-aggregate',
+            executionEvidence.tag,
             'correlation:unknown',
           ],
         ),
@@ -64,6 +74,51 @@ abstract final class LocalLiveEconomicRanking {
         if (bySetupId[item.candidate.setupId] case final idea?)
           LocalLiveRankedIdea(idea: idea, ranked: item),
     ]);
+  }
+
+  static _ExecutionRankingEvidence _rankingExecutionCosts({
+    required EstimatedExecutionCosts? estimate,
+    required double maximumLoss,
+    required DateTime evaluatedAtUtc,
+    required Duration maximumAge,
+  }) {
+    if (estimate == null) {
+      return const _ExecutionRankingEvidence(
+        costs: null,
+        tag: 'cost:trade-idea-aggregate',
+      );
+    }
+    try {
+      estimate.validate();
+    } on FormatException {
+      return const _ExecutionRankingEvidence(
+        costs: null,
+        tag: 'cost:execution-quality-invalid-fallback',
+      );
+    }
+    if (estimate.evidenceQuality == ExecutionEvidenceQuality.insufficient) {
+      return const _ExecutionRankingEvidence(
+        costs: null,
+        tag: 'cost:execution-quality-insufficient-fallback',
+      );
+    }
+    final age = evaluatedAtUtc.difference(estimate.asOfUtc);
+    if (age.isNegative || age > maximumAge || maximumLoss <= 0) {
+      return const _ExecutionRankingEvidence(
+        costs: null,
+        tag: 'cost:execution-quality-stale-fallback',
+      );
+    }
+    return _ExecutionRankingEvidence(
+      costs: OpportunityExecutionCostEvidence(
+        feeR: estimate.fees / maximumLoss,
+        fundingR: estimate.funding / maximumLoss,
+        spreadR: estimate.spread / maximumLoss,
+        slippageR: estimate.slippage / maximumLoss,
+        latencyR: estimate.latency / maximumLoss,
+      ),
+      tag: 'cost:execution-quality:${estimate.modelVersion}',
+    );
   }
 
   static List<TradeIdea> _resolveConflictAndPreferredTimeframe(
@@ -110,4 +165,11 @@ abstract final class LocalLiveEconomicRanking {
     MarketRegime.transition => 0.35,
     MarketRegime.disorder => 0.7,
   };
+}
+
+final class _ExecutionRankingEvidence {
+  const _ExecutionRankingEvidence({required this.costs, required this.tag});
+
+  final OpportunityExecutionCostEvidence? costs;
+  final String tag;
 }
