@@ -62,7 +62,7 @@ final class AdaptiveManagementSnapshot {
     if (terminal) {
       return AdaptiveManagementSnapshot(
         state: state,
-        revision: revision,
+        revision: revision + 1,
         processedEventIds: {...processedEventIds, eventId},
       );
     }
@@ -86,10 +86,15 @@ final class AdaptiveManagementSnapshot {
       throw const FormatException('Management snapshot is invalid.');
     }
     final json = value.map((key, item) => MapEntry(key.toString(), item));
-    final version = (json['version'] as num?)?.toInt();
-    final revision = (json['revision'] as num?)?.toInt();
+    final versionValue = json['version'];
+    final revisionValue = json['revision'];
+    if (versionValue is! num || revisionValue is! num) {
+      throw const FormatException('Management snapshot version is invalid.');
+    }
+    final version = versionValue.toInt();
+    final revision = revisionValue.toInt();
     final stateName = json['state']?.toString() ?? '';
-    if (version != 1 || revision == null || revision < 0) {
+    if (version != 1 || revision < 0) {
       throw const FormatException('Management snapshot version is invalid.');
     }
     final state = AdaptiveManagementState.values.where(
@@ -98,11 +103,15 @@ final class AdaptiveManagementSnapshot {
     if (state.length != 1) {
       throw const FormatException('Management snapshot state is invalid.');
     }
-    final ids = (json['processedEventIds'] as List<Object?>? ?? const [])
-        .whereType<String>()
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toSet();
+    final rawIds = json['processedEventIds'];
+    if (rawIds != null && rawIds is! List<Object?>) {
+      throw const FormatException('Management event history is invalid.');
+    }
+    final values = rawIds as List<Object?>? ?? const [];
+    if (values.any((item) => item is! String || item.trim().isEmpty)) {
+      throw const FormatException('Management event history is invalid.');
+    }
+    final ids = values.cast<String>().map((item) => item.trim()).toSet();
     return AdaptiveManagementSnapshot(
       state: state.single,
       revision: revision,
