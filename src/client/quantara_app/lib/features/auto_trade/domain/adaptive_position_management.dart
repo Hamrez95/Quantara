@@ -36,18 +36,20 @@ final class AdaptiveManagementSnapshot {
   AdaptiveManagementSnapshot({
     required this.state,
     required this.revision,
-    required Set<String> processedEventIds,
-  }) : processedEventIds = Set.unmodifiable(processedEventIds);
+    required Map<String, AdaptiveManagementEventKind> processedEvents,
+  }) : processedEvents = Map.unmodifiable(processedEvents);
 
   factory AdaptiveManagementSnapshot.initial() => AdaptiveManagementSnapshot(
     state: AdaptiveManagementState.watch,
     revision: 0,
-    processedEventIds: const {},
+    processedEvents: const {},
   );
 
   final AdaptiveManagementState state;
   final int revision;
-  final Set<String> processedEventIds;
+  final Map<String, AdaptiveManagementEventKind> processedEvents;
+
+  Set<String> get processedEventIds => Set.unmodifiable(processedEvents.keys);
 
   bool get terminal =>
       state == AdaptiveManagementState.exited ||
@@ -58,28 +60,39 @@ final class AdaptiveManagementSnapshot {
     if (eventId.isEmpty) {
       throw const FormatException('Management event id is required.');
     }
-    if (processedEventIds.contains(eventId)) return this;
+    final priorKind = processedEvents[eventId];
+    if (priorKind != null) {
+      if (priorKind != event.kind) {
+        throw StateError('Management event id was reused with a different kind.');
+      }
+      return this;
+    }
     if (terminal) {
       return AdaptiveManagementSnapshot(
         state: state,
         revision: revision + 1,
-        processedEventIds: {...processedEventIds, eventId},
+        processedEvents: {...processedEvents, eventId: event.kind},
       );
     }
     final next = _transition(state, event.kind);
     return AdaptiveManagementSnapshot(
       state: next,
       revision: revision + 1,
-      processedEventIds: {...processedEventIds, eventId},
+      processedEvents: {...processedEvents, eventId: event.kind},
     );
   }
 
-  Map<String, Object?> toJson() => {
-    'version': 1,
-    'state': state.name,
-    'revision': revision,
-    'processedEventIds': processedEventIds.toList(growable: false)..sort(),
-  };
+  Map<String, Object?> toJson() {
+    final ids = processedEvents.keys.toList(growable: false)..sort();
+    return {
+      'version': 1,
+      'state': state.name,
+      'revision': revision,
+      'processedEvents': [
+        for (final id in ids) {'id': id, 'kind': processedEvents[id]!.name},
+      ],
+    };
+  }
 
   factory AdaptiveManagementSnapshot.fromJson(Object? value) {
     if (value is! Map<Object?, Object?>) {
@@ -88,34 +101,48 @@ final class AdaptiveManagementSnapshot {
     final json = value.map((key, item) => MapEntry(key.toString(), item));
     final versionValue = json['version'];
     final revisionValue = json['revision'];
-    if (versionValue is! num || revisionValue is! num) {
+    if (versionValue is! int || revisionValue is! int) {
       throw const FormatException('Management snapshot version is invalid.');
     }
-    final version = versionValue.toInt();
-    final revision = revisionValue.toInt();
+    if (versionValue != 1 || revisionValue < 0) {
+      throw const FormatException('Management snapshot version is invalid.');
+    }
     final stateName = json['state']?.toString() ?? '';
-    if (version != 1 || revision < 0) {
-      throw const FormatException('Management snapshot version is invalid.');
-    }
     final state = AdaptiveManagementState.values.where(
       (item) => item.name == stateName,
     );
     if (state.length != 1) {
       throw const FormatException('Management snapshot state is invalid.');
     }
-    final rawIds = json['processedEventIds'];
-    if (rawIds != null && rawIds is! List<Object?>) {
+    final rawEvents = json['processedEvents'];
+    if (rawEvents != null && rawEvents is! List<Object?>) {
       throw const FormatException('Management event history is invalid.');
     }
-    final values = rawIds as List<Object?>? ?? const [];
-    if (values.any((item) => item is! String || item.trim().isEmpty)) {
-      throw const FormatException('Management event history is invalid.');
+    final events = <String, AdaptiveManagementEventKind>{};
+    for (final rawEvent in rawEvents as List<Object?>? ?? const []) {
+      if (rawEvent is! Map<Object?, Object?>) {
+        throw const FormatException('Management event history is invalid.');
+      }
+      final eventJson = rawEvent.map(
+        (key, item) => MapEntry(key.toString(), item),
+      );
+      final id = eventJson['id']?.toString().trim() ?? '';
+      final kindName = eventJson['kind']?.toString() ?? '';
+      if (id.isEmpty || events.containsKey(id)) {
+        throw const FormatException('Management event history is invalid.');
+      }
+      final kinds = AdaptiveManagementEventKind.values.where(
+        (item) => item.name == kindName,
+      );
+      if (kinds.length != 1) {
+        throw const FormatException('Management event history is invalid.');
+      }
+      events[id] = kinds.single;
     }
-    final ids = values.cast<String>().map((item) => item.trim()).toSet();
     return AdaptiveManagementSnapshot(
       state: state.single,
-      revision: revision,
-      processedEventIds: ids,
+      revision: revisionValue,
+      processedEvents: events,
     );
   }
 
