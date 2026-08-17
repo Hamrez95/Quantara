@@ -61,12 +61,14 @@ void main() {
         availableMarginAfter: 90,
       );
 
-  PortfolioLiquidationEvidence evidence(double liquidationPrice, {DateTime? asOf}) =>
-      PortfolioLiquidationEvidence(
-        asOfUtc: asOf ?? now,
-        estimatedLiquidationPrice: liquidationPrice,
-        source: 'bitunix-private-account-v1',
-      );
+  PortfolioLiquidationEvidence evidence(
+    double liquidationPrice, {
+    DateTime? asOf,
+  }) => PortfolioLiquidationEvidence(
+    asOfUtc: asOf ?? now,
+    estimatedLiquidationPrice: liquidationPrice,
+    source: 'bitunix-private-account-v1',
+  );
 
   test('long stop must keep a minimum cushion above liquidation', () {
     const policy = PortfolioLiquidationPolicy(
