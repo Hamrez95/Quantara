@@ -94,10 +94,7 @@ void main() {
 
   PortfolioRiskLedger emptyLedger({double dailyRiskLimit = 10}) =>
       PortfolioRiskLedger.initial(
-        tradingDay: TradingDayId.start(
-          now: now,
-          timezoneOffsetMinutes: 0,
-        ),
+        tradingDay: TradingDayId.start(now: now, timezoneOffsetMinutes: 0),
         dailyRiskLimit: dailyRiskLimit,
       );
 
@@ -342,9 +339,7 @@ void main() {
       );
 
       expect(decision.selected.map((item) => item.proposalId), ['btc', 'xrp']);
-      final eth = decision.items.firstWhere(
-        (item) => item.proposalId == 'eth',
-      );
+      final eth = decision.items.firstWhere((item) => item.proposalId == 'eth');
       expect(eth.reason, PortfolioAllocationReason.correlationBucketLimit);
       expect(eth.correlationBucket, 'majors');
       expect(eth.correlationRiskBefore, 4);
