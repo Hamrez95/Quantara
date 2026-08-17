@@ -65,8 +65,7 @@ final class PortfolioAdmissionDecision {
     'liquidation': {
       'reason': liquidation.reason.name,
       'cushionFraction': liquidation.liquidationCushionFraction,
-      'minimumCushionFraction':
-          liquidation.minimumLiquidationCushionFraction,
+      'minimumCushionFraction': liquidation.minimumLiquidationCushionFraction,
       'marginHeadroomAfterEntry': liquidation.marginHeadroomAfterEntry,
       'minimumMarginHeadroom': liquidation.minimumMarginHeadroom,
     },
