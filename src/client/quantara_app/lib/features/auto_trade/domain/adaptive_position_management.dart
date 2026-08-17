@@ -63,7 +63,9 @@ final class AdaptiveManagementSnapshot {
     final priorKind = processedEvents[eventId];
     if (priorKind != null) {
       if (priorKind != event.kind) {
-        throw StateError('Management event id was reused with a different kind.');
+        throw StateError(
+          'Management event id was reused with a different kind.',
+        );
       }
       return this;
     }
