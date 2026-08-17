@@ -3,6 +3,7 @@ import 'dart:async';
 import '../data/bitunix_private_websocket_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/private_truth_models.dart';
+import 'private_order_execution_tracker.dart';
 import 'private_truth_reconciler.dart';
 import 'private_truth_telemetry.dart';
 import 'private_truth_reducer.dart';
@@ -34,6 +35,8 @@ final class PrivateTruthCoordinator {
   final int restRequestsPerVerification;
   final PrivateTruthTelemetryCollector _telemetry =
       PrivateTruthTelemetryCollector();
+  final PrivateOrderExecutionTracker _orderExecutionTracker =
+      PrivateOrderExecutionTracker();
 
   final StreamController<PrivateTruthProjection> _projections =
       StreamController<PrivateTruthProjection>.broadcast(sync: true);
@@ -54,6 +57,9 @@ final class PrivateTruthCoordinator {
   PrivateTruthProjection get current => _projection;
   AutoTradeAccountSnapshot? get latestRestSnapshot => _latestRestSnapshot;
   bool get isRunning => _running;
+
+  PrivateOrderExecutionObservation? orderExecutionObservation(String orderId) =>
+      _orderExecutionTracker.observationFor(orderId);
 
   PrivateTruthTelemetrySnapshot telemetrySnapshot([DateTime? nowUtc]) =>
       _telemetry.snapshot(
@@ -89,6 +95,7 @@ final class PrivateTruthCoordinator {
   Future<void> start(BitunixApiCredentials credentials) async {
     if (_disposed) throw StateError('Private truth coordinator is disposed.');
     if (_running) return;
+    _orderExecutionTracker.clear();
     _credentials = credentials;
     _running = true;
     _eventSubscription = _socketClient.events.listen(_onEvent);
@@ -117,6 +124,7 @@ final class PrivateTruthCoordinator {
     await _statusSubscription?.cancel();
     _statusSubscription = null;
     await _socketClient.stop();
+    _orderExecutionTracker.clear();
     _setProjection(
       PrivateTruthReducer.markStale(
         current: _projection,
@@ -137,9 +145,12 @@ final class PrivateTruthCoordinator {
   void _onEvent(PrivateTruthEvent event) {
     if (!_running) return;
     _telemetry.recordEvent(event);
-    _setProjection(
-      PrivateTruthReducer.apply(current: _projection, event: event),
-    );
+    final current = _projection;
+    final next = PrivateTruthReducer.apply(current: current, event: event);
+    if (next.metrics.acceptedEvents > current.metrics.acceptedEvents) {
+      _orderExecutionTracker.recordAccepted(event);
+    }
+    _setProjection(next);
   }
 
   void _onSocketStatus(PrivateWsClientStatus status) {

@@ -138,6 +138,21 @@ void main() {
       expect(confirmation!.order.orderId, 'ord-1');
       expect(confirmation.position.positionId, 'pos-1');
       expect(confirmation.order.orderStatus, 'FILLED');
+
+      final execution = coordinator.orderExecutionObservation('ord-1');
+      final fillAt = DateTime.fromMillisecondsSinceEpoch(
+        1786795200123,
+        isUtc: true,
+      );
+      expect(execution, isNotNull);
+      expect(execution!.correlationId, 'client-1');
+      expect(execution.acknowledgedAtUtc, fillAt);
+      expect(execution.firstFillAtUtc, fillAt);
+      expect(execution.finalFillAtUtc, fillAt);
+      expect(execution.filledQuantity, 0.01);
+      expect(execution.fillRatio, 1);
+      expect(execution.weightedAverageFillPrice, 120000);
+      expect(execution.ambiguous, isFalse);
       await coordinator.dispose();
     },
   );
