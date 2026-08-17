@@ -69,9 +69,7 @@ final class PortfolioLiquidationPolicy {
     required DateTime nowUtc,
   }) {
     if (!baseDecision.allowed) {
-      return _blocked(
-        reason: PortfolioLiquidationReason.baseDecisionRejected,
-      );
+      return _blocked(reason: PortfolioLiquidationReason.baseDecisionRejected);
     }
     if (maximumEvidenceAge <= Duration.zero ||
         !minimumLiquidationCushionFraction.isFinite ||
@@ -94,9 +92,7 @@ final class PortfolioLiquidationPolicy {
     if (!spendable.isFinite ||
         !baseDecision.requiredMargin.isFinite ||
         baseDecision.requiredMargin < 0) {
-      return _blocked(
-        reason: PortfolioLiquidationReason.invalidAccountInputs,
-      );
+      return _blocked(reason: PortfolioLiquidationReason.invalidAccountInputs);
     }
     final postEntryHeadroom = math
         .max(0, spendable - baseDecision.requiredMargin)
