@@ -64,7 +64,11 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        shell: bash
+        run: |
+          dart format test/portfolio_capital_allocator_test.dart
+          git diff -- test/portfolio_capital_allocator_test.dart
+          exit 1
 
       - name: Analyze
         shell: bash
