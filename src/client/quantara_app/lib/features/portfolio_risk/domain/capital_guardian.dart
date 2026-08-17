@@ -64,15 +64,13 @@ final class CapitalGuardianPolicy {
       timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
     );
     final weeklyLimit = weeklyLossLimit(ledger.dailyRiskLimit);
-    final weeklyRemaining = math.max(
-      0,
-      weeklyLimit - normalized.weeklyRealizedLoss,
-    );
+    final weeklyRemaining = math
+        .max(0, weeklyLimit - normalized.weeklyRealizedLoss)
+        .toDouble();
     final multiplier = normalized.riskMultiplier(this);
-    final maximumAllowedEntryRisk = math.min(
-      weeklyRemaining,
-      ledger.dailyRisk.limit * multiplier,
-    );
+    final maximumAllowedEntryRisk = math
+        .min(weeklyRemaining, ledger.dailyRisk.limit * multiplier)
+        .toDouble();
 
     CapitalGuardianDecision blocked(CapitalGuardianBreakerReason reason) =>
         CapitalGuardianDecision(
