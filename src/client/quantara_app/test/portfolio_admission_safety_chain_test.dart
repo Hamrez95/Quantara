@@ -163,7 +163,10 @@ void main() {
     ).toJson();
 
     expect(json['proposedMaximumLoss'], 2);
-    expect((json['correlation'] as Map<String, Object?>)['bucket'], 'large-cap-beta');
+    expect(
+      (json['correlation'] as Map<String, Object?>)['bucket'],
+      'large-cap-beta',
+    );
     expect(
       (json['liquidation'] as Map<String, Object?>)['cushionFraction'],
       0.05,
