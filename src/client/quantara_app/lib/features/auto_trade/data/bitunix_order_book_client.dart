@@ -5,7 +5,10 @@ import 'package:http/http.dart' as http;
 import 'bitunix_order_book_top.dart';
 
 final class BitunixOrderBookClient {
-  BitunixOrderBookClient({required http.Client client}) : _client = client;
+  factory BitunixOrderBookClient({required http.Client client}) =>
+      BitunixOrderBookClient._(client);
+
+  BitunixOrderBookClient._(this._client);
 
   static const _host = 'fapi.bitunix.com';
   static const _depthPath = '/api/v1/futures/market/depth';
