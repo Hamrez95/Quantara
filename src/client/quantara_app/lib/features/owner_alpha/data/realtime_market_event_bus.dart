@@ -40,11 +40,21 @@ final class RealtimeMarketEventBus {
   final Map<RealtimeCandleStreamKey, _StreamEventQueue> _streams = {};
   var _closed = false;
   var _activeStreamCount = 0;
+  var _pendingEventCount = 0;
+  var _maximumObservedPendingEventCount = 0;
+  var _maximumObservedPendingPerStream = 0;
   var _deliveredCount = 0;
   var _coalescedCount = 0;
   var _backpressureCount = 0;
 
   int get activeStreamCount => _activeStreamCount;
+
+  int get pendingEventCount => _pendingEventCount;
+
+  int get maximumObservedPendingEventCount => _maximumObservedPendingEventCount;
+
+  int get maximumObservedPendingPerStream =>
+      _maximumObservedPendingPerStream;
 
   int get deliveredCount => _deliveredCount;
 
@@ -81,6 +91,7 @@ final class RealtimeMarketEventBus {
         if (pending.update.isCritical) {
           retained.add(pending);
         } else {
+          _pendingEventCount--;
           _coalescedCount++;
           pending.complete(RealtimeMarketEventDelivery.coalesced);
         }
@@ -101,6 +112,7 @@ final class RealtimeMarketEventBus {
 
     final pending = _PendingMarketEvent(update);
     stream.queue.addLast(pending);
+    _recordEnqueue(stream.queue.length);
     if (!stream.draining) {
       stream.draining = true;
       unawaited(_drain(update.key, stream));
@@ -121,6 +133,7 @@ final class RealtimeMarketEventBus {
     for (final stream in _streams.values) {
       while (stream.queue.isNotEmpty) {
         final pending = stream.queue.removeFirst();
+        _pendingEventCount--;
         pending.completeError(
           StateError('The market event bus closed before delivery.'),
         );
@@ -138,6 +151,7 @@ final class RealtimeMarketEventBus {
     try {
       while (stream.queue.isNotEmpty) {
         final pending = stream.queue.removeFirst();
+        _pendingEventCount--;
         try {
           await handler(pending.update);
           _deliveredCount++;
@@ -158,6 +172,16 @@ final class RealtimeMarketEventBus {
         }
         if (!stream.drained.isCompleted) stream.drained.complete();
       }
+    }
+  }
+
+  void _recordEnqueue(int streamPendingCount) {
+    _pendingEventCount++;
+    if (_pendingEventCount > _maximumObservedPendingEventCount) {
+      _maximumObservedPendingEventCount = _pendingEventCount;
+    }
+    if (streamPendingCount > _maximumObservedPendingPerStream) {
+      _maximumObservedPendingPerStream = streamPendingCount;
     }
   }
 }
