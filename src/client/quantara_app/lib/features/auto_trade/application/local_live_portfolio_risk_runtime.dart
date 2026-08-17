@@ -87,13 +87,14 @@ final class LocalLivePortfolioRiskRuntime {
       );
       var decision = _applyGuardianDecision(baseDecision, guardianDecision);
       if (decision.allowed) {
-        final correlationDecision = PortfolioCorrelationPolicy(
-          maximumBucketRiskFraction: maximumAssetGroupRiskFraction,
-        ).evaluate(
-          ledger: ledger,
-          candidate: candidate,
-          baseDecision: decision,
-        );
+        final correlationDecision =
+            PortfolioCorrelationPolicy(
+              maximumBucketRiskFraction: maximumAssetGroupRiskFraction,
+            ).evaluate(
+              ledger: ledger,
+              candidate: candidate,
+              baseDecision: decision,
+            );
         if (!correlationDecision.allowed) {
           decision = PortfolioEntryDecision(
             allowed: false,

@@ -167,10 +167,7 @@ void main() {
     await store.mutateRiskAndGuardian<void>((ledger, guardian) async {
       final base =
           guardian ??
-          CapitalGuardianState.initial(
-            now: now,
-            timezoneOffsetMinutes: 0,
-          );
+          CapitalGuardianState.initial(now: now, timezoneOffsetMinutes: 0);
       final hardStopped = base.recordEnvironment(
         drawdownFraction: 0.11,
         abnormalVolatility: false,
