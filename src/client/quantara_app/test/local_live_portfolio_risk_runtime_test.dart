@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/core/persistence/quantara_durable_database.dart';
 import 'package:quantara_app/features/auto_trade/application/local_live_portfolio_risk_runtime.dart';
 import 'package:quantara_app/features/portfolio_risk/data/portfolio_risk_ledger_store.dart';
+import 'package:quantara_app/features/portfolio_risk/domain/capital_guardian.dart';
 import 'package:quantara_app/features/portfolio_risk/domain/portfolio_risk_models.dart';
 import 'package:sembast/sembast_memory.dart';
 
@@ -145,6 +146,74 @@ void main() {
       await database.close();
     },
   );
+
+  test('persisted Guardian hard stop blocks Local Live atomically', () async {
+    final database = SembastQuantaraDurableDatabase(
+      factory: databaseFactoryMemory,
+      path: 'local-live-guardian-runtime.db',
+    );
+    await database.initialize();
+    final store = DatabasePortfolioRiskLedgerStore(
+      databaseFactory: () async => database,
+      recordKey: 'local-live-guardian-ledger',
+    );
+    final runtime = LocalLivePortfolioRiskRuntime(
+      dailyRiskLimit: 10,
+      store: store,
+    );
+    final now = DateTime.utc(2026, 8, 5);
+    await runtime.load(now: now);
+
+    await store.mutateRiskAndGuardian<void>((ledger, guardian) async {
+      final base =
+          guardian ??
+          CapitalGuardianState.initial(
+            now: now,
+            timezoneOffsetMinutes: 0,
+          );
+      final hardStopped = base.recordEnvironment(
+        drawdownFraction: 0.11,
+        abnormalVolatility: false,
+        now: now,
+        timezoneOffsetMinutes: 0,
+        policy: const CapitalGuardianPolicy(),
+      );
+      return PortfolioRiskAndGuardianMutation<void>(
+        value: null,
+        nextLedger: ledger,
+        nextGuardian: hardStopped,
+      );
+    });
+
+    final blocked = await runtime.reserve(
+      candidate: _candidate(
+        id: 'btc',
+        symbol: 'BTCUSDT',
+        side: PortfolioSide.long,
+        riskDistance: 2,
+        requiredMargin: 10,
+      ),
+      account: _account(now),
+      now: now,
+    );
+
+    expect(blocked.decision.allowed, isFalse);
+    expect(
+      blocked.decision.reason,
+      PortfolioEntryBlockReason.riskBudgetInsufficient,
+    );
+    expect(
+      blocked.guardianDecision?.reason,
+      CapitalGuardianBreakerReason.drawdownHardStop,
+    );
+    expect(blocked.ledger.activeReservations, isEmpty);
+    expect(
+      (await store.loadCapitalGuardian())?.drawdownTier,
+      CapitalGuardianDrawdownTier.hardStop,
+    );
+
+    await database.close();
+  });
 
   test('runtime ledger is isolated from the simulation ledger', () async {
     final database = SembastQuantaraDurableDatabase(
