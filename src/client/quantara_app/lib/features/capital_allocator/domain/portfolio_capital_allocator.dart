@@ -246,7 +246,9 @@ final class PortfolioCapitalAllocator {
     for (final proposal in ranked) {
       PortfolioAllocationReason reason;
       _PortfolioAllocationCorrelationImpact? correlationImpact;
-      if (correlation != null && proposal.valid) {
+      if (correlation != null &&
+          proposal.valid &&
+          proposal.riskDecision.allowed) {
         final bucket = correlation.policy.bucketFor(
           symbol: proposal.candidate.symbol,
           assetGroup: proposal.candidate.assetGroup,
