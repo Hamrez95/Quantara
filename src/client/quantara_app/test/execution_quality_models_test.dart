@@ -44,10 +44,7 @@ void main() {
 
   test('fill ratio represents partial fills and rejects overfill', () {
     expect(
-      ExecutionQualityMath.fillRatio(
-        plannedQuantity: 10,
-        filledQuantity: 4,
-      ),
+      ExecutionQualityMath.fillRatio(plannedQuantity: 10, filledQuantity: 4),
       0.4,
     );
     expect(
@@ -78,15 +75,9 @@ void main() {
     );
 
     expect(longDecision.allowed, isFalse);
-    expect(
-      longDecision.reason,
-      NoChaseDecisionReason.priceBeyondBoundary,
-    );
+    expect(longDecision.reason, NoChaseDecisionReason.priceBeyondBoundary);
     expect(shortDecision.allowed, isFalse);
-    expect(
-      shortDecision.reason,
-      NoChaseDecisionReason.priceBeyondBoundary,
-    );
+    expect(shortDecision.reason, NoChaseDecisionReason.priceBeyondBoundary);
   });
 
   test('no-chase accepts favorable prices inside the validity window', () {
@@ -166,23 +157,26 @@ void main() {
     expect(confirmed.total, 11);
   });
 
-  test('execution lifecycle enforces UTC ordering with stable correlation id', () {
-    final valid = ExecutionLifecycleTiming(
-      correlationId: 'setup-1:attempt-1',
-      decisionAtUtc: now,
-      submitAtUtc: now.add(const Duration(milliseconds: 20)),
-      acknowledgedAtUtc: now.add(const Duration(milliseconds: 40)),
-      firstFillAtUtc: now.add(const Duration(milliseconds: 50)),
-      finalFillAtUtc: now.add(const Duration(milliseconds: 80)),
-    );
-    valid.validate();
+  test(
+    'execution lifecycle enforces UTC ordering with stable correlation id',
+    () {
+      final valid = ExecutionLifecycleTiming(
+        correlationId: 'setup-1:attempt-1',
+        decisionAtUtc: now,
+        submitAtUtc: now.add(const Duration(milliseconds: 20)),
+        acknowledgedAtUtc: now.add(const Duration(milliseconds: 40)),
+        firstFillAtUtc: now.add(const Duration(milliseconds: 50)),
+        finalFillAtUtc: now.add(const Duration(milliseconds: 80)),
+      );
+      valid.validate();
 
-    final invalid = ExecutionLifecycleTiming(
-      correlationId: 'setup-1:attempt-2',
-      decisionAtUtc: now,
-      submitAtUtc: now.add(const Duration(milliseconds: 50)),
-      acknowledgedAtUtc: now.add(const Duration(milliseconds: 40)),
-    );
-    expect(invalid.validate, throwsFormatException);
-  });
+      final invalid = ExecutionLifecycleTiming(
+        correlationId: 'setup-1:attempt-2',
+        decisionAtUtc: now,
+        submitAtUtc: now.add(const Duration(milliseconds: 50)),
+        acknowledgedAtUtc: now.add(const Duration(milliseconds: 40)),
+      );
+      expect(invalid.validate, throwsFormatException);
+    },
+  );
 }
