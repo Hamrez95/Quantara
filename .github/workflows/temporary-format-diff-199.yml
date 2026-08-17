@@ -1,0 +1,25 @@
+name: Temporary format diff issue 199
+
+on:
+  push:
+    branches:
+      - feat/issue-199-execution-quality-foundation
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Print formatter diff
+        working-directory: src/client/quantara_app
+        run: |
+          dart format lib/features/auto_trade/domain/execution_quality_models.dart test/execution_quality_models_test.dart
+          git diff -- lib/features/auto_trade/domain/execution_quality_models.dart test/execution_quality_models_test.dart
