@@ -7,6 +7,9 @@ import 'portfolio_risk_models.dart';
 enum PortfolioLiquidationReason {
   allowed,
   baseDecisionRejected,
+  invalidPolicy,
+  invalidCandidateInputs,
+  invalidAccountInputs,
   invalidEvidence,
   staleEvidence,
   invalidLiquidationGeometry,
@@ -52,8 +55,7 @@ final class PortfolioLiquidationPolicy {
     this.maximumEvidenceAge = const Duration(seconds: 5),
     this.minimumLiquidationCushionFraction = 0.015,
     this.minimumPostEntryMarginHeadroomFraction = 0.25,
-  }) : assert(minimumLiquidationCushionFraction > 0),
-       assert(minimumPostEntryMarginHeadroomFraction >= 0);
+  });
 
   final Duration maximumEvidenceAge;
   final double minimumLiquidationCushionFraction;
@@ -66,7 +68,36 @@ final class PortfolioLiquidationPolicy {
     required PortfolioLiquidationEvidence evidence,
     required DateTime nowUtc,
   }) {
+    if (!baseDecision.allowed) {
+      return _blocked(
+        reason: PortfolioLiquidationReason.baseDecisionRejected,
+      );
+    }
+    if (maximumEvidenceAge <= Duration.zero ||
+        !minimumLiquidationCushionFraction.isFinite ||
+        minimumLiquidationCushionFraction <= 0 ||
+        minimumLiquidationCushionFraction > 1 ||
+        !minimumPostEntryMarginHeadroomFraction.isFinite ||
+        minimumPostEntryMarginHeadroomFraction < 0) {
+      return _blocked(reason: PortfolioLiquidationReason.invalidPolicy);
+    }
+    if (!candidate.entryPrice.isFinite ||
+        !candidate.stopPrice.isFinite ||
+        candidate.entryPrice <= 0 ||
+        candidate.stopPrice <= 0) {
+      return _blocked(
+        reason: PortfolioLiquidationReason.invalidCandidateInputs,
+      );
+    }
+
     final spendable = account.marginBudget.spendable;
+    if (!spendable.isFinite ||
+        !baseDecision.requiredMargin.isFinite ||
+        baseDecision.requiredMargin < 0) {
+      return _blocked(
+        reason: PortfolioLiquidationReason.invalidAccountInputs,
+      );
+    }
     final postEntryHeadroom = math
         .max(0, spendable - baseDecision.requiredMargin)
         .toDouble();
@@ -85,11 +116,7 @@ final class PortfolioLiquidationPolicy {
       minimumMarginHeadroom: minimumHeadroom,
     );
 
-    if (!baseDecision.allowed) {
-      return blocked(PortfolioLiquidationReason.baseDecisionRejected);
-    }
-    if (maximumEvidenceAge <= Duration.zero ||
-        !nowUtc.isUtc ||
+    if (!nowUtc.isUtc ||
         !evidence.asOfUtc.isUtc ||
         evidence.source.trim().isEmpty ||
         !evidence.estimatedLiquidationPrice.isFinite ||
@@ -146,4 +173,19 @@ final class PortfolioLiquidationPolicy {
       minimumMarginHeadroom: minimumHeadroom,
     );
   }
+
+  PortfolioLiquidationDecision _blocked({
+    required PortfolioLiquidationReason reason,
+  }) => PortfolioLiquidationDecision(
+    allowed: false,
+    reason: reason,
+    liquidationCushionFraction: 0,
+    minimumLiquidationCushionFraction:
+        minimumLiquidationCushionFraction.isFinite &&
+            minimumLiquidationCushionFraction > 0
+        ? minimumLiquidationCushionFraction
+        : 0,
+    marginHeadroomAfterEntry: 0,
+    minimumMarginHeadroom: 0,
+  );
 }
