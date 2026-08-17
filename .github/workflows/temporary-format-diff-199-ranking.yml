@@ -1,0 +1,25 @@
+name: Temporary format diff issue 199 ranking
+
+on:
+  push:
+    branches:
+      - feat/issue-199-ranking-cost-adapter
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Print formatter diff
+        working-directory: src/client/quantara_app
+        run: |
+          dart format lib/features/auto_trade/application/local_live_economic_ranking.dart test/local_live_economic_ranking_test.dart
+          git diff -- lib/features/auto_trade/application/local_live_economic_ranking.dart test/local_live_economic_ranking_test.dart
