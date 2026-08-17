@@ -3,37 +3,38 @@ import 'package:quantara_app/features/auto_trade/domain/adaptive_position_manage
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
 void main() {
-  AdaptiveManagementEvent event(
-    String id,
-    AdaptiveManagementEventKind kind,
-  ) => AdaptiveManagementEvent(id: id, kind: kind);
+  AdaptiveManagementEvent event(String id, AdaptiveManagementEventKind kind) =>
+      AdaptiveManagementEvent(id: id, kind: kind);
 
-  test('valid lifecycle progresses deterministically to runner then exited', () {
-    var snapshot = AdaptiveManagementSnapshot.initial();
-    snapshot = snapshot.apply(event('1', AdaptiveManagementEventKind.arm));
-    expect(snapshot.state, AdaptiveManagementState.armed);
-    snapshot = snapshot.apply(
-      event('2', AdaptiveManagementEventKind.entryConfirmed),
-    );
-    expect(snapshot.state, AdaptiveManagementState.entered);
-    snapshot = snapshot.apply(
-      event('3', AdaptiveManagementEventKind.managementActivated),
-    );
-    expect(snapshot.state, AdaptiveManagementState.active);
-    snapshot = snapshot.apply(
-      event('4', AdaptiveManagementEventKind.protectionConfirmed),
-    );
-    expect(snapshot.state, AdaptiveManagementState.protected);
-    snapshot = snapshot.apply(
-      event('5', AdaptiveManagementEventKind.runnerActivated),
-    );
-    expect(snapshot.state, AdaptiveManagementState.runner);
-    snapshot = snapshot.apply(
-      event('6', AdaptiveManagementEventKind.exitConfirmed),
-    );
-    expect(snapshot.state, AdaptiveManagementState.exited);
-    expect(snapshot.revision, 6);
-  });
+  test(
+    'valid lifecycle progresses deterministically to runner then exited',
+    () {
+      var snapshot = AdaptiveManagementSnapshot.initial();
+      snapshot = snapshot.apply(event('1', AdaptiveManagementEventKind.arm));
+      expect(snapshot.state, AdaptiveManagementState.armed);
+      snapshot = snapshot.apply(
+        event('2', AdaptiveManagementEventKind.entryConfirmed),
+      );
+      expect(snapshot.state, AdaptiveManagementState.entered);
+      snapshot = snapshot.apply(
+        event('3', AdaptiveManagementEventKind.managementActivated),
+      );
+      expect(snapshot.state, AdaptiveManagementState.active);
+      snapshot = snapshot.apply(
+        event('4', AdaptiveManagementEventKind.protectionConfirmed),
+      );
+      expect(snapshot.state, AdaptiveManagementState.protected);
+      snapshot = snapshot.apply(
+        event('5', AdaptiveManagementEventKind.runnerActivated),
+      );
+      expect(snapshot.state, AdaptiveManagementState.runner);
+      snapshot = snapshot.apply(
+        event('6', AdaptiveManagementEventKind.exitConfirmed),
+      );
+      expect(snapshot.state, AdaptiveManagementState.exited);
+      expect(snapshot.revision, 6);
+    },
+  );
 
   test('duplicate event id is idempotent', () {
     final armed = AdaptiveManagementSnapshot.initial().apply(
