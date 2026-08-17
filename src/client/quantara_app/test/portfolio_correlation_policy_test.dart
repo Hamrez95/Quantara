@@ -97,21 +97,12 @@ void main() {
       },
     );
     final ledger = ledgerWith([
-      openRisk(
-        'btc',
-        symbol: 'BTCUSDT',
-        assetGroup: 'crypto',
-        risk: 4,
-      ),
+      openRisk('btc', symbol: 'BTCUSDT', assetGroup: 'crypto', risk: 4),
     ]);
 
     final decision = policy.evaluate(
       ledger: ledger,
-      candidate: candidate(
-        'eth',
-        symbol: 'ETHUSDT',
-        assetGroup: 'crypto',
-      ),
+      candidate: candidate('eth', symbol: 'ETHUSDT', assetGroup: 'crypto'),
       baseDecision: allowed(3),
     );
 
@@ -132,21 +123,12 @@ void main() {
       },
     );
     final ledger = ledgerWith([
-      openRisk(
-        'btc',
-        symbol: 'BTCUSDT',
-        assetGroup: 'crypto',
-        risk: 5,
-      ),
+      openRisk('btc', symbol: 'BTCUSDT', assetGroup: 'crypto', risk: 5),
     ]);
 
     final decision = policy.evaluate(
       ledger: ledger,
-      candidate: candidate(
-        'sol',
-        symbol: 'SOLUSDT',
-        assetGroup: 'crypto',
-      ),
+      candidate: candidate('sol', symbol: 'SOLUSDT', assetGroup: 'crypto'),
       baseDecision: allowed(3),
     );
 
@@ -159,21 +141,12 @@ void main() {
   test('unknown symbols fall back to a conservative asset-group bucket', () {
     const policy = PortfolioCorrelationPolicy(maximumBucketRiskFraction: 0.5);
     final ledger = ledgerWith([
-      openRisk(
-        'a',
-        symbol: 'AAAUSDT',
-        assetGroup: 'crypto',
-        risk: 3,
-      ),
+      openRisk('a', symbol: 'AAAUSDT', assetGroup: 'crypto', risk: 3),
     ]);
 
     final decision = policy.evaluate(
       ledger: ledger,
-      candidate: candidate(
-        'b',
-        symbol: 'BBBUSDT',
-        assetGroup: 'crypto',
-      ),
+      candidate: candidate('b', symbol: 'BBBUSDT', assetGroup: 'crypto'),
       baseDecision: allowed(2.1),
     );
 
@@ -191,21 +164,12 @@ void main() {
       },
     );
     final ledger = ledgerWith([
-      openRisk(
-        'btc',
-        symbol: 'BTCUSDT',
-        assetGroup: 'crypto',
-        risk: 3,
-      ),
+      openRisk('btc', symbol: 'BTCUSDT', assetGroup: 'crypto', risk: 3),
     ]);
 
     final decision = policy.evaluate(
       ledger: ledger,
-      candidate: candidate(
-        'eth',
-        symbol: 'ETHUSDT',
-        assetGroup: 'crypto',
-      ),
+      candidate: candidate('eth', symbol: 'ETHUSDT', assetGroup: 'crypto'),
       baseDecision: allowed(2),
     );
 
@@ -228,11 +192,7 @@ void main() {
 
     final decision = policy.evaluate(
       ledger: ledgerWith(const []),
-      candidate: candidate(
-        'btc',
-        symbol: 'BTCUSDT',
-        assetGroup: 'crypto',
-      ),
+      candidate: candidate('btc', symbol: 'BTCUSDT', assetGroup: 'crypto'),
       baseDecision: blocked,
     );
 
