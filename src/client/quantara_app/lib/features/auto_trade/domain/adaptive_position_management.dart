@@ -122,26 +122,28 @@ final class AdaptiveManagementSnapshot {
       return AdaptiveManagementState.exited;
     }
     return switch ((current, event)) {
-      (
-        AdaptiveManagementState.watch,
-        AdaptiveManagementEventKind.arm,
-      ) => AdaptiveManagementState.armed,
+      (AdaptiveManagementState.watch, AdaptiveManagementEventKind.arm) =>
+        AdaptiveManagementState.armed,
       (
         AdaptiveManagementState.armed,
         AdaptiveManagementEventKind.entryConfirmed,
-      ) => AdaptiveManagementState.entered,
+      ) =>
+        AdaptiveManagementState.entered,
       (
         AdaptiveManagementState.entered,
         AdaptiveManagementEventKind.managementActivated,
-      ) => AdaptiveManagementState.active,
+      ) =>
+        AdaptiveManagementState.active,
       (
         AdaptiveManagementState.active,
         AdaptiveManagementEventKind.protectionConfirmed,
-      ) => AdaptiveManagementState.protected,
+      ) =>
+        AdaptiveManagementState.protected,
       (
         AdaptiveManagementState.protected,
         AdaptiveManagementEventKind.runnerActivated,
-      ) => AdaptiveManagementState.runner,
+      ) =>
+        AdaptiveManagementState.runner,
       _ => throw StateError(
         'Invalid adaptive management transition: ${current.name} + ${event.name}.',
       ),
