@@ -52,8 +52,7 @@ final class PortfolioLiquidationPolicy {
     this.maximumEvidenceAge = const Duration(seconds: 5),
     this.minimumLiquidationCushionFraction = 0.015,
     this.minimumPostEntryMarginHeadroomFraction = 0.25,
-  }) : assert(maximumEvidenceAge > Duration.zero),
-       assert(minimumLiquidationCushionFraction > 0),
+  }) : assert(minimumLiquidationCushionFraction > 0),
        assert(minimumPostEntryMarginHeadroomFraction >= 0);
 
   final Duration maximumEvidenceAge;
@@ -89,7 +88,8 @@ final class PortfolioLiquidationPolicy {
     if (!baseDecision.allowed) {
       return blocked(PortfolioLiquidationReason.baseDecisionRejected);
     }
-    if (!nowUtc.isUtc ||
+    if (maximumEvidenceAge <= Duration.zero ||
+        !nowUtc.isUtc ||
         !evidence.asOfUtc.isUtc ||
         evidence.source.trim().isEmpty ||
         !evidence.estimatedLiquidationPrice.isFinite ||
