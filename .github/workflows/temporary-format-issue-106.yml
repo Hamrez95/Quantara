@@ -1,0 +1,58 @@
+name: Temporary format issue 106
+
+on:
+  push:
+    branches:
+      - 'feat/issue-106-capital-guardian'
+    paths:
+      - 'src/client/quantara_app/lib/features/portfolio_risk/**'
+      - 'src/client/quantara_app/test/capital_guardian_policy_test.dart'
+      - '.github/workflows/temporary-format-issue-106.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/issue-106-capital-guardian
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+
+      - name: Format changed Dart files
+        run: |
+          dart format \
+            lib/features/portfolio_risk/domain/capital_guardian.dart \
+            lib/features/portfolio_risk/data/portfolio_risk_ledger_store.dart \
+            lib/features/portfolio_risk/application/portfolio_risk_coordinator.dart \
+            test/capital_guardian_policy_test.dart
+
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No formatting changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            lib/features/portfolio_risk/domain/capital_guardian.dart \
+            lib/features/portfolio_risk/data/portfolio_risk_ledger_store.dart \
+            lib/features/portfolio_risk/application/portfolio_risk_coordinator.dart \
+            test/capital_guardian_policy_test.dart
+          git commit -m 'style(risk): apply dart formatter'
+          git push origin HEAD:feat/issue-106-capital-guardian
