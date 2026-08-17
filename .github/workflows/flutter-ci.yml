@@ -64,11 +64,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        shell: bash
-        run: |
-          dart format lib/features/owner_alpha/data/realtime_market_event_bus.dart
-          git diff -- lib/features/owner_alpha/data/realtime_market_event_bus.dart
-          exit 1
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         shell: bash
