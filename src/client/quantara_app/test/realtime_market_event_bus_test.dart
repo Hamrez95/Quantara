@@ -176,6 +176,68 @@ void main() {
       },
     );
 
+    test('tracks queue pressure in O(1) bounded counters', () async {
+      final gate = Completer<void>();
+      final handlersStarted = Completer<void>();
+      var activeHandlers = 0;
+      final bus = RealtimeMarketEventBus(
+        maximumPendingPerStream: 4,
+        handler: (update) async {
+          activeHandlers++;
+          if (activeHandlers == 2 && !handlersStarted.isCompleted) {
+            handlersStarted.complete();
+          }
+          await gate.future;
+        },
+      );
+
+      final btcFirst = bus.publish(
+        _update(
+          RealtimeCandlePipelineDisposition.candleClosed,
+          symbol: 'BTCUSDT',
+        ),
+      );
+      final ethFirst = bus.publish(
+        _update(
+          RealtimeCandlePipelineDisposition.candleClosed,
+          symbol: 'ETHUSDT',
+        ),
+      );
+      await handlersStarted.future;
+
+      final btcSecond = bus.publish(
+        _update(
+          RealtimeCandlePipelineDisposition.candleClosed,
+          symbol: 'BTCUSDT',
+          close: 102,
+        ),
+      );
+      final btcThird = bus.publish(
+        _update(
+          RealtimeCandlePipelineDisposition.gapDetected,
+          symbol: 'BTCUSDT',
+          close: 103,
+        ),
+      );
+      final ethSecond = bus.publish(
+        _update(
+          RealtimeCandlePipelineDisposition.candleClosed,
+          symbol: 'ETHUSDT',
+          close: 104,
+        ),
+      );
+
+      expect(bus.pendingEventCount, 3);
+      expect(bus.maximumObservedPendingEventCount, 3);
+      expect(bus.maximumObservedPendingPerStream, 2);
+
+      gate.complete();
+      await Future.wait([btcFirst, ethFirst, btcSecond, btcThird, ethSecond]);
+      expect(bus.pendingEventCount, 0);
+      expect(bus.maximumObservedPendingEventCount, 3);
+      expect(bus.maximumObservedPendingPerStream, 2);
+    });
+
     test(
       'handler failure does not poison later events for the stream',
       () async {
