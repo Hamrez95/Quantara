@@ -21,25 +21,22 @@ void main() {
     },
   );
 
-  test(
-    'restart snapshot rejects state unsupported by event history',
-    () {
-      expect(
-        () => AdaptiveManagementSnapshot.fromJson({
-          'version': 1,
-          'state': 'protected',
-          'revision': 4,
-          'processedEvents': [
-            {'id': '1', 'kind': 'arm'},
-            {'id': '2', 'kind': 'entryConfirmed'},
-            {'id': '3', 'kind': 'managementActivated'},
-            {'id': '4', 'kind': 'runnerActivated'},
-          ],
-        }),
-        throwsFormatException,
-      );
-    },
-  );
+  test('restart snapshot rejects state unsupported by event history', () {
+    expect(
+      () => AdaptiveManagementSnapshot.fromJson({
+        'version': 1,
+        'state': 'protected',
+        'revision': 4,
+        'processedEvents': [
+          {'id': '1', 'kind': 'arm'},
+          {'id': '2', 'kind': 'entryConfirmed'},
+          {'id': '3', 'kind': 'managementActivated'},
+          {'id': '4', 'kind': 'runnerActivated'},
+        ],
+      }),
+      throwsFormatException,
+    );
+  });
 
   test(
     'valid terminal snapshot with absorbed audit event survives restart',
