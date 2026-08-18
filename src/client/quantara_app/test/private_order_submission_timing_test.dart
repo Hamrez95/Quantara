@@ -28,26 +28,23 @@ void main() {
     },
   );
 
-  test(
-    'acknowledgement earlier than recorded submit fails closed',
-    () {
-      final tracker = PrivateOrderExecutionTracker();
-      final acknowledgedAt = DateTime.utc(2026, 8, 18, 8);
+  test('acknowledgement earlier than recorded submit fails closed', () {
+    final tracker = PrivateOrderExecutionTracker();
+    final acknowledgedAt = DateTime.utc(2026, 8, 18, 8);
 
-      tracker.recordSubmission(
-        correlationId: 'setup-1:attempt-1',
-        submittedAtUtc: acknowledgedAt.add(const Duration(milliseconds: 1)),
-      );
-      tracker.recordAccepted(
-        _orderEvent(
-          clientId: 'setup-1:attempt-1',
-          atUtc: acknowledgedAt,
-        ),
-      );
+    tracker.recordSubmission(
+      correlationId: 'setup-1:attempt-1',
+      submittedAtUtc: acknowledgedAt.add(const Duration(milliseconds: 1)),
+    );
+    tracker.recordAccepted(
+      _orderEvent(
+        clientId: 'setup-1:attempt-1',
+        atUtc: acknowledgedAt,
+      ),
+    );
 
-      expect(tracker.observationFor('order-1')!.ambiguous, isTrue);
-    },
-  );
+    expect(tracker.observationFor('order-1')!.ambiguous, isTrue);
+  });
 }
 
 PrivateTruthEvent _orderEvent({
