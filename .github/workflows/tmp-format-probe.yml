@@ -1,0 +1,26 @@
+name: Temporary Dart format probe
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  format-probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Show canonical formatter diff
+        shell: bash
+        run: |
+          cd src/client/quantara_app
+          dart format lib/features/auto_trade/domain/adaptive_position_management.dart
+          git diff -- lib/features/auto_trade/domain/adaptive_position_management.dart
