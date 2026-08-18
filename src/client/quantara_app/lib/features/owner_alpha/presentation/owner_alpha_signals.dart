@@ -790,26 +790,29 @@ class _ActionableSignalSummary extends StatelessWidget {
                 ),
               ],
             ),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-              title: Text(
-                _t(context, 'جزئیات تشخیصی', 'Diagnostics'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              children: [
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: SelectableText(
-                    presentation.rawReasonCode,
-                    textDirection: TextDirection.ltr,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
-                  ),
+            Material(
+              type: MaterialType.transparency,
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                title: Text(
+                  _t(context, 'جزئیات تشخیصی', 'Diagnostics'),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-              ],
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: SelectableText(
+                      presentation.rawReasonCode,
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
