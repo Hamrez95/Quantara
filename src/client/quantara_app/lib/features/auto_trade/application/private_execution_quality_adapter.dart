@@ -89,6 +89,7 @@ abstract final class PrivateExecutionQualityAdapter {
     final lifecycle = _validatedLifecycle(
       correlationId: correlationId,
       decisionAtUtc: decisionAtUtc,
+      submitAtUtc: observation.submitAtUtc,
       acknowledgedAtUtc: observation.acknowledgedAtUtc,
       firstFillAtUtc: observation.firstFillAtUtc,
       finalFillAtUtc: observation.finalFillAtUtc,
@@ -141,6 +142,7 @@ abstract final class PrivateExecutionQualityAdapter {
   static ExecutionLifecycleTiming? _validatedLifecycle({
     required String correlationId,
     required DateTime decisionAtUtc,
+    required DateTime? submitAtUtc,
     required DateTime acknowledgedAtUtc,
     required DateTime? firstFillAtUtc,
     required DateTime? finalFillAtUtc,
@@ -148,6 +150,7 @@ abstract final class PrivateExecutionQualityAdapter {
     final lifecycle = ExecutionLifecycleTiming(
       correlationId: correlationId,
       decisionAtUtc: decisionAtUtc,
+      submitAtUtc: submitAtUtc,
       acknowledgedAtUtc: acknowledgedAtUtc,
       firstFillAtUtc: firstFillAtUtc,
       finalFillAtUtc: finalFillAtUtc,

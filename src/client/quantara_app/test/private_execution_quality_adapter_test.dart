@@ -14,6 +14,7 @@ void main() {
     double orderQuantity = 2,
     double? weightedAverageFillPrice = 101,
     bool ambiguous = false,
+    DateTime? submitAtUtc,
     DateTime? acknowledgedAtUtc,
     DateTime? firstFillAtUtc,
     DateTime? finalFillAtUtc,
@@ -24,6 +25,7 @@ void main() {
       clientId: correlationId,
       symbol: symbol,
       orderStatus: status,
+      submitAtUtc: submitAtUtc,
       acknowledgedAtUtc:
           acknowledgedAtUtc ?? decisionAt.add(const Duration(milliseconds: 20)),
       firstFillAtUtc:
@@ -58,13 +60,15 @@ void main() {
   }
 
   test('trusted filled private truth becomes observed execution evidence', () {
-    final snapshot = adapt(observation());
+    final submitAt = decisionAt.add(const Duration(milliseconds: 10));
+    final snapshot = adapt(observation(submitAtUtc: submitAt));
 
     expect(snapshot.outcome, ExecutionOutcome.filled);
     expect(snapshot.evidenceQuality, ExecutionEvidenceQuality.observed);
     expect(snapshot.fillRatio, 1);
     expect(snapshot.signedSlippageBps, closeTo(100, 1e-9));
     expect(snapshot.lifecycle, isNotNull);
+    expect(snapshot.lifecycle!.submitAtUtc, submitAt);
     expect(
       snapshot.lifecycle!.firstFillAtUtc,
       decisionAt.add(const Duration(milliseconds: 40)),
@@ -156,5 +160,19 @@ void main() {
     expect(snapshot.lifecycle, isNull);
     expect(snapshot.evidenceQuality, ExecutionEvidenceQuality.insufficient);
     expect(snapshot.signedSlippageBps, isNull);
+  });
+
+  test('submit timestamp after acknowledgement is rejected as ambiguous', () {
+    final snapshot = adapt(
+      observation(
+        submitAtUtc: decisionAt.add(const Duration(milliseconds: 30)),
+        acknowledgedAtUtc: decisionAt.add(const Duration(milliseconds: 20)),
+      ),
+    );
+
+    expect(snapshot.lifecycle, isNull);
+    expect(snapshot.evidenceQuality, ExecutionEvidenceQuality.insufficient);
+    expect(snapshot.signedSlippageBps, isNull);
+    expect(snapshot.isTrusted, isFalse);
   });
 }

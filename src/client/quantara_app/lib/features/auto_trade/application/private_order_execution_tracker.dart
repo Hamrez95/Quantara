@@ -9,6 +9,7 @@ final class PrivateOrderExecutionObservation {
     required this.clientId,
     required this.symbol,
     required this.orderStatus,
+    this.submitAtUtc,
     required this.acknowledgedAtUtc,
     required this.firstFillAtUtc,
     required this.finalFillAtUtc,
@@ -23,6 +24,7 @@ final class PrivateOrderExecutionObservation {
   final String clientId;
   final String symbol;
   final String orderStatus;
+  final DateTime? submitAtUtc;
   final DateTime acknowledgedAtUtc;
   final DateTime? firstFillAtUtc;
   final DateTime? finalFillAtUtc;
@@ -49,13 +51,33 @@ final class PrivateOrderExecutionTracker {
   final int maximumEntries;
   final LinkedHashMap<String, PrivateOrderExecutionObservation> _byOrderId =
       LinkedHashMap<String, PrivateOrderExecutionObservation>();
+  final LinkedHashMap<String, DateTime> _pendingSubmissions =
+      LinkedHashMap<String, DateTime>();
 
   int get length => _byOrderId.length;
 
   PrivateOrderExecutionObservation? observationFor(String orderId) =>
       _byOrderId[orderId.trim()];
 
-  void clear() => _byOrderId.clear();
+  void recordSubmission({
+    required String correlationId,
+    required DateTime submittedAtUtc,
+  }) {
+    final normalizedCorrelationId = correlationId.trim();
+    if (normalizedCorrelationId.isEmpty || !submittedAtUtc.isUtc) {
+      throw const FormatException('Order submission timing is invalid.');
+    }
+    _pendingSubmissions.remove(normalizedCorrelationId);
+    _pendingSubmissions[normalizedCorrelationId] = submittedAtUtc;
+    while (_pendingSubmissions.length > maximumEntries) {
+      _pendingSubmissions.remove(_pendingSubmissions.keys.first);
+    }
+  }
+
+  void clear() {
+    _byOrderId.clear();
+    _pendingSubmissions.clear();
+  }
 
   void recordAccepted(PrivateTruthEvent event) {
     final payload = event.payload;
@@ -88,6 +110,8 @@ final class PrivateOrderExecutionTracker {
         (payload.clientId.trim().isNotEmpty
             ? payload.clientId.trim()
             : orderId);
+    final submitAtUtc =
+        previous?.submitAtUtc ?? _pendingSubmissions.remove(correlationId);
     final clientId = payload.clientId.trim().isNotEmpty
         ? payload.clientId.trim()
         : previous?.clientId ?? '';
@@ -96,6 +120,8 @@ final class PrivateOrderExecutionTracker {
         : previous?.orderQuantity ?? 0;
     final overfilled =
         orderQuantity > 0 && filledQuantity > orderQuantity + 1e-9;
+    final acknowledgementBeforeSubmit =
+        submitAtUtc != null && observedAtUtc.isBefore(submitAtUtc);
     final finalFillAtUtc =
         previous?.finalFillAtUtc ??
         (isFilled &&
@@ -112,6 +138,7 @@ final class PrivateOrderExecutionTracker {
       clientId: clientId,
       symbol: symbol,
       orderStatus: payload.orderStatus.trim().toUpperCase(),
+      submitAtUtc: submitAtUtc,
       acknowledgedAtUtc: previous?.acknowledgedAtUtc ?? observedAtUtc,
       firstFillAtUtc: firstFillAtUtc,
       finalFillAtUtc: finalFillAtUtc,
@@ -122,7 +149,8 @@ final class PrivateOrderExecutionTracker {
           (previous?.ambiguous ?? false) ||
           invalidFill ||
           regressedFill ||
-          overfilled,
+          overfilled ||
+          acknowledgementBeforeSubmit,
     );
 
     while (_byOrderId.length > maximumEntries) {
