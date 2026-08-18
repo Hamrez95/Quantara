@@ -198,46 +198,28 @@ class _AutoTradeViewState extends State<_AutoTradeView>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              QuantaraColors.violet,
-                              QuantaraColors.cyan,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
+                  _AutoTradeSectionHeader(
+                    leading: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [QuantaraColors.violet, QuantaraColors.cyan],
                         ),
-                        child: const Icon(
-                          Icons.account_balance_wallet_outlined,
-                          color: QuantaraColors.ink,
-                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _t('حساب Bitunix', 'Bitunix account'),
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w900),
-                            ),
-                            Text(
-                              _t(
-                                'اتصال امن، موجودی، پوزیشن‌ها و سفارش‌های فعال',
-                                'Secure connection, balance, positions, and open orders',
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: QuantaraColors.ink,
                       ),
-                      _connectionPill(),
-                    ],
+                    ),
+                    title: _t('حساب Bitunix', 'Bitunix account'),
+                    subtitle: _t(
+                      'اتصال امن، موجودی، پوزیشن‌ها و سفارش‌های فعال',
+                      'Secure connection, balance, positions, and open orders',
+                    ),
+                    status: _connectionPill(),
+                    headline: true,
                   ),
                   const SizedBox(height: 14),
                   _BoundaryNotice(
@@ -522,57 +504,40 @@ class _LocalLiveTradeControlCardState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  entriesActive
-                      ? Icons.play_circle_fill_rounded
-                      : serviceActive
-                      ? Icons.pause_circle_filled_rounded
-                      : Icons.phone_android_rounded,
-                  color: color,
-                ),
+          _AutoTradeSectionHeader(
+            leading: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.13),
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _t(
-                        'ترید واقعی محلی · Canary',
-                        'Guarded local live · Canary',
-                      ),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      _t(
-                        'اجرا روی همین گوشی با سرویس دائماً قابل‌مشاهده Android',
-                        'Runs on this phone through a visible Android foreground service',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              StatusPill(
-                label: _stateLabel(status.state),
-                color: color,
-                icon: entriesActive
-                    ? Icons.shield_rounded
+              child: Icon(
+                entriesActive
+                    ? Icons.play_circle_fill_rounded
                     : serviceActive
-                    ? Icons.pause_circle_outline_rounded
-                    : Icons.stop_circle_outlined,
+                    ? Icons.pause_circle_filled_rounded
+                    : Icons.phone_android_rounded,
+                color: color,
               ),
-            ],
+            ),
+            title: _t(
+              'ترید واقعی محلی · Canary',
+              'Guarded local live · Canary',
+            ),
+            subtitle: _t(
+              'اجرا روی همین گوشی با سرویس دائماً قابل‌مشاهده Android',
+              'Runs on this phone through a visible Android foreground service',
+            ),
+            status: StatusPill(
+              label: _stateLabel(status.state),
+              color: color,
+              icon: entriesActive
+                  ? Icons.shield_rounded
+                  : serviceActive
+                  ? Icons.pause_circle_outline_rounded
+                  : Icons.stop_circle_outlined,
+            ),
           ),
           const SizedBox(height: 12),
           _ExecutionModeBanner(presentation: modePresentation),
@@ -1184,6 +1149,71 @@ class _ExecutionModeBanner extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AutoTradeSectionHeader extends StatelessWidget {
+  const _AutoTradeSectionHeader({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    this.headline = false,
+  });
+
+  final Widget leading;
+  final String title;
+  final String subtitle;
+  final Widget status;
+  final bool headline;
+
+  @override
+  Widget build(BuildContext context) {
+    final identity = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        leading,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style:
+                    (headline
+                            ? Theme.of(context).textTheme.headlineSmall
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              Text(subtitle),
+            ],
+          ),
+        ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 420) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identity,
+              const SizedBox(height: 10),
+              Align(alignment: AlignmentDirectional.centerStart, child: status),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: identity),
+            const SizedBox(width: 12),
+            status,
+          ],
+        );
+      },
     );
   }
 }

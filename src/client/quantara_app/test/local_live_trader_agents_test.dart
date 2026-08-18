@@ -155,7 +155,7 @@ void main() {
         ).readAsStringSync();
         expect(view, contains('شروع ترید'));
         expect(view, contains('قطع ترید'));
-        expect(view, contains('ترید شبانه سروری · قفل'));
+        expect(view, contains('Capped / Autonomous · قفل انتشار'));
         expect(view, contains('Expanded'));
         expect(view, isNot(contains('DropdownButton')));
       },
