@@ -2,6 +2,8 @@ import 'dart:collection';
 
 import 'autonomy_policy_gateway.dart';
 
+enum AutonomyCommandRuntime { localAndroid, durableService }
+
 final class AutonomyCommandAuthorization {
   AutonomyCommandAuthorization._({
     required this.idempotencyKey,
@@ -10,6 +12,7 @@ final class AutonomyCommandAuthorization {
     required this.policyVersion,
     required this.mode,
     required this.promotionState,
+    required this.runtime,
     required this.canonicalDecisionId,
     required this.riskDecisionId,
     required this.allocationDecisionId,
@@ -21,6 +24,7 @@ final class AutonomyCommandAuthorization {
 
   factory AutonomyCommandAuthorization.fromPolicyDecision({
     required AutonomyPolicyDecision decision,
+    required AutonomyCommandRuntime runtime,
     required String idempotencyKey,
     required String clientId,
     required String policyDecisionId,
@@ -33,6 +37,14 @@ final class AutonomyCommandAuthorization {
         decision.blockReason != AutonomyPolicyBlockReason.none) {
       throw StateError(
         'A blocked autonomy decision cannot authorize a live command.',
+      );
+    }
+    final durableMode =
+        decision.mode == AutonomyExecutionMode.cappedAuto ||
+        decision.mode == AutonomyExecutionMode.autonomous;
+    if (durableMode && runtime != AutonomyCommandRuntime.durableService) {
+      throw StateError(
+        'Persistent autonomy requires a certified durable service runtime.',
       );
     }
     final identifiers = [
@@ -58,6 +70,7 @@ final class AutonomyCommandAuthorization {
       policyVersion: decision.version.trim(),
       mode: decision.mode,
       promotionState: decision.promotionState,
+      runtime: runtime,
       canonicalDecisionId: canonicalDecisionId.trim(),
       riskDecisionId: riskDecisionId.trim(),
       allocationDecisionId: allocationDecisionId.trim(),
@@ -72,6 +85,7 @@ final class AutonomyCommandAuthorization {
   final String policyVersion;
   final AutonomyExecutionMode mode;
   final AutonomyPromotionState promotionState;
+  final AutonomyCommandRuntime runtime;
   final String canonicalDecisionId;
   final String riskDecisionId;
   final String allocationDecisionId;
@@ -85,6 +99,7 @@ final class AutonomyCommandAuthorization {
     'policyVersion': policyVersion,
     'mode': mode.name,
     'promotionState': promotionState.name,
+    'runtime': runtime.name,
     'canonicalDecisionId': canonicalDecisionId,
     'riskDecisionId': riskDecisionId,
     'allocationDecisionId': allocationDecisionId,
