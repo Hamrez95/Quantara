@@ -513,6 +513,10 @@ class _LocalLiveTradeControlCardState
       status.message,
       persian: _fa,
     );
+    final modePresentation = ExecutionModePresentation.fromLocalLive(
+      status,
+      persian: _fa,
+    );
     return SectionCard(
       accentColor: color,
       child: Column(
@@ -570,6 +574,8 @@ class _LocalLiveTradeControlCardState
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _ExecutionModeBanner(presentation: modePresentation),
           const SizedBox(height: 12),
           _BoundaryNotice(
             text: _t(
@@ -1102,6 +1108,86 @@ class _LocalLiveTradeControlCardState
   };
 }
 
+class _ExecutionModeBanner extends StatelessWidget {
+  const _ExecutionModeBanner({required this.presentation});
+
+  final ExecutionModePresentation presentation;
+
+  @override
+  Widget build(BuildContext context) {
+    final fa = Directionality.of(context) == TextDirection.rtl;
+    final color = switch (presentation.attention) {
+      ExecutionModeAttention.normal =>
+        presentation.newEntriesEnabled
+            ? QuantaraColors.success
+            : QuantaraColors.cyan,
+      ExecutionModeAttention.caution => QuantaraColors.warning,
+      ExecutionModeAttention.critical => QuantaraColors.danger,
+    };
+    return Semantics(
+      container: true,
+      label:
+          '${presentation.title}. ${presentation.status}. '
+          '${presentation.summary}',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(QuantaraRadius.medium),
+          border: Border.all(color: color.withValues(alpha: 0.34)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    fa ? 'حالت اجرا' : 'Execution mode',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  StatusPill(
+                    label: presentation.title,
+                    color: color,
+                    icon: presentation.failClosed
+                        ? Icons.lock_outline_rounded
+                        : Icons.shield_outlined,
+                  ),
+                  StatusPill(label: presentation.status, color: color),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(presentation.summary),
+              const SizedBox(height: 6),
+              Text(
+                fa
+                    ? 'Approval Required: در این نسخه به workflow تأیید متصل نیست.'
+                    : 'Approval Required: no approval workflow is connected in this release.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                fa
+                    ? 'Diagnostics · mode=${presentation.mode.name} · runtime=${presentation.rawState}'
+                    : 'Diagnostics · mode=${presentation.mode.name} · runtime=${presentation.rawState}',
+                textDirection: TextDirection.ltr,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LocalLiveStatusNotice extends StatelessWidget {
   const _LocalLiveStatusNotice({
     required this.message,
@@ -1227,8 +1313,8 @@ class _LockedServerModeCard extends StatelessWidget {
                   children: [
                     Text(
                       fa
-                          ? 'ترید شبانه سروری · قفل'
-                          : 'Always-on server trading · Locked',
+                          ? 'Capped / Autonomous · قفل انتشار'
+                          : 'Capped / Autonomous · Release locked',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
@@ -1251,8 +1337,8 @@ class _LockedServerModeCard extends StatelessWidget {
           const SizedBox(height: 12),
           _BoundaryNotice(
             text: fa
-                ? 'این بخش عمداً غیرفعال است تا Vault کلید، موتور همیشه‌روشن، مانیتورینگ، WebSocket خصوصی و تست Canary سرور مستقر شوند. هیچ دکمه Start سروری در این نسخه عمل نمی‌کند.'
-                : 'This section is intentionally disabled until the credential vault, always-on worker, monitoring, private WebSocket, and server canary are deployed. No server Start action works in this release.',
+                ? 'این contractها production-ready نیستند و عمداً قفل انتشار مانده‌اند تا Vault کلید، worker پایدار، مانیتورینگ، WebSocket خصوصی و certification کامل شوند. هیچ Start سروری در این نسخه عمل نمی‌کند.'
+                : 'These contracts are not production-ready and remain release-locked until the credential vault, durable worker, monitoring, private WebSocket, and certification are complete. No server Start action works in this release.',
             color: QuantaraColors.violet,
           ),
           if (legacyConfigured) ...[

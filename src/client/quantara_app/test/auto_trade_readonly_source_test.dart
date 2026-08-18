@@ -29,7 +29,9 @@ void main() {
     expect(view, contains('ترید واقعی محلی'));
     expect(view, contains('شروع ترید'));
     expect(view, contains('قطع ترید'));
-    expect(view, contains('ترید شبانه سروری · قفل'));
+    expect(view, contains('Capped / Autonomous · قفل انتشار'));
+    expect(view, contains('Approval Required'));
+    expect(view, contains('ExecutionModePresentation.fromLocalLive'));
     expect(view, contains('No server Start action works'));
     expect(readOnlyClient, contains('/api/v1/futures/account'));
     expect(readOnlyClient, contains('/api/v1/futures/tpsl/get_pending_orders'));

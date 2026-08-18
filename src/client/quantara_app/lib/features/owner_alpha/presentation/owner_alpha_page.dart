@@ -55,6 +55,7 @@ import '../domain/owner_alpha_models.dart';
 import '../domain/profit_protection_policy.dart';
 import '../domain/realtime_market_runtime_models.dart';
 import 'actionable_signal_presentation.dart';
+import 'execution_mode_presentation.dart';
 
 part 'owner_alpha_dashboard.dart';
 part 'owner_alpha_home.dart';
