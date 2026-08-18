@@ -114,7 +114,9 @@ final class AutonomyFaultCampaignScenario {
       );
     }
     if (category != fault.category) {
-      throw StateError('Fault campaign scenario category does not match fault.');
+      throw StateError(
+        'Fault campaign scenario category does not match fault.',
+      );
     }
   }
 
