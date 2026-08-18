@@ -15,10 +15,7 @@ void main() {
         submittedAtUtc: submittedAt,
       );
       tracker.recordAccepted(
-        _orderEvent(
-          clientId: 'setup-1:attempt-1',
-          atUtc: acknowledgedAt,
-        ),
+        _orderEvent(clientId: 'setup-1:attempt-1', atUtc: acknowledgedAt),
       );
 
       final observation = tracker.observationFor('order-1')!;
@@ -37,10 +34,7 @@ void main() {
       submittedAtUtc: acknowledgedAt.add(const Duration(milliseconds: 1)),
     );
     tracker.recordAccepted(
-      _orderEvent(
-        clientId: 'setup-1:attempt-1',
-        atUtc: acknowledgedAt,
-      ),
+      _orderEvent(clientId: 'setup-1:attempt-1', atUtc: acknowledgedAt),
     );
 
     expect(tracker.observationFor('order-1')!.ambiguous, isTrue);
