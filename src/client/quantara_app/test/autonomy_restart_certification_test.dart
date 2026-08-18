@@ -94,9 +94,7 @@ void main() {
     incomplete.removeAt(AutonomyRestartCheckpoint.management.index);
 
     expect(
-      () => AutonomyRestartCertificationGate.evaluate(
-        observations: incomplete,
-      ),
+      () => AutonomyRestartCertificationGate.evaluate(observations: incomplete),
       throwsStateError,
     );
   });
@@ -114,9 +112,7 @@ void main() {
     );
 
     expect(
-      () => AutonomyRestartCertificationGate.evaluate(
-        observations: duplicate,
-      ),
+      () => AutonomyRestartCertificationGate.evaluate(observations: duplicate),
       throwsStateError,
     );
   });
