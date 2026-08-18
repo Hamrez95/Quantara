@@ -189,8 +189,9 @@ final class AdaptiveManagementSnapshot {
         kinds.contains(AdaptiveManagementEventKind.arm) &&
             kinds.contains(AdaptiveManagementEventKind.entryConfirmed) &&
             kinds.contains(AdaptiveManagementEventKind.exitConfirmed),
-      AdaptiveManagementState.invalidated =>
-        kinds.contains(AdaptiveManagementEventKind.invalidate),
+      AdaptiveManagementState.invalidated => kinds.contains(
+        AdaptiveManagementEventKind.invalidate,
+      ),
     };
   }
 
