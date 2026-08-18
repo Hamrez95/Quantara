@@ -1132,7 +1132,7 @@ class _ExecutionModeBanner extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.09),
-          borderRadius: BorderRadius.circular(QuantaraRadius.medium),
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
           border: Border.all(color: color.withValues(alpha: 0.34)),
         ),
         child: Padding(
