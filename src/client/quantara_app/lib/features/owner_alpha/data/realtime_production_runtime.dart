@@ -26,16 +26,22 @@ final class RealtimeMarketMonitorSnapshot {
     required this.health,
     required this.error,
     required this.foregroundOnly,
+    this.candidates = const [],
+    this.candidateRevision = 0,
   });
 
   const RealtimeMarketMonitorSnapshot.initial()
     : health = null,
       error = null,
-      foregroundOnly = true;
+      foregroundOnly = true,
+      candidates = const [],
+      candidateRevision = 0;
 
   final RealtimeMarketHealthSnapshot? health;
   final String? error;
   final bool foregroundOnly;
+  final List<RealtimeOpportunityCandidate> candidates;
+  final int candidateRevision;
 
   bool get operational => health?.operational == true && error == null;
 
@@ -45,6 +51,8 @@ final class RealtimeMarketMonitorSnapshot {
 abstract interface class RealtimeMarketRuntimeLifecycle {
   RealtimeMarketRuntimeState get state;
   RealtimeMarketHealthSnapshot get health;
+  int get candidateSnapshotRevision;
+  List<RealtimeOpportunityCandidate> get radarCandidates;
   Future<void> start();
   Future<void> resume();
   Future<void> pause();
@@ -62,6 +70,13 @@ final class RealtimeMarketApplicationLifecycle
 
   @override
   RealtimeMarketHealthSnapshot get health => application.health;
+
+  @override
+  int get candidateSnapshotRevision => application.candidateSnapshotRevision;
+
+  @override
+  List<RealtimeOpportunityCandidate> get radarCandidates =>
+      application.radarCandidates;
 
   @override
   Future<void> start() => application.start();
@@ -113,6 +128,8 @@ final class RealtimeMarketHost
   bool _degradedRecoveryScheduled = false;
   bool _initialized = false;
   bool _disposed = false;
+  var _candidateRevision = -1;
+  List<RealtimeOpportunityCandidate> _candidates = const [];
 
   Future<void> initialize() => _serialize(() async {
     if (_disposed || _initialized) return;
@@ -202,10 +219,22 @@ final class RealtimeMarketHost
     } on Object {
       health = null;
     }
+    try {
+      final revision = runtime.candidateSnapshotRevision;
+      if (revision != _candidateRevision) {
+        _candidates = runtime.radarCandidates;
+        _candidateRevision = revision;
+      }
+    } on Object {
+      _candidates = const [];
+      _candidateRevision = -1;
+    }
     value = RealtimeMarketMonitorSnapshot(
       health: health,
       error: error,
       foregroundOnly: true,
+      candidates: _candidates,
+      candidateRevision: _candidateRevision,
     );
     _maybeRecoverDegraded(health, error: error);
   }

@@ -198,6 +198,12 @@ final class RealtimeMarketApplication {
 
   RealtimeMarketRuntimeState get state => _state;
 
+  int get candidateSnapshotRevision =>
+      candidateCoordinator.registry.snapshotRevision;
+
+  List<RealtimeOpportunityCandidate> get radarCandidates =>
+      candidateCoordinator.registry.recentCandidates();
+
   RealtimeMarketHealthSnapshot get health => _metrics.snapshot(
     state: _state,
     configuredStreams: universe.streams.length,

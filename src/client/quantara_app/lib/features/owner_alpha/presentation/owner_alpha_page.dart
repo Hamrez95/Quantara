@@ -34,6 +34,7 @@ import '../../auto_trade/presentation/private_account_reconciliation_banner.dart
 import '../../auto_trade/presentation/position_protection_summary.dart';
 import '../../auto_trade/presentation/tp_allocation_editor.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
+import '../../market_analysis/domain/market_regime_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../trading_journal/application/trading_journal_controller.dart';
 import '../../trading_journal/data/database_trading_journal_store.dart';
@@ -56,6 +57,7 @@ import '../domain/profit_protection_policy.dart';
 import '../domain/realtime_market_runtime_models.dart';
 import 'actionable_signal_presentation.dart';
 import 'execution_mode_presentation.dart';
+import 'realtime_radar_presentation.dart';
 
 part 'owner_alpha_dashboard.dart';
 part 'owner_alpha_home.dart';
@@ -963,6 +965,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                       _ => _HomeDashboard(
                         controller: controller,
                         snapshot: controller.snapshot!,
+                        realtimeMonitor: realtimeMonitor,
                         onOpenAnalysis: onOpenAnalysis,
                         onNavigate: onNavigate,
                         onOpenPortfolioRisk: onOpenPortfolioRisk,

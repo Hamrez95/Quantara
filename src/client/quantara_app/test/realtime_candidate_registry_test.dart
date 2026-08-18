@@ -12,6 +12,8 @@ void main() {
         final registry = RealtimeCandidateRegistry();
         final candidate = _candidate();
 
+        expect(registry.snapshotRevision, 0);
+
         expect(
           registry.register(candidate).disposition,
           CandidateRegistrationDisposition.registered,
@@ -25,6 +27,8 @@ void main() {
           CandidateRegistrationDisposition.conflict,
         );
         expect(registry.candidateCount, 1);
+        expect(registry.snapshotRevision, 1);
+        expect(registry.recentCandidates(), [candidate]);
       },
     );
 
