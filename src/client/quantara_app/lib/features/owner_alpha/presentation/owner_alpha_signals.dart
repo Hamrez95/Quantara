@@ -25,6 +25,14 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     final controller = widget.controller;
     final now = DateTime.now().toUtc();
     final all = controller.signalJournal;
+    final quotesBySymbol = <String, AlphaMarketQuote>{
+      for (final item
+          in controller.snapshot?.radar ?? const <SymbolRadarResult>[])
+        item.quote.symbol: item.quote,
+    };
+    final marketDataFresh =
+        controller.connectionState == OwnerAlphaConnectionState.fresh ||
+        controller.connectionState == OwnerAlphaConnectionState.refreshing;
     final filtered = SignalInboxQuery.apply(
       entries: all,
       filter: _filter,
@@ -172,6 +180,9 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
           for (var index = 0; index < filtered.length; index++) ...[
             _SignalJournalCard(
               entry: filtered[index],
+              nowUtc: now,
+              quote: quotesBySymbol[filtered[index].symbol],
+              marketDataFresh: marketDataFresh,
               taken: controller.isTaken(filtered[index].setupId),
               onOpen: () => widget.onOpenAnalysis(
                 filtered[index].symbol,
@@ -390,6 +401,9 @@ class _SignalPolicyCard extends StatelessWidget {
 class _SignalJournalCard extends StatelessWidget {
   const _SignalJournalCard({
     required this.entry,
+    required this.nowUtc,
+    required this.quote,
+    required this.marketDataFresh,
     required this.taken,
     required this.onOpen,
     required this.onTakenChanged,
@@ -399,6 +413,9 @@ class _SignalJournalCard extends StatelessWidget {
   });
 
   final SignalJournalEntry entry;
+  final DateTime nowUtc;
+  final AlphaMarketQuote? quote;
+  final bool marketDataFresh;
   final bool taken;
   final VoidCallback onOpen;
   final ValueChanged<bool> onTakenChanged;
@@ -413,8 +430,15 @@ class _SignalJournalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lifecycle = entry.lifecycle(DateTime.now().toUtc(), taken: taken);
+    final lifecycle = entry.lifecycle(nowUtc, taken: taken);
     final color = _lifecycleColor(context, lifecycle);
+    final actionable = ActionableSignalPresentation.fromEvidence(
+      entry: entry,
+      nowUtc: nowUtc,
+      marketDataFresh: marketDataFresh,
+      currentPrice: quote?.lastPrice,
+      quoteObservedAtUtc: quote?.observedAt,
+    );
     return SectionCard(
       accentColor: color,
       semanticLabel: '${entry.symbol} ${entry.timeframe}',
@@ -458,12 +482,12 @@ class _SignalJournalCard extends StatelessWidget {
                 color: _outcomeColor(context),
                 icon: _outcomeIcon,
               ),
-              if ((entry.setupQualityScore ?? entry.confidencePercent) > 0)
+              if (entry.setupQualityScore != null)
                 StatusPill(
                   label: _t(
                     context,
-                    'کیفیت ستاپ ${entry.setupQualityScore ?? entry.confidencePercent}',
-                    'Setup Quality ${entry.setupQualityScore ?? entry.confidencePercent}',
+                    'کیفیت ستاپ ${entry.setupQualityScore}',
+                    'Setup Quality ${entry.setupQualityScore}',
                   ),
                   color: QuantaraColors.cyan,
                 ),
@@ -473,6 +497,11 @@ class _SignalJournalCard extends StatelessWidget {
                   color: QuantaraColors.success,
                 ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _ActionableSignalSummary(
+            presentation: actionable,
+            qualityScore: entry.setupQualityScore,
           ),
           const SizedBox(height: 12),
           Text(entry.summary),
@@ -664,6 +693,150 @@ class _SignalJournalCard extends StatelessWidget {
     SignalOutcome.tp1 ||
     SignalOutcome.tp2 ||
     SignalOutcome.tp3 => Icons.check_circle_outline_rounded,
+  };
+}
+
+class _ActionableSignalSummary extends StatelessWidget {
+  const _ActionableSignalSummary({
+    required this.presentation,
+    required this.qualityScore,
+  });
+
+  final ActionableSignalPresentation presentation;
+  final int? qualityScore;
+
+  bool _fa(BuildContext context) =>
+      Directionality.of(context) == TextDirection.rtl;
+  String _t(BuildContext context, String fa, String en) =>
+      _fa(context) ? fa : en;
+
+  @override
+  Widget build(BuildContext context) {
+    final persian = _fa(context);
+    final color = _stageColor(context);
+    final stage = presentation.stageLabel(persian: persian);
+    final reason = presentation.conciseReason(persian: persian);
+    final action = presentation.safeNextAction(persian: persian);
+    return Semantics(
+      container: true,
+      label: '$stage. $reason. $action',
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.32)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(_stageIcon, color: color, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    stage,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              reason,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 18,
+              runSpacing: 10,
+              children: [
+                MetricTile(
+                  label: _t(context, 'فاصله تا ورود', 'Distance to entry'),
+                  value: presentation.distanceLabel(persian: persian),
+                ),
+                MetricTile(
+                  label: _t(context, 'سن داده', 'Market age'),
+                  value: presentation.ageLabel(persian: persian),
+                  valueColor: presentation.isDataUncertain ? color : null,
+                ),
+                if (qualityScore != null)
+                  MetricTile(
+                    label: _t(context, 'کیفیت ستاپ', 'Setup quality'),
+                    value: '$qualityScore / 100',
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.shield_outlined, color: color, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${_t(context, 'اقدام امن', 'Safe next action')}: $action',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              title: Text(
+                _t(context, 'جزئیات تشخیصی', 'Diagnostics'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              children: [
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: SelectableText(
+                    presentation.rawReasonCode,
+                    textDirection: TextDirection.ltr,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _stageColor(BuildContext context) => switch (presentation.stage) {
+    ActionableSignalStage.forming => Theme.of(context).colorScheme.primary,
+    ActionableSignalStage.armed => QuantaraColors.cyan,
+    ActionableSignalStage.triggered => QuantaraColors.success,
+    ActionableSignalStage.managing => QuantaraColors.success,
+    ActionableSignalStage.missed => QuantaraColors.warning,
+    ActionableSignalStage.resolved => Theme.of(
+      context,
+    ).colorScheme.onSurfaceVariant,
+    ActionableSignalStage.dataUncertain => QuantaraColors.danger,
+  };
+
+  IconData get _stageIcon => switch (presentation.stage) {
+    ActionableSignalStage.forming => Icons.radar_rounded,
+    ActionableSignalStage.armed => Icons.adjust_rounded,
+    ActionableSignalStage.triggered => Icons.bolt_rounded,
+    ActionableSignalStage.managing => Icons.shield_rounded,
+    ActionableSignalStage.missed => Icons.trending_up_rounded,
+    ActionableSignalStage.resolved => Icons.task_alt_rounded,
+    ActionableSignalStage.dataUncertain => Icons.cloud_off_rounded,
   };
 }
 
