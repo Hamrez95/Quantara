@@ -1,0 +1,23 @@
+name: Temporary Dart format probe
+
+on:
+  push:
+    branches:
+      - feat/199-execution-quality-domain
+
+jobs:
+  format-probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Print formatter patch
+        working-directory: src/client/quantara_app
+        run: |
+          dart format lib/features/auto_trade/application/private_execution_quality_adapter.dart
+          git diff -- lib/features/auto_trade/application/private_execution_quality_adapter.dart
+          exit 1
