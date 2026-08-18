@@ -141,11 +141,57 @@ final class AdaptiveManagementSnapshot {
       }
       events[id] = kinds.single;
     }
+    if (revisionValue != events.length ||
+        !_historySupportsState(state.single, events.values)) {
+      throw const FormatException(
+        'Management snapshot state and event history are inconsistent.',
+      );
+    }
     return AdaptiveManagementSnapshot(
       state: state.single,
       revision: revisionValue,
       processedEvents: events,
     );
+  }
+
+  static bool _historySupportsState(
+    AdaptiveManagementState state,
+    Iterable<AdaptiveManagementEventKind> history,
+  ) {
+    final kinds = history.toSet();
+    return switch (state) {
+      AdaptiveManagementState.watch => kinds.isEmpty,
+      AdaptiveManagementState.armed =>
+        kinds.length == 1 && kinds.contains(AdaptiveManagementEventKind.arm),
+      AdaptiveManagementState.entered =>
+        kinds.length == 2 &&
+            kinds.contains(AdaptiveManagementEventKind.arm) &&
+            kinds.contains(AdaptiveManagementEventKind.entryConfirmed),
+      AdaptiveManagementState.active =>
+        kinds.length == 3 &&
+            kinds.contains(AdaptiveManagementEventKind.arm) &&
+            kinds.contains(AdaptiveManagementEventKind.entryConfirmed) &&
+            kinds.contains(AdaptiveManagementEventKind.managementActivated),
+      AdaptiveManagementState.protected =>
+        kinds.length == 4 &&
+            kinds.contains(AdaptiveManagementEventKind.arm) &&
+            kinds.contains(AdaptiveManagementEventKind.entryConfirmed) &&
+            kinds.contains(AdaptiveManagementEventKind.managementActivated) &&
+            kinds.contains(AdaptiveManagementEventKind.protectionConfirmed),
+      AdaptiveManagementState.runner =>
+        kinds.length == 5 &&
+            kinds.contains(AdaptiveManagementEventKind.arm) &&
+            kinds.contains(AdaptiveManagementEventKind.entryConfirmed) &&
+            kinds.contains(AdaptiveManagementEventKind.managementActivated) &&
+            kinds.contains(AdaptiveManagementEventKind.protectionConfirmed) &&
+            kinds.contains(AdaptiveManagementEventKind.runnerActivated),
+      AdaptiveManagementState.exited =>
+        kinds.contains(AdaptiveManagementEventKind.arm) &&
+            kinds.contains(AdaptiveManagementEventKind.entryConfirmed) &&
+            kinds.contains(AdaptiveManagementEventKind.exitConfirmed),
+      AdaptiveManagementState.invalidated =>
+        kinds.contains(AdaptiveManagementEventKind.invalidate),
+    };
   }
 
   static AdaptiveManagementState _transition(
