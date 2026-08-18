@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../market_analysis/domain/market_regime_models.dart';
 
@@ -785,6 +787,10 @@ abstract interface class SetupNotificationGateway {
   Future<void> show(TradeIdea idea, {required String languageCode});
 
   Future<void> openBackgroundSettings();
+
+  Stream<String> get openedSetupIds;
+
+  Future<String?> initialSetupId();
 }
 
 final class NoopSetupNotificationGateway implements SetupNotificationGateway {
@@ -798,4 +804,10 @@ final class NoopSetupNotificationGateway implements SetupNotificationGateway {
 
   @override
   Future<void> openBackgroundSettings() async {}
+
+  @override
+  Stream<String> get openedSetupIds => const Stream.empty();
+
+  @override
+  Future<String?> initialSetupId() async => null;
 }

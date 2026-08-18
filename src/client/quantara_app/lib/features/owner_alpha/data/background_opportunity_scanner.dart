@@ -151,7 +151,7 @@ void quantaraBackgroundDispatcher() {
           id: _stableNotificationId(idea.setupId),
           title: title,
           body: body,
-          notificationDetails: const NotificationDetails(
+          notificationDetails: NotificationDetails(
             android: AndroidNotificationDetails(
               'quantara_background_setups',
               'Quantara background setups',
@@ -159,6 +159,13 @@ void quantaraBackgroundDispatcher() {
                   'Fresh paper-trading ideas found by periodic background scans',
               importance: Importance.high,
               priority: Priority.high,
+              actions: [
+                AndroidNotificationAction(
+                  'view_analysis',
+                  language == 'en' ? 'View analysis' : 'مشاهده تحلیل',
+                  showsUserInterface: true,
+                ),
+              ],
             ),
           ),
           payload: idea.setupId,

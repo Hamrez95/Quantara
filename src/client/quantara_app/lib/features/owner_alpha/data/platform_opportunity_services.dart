@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -168,6 +169,8 @@ final class PlatformSetupNotificationGateway
 
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+  static final StreamController<String> _openedSetupIds =
+      StreamController<String>.broadcast();
   static Future<void>? _notificationInitialization;
 
   static Future<void> _ensureInitialized() {
@@ -179,7 +182,26 @@ final class PlatformSetupNotificationGateway
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('ic_quantara_launcher'),
       ),
+      onDidReceiveNotificationResponse: (response) {
+        final setupId = _validSetupId(response.payload);
+        if (setupId != null) _openedSetupIds.add(setupId);
+      },
     );
+  }
+
+  @override
+  Stream<String> get openedSetupIds => _openedSetupIds.stream;
+
+  @override
+  Future<String?> initialSetupId() async {
+    try {
+      await _ensureInitialized();
+      final launch = await _notifications.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp != true) return null;
+      return _validSetupId(launch?.notificationResponse?.payload);
+    } on Object {
+      return null;
+    }
   }
 
   @override
@@ -231,7 +253,7 @@ final class PlatformSetupNotificationGateway
         id: _stableNotificationId(idea.setupId),
         title: title,
         body: body,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             'quantara_setup_alerts_v1',
             'Quantara setups',
@@ -239,6 +261,13 @@ final class PlatformSetupNotificationGateway
             importance: Importance.high,
             priority: Priority.high,
             category: AndroidNotificationCategory.recommendation,
+            actions: [
+              AndroidNotificationAction(
+                'view_analysis',
+                persian ? 'مشاهده تحلیل' : 'View analysis',
+                showsUserInterface: true,
+              ),
+            ],
           ),
         ),
         payload: idea.setupId,
@@ -247,6 +276,12 @@ final class PlatformSetupNotificationGateway
       // Notification delivery is best effort and must not fail a scan.
     }
   }
+}
+
+String? _validSetupId(String? value) {
+  final normalized = value?.trim() ?? '';
+  if (normalized.isEmpty || normalized.length > 320) return null;
+  return normalized;
 }
 
 int _stableNotificationId(String value) {
