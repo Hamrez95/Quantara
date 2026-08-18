@@ -13,15 +13,19 @@ void main() {
     expect(() => _configuration(4).validate(), throwsFormatException);
   });
 
-  test('service reserves atomically before submitting an entry order', () {
+  test('service reserves and records timing before submitting an entry', () {
     final source = File(
       'lib/features/auto_trade/application/local_live_trade_service.dart',
     ).readAsStringSync();
     final reserve = source.indexOf('portfolioGuard.reserve(');
+    final submitTiming = source.indexOf(
+      'privateTruth.recordOrderSubmission(correlationId: clientId);',
+    );
     final submit = source.indexOf('exchange.placeMarketEntry(');
 
     expect(reserve, greaterThanOrEqualTo(0));
-    expect(submit, greaterThan(reserve));
+    expect(submitTiming, greaterThan(reserve));
+    expect(submit, greaterThan(submitTiming));
     expect(source, contains('portfolioGuard.recordFill('));
     expect(source, contains('portfolioGuard.confirmStop('));
     expect(source, contains('portfolioGuard.confirmReduction('));

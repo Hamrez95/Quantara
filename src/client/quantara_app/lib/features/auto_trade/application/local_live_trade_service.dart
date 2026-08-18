@@ -810,6 +810,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             'All deterministic pre-order gates passed; protected entry request may start.',
           );
           orderRequestStarted = true;
+          privateTruth.recordOrderSubmission(correlationId: clientId);
           final placed = await exchange.placeMarketEntry(
             symbol: idea.symbol,
             quantity: quantity,
