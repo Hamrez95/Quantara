@@ -90,8 +90,7 @@ void main() {
           nowUtc: now,
         );
         final allocatableRisk = availableRisk * (1 - riskReserveFraction);
-        final allocatableMargin =
-            availableMargin * (1 - marginReserveFraction);
+        final allocatableMargin = availableMargin * (1 - marginReserveFraction);
         final selected = decision.selected;
         final selectedIds = selected.map((item) => item.proposalId).toSet();
         final selectedSymbols = selected.map((item) => item.symbol).toSet();
@@ -126,9 +125,11 @@ void main() {
           closeTo(allocatableMargin, 1e-9),
         );
         expect(
-          decision.items.where((item) => !item.selected).every(
-            (item) => item.allocatedRisk == 0 && item.allocatedMargin == 0,
-          ),
+          decision.items
+              .where((item) => !item.selected)
+              .every(
+                (item) => item.allocatedRisk == 0 && item.allocatedMargin == 0,
+              ),
           isTrue,
         );
       }
