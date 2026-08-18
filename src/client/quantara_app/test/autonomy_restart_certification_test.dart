@@ -3,17 +3,19 @@ import 'package:quantara_app/features/autonomy/domain/autonomy_restart_certifica
 
 void main() {
   List<AutonomyRestartObservation> allPassing() {
-    return AutonomyRestartCheckpoint.values
-        .map(
-          (checkpoint) => AutonomyRestartObservation(
-            checkpoint: checkpoint,
-            recovered: true,
-            idempotent: true,
-            reservationConsistent: true,
-            protectionConsistent: true,
-          ),
-        )
-        .toList();
+    final observations = <AutonomyRestartObservation>[];
+    for (final checkpoint in AutonomyRestartCheckpoint.values) {
+      observations.add(
+        AutonomyRestartObservation(
+          checkpoint: checkpoint,
+          recovered: true,
+          idempotent: true,
+          reservationConsistent: true,
+          protectionConsistent: true,
+        ),
+      );
+    }
+    return observations;
   }
 
   test('all restart boundaries must pass before promotion is eligible', () {
@@ -32,10 +34,7 @@ void main() {
 
   test('unknown submit outcome cannot blind-submit a duplicate order', () {
     final observations = allPassing();
-    final index = observations.indexWhere(
-      (value) =>
-          value.checkpoint == AutonomyRestartCheckpoint.submitUnknownOutcome,
-    );
+    final index = AutonomyRestartCheckpoint.submitUnknownOutcome.index;
     observations[index] = AutonomyRestartObservation(
       checkpoint: AutonomyRestartCheckpoint.submitUnknownOutcome,
       recovered: true,
@@ -59,9 +58,7 @@ void main() {
 
   test('reservation inconsistency after restart is a stop-ship failure', () {
     final observations = allPassing();
-    final index = observations.indexWhere(
-      (value) => value.checkpoint == AutonomyRestartCheckpoint.fill,
-    );
+    final index = AutonomyRestartCheckpoint.fill.index;
     observations[index] = AutonomyRestartObservation(
       checkpoint: AutonomyRestartCheckpoint.fill,
       recovered: true,
@@ -93,10 +90,8 @@ void main() {
   });
 
   test('missing restart checkpoint cannot produce a green artifact', () {
-    final incomplete = allPassing()
-      ..removeWhere(
-        (value) => value.checkpoint == AutonomyRestartCheckpoint.management,
-      );
+    final incomplete = allPassing();
+    incomplete.removeAt(AutonomyRestartCheckpoint.management.index);
 
     expect(
       () => AutonomyRestartCertificationGate.evaluate(
@@ -107,16 +102,16 @@ void main() {
   });
 
   test('duplicate restart checkpoint is rejected', () {
-    final duplicate = allPassing()
-      ..add(
-        AutonomyRestartObservation(
-          checkpoint: AutonomyRestartCheckpoint.acknowledgement,
-          recovered: true,
-          idempotent: true,
-          reservationConsistent: true,
-          protectionConsistent: true,
-        ),
-      );
+    final duplicate = allPassing();
+    duplicate.add(
+      AutonomyRestartObservation(
+        checkpoint: AutonomyRestartCheckpoint.acknowledgement,
+        recovered: true,
+        idempotent: true,
+        reservationConsistent: true,
+        protectionConsistent: true,
+      ),
+    );
 
     expect(
       () => AutonomyRestartCertificationGate.evaluate(
