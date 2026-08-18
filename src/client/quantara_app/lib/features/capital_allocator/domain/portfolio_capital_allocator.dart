@@ -215,16 +215,23 @@ final class PortfolioCapitalAllocator {
       throw const FormatException('Portfolio allocation input is invalid.');
     }
 
-    final ranked = proposals.toList(growable: false)
-      ..sort((left, right) {
-        final scoreOrder = right.utility.score.compareTo(left.utility.score);
-        if (scoreOrder != 0) return scoreOrder;
-        final setupOrder = left.utility.setupId.compareTo(
-          right.utility.setupId,
+    final ranked = proposals.toList(growable: false);
+    final proposalIds = <String>{};
+    for (final proposal in ranked) {
+      final proposalId = proposal.id.trim();
+      if (proposalId.isNotEmpty && !proposalIds.add(proposalId)) {
+        throw const FormatException(
+          'Portfolio allocation proposal identities must be unique.',
         );
-        if (setupOrder != 0) return setupOrder;
-        return left.id.compareTo(right.id);
-      });
+      }
+    }
+    ranked.sort((left, right) {
+      final scoreOrder = right.utility.score.compareTo(left.utility.score);
+      if (scoreOrder != 0) return scoreOrder;
+      final setupOrder = left.utility.setupId.compareTo(right.utility.setupId);
+      if (setupOrder != 0) return setupOrder;
+      return left.id.compareTo(right.id);
+    });
 
     final riskHeldInReserve =
         budget.availableRisk * configuration.riskReserveFraction;
