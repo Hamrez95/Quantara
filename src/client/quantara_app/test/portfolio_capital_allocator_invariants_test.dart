@@ -90,7 +90,8 @@ void main() {
           nowUtc: now,
         );
         final allocatableRisk = availableRisk * (1 - riskReserveFraction);
-        final allocatableMargin = availableMargin * (1 - marginReserveFraction);
+        final allocatableMargin =
+            availableMargin * (1 - marginReserveFraction);
         final selected = decision.selected;
         final selectedIds = selected.map((item) => item.proposalId).toSet();
         final selectedSymbols = selected.map((item) => item.symbol).toSet();
