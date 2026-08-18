@@ -3,11 +3,20 @@ import 'dart:collection';
 
 import '../domain/realtime_candle_pipeline_models.dart';
 
-enum RealtimeMarketEventDelivery { delivered, coalesced }
+enum RealtimeMarketEventDelivery { delivered, coalesced, staleDropped }
+
+enum RealtimeMarketBackpressureDisposition {
+  activeStreamCapacity,
+  criticalStreamCapacity,
+}
 
 final class RealtimeMarketEventBackpressureException implements Exception {
-  const RealtimeMarketEventBackpressureException(this.message);
+  const RealtimeMarketEventBackpressureException(
+    this.disposition,
+    this.message,
+  );
 
+  final RealtimeMarketBackpressureDisposition disposition;
   final String message;
 
   @override
@@ -17,12 +26,16 @@ final class RealtimeMarketEventBackpressureException implements Exception {
 typedef RealtimeMarketEventHandler =
     FutureOr<void> Function(RealtimeCandlePipelineUpdate update);
 
+typedef RealtimeMarketEventBusClock = DateTime Function();
+
 final class RealtimeMarketEventBus {
   RealtimeMarketEventBus({
     required this.handler,
     this.maximumPendingPerStream = 64,
     this.maximumActiveStreams = 2000,
-  }) {
+    this.maximumWorkingQueueAge = const Duration(seconds: 2),
+    RealtimeMarketEventBusClock? clock,
+  }) : _clock = clock ?? _utcNow {
     if (maximumPendingPerStream < 1) {
       throw ArgumentError.value(
         maximumPendingPerStream,
@@ -32,11 +45,20 @@ final class RealtimeMarketEventBus {
     if (maximumActiveStreams < 1) {
       throw ArgumentError.value(maximumActiveStreams, 'maximumActiveStreams');
     }
+    if (maximumWorkingQueueAge <= Duration.zero ||
+        maximumWorkingQueueAge > const Duration(minutes: 1)) {
+      throw ArgumentError.value(
+        maximumWorkingQueueAge,
+        'maximumWorkingQueueAge',
+      );
+    }
   }
 
   final RealtimeMarketEventHandler handler;
   final int maximumPendingPerStream;
   final int maximumActiveStreams;
+  final Duration maximumWorkingQueueAge;
+  final RealtimeMarketEventBusClock _clock;
   final Map<RealtimeCandleStreamKey, _StreamEventQueue> _streams = {};
   var _closed = false;
   var _activeStreamCount = 0;
@@ -46,6 +68,7 @@ final class RealtimeMarketEventBus {
   var _deliveredCount = 0;
   var _coalescedCount = 0;
   var _backpressureCount = 0;
+  var _staleDroppedCount = 0;
 
   int get activeStreamCount => _activeStreamCount;
 
@@ -61,6 +84,8 @@ final class RealtimeMarketEventBus {
 
   int get backpressureCount => _backpressureCount;
 
+  int get staleDroppedCount => _staleDroppedCount;
+
   Future<RealtimeMarketEventDelivery> publish(
     RealtimeCandlePipelineUpdate update,
   ) {
@@ -74,6 +99,7 @@ final class RealtimeMarketEventBus {
         _backpressureCount++;
         return Future.error(
           const RealtimeMarketEventBackpressureException(
+            RealtimeMarketBackpressureDisposition.activeStreamCapacity,
             'The market event bus reached its active-stream capacity.',
           ),
         );
@@ -104,12 +130,13 @@ final class RealtimeMarketEventBus {
       _backpressureCount++;
       return Future.error(
         RealtimeMarketEventBackpressureException(
+          RealtimeMarketBackpressureDisposition.criticalStreamCapacity,
           'Critical market event capacity was exceeded for ${update.key.id}.',
         ),
       );
     }
 
-    final pending = _PendingMarketEvent(update);
+    final pending = _PendingMarketEvent(update, enqueuedAtUtc: _clock());
     stream.queue.addLast(pending);
     _recordEnqueue(stream.queue.length);
     if (!stream.draining) {
@@ -151,6 +178,14 @@ final class RealtimeMarketEventBus {
       while (stream.queue.isNotEmpty) {
         final pending = stream.queue.removeFirst();
         _pendingEventCount--;
+        final queuedFor = _clock().difference(pending.enqueuedAtUtc);
+        if (!pending.update.isCritical &&
+            !queuedFor.isNegative &&
+            queuedFor > maximumWorkingQueueAge) {
+          _staleDroppedCount++;
+          pending.complete(RealtimeMarketEventDelivery.staleDropped);
+          continue;
+        }
         try {
           await handler(pending.update);
           _deliveredCount++;
@@ -192,9 +227,10 @@ final class _StreamEventQueue {
 }
 
 final class _PendingMarketEvent {
-  _PendingMarketEvent(this.update);
+  _PendingMarketEvent(this.update, {required this.enqueuedAtUtc});
 
   final RealtimeCandlePipelineUpdate update;
+  final DateTime enqueuedAtUtc;
   final Completer<RealtimeMarketEventDelivery> _completer = Completer();
 
   Future<RealtimeMarketEventDelivery> get future => _completer.future;
@@ -208,3 +244,5 @@ final class _PendingMarketEvent {
     _completer.completeError(error, stackTrace);
   }
 }
+
+DateTime _utcNow() => DateTime.now().toUtc();

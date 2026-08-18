@@ -64,7 +64,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format --output=none --set-exit-if-changed lib test tool
 
       - name: Analyze
         shell: bash
@@ -84,6 +84,11 @@ jobs:
           cat flutter-test.log
           exit $status
 
+      - name: Run reproducible hot-path software stress gate
+        run: >-
+          dart run tool/hot_path_benchmark.dart
+          --output hot-path-performance.json
+
       - name: Upload Flutter diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,6 +97,7 @@ jobs:
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
+            src/client/quantara_app/hot-path-performance.json
           if-no-files-found: ignore
           retention-days: 14
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import '../../hot_path_performance/domain/hot_path_latency.dart';
 import '../domain/bitunix_public_stream_models.dart';
 import '../domain/realtime_candidate_models.dart';
 import '../domain/realtime_candle_pipeline_models.dart';
@@ -137,9 +138,15 @@ final class RealtimeMarketApplication {
     this.bootstrapSpacing = const Duration(milliseconds: 120),
     this.maximumPendingEventsPerStream = 64,
     this.maximumLatencySamples = 512,
+    HotPathLatencyRecorder? hotPathLatencyRecorder,
     RealtimeCandleUtcClock? clock,
     RealtimeBootstrapDelay? delay,
   }) : _clock = clock ?? _utcNow,
+       _hotPathLatency =
+           hotPathLatencyRecorder ??
+           HotPathLatencyRecorder(
+             maximumSamplesPerStage: maximumLatencySamples,
+           ),
        _delay = delay ?? _defaultDelay {
     if (closedCandleLimit < 20 || closedCandleLimit > 200) {
       throw ArgumentError.value(closedCandleLimit, 'closedCandleLimit');
@@ -153,7 +160,7 @@ final class RealtimeMarketApplication {
         'maximumPendingEventsPerStream',
       );
     }
-    if (maximumLatencySamples < 20) {
+    if (maximumLatencySamples < 20 || maximumLatencySamples > 8192) {
       throw ArgumentError.value(maximumLatencySamples, 'maximumLatencySamples');
     }
 
@@ -182,6 +189,7 @@ final class RealtimeMarketApplication {
   final int maximumLatencySamples;
   final RealtimeCandleUtcClock _clock;
   final RealtimeBootstrapDelay _delay;
+  final HotPathLatencyRecorder _hotPathLatency;
 
   late final _RealtimeMarketMetrics _metrics;
   late final RealtimeMarketEventBus _eventBus;
@@ -214,6 +222,15 @@ final class RealtimeMarketApplication {
     liveShards: _shardStates.values
         .where((state) => state == BitunixPublicConnectionState.live)
         .length,
+    pendingEvents: _eventBus.pendingEventCount,
+    maximumObservedPendingEvents: _eventBus.maximumObservedPendingEventCount,
+    maximumObservedPendingPerStream: _eventBus.maximumObservedPendingPerStream,
+    coalescedWorkingEvents: _eventBus.coalescedCount,
+    staleDroppedWorkingEvents: _eventBus.staleDroppedCount,
+    p95StageLatency: {
+      for (final stage in HotPathStage.values)
+        stage.name: _hotPathLatency.percentiles(stage).p95,
+    },
   );
 
   Future<void> start() => _serializeLifecycle(_startInternal);
@@ -411,6 +428,19 @@ final class RealtimeMarketApplication {
     RealtimeCandlePipelineUpdate update,
   ) async {
     _metrics.recordPipelineUpdate(update);
+    final correlationId =
+        '${update.key.id}|${update.exchangeTimestampUtc.microsecondsSinceEpoch}|${update.disposition.name}';
+    _hotPathLatency.record(
+      HotPathStageSample(
+        correlationId: correlationId,
+        stage: HotPathStage.ingestValidation,
+        startedAtUtc: update.receivedAtUtc,
+        completedAtUtc: update.processedAtUtc.isBefore(update.receivedAtUtc)
+            ? update.receivedAtUtc
+            : update.processedAtUtc,
+      ),
+    );
+    final featureStartedAtUtc = _clock();
     final synchronizer = analysisGateway is RealtimeMarketAnalysisSynchronizer
         ? analysisGateway as RealtimeMarketAnalysisSynchronizer
         : null;
@@ -437,8 +467,20 @@ final class RealtimeMarketApplication {
       );
       rethrow;
     }
+    final featureCompletedAtUtc = _clock();
+    _hotPathLatency.record(
+      HotPathStageSample(
+        correlationId: correlationId,
+        stage: HotPathStage.featureUpdate,
+        startedAtUtc: featureStartedAtUtc,
+        completedAtUtc: featureCompletedAtUtc.isBefore(featureStartedAtUtc)
+            ? featureStartedAtUtc
+            : featureCompletedAtUtc,
+      ),
+    );
     if (batch.isEmpty) return;
 
+    final candidateStartedAtUtc = _clock();
     for (final candidate in batch.candidates) {
       candidateCoordinator.registry.register(candidate);
     }
@@ -465,6 +507,17 @@ final class RealtimeMarketApplication {
         );
       }
     }
+    final candidateCompletedAtUtc = _clock();
+    _hotPathLatency.record(
+      HotPathStageSample(
+        correlationId: correlationId,
+        stage: HotPathStage.candidateEvaluation,
+        startedAtUtc: candidateStartedAtUtc,
+        completedAtUtc: candidateCompletedAtUtc.isBefore(candidateStartedAtUtc)
+            ? candidateStartedAtUtc
+            : candidateCompletedAtUtc,
+      ),
+    );
   }
 
   Future<void> _handleTransportFault(BitunixPublicStreamFault fault) async {
@@ -611,6 +664,12 @@ final class _RealtimeMarketMetrics {
     required Map<String, String> quarantinedStreamReasons,
     required int activeShards,
     required int liveShards,
+    int pendingEvents = 0,
+    int maximumObservedPendingEvents = 0,
+    int maximumObservedPendingPerStream = 0,
+    int coalescedWorkingEvents = 0,
+    int staleDroppedWorkingEvents = 0,
+    Map<String, Duration> p95StageLatency = const {},
   }) => RealtimeMarketHealthSnapshot(
     state: state,
     configuredStreams: configuredStreams,
@@ -630,6 +689,12 @@ final class _RealtimeMarketMetrics {
     bootstrapFaults: bootstrapFaults,
     malformedPayloadFaults: malformedPayloadFaults,
     backpressureFaults: backpressureFaults,
+    pendingEvents: pendingEvents,
+    maximumObservedPendingEvents: maximumObservedPendingEvents,
+    maximumObservedPendingPerStream: maximumObservedPendingPerStream,
+    coalescedWorkingEvents: coalescedWorkingEvents,
+    staleDroppedWorkingEvents: staleDroppedWorkingEvents,
+    p95StageLatency: Map.unmodifiable(p95StageLatency),
     p95TransportLag: _p95(_transportLagMicros),
     p95PipelineLatency: _p95(_pipelineLatencyMicros),
     lastEventAtUtc: lastEventAtUtc,
