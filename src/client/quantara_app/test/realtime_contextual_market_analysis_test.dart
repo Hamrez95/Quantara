@@ -67,6 +67,10 @@ void main() {
     expect(context.closedCandles.last.openTime, closed.openTime);
     expect(context.closedCandles.first.openTime, history[1].openTime);
     expect(context.triggersClosedCandleAnalysis, isTrue);
+    final features = gateway.featuresFor(key);
+    expect(features, isNotNull);
+    expect(features!.candleCount, 21);
+    expect(features.sma20, closeTo(110.55, 1e-9));
   });
 
   test('blocks analysis while a stream gap is active', () async {

@@ -167,12 +167,98 @@ void main() {
 
         await expectLater(
           third,
-          throwsA(isA<RealtimeMarketEventBackpressureException>()),
+          throwsA(
+            isA<RealtimeMarketEventBackpressureException>().having(
+              (error) => error.disposition,
+              'disposition',
+              RealtimeMarketBackpressureDisposition.criticalStreamCapacity,
+            ),
+          ),
         );
         gate.complete();
         await first;
         await second;
         expect(bus.backpressureCount, 1);
+      },
+    );
+
+    test(
+      'drops stale working updates but retains stale critical events',
+      () async {
+        var now = DateTime.utc(2026, 8, 2, 12);
+        final gate = Completer<void>();
+        final started = Completer<void>();
+        final observed = <RealtimeCandlePipelineDisposition>[];
+        final bus = RealtimeMarketEventBus(
+          maximumWorkingQueueAge: const Duration(seconds: 1),
+          clock: () => now,
+          handler: (update) async {
+            observed.add(update.disposition);
+            if (!started.isCompleted) {
+              started.complete();
+              await gate.future;
+            }
+          },
+        );
+
+        final first = bus.publish(
+          _update(RealtimeCandlePipelineDisposition.candleClosed),
+        );
+        await started.future;
+        final working = bus.publish(
+          _update(RealtimeCandlePipelineDisposition.workingUpdated, close: 102),
+        );
+        final critical = bus.publish(
+          _update(RealtimeCandlePipelineDisposition.gapDetected, close: 103),
+        );
+        now = now.add(const Duration(seconds: 2));
+        gate.complete();
+
+        expect(await first, RealtimeMarketEventDelivery.delivered);
+        expect(await working, RealtimeMarketEventDelivery.staleDropped);
+        expect(await critical, RealtimeMarketEventDelivery.delivered);
+        expect(bus.staleDroppedCount, 1);
+        expect(observed, [
+          RealtimeCandlePipelineDisposition.candleClosed,
+          RealtimeCandlePipelineDisposition.gapDetected,
+        ]);
+      },
+    );
+
+    test(
+      'fails closed at active stream capacity with typed evidence',
+      () async {
+        final gate = Completer<void>();
+        final started = Completer<void>();
+        final bus = RealtimeMarketEventBus(
+          maximumActiveStreams: 1,
+          handler: (update) async {
+            if (!started.isCompleted) started.complete();
+            await gate.future;
+          },
+        );
+        final first = bus.publish(
+          _update(RealtimeCandlePipelineDisposition.candleClosed),
+        );
+        await started.future;
+
+        await expectLater(
+          bus.publish(
+            _update(
+              RealtimeCandlePipelineDisposition.candleClosed,
+              symbol: 'ETHUSDT',
+            ),
+          ),
+          throwsA(
+            isA<RealtimeMarketEventBackpressureException>().having(
+              (error) => error.disposition,
+              'disposition',
+              RealtimeMarketBackpressureDisposition.activeStreamCapacity,
+            ),
+          ),
+        );
+        gate.complete();
+        await first;
       },
     );
 

@@ -1,3 +1,4 @@
+import '../../hot_path_performance/domain/rolling_market_features.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../domain/realtime_candle_pipeline_models.dart';
 import '../domain/realtime_market_runtime_models.dart';
@@ -69,6 +70,9 @@ final class SnapshottingRealtimeMarketAnalysisGateway
   final int maximumStreams;
   final int maximumClosedCandlesPerStream;
   final Map<RealtimeCandleStreamKey, _AnalysisStreamState> _states = {};
+
+  RollingMarketFeatureSnapshot? featuresFor(RealtimeCandleStreamKey key) =>
+      _states[key]?.rollingFeatures;
 
   @override
   Future<void> synchronize(RealtimeCandlePipelineUpdate update) async {
@@ -153,9 +157,16 @@ final class SnapshottingRealtimeMarketAnalysisGateway
         : update.closedCandles.sublist(
             update.closedCandles.length - maximumClosedCandlesPerStream,
           );
+    final featureState = RollingMarketFeatureState();
+    RollingMarketFeatureSnapshot? rollingFeatures;
+    for (final candle in retained) {
+      rollingFeatures = featureState.append(candle) ?? rollingFeatures;
+    }
     _states[update.key] = _AnalysisStreamState(
       closedCandles: retained,
       lastUpdate: update,
+      featureState: featureState,
+      rollingFeatures: rollingFeatures,
     );
   }
 
@@ -175,6 +186,7 @@ final class SnapshottingRealtimeMarketAnalysisGateway
       if (last != null) {
         if (last.openTime == candle.openTime) {
           state.closedCandles[state.closedCandles.length - 1] = candle;
+          state.rebuildFeatures();
           continue;
         }
         if (!candle.openTime.isAfter(last.openTime)) {
@@ -182,6 +194,7 @@ final class SnapshottingRealtimeMarketAnalysisGateway
         }
       }
       state.closedCandles.add(candle);
+      state.rollingFeatures = state.featureState.append(candle);
       if (state.closedCandles.length > maximumClosedCandlesPerStream) {
         state.closedCandles.removeAt(0);
       }
@@ -193,10 +206,22 @@ final class _AnalysisStreamState {
   _AnalysisStreamState({
     required List<ChartCandle> closedCandles,
     required this.lastUpdate,
+    required this.featureState,
+    required this.rollingFeatures,
   }) : closedCandles = List.of(closedCandles);
 
   final List<ChartCandle> closedCandles;
+  RollingMarketFeatureState featureState;
+  RollingMarketFeatureSnapshot? rollingFeatures;
   ChartCandle? workingCandle;
   RealtimeCandleGap? gap;
   RealtimeCandlePipelineUpdate lastUpdate;
+
+  void rebuildFeatures() {
+    featureState = RollingMarketFeatureState();
+    rollingFeatures = null;
+    for (final candle in closedCandles) {
+      rollingFeatures = featureState.append(candle) ?? rollingFeatures;
+    }
+  }
 }
