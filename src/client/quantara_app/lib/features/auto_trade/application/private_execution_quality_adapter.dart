@@ -51,7 +51,9 @@ abstract final class PrivateExecutionQualityAdapter {
       );
     }
 
+    final orderId = observation.orderId.trim();
     final identityMatches =
+        orderId.isNotEmpty &&
         observation.correlationId.trim() == correlationId &&
         observation.symbol.trim().toUpperCase() == symbol;
     final quantitiesValid =
@@ -61,21 +63,22 @@ abstract final class PrivateExecutionQualityAdapter {
         observation.filledQuantity >= 0 &&
         observation.filledQuantity <= observation.orderQuantity + 1e-9;
 
-    final fillRatio = quantitiesValid
-        ? ExecutionQualityMath.fillRatio(
-            plannedQuantity: observation.orderQuantity,
-            filledQuantity: observation.filledQuantity,
-          )
-        : null;
+    double? fillRatio;
+    if (quantitiesValid) {
+      fillRatio = ExecutionQualityMath.fillRatio(
+        plannedQuantity: observation.orderQuantity,
+        filledQuantity: observation.filledQuantity,
+      );
+    }
+
     final mapped = _mapOutcome(
       status: observation.orderStatus,
       fillRatio: fillRatio,
     );
     final hasFill = (fillRatio ?? 0) > 0;
+    final fillPrice = observation.weightedAverageFillPrice;
     final trustedFillPrice =
-        observation.weightedAverageFillPrice != null &&
-        observation.weightedAverageFillPrice!.isFinite &&
-        observation.weightedAverageFillPrice! > 0;
+        fillPrice != null && fillPrice.isFinite && fillPrice > 0;
     final statusConsistent = _isStatusConsistent(
       status: observation.orderStatus,
       outcome: mapped.outcome,
@@ -100,33 +103,39 @@ abstract final class PrivateExecutionQualityAdapter {
         !mapped.knownStatus ||
         !statusConsistent ||
         !lifecycleConsistent;
-    final evidenceQuality = ambiguous
-        ? ExecutionEvidenceQuality.insufficient
-        : ExecutionEvidenceQuality.observed;
+    final evidenceQuality = _evidenceQuality(ambiguous);
 
-    final signedSlippageBps =
-        !ambiguous && hasFill && trustedFillPrice
-        ? ExecutionQualityMath.signedSlippageBps(
-            side: side,
-            referencePrice: referencePrice,
-            fillPrice: observation.weightedAverageFillPrice!,
-          )
-        : null;
+    double? signedSlippageBps;
+    if (!ambiguous && hasFill && trustedFillPrice) {
+      signedSlippageBps = ExecutionQualityMath.signedSlippageBps(
+        side: side,
+        referencePrice: referencePrice,
+        fillPrice: fillPrice,
+      );
+    }
+
+    double? trustedWeightedAverageFillPrice;
+    if (trustedFillPrice) {
+      trustedWeightedAverageFillPrice = fillPrice;
+    }
 
     return PrivateExecutionQualitySnapshot(
       correlationId: correlationId,
-      orderId: observation.orderId.trim(),
+      orderId: orderId,
       symbol: symbol,
       outcome: mapped.outcome,
       evidenceQuality: evidenceQuality,
       lifecycle: lifecycle,
       fillRatio: fillRatio,
-      weightedAverageFillPrice: trustedFillPrice
-          ? observation.weightedAverageFillPrice
-          : null,
+      weightedAverageFillPrice: trustedWeightedAverageFillPrice,
       signedSlippageBps: signedSlippageBps,
       ambiguous: ambiguous,
     );
+  }
+
+  static ExecutionEvidenceQuality _evidenceQuality(bool ambiguous) {
+    if (ambiguous) return ExecutionEvidenceQuality.insufficient;
+    return ExecutionEvidenceQuality.observed;
   }
 
   static ExecutionLifecycleTiming? _validatedLifecycle({
@@ -173,23 +182,32 @@ abstract final class PrivateExecutionQualityAdapter {
         outcome: ExecutionOutcome.rejected,
         knownStatus: true,
       ),
-      'EXPIRED' => _MappedOutcome(
-        outcome: (fillRatio ?? 0) > 0
-            ? ExecutionOutcome.partialFill
-            : ExecutionOutcome.expired,
-        knownStatus: true,
+      'EXPIRED' => _terminalOutcome(
+        fillRatio: fillRatio,
+        emptyOutcome: ExecutionOutcome.expired,
       ),
-      'CANCELED' || 'CANCELLED' => _MappedOutcome(
-        outcome: (fillRatio ?? 0) > 0
-            ? ExecutionOutcome.partialFill
-            : ExecutionOutcome.noFill,
-        knownStatus: true,
+      'CANCELED' || 'CANCELLED' => _terminalOutcome(
+        fillRatio: fillRatio,
+        emptyOutcome: ExecutionOutcome.noFill,
       ),
       _ => const _MappedOutcome(
         outcome: ExecutionOutcome.unknown,
         knownStatus: false,
       ),
     };
+  }
+
+  static _MappedOutcome _terminalOutcome({
+    required double? fillRatio,
+    required ExecutionOutcome emptyOutcome,
+  }) {
+    if ((fillRatio ?? 0) > 0) {
+      return const _MappedOutcome(
+        outcome: ExecutionOutcome.partialFill,
+        knownStatus: true,
+      );
+    }
+    return _MappedOutcome(outcome: emptyOutcome, knownStatus: true);
   }
 
   static bool _isStatusConsistent({
