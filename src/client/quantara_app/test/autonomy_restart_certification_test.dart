@@ -2,18 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/autonomy/domain/autonomy_restart_certification.dart';
 
 void main() {
-  List<AutonomyRestartObservation> allPassing() => AutonomyRestartCheckpoint
-      .values
-      .map(
-        (checkpoint) => AutonomyRestartObservation(
-          checkpoint: checkpoint,
-          recovered: true,
-          idempotent: true,
-          reservationConsistent: true,
-          protectionConsistent: true,
-        ),
-      )
-      .toList();
+  List<AutonomyRestartObservation> allPassing() {
+    return AutonomyRestartCheckpoint.values
+        .map(
+          (checkpoint) => AutonomyRestartObservation(
+            checkpoint: checkpoint,
+            recovered: true,
+            idempotent: true,
+            reservationConsistent: true,
+            protectionConsistent: true,
+          ),
+        )
+        .toList();
+  }
 
   test('all restart boundaries must pass before promotion is eligible', () {
     final result = AutonomyRestartCertificationGate.evaluate(
