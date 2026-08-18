@@ -69,16 +69,19 @@ void main() {
     expect(invalid.validate, throwsStateError);
   });
 
-  test('campaign scenario requires deterministic version and seed metadata', () {
-    const invalid = AutonomyFaultCampaignScenario(
-      version: ' ',
-      seed: -1,
-      fault: AutonomyFaultCode.driftBreakerTriggered,
-      category: AutonomyFaultCategory.strategyAutonomy,
-    );
+  test(
+    'campaign scenario requires deterministic version and seed metadata',
+    () {
+      const invalid = AutonomyFaultCampaignScenario(
+        version: ' ',
+        seed: -1,
+        fault: AutonomyFaultCode.driftBreakerTriggered,
+        category: AutonomyFaultCategory.strategyAutonomy,
+      );
 
-    expect(invalid.validate, throwsFormatException);
-  });
+      expect(invalid.validate, throwsFormatException);
+    },
+  );
 
   test('campaign scenario converts to the shared certification scenario', () {
     const scenario = AutonomyFaultCampaignScenario(
