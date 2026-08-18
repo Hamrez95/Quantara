@@ -8,6 +8,7 @@ enum PortfolioAllocationReason {
   selected,
   hardRiskRejected,
   invalidProposal,
+  duplicateProposal,
   utilityBelowThreshold,
   duplicateSymbol,
   slotCeiling,
@@ -232,6 +233,7 @@ final class PortfolioCapitalAllocator {
         budget.availableMargin * configuration.marginReserveFraction;
     final allocatableRisk = budget.availableRisk - riskHeldInReserve;
     final allocatableMargin = budget.availableMargin - marginHeldInReserve;
+    final seenProposalIds = <String>{};
     final selectedSymbols = <String>{};
     final decisions = <PortfolioAllocationItemDecision>[];
     final correlationRiskByBucket = _initialCorrelationExposure(correlation);
@@ -246,9 +248,14 @@ final class PortfolioCapitalAllocator {
     for (final proposal in ranked) {
       PortfolioAllocationReason reason;
       _PortfolioAllocationCorrelationImpact? correlationImpact;
+      final normalizedProposalId = proposal.id.trim();
+      final duplicateProposal =
+          normalizedProposalId.isNotEmpty &&
+          !seenProposalIds.add(normalizedProposalId);
       if (correlation != null &&
           proposal.valid &&
-          proposal.riskDecision.allowed) {
+          proposal.riskDecision.allowed &&
+          !duplicateProposal) {
         final bucket = correlation.policy.bucketFor(
           symbol: proposal.candidate.symbol,
           assetGroup: proposal.candidate.assetGroup,
@@ -264,6 +271,8 @@ final class PortfolioCapitalAllocator {
 
       if (!proposal.valid) {
         reason = PortfolioAllocationReason.invalidProposal;
+      } else if (duplicateProposal) {
+        reason = PortfolioAllocationReason.duplicateProposal;
       } else if (!proposal.riskDecision.allowed) {
         reason = PortfolioAllocationReason.hardRiskRejected;
       } else if (proposal.utility.score < configuration.minimumUtilityScore) {
