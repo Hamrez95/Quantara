@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/owner_alpha/data/realtime_production_runtime.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
+import 'package:quantara_app/features/owner_alpha/domain/realtime_candidate_models.dart';
 import 'package:quantara_app/features/owner_alpha/domain/realtime_market_runtime_models.dart';
 
 void main() {
@@ -140,6 +141,12 @@ final class _FakeRuntime implements RealtimeMarketRuntimeLifecycle {
 
   @override
   RealtimeMarketRuntimeState get state => _state;
+
+  @override
+  int get candidateSnapshotRevision => 0;
+
+  @override
+  List<RealtimeOpportunityCandidate> get radarCandidates => const [];
 
   @override
   RealtimeMarketHealthSnapshot get health => RealtimeMarketHealthSnapshot(

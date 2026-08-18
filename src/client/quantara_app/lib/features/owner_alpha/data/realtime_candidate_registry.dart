@@ -53,8 +53,24 @@ final class RealtimeCandidateRegistry {
   final Map<_CandidateStreamKey, _StreamCursor> _streamCursors = {};
   final LinkedHashSet<String> _recentEventIds = LinkedHashSet();
   var _nextAuditSequence = 1;
+  var _snapshotRevision = 0;
 
   int get candidateCount => _candidates.length;
+
+  int get snapshotRevision => _snapshotRevision;
+
+  List<RealtimeOpportunityCandidate> recentCandidates({int limit = 100}) {
+    if (limit < 1) {
+      throw ArgumentError.value(limit, 'limit');
+    }
+    final result = _candidates.values.toList(growable: false)
+      ..sort(
+        (left, right) =>
+            right.lastUpdatedAtUtc.compareTo(left.lastUpdatedAtUtc),
+      );
+    final boundedLimit = limit > maximumCandidates ? maximumCandidates : limit;
+    return List.unmodifiable(result.take(boundedLimit));
+  }
 
   int revisionFor(String setupId) => _candidateRevisions[setupId] ?? -1;
 
@@ -90,6 +106,7 @@ final class RealtimeCandidateRegistry {
 
     _candidates[candidate.setupId] = candidate;
     _candidateRevisions[candidate.setupId] = 0;
+    _snapshotRevision++;
     return CandidateRegistrationResult(
       disposition: CandidateRegistrationDisposition.registered,
       candidate: candidate,
@@ -220,6 +237,7 @@ final class RealtimeCandidateRegistry {
     _streamCursors[cursorKey] = nextCursor;
     _remember(deduplicationKey);
     _candidateRevisions[setupId] = prepared._candidateRevision + 1;
+    _snapshotRevision++;
     return prepared.update;
   }
 

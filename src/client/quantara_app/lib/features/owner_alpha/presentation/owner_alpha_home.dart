@@ -4,6 +4,7 @@ class _HomeDashboard extends StatelessWidget {
   const _HomeDashboard({
     required this.controller,
     required this.snapshot,
+    required this.realtimeMonitor,
     required this.onOpenAnalysis,
     required this.onNavigate,
     required this.onOpenPortfolioRisk,
@@ -11,6 +12,7 @@ class _HomeDashboard extends StatelessWidget {
 
   final OwnerAlphaController controller;
   final OwnerAlphaSnapshot snapshot;
+  final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
   final _OpenAnalysis onOpenAnalysis;
   final ValueChanged<int> onNavigate;
   final VoidCallback onOpenPortfolioRisk;
@@ -34,7 +36,8 @@ class _HomeDashboard extends StatelessWidget {
         _RadarDashboard(
           controller: controller,
           snapshot: snapshot,
-          onOpenAnalysis: (symbol) => onOpenAnalysis(symbol),
+          realtimeMonitor: realtimeMonitor,
+          onOpenAnalysis: onOpenAnalysis,
         ),
       ],
     );
