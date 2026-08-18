@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:quantara_app/features/cockpit/data/mock_cockpit_repository.dart';
 import 'package:quantara_app/core/settings/app_preferences.dart';
 import 'package:quantara_app/features/cockpit/domain/cockpit_models.dart';
@@ -162,8 +164,26 @@ final class MemoryOpportunityStateStore implements OpportunityStateStore {
 
 final class RecordingSetupNotificationGateway
     implements SetupNotificationGateway {
+  RecordingSetupNotificationGateway({this.launchSetupId});
+
   bool permissionGranted = true;
   final shown = <String>[];
+  String? launchSetupId;
+  final StreamController<String> _opened = StreamController.broadcast();
+
+  @override
+  Stream<String> get openedSetupIds => _opened.stream;
+
+  @override
+  Future<String?> initialSetupId() async {
+    final value = launchSetupId;
+    launchSetupId = null;
+    return value;
+  }
+
+  void open(String setupId) => _opened.add(setupId);
+
+  Future<void> dispose() => _opened.close();
 
   @override
   Future<bool> requestPermission() async => permissionGranted;

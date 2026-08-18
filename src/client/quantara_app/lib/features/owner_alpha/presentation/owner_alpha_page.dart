@@ -239,11 +239,16 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
       GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
+  StreamSubscription<String>? _notificationOpenSubscription;
+  late final Future<void> _ownerAlphaInitialization;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_controller.initialize());
+    _ownerAlphaInitialization = _controller.initialize();
+    _notificationOpenSubscription = widget.notificationGateway.openedSetupIds
+        .listen((setupId) => unawaited(_openNotificationSetup(setupId)));
+    unawaited(_consumeInitialNotification());
     unawaited(_tradingLabController.initialize());
     unawaited(_autoTradeController.initialize());
     unawaited(_unattendedAutoTradeController.initialize());
@@ -252,6 +257,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
 
   @override
   void dispose() {
+    unawaited(_notificationOpenSubscription?.cancel());
     _tradingLabController.dispose();
     _controller.dispose();
     _autoTradeController.dispose();
@@ -259,6 +265,32 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     _journalController.dispose();
     _autoTradeHttpClient.close();
     super.dispose();
+  }
+
+  Future<void> _consumeInitialNotification() async {
+    final setupId = await widget.notificationGateway.initialSetupId();
+    if (setupId != null) await _openNotificationSetup(setupId);
+  }
+
+  Future<void> _openNotificationSetup(String setupId) async {
+    await _ownerAlphaInitialization;
+    if (!mounted) return;
+    final signal = _controller.signalEntry(setupId);
+    if (signal == null) {
+      final persian = widget.locale.languageCode != 'en';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            persian
+                ? 'این ستاپ دیگر در ژورنال محلی موجود نیست یا منقضی شده است.'
+                : 'This setup is no longer available in the local journal or has expired.',
+          ),
+        ),
+      );
+      return;
+    }
+    await _openAnalysisContext(signal.symbol, signal.timeframe, signal.setupId);
   }
 
   @override
