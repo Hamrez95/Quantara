@@ -181,8 +181,18 @@ abstract final class ReleaseCertificationGate {
       gates: ordered,
     );
 
+    _validateShadowEvidence(artifact);
     _validateCanaryOrdering(artifact);
     return artifact;
+  }
+
+  static void _validateShadowEvidence(ReleaseCertificationArtifact artifact) {
+    final shadow = artifact.gate(ReleaseGateCode.realtimeShadow14Day);
+    if (shadow.passed && !artifact.shadowDurationSatisfied) {
+      throw StateError(
+        '14-day Shadow cannot pass without 14 days of recorded soak evidence.',
+      );
+    }
   }
 
   static void _validateCanaryOrdering(ReleaseCertificationArtifact artifact) {
@@ -193,7 +203,7 @@ abstract final class ReleaseCertificationGate {
 
     final signing = artifact.gate(ReleaseGateCode.permanentSigning);
     final shadow = artifact.gate(ReleaseGateCode.realtimeShadow14Day);
-    if (!signing.passed || !shadow.passed || !artifact.shadowDurationSatisfied) {
+    if (!signing.passed || !shadow.passed) {
       throw StateError(
         'Tiny-risk canary evidence is invalid before signing and 14-day shadow.',
       );
