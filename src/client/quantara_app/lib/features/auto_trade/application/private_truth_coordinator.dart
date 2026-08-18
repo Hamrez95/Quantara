@@ -61,6 +61,16 @@ final class PrivateTruthCoordinator {
   PrivateOrderExecutionObservation? orderExecutionObservation(String orderId) =>
       _orderExecutionTracker.observationFor(orderId);
 
+  void recordOrderSubmission({
+    required String correlationId,
+    DateTime? submittedAtUtc,
+  }) {
+    _orderExecutionTracker.recordSubmission(
+      correlationId: correlationId,
+      submittedAtUtc: (submittedAtUtc ?? _clock()).toUtc(),
+    );
+  }
+
   PrivateTruthTelemetrySnapshot telemetrySnapshot([DateTime? nowUtc]) =>
       _telemetry.snapshot(
         projection: _projection,
