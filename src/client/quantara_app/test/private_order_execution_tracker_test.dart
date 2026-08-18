@@ -35,18 +35,13 @@ void main() {
   );
 
   test(
-    'captures submit, acknowledgement, fills and weighted price',
+    'captures acknowledgement, first fill, final fill and weighted price',
     () {
       final tracker = PrivateOrderExecutionTracker();
-      final submitAt = DateTime.utc(2026, 8, 18, 0, 59, 59, 990);
       final acknowledgedAt = DateTime.utc(2026, 8, 18, 1);
       final firstFillAt = acknowledgedAt.add(const Duration(milliseconds: 25));
       final finalFillAt = acknowledgedAt.add(const Duration(milliseconds: 60));
 
-      tracker.recordSubmission(
-        correlationId: 'q-local-1',
-        submittedAtUtc: submitAt,
-      );
       tracker.recordAccepted(
         orderEvent(
           identity: 'ack',
@@ -87,7 +82,6 @@ void main() {
       final observation = tracker.observationFor('ord-1');
       expect(observation, isNotNull);
       expect(observation!.correlationId, 'q-local-1');
-      expect(observation.submitAtUtc, submitAt);
       expect(observation.acknowledgedAtUtc, acknowledgedAt);
       expect(observation.firstFillAtUtc, firstFillAt);
       expect(observation.finalFillAtUtc, finalFillAt);
@@ -97,32 +91,6 @@ void main() {
       expect(observation.ambiguous, isFalse);
     },
   );
-
-  test('acknowledgement before local submit timing fails closed', () {
-    final tracker = PrivateOrderExecutionTracker();
-    final acknowledgedAt = DateTime.utc(2026, 8, 18, 1);
-
-    tracker.recordSubmission(
-      correlationId: 'q-local-1',
-      submittedAtUtc: acknowledgedAt.add(const Duration(milliseconds: 1)),
-    );
-    tracker.recordAccepted(
-      orderEvent(
-        identity: 'ack-before-submit',
-        orderId: 'ord-1',
-        clientId: 'q-local-1',
-        status: 'NEW',
-        quantity: 1,
-        dealAmount: 0,
-        averagePrice: 0,
-        atUtc: acknowledgedAt,
-      ),
-    );
-
-    final observation = tracker.observationFor('ord-1')!;
-    expect(observation.submitAtUtc, isNotNull);
-    expect(observation.ambiguous, isTrue);
-  });
 
   test(
     'regressive cumulative fill is flagged and never reduces known fill',
@@ -188,17 +156,9 @@ void main() {
     expect(tracker.observationFor('ord-3'), isNotNull);
   });
 
-  test('invalid retention capacity and submit identity fail closed', () {
+  test('invalid retention capacity fails closed', () {
     expect(
       () => PrivateOrderExecutionTracker(maximumEntries: 0),
-      throwsFormatException,
-    );
-    final tracker = PrivateOrderExecutionTracker();
-    expect(
-      () => tracker.recordSubmission(
-        correlationId: ' ',
-        submittedAtUtc: DateTime.utc(2026, 8, 18),
-      ),
       throwsFormatException,
     );
   });
