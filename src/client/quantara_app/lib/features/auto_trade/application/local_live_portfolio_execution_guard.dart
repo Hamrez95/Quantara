@@ -6,13 +6,19 @@ import '../domain/auto_trade_models.dart';
 import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'local_live_capital_guardian_monitor.dart';
 import 'local_live_portfolio_risk_runtime.dart';
 
 final class LocalLivePortfolioExecutionGuard {
-  LocalLivePortfolioExecutionGuard({required double dailyRiskLimit})
-    : _runtime = LocalLivePortfolioRiskRuntime(dailyRiskLimit: dailyRiskLimit);
+  LocalLivePortfolioExecutionGuard({
+    required double dailyRiskLimit,
+    LocalLiveCapitalGuardianMonitor? capitalGuardianMonitor,
+  }) : _runtime = LocalLivePortfolioRiskRuntime(dailyRiskLimit: dailyRiskLimit),
+       _capitalGuardianMonitor =
+           capitalGuardianMonitor ?? LocalLiveCapitalGuardianMonitor();
 
   final LocalLivePortfolioRiskRuntime _runtime;
+  final LocalLiveCapitalGuardianMonitor _capitalGuardianMonitor;
 
   Future<PortfolioReservationOutcome> preview({
     required TradeIdea idea,
@@ -226,12 +232,19 @@ final class LocalLivePortfolioExecutionGuard {
     required AutoTradeAccountSnapshot account,
     required bool allOpenPositionsProtected,
     required DateTime now,
-  }) => _runtime.snapshot(
-    account: LocalLivePortfolioAdmission.accountTruth(
-      account: account,
-      observedAt: now,
-      allOpenPositionsProtected: allOpenPositionsProtected,
-    ),
-    now: now,
-  );
+  }) async {
+    final riskSnapshot = await _runtime.snapshot(
+      account: LocalLivePortfolioAdmission.accountTruth(
+        account: account,
+        observedAt: now,
+        allOpenPositionsProtected: allOpenPositionsProtected,
+      ),
+      now: now,
+    );
+    await _capitalGuardianMonitor.refresh(
+      accountEquity: account.estimatedEquity,
+      now: now,
+    );
+    return riskSnapshot;
+  }
 }
