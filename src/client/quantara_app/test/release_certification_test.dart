@@ -148,6 +148,18 @@ void main() {
     expect(artifact.failedGates, isEmpty);
   });
 
+  test('release build must match the build certified by soak evidence', () {
+    expect(
+      () => ReleaseCertificationGate.evaluate(
+        buildCommit: 'different-build',
+        releaseVersion: '1.2.0',
+        autonomySoak: soak(),
+        gates: allPassedGates(),
+      ),
+      throwsStateError,
+    );
+  });
+
   test('pending physical evidence blocks Stable without fabricating failure', () {
     final gates = allPassedGates();
     gates[ReleaseGateCode.samsungPhysicalQa.index] = ReleaseGateEvidence(
