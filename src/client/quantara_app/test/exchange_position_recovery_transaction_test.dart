@@ -36,6 +36,16 @@ void main() {
     );
   });
 
+  test('legacy risk-adopted checkpoint restores conservatively', () {
+    final legacy = checkpoint(stage: ExchangePositionRecoveryStage.riskAdopted);
+
+    final restored = ExchangePositionRecoveryCheckpoint.fromJson(
+      legacy.toJson(),
+    );
+
+    expect(restored.stage, ExchangePositionRecoveryStage.journalCommitted);
+  });
+
   test(
     'journal failure leaves verified checkpoint and skips later stores',
     () async {
@@ -114,10 +124,16 @@ void main() {
     expect(managedCalls, 1);
     expect(durable, isNull);
     expect(persisted.last, isNull);
+    expect(
+      persisted.whereType<ExchangePositionRecoveryCheckpoint>().map(
+        (value) => value.stage,
+      ),
+      isNot(contains(ExchangePositionRecoveryStage.riskAdopted)),
+    );
   });
 
   test(
-    'risk-adopted retry commits only managed state then clears checkpoint',
+    'legacy risk-adopted retry replays idempotent risk before managed state',
     () async {
       var journalCalls = 0;
       var riskCalls = 0;
@@ -140,7 +156,7 @@ void main() {
 
       expect(result.completed, isTrue);
       expect(journalCalls, 0);
-      expect(riskCalls, 0);
+      expect(riskCalls, 1);
       expect(managedCalls, 1);
       expect(durable, isNull);
     },
