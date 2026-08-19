@@ -14,6 +14,37 @@ final class LocalLivePortfolioExecutionGuard {
 
   final LocalLivePortfolioRiskRuntime _runtime;
 
+  Future<PortfolioReservationOutcome> preview({
+    required TradeIdea idea,
+    required double plannedQuantity,
+    required double entryPrice,
+    required double stopPrice,
+    required double requiredMargin,
+    required int leverage,
+    required double minimumQuantity,
+    required double minimumNotional,
+    required AutoTradeAccountSnapshot account,
+    required bool allOpenPositionsProtected,
+    required DateTime now,
+  }) {
+    final candidate = LocalLivePortfolioAdmission.candidate(
+      idea: idea,
+      plannedQuantity: plannedQuantity,
+      entryPrice: entryPrice,
+      stopPrice: stopPrice,
+      requiredMargin: requiredMargin,
+      leverage: leverage,
+      minimumQuantity: minimumQuantity,
+      minimumNotional: minimumNotional,
+    );
+    final truth = LocalLivePortfolioAdmission.accountTruth(
+      account: account,
+      observedAt: now,
+      allOpenPositionsProtected: allOpenPositionsProtected,
+    );
+    return _runtime.preview(candidate: candidate, account: truth, now: now);
+  }
+
   Future<PortfolioReservationOutcome> reserve({
     required TradeIdea idea,
     required double plannedQuantity,
