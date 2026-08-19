@@ -135,7 +135,9 @@ final class ReleaseCertificationArtifact {
     'physicalEvidenceComplete': physicalEvidenceComplete,
     'stopShip': stopShip,
     'stableEligible': stableEligible,
-    'pendingGates': pendingGates.map((gate) => gate.name).toList(growable: false),
+    'pendingGates': pendingGates
+        .map((gate) => gate.name)
+        .toList(growable: false),
     'failedGates': failedGates.map((gate) => gate.name).toList(growable: false),
     'gates': gates.map((gate) => gate.toJson()).toList(growable: false),
   };
