@@ -35,65 +35,74 @@ void main() {
     final first = PortfolioAllocationPolicyReplay.compare(frames: frames);
     final second = PortfolioAllocationPolicyReplay.compare(frames: frames);
 
-    expect(first.map((value) => value.fingerprint), second.map((value) => value.fingerprint));
+    expect(
+      first.map((value) => value.fingerprint),
+      second.map((value) => value.fingerprint),
+    );
     expect(
       first.map((value) => value.policy).toSet(),
       PortfolioAllocationReplayPolicy.values.toSet(),
     );
   });
 
-  test('equal-risk and utility-weighted policies size the same safe set differently', () {
-    final replayFrame = frame(
-      'sizing',
-      now,
-      proposals: [
-        proposal(
-          'high',
-          symbol: 'BTCUSDT',
-          score: 9,
-          risk: 10,
-          margin: 20,
-          assetGroup: 'major',
+  test(
+    'equal-risk and utility-weighted policies size the same safe set differently',
+    () {
+      final replayFrame = frame(
+        'sizing',
+        now,
+        proposals: [
+          proposal(
+            'high',
+            symbol: 'BTCUSDT',
+            score: 9,
+            risk: 10,
+            margin: 20,
+            assetGroup: 'major',
+          ),
+          proposal(
+            'low',
+            symbol: 'SOLUSDT',
+            score: 3,
+            risk: 10,
+            margin: 20,
+            assetGroup: 'alt',
+          ),
+        ],
+        outcomes: [outcome('high'), outcome('low')],
+      );
+      const configuration = PortfolioAllocationReplayConfiguration(
+        totalRiskBudget: 10,
+        totalMarginBudget: 100,
+        maximumSelections: 2,
+        correlationPolicy: PortfolioCorrelationPolicy(
+          maximumBucketRiskFraction: 1,
         ),
-        proposal(
-          'low',
-          symbol: 'SOLUSDT',
-          score: 3,
-          risk: 10,
-          margin: 20,
-          assetGroup: 'alt',
-        ),
-      ],
-      outcomes: [outcome('high'), outcome('low')],
-    );
-    const configuration = PortfolioAllocationReplayConfiguration(
-      totalRiskBudget: 10,
-      totalMarginBudget: 100,
-      maximumSelections: 2,
-      correlationPolicy: PortfolioCorrelationPolicy(
-        maximumBucketRiskFraction: 1,
-      ),
-    );
+      );
 
-    final equal = PortfolioAllocationPolicyReplay.run(
-      policy: PortfolioAllocationReplayPolicy.conservativeEqualRisk,
-      frames: [replayFrame],
-      configuration: configuration,
-    );
-    final weighted = PortfolioAllocationPolicyReplay.run(
-      policy: PortfolioAllocationReplayPolicy.utilityWeightedFixedRisk,
-      frames: [replayFrame],
-      configuration: configuration,
-    );
+      final equal = PortfolioAllocationPolicyReplay.run(
+        policy: PortfolioAllocationReplayPolicy.conservativeEqualRisk,
+        frames: [replayFrame],
+        configuration: configuration,
+      );
+      final weighted = PortfolioAllocationPolicyReplay.run(
+        policy: PortfolioAllocationReplayPolicy.utilityWeightedFixedRisk,
+        frames: [replayFrame],
+        configuration: configuration,
+      );
 
-    expect(equal.frames.single.selected.map((value) => value.allocatedRisk), [5, 5]);
-    expect(
-      weighted.frames.single.selected.map((value) => value.allocatedRisk),
-      [7.5, 2.5],
-    );
-    expect(equal.metrics.riskTurnover, 10);
-    expect(weighted.metrics.riskTurnover, 10);
-  });
+      expect(equal.frames.single.selected.map((value) => value.allocatedRisk), [
+        5,
+        5,
+      ]);
+      expect(
+        weighted.frames.single.selected.map((value) => value.allocatedRisk),
+        [7.5, 2.5],
+      );
+      expect(equal.metrics.riskTurnover, 10);
+      expect(weighted.metrics.riskTurnover, 10);
+    },
+  );
 
   test('correlation policy can prefer a lower-ranked independent setup', () {
     final replayFrame = frame(
@@ -138,8 +147,20 @@ void main() {
       'reserve',
       now,
       proposals: [
-        proposal('first', symbol: 'BTCUSDT', score: 9, risk: 4, assetGroup: 'a'),
-        proposal('second', symbol: 'SOLUSDT', score: 8, risk: 4, assetGroup: 'b'),
+        proposal(
+          'first',
+          symbol: 'BTCUSDT',
+          score: 9,
+          risk: 4,
+          assetGroup: 'a',
+        ),
+        proposal(
+          'second',
+          symbol: 'SOLUSDT',
+          score: 8,
+          risk: 4,
+          assetGroup: 'b',
+        ),
       ],
       outcomes: [outcome('first'), outcome('second')],
     );
@@ -200,59 +221,62 @@ void main() {
     }
   });
 
-  test('later stronger setup records regret while earlier capital remains locked', () {
-    final frames = [
-      frame(
-        'early',
-        now,
-        proposals: [
-          proposal(
-            'early-low',
-            symbol: 'BTCUSDT',
-            score: 4,
-            risk: 6,
-            margin: 60,
-            assetGroup: 'first',
-          ),
-        ],
-        outcomes: [outcome('early-low', holdingFrames: 2)],
-      ),
-      frame(
-        'later',
-        now.add(const Duration(minutes: 1)),
-        proposals: [
-          proposal(
-            'later-high',
-            symbol: 'SOLUSDT',
-            score: 10,
-            risk: 6,
-            margin: 60,
-            assetGroup: 'second',
-          ),
-        ],
-        outcomes: [outcome('later-high')],
-      ),
-    ];
-    const configuration = PortfolioAllocationReplayConfiguration(
-      totalRiskBudget: 6,
-      totalMarginBudget: 60,
-      maximumSelections: 1,
-      correlationPolicy: PortfolioCorrelationPolicy(
-        maximumBucketRiskFraction: 1,
-      ),
-    );
+  test(
+    'later stronger setup records regret while earlier capital remains locked',
+    () {
+      final frames = [
+        frame(
+          'early',
+          now,
+          proposals: [
+            proposal(
+              'early-low',
+              symbol: 'BTCUSDT',
+              score: 4,
+              risk: 6,
+              margin: 60,
+              assetGroup: 'first',
+            ),
+          ],
+          outcomes: [outcome('early-low', holdingFrames: 2)],
+        ),
+        frame(
+          'later',
+          now.add(const Duration(minutes: 1)),
+          proposals: [
+            proposal(
+              'later-high',
+              symbol: 'SOLUSDT',
+              score: 10,
+              risk: 6,
+              margin: 60,
+              assetGroup: 'second',
+            ),
+          ],
+          outcomes: [outcome('later-high')],
+        ),
+      ];
+      const configuration = PortfolioAllocationReplayConfiguration(
+        totalRiskBudget: 6,
+        totalMarginBudget: 60,
+        maximumSelections: 1,
+        correlationPolicy: PortfolioCorrelationPolicy(
+          maximumBucketRiskFraction: 1,
+        ),
+      );
 
-    final result = PortfolioAllocationPolicyReplay.run(
-      policy: PortfolioAllocationReplayPolicy.correlationAwareMarginalUtility,
-      frames: frames,
-      configuration: configuration,
-    );
+      final result = PortfolioAllocationPolicyReplay.run(
+        policy: PortfolioAllocationReplayPolicy.correlationAwareMarginalUtility,
+        frames: frames,
+        configuration: configuration,
+      );
 
-    expect(result.frames.first.selected.single.proposalId, 'early-low');
-    expect(result.frames.last.selected, isEmpty);
-    expect(result.frames.last.opportunityRegret, 6);
-    expect(result.metrics.opportunityRegret, 6);
-  });
+      expect(result.frames.first.selected.single.proposalId, 'early-low');
+      expect(result.frames.last.selected, isEmpty);
+      expect(result.frames.last.opportunityRegret, 6);
+      expect(result.metrics.opportunityRegret, 6);
+    },
+  );
 
   test('outcome coverage is fail closed', () {
     expect(

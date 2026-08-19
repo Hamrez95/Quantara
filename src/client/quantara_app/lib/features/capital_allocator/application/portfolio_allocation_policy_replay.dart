@@ -55,7 +55,9 @@ final class PortfolioAllocationReplayFrame {
        }) {
     final proposalIds = <String>{};
     if (frameId.trim().isEmpty || !occurredAtUtc.isUtc) {
-      throw const FormatException('Allocation replay frame identity is invalid.');
+      throw const FormatException(
+        'Allocation replay frame identity is invalid.',
+      );
     }
     for (final proposal in this.proposals) {
       final id = proposal.id.trim();
@@ -300,7 +302,9 @@ abstract final class PortfolioAllocationPolicyReplay {
     PortfolioAllocationReplayConfiguration configuration,
   ) {
     if (!configuration.valid) {
-      throw const FormatException('Allocation replay configuration is invalid.');
+      throw const FormatException(
+        'Allocation replay configuration is invalid.',
+      );
     }
     DateTime? previous;
     final frameIds = <String>{};
@@ -341,25 +345,37 @@ abstract final class PortfolioAllocationPolicyReplay {
     var selectionCount = 0;
 
     void realize(_ActiveReplayAllocation allocation) {
-      final pnl = allocation.selection.allocatedRisk * allocation.outcome.realizedNetR;
+      final pnl =
+          allocation.selection.allocatedRisk * allocation.outcome.realizedNetR;
       cumulativePnl += pnl;
       peakPnl = math.max(peakPnl, cumulativePnl);
       maximumDrawdown = math.max(maximumDrawdown, peakPnl - cumulativePnl);
-      worstSingleLoss = math.max(worstSingleLoss, math.max(0, -pnl));
-      riskHours += allocation.selection.allocatedRisk * allocation.outcome.riskHours;
+      worstSingleLoss = math.max(worstSingleLoss, math.max(0.0, -pnl));
+      riskHours +=
+          allocation.selection.allocatedRisk * allocation.outcome.riskHours;
       capitalHours +=
-          allocation.selection.allocatedMargin * allocation.outcome.capitalHours;
+          allocation.selection.allocatedMargin *
+          allocation.outcome.capitalHours;
       tradingCosts +=
-          allocation.selection.allocatedRisk * allocation.outcome.executionCostR;
+          allocation.selection.allocatedRisk *
+          allocation.outcome.executionCostR;
       realizedPath.add(cumulativePnl);
     }
 
     for (var frameIndex = 0; frameIndex < frames.length; frameIndex++) {
       final frame = frames[frameIndex];
-      final released = active
-          .where((allocation) => allocation.selection.releaseFrameIndex <= frameIndex)
-          .toList(growable: false)
-        ..sort((left, right) => left.selection.proposalId.compareTo(right.selection.proposalId));
+      final released =
+          active
+              .where(
+                (allocation) =>
+                    allocation.selection.releaseFrameIndex <= frameIndex,
+              )
+              .toList(growable: false)
+            ..sort(
+              (left, right) => left.selection.proposalId.compareTo(
+                right.selection.proposalId,
+              ),
+            );
       for (final allocation in released) {
         realize(allocation);
       }
@@ -376,9 +392,12 @@ abstract final class PortfolioAllocationPolicyReplay {
         0,
         (sum, allocation) => sum + allocation.selection.allocatedMargin,
       );
-      final availableRisk = math.max(0, configuration.totalRiskBudget - beforeRisk);
+      final availableRisk = math.max(
+        0.0,
+        configuration.totalRiskBudget - beforeRisk,
+      );
       final availableMargin = math.max(
-        0,
+        0.0,
         configuration.totalMarginBudget - beforeMargin,
       );
       final availableSlots = math.max(
@@ -418,16 +437,33 @@ abstract final class PortfolioAllocationPolicyReplay {
                 .map((allocation) => allocation.selection.utilityScore)
                 .reduce(math.min);
       var frameRegret = 0.0;
-      if (minimumActiveUtility != null && availableSlots == 0 || active.isNotEmpty) {
+      if (minimumActiveUtility != null) {
+        final bucketLimit =
+            configuration.totalRiskBudget *
+            configuration.correlationPolicy.maximumBucketRiskFraction;
         for (final proposal in ranked) {
           if (selectedIds.contains(proposal.id) ||
               !proposal.valid ||
               !proposal.riskDecision.allowed ||
-              proposal.utility.score < configuration.minimumUtilityScore ||
-              minimumActiveUtility == null) {
+              proposal.utility.score < configuration.minimumUtilityScore) {
             continue;
           }
-          frameRegret += math.max(0, proposal.utility.score - minimumActiveUtility);
+          final bucket = configuration.correlationPolicy.bucketFor(
+            symbol: proposal.candidate.symbol,
+            assetGroup: proposal.candidate.assetGroup,
+          );
+          final blockedByEarlierCapital =
+              availableSlots == 0 ||
+              proposal.requestedRisk > availableRisk + 1e-9 ||
+              proposal.requestedMargin > availableMargin + 1e-9 ||
+              activeSymbols.contains(proposal.symbol) ||
+              (bucketRisk[bucket] ?? 0) + proposal.requestedRisk >
+                  bucketLimit + 1e-9;
+          if (!blockedByEarlierCapital) continue;
+          frameRegret += math.max(
+            0.0,
+            proposal.utility.score - minimumActiveUtility,
+          );
         }
       }
       opportunityRegret += frameRegret;
@@ -451,9 +487,9 @@ abstract final class PortfolioAllocationPolicyReplay {
       );
       riskUtilizationSum += lockedRisk / configuration.totalRiskBudget;
       capitalUtilizationSum += lockedMargin / configuration.totalMarginBudget;
-      idleRiskSum += math.max(0, configuration.totalRiskBudget - lockedRisk);
+      idleRiskSum += math.max(0.0, configuration.totalRiskBudget - lockedRisk);
       idleMarginSum += math.max(
-        0,
+        0.0,
         configuration.totalMarginBudget - lockedMargin,
       );
       final riskByBucket = <String, double>{};
@@ -500,16 +536,19 @@ abstract final class PortfolioAllocationPolicyReplay {
       opportunityCount: opportunityCount,
       selectionCount: selectionCount,
       netPnl: cumulativePnl,
-      netExpectancyPerSelection:
-          selectionCount == 0 ? 0 : cumulativePnl / selectionCount,
+      netExpectancyPerSelection: selectionCount == 0
+          ? 0
+          : cumulativePnl / selectionCount,
       pnlPerRiskHour: riskHours == 0 ? 0 : cumulativePnl / riskHours,
       pnlPerCapitalHour: capitalHours == 0 ? 0 : cumulativePnl / capitalHours,
       maximumDrawdown: maximumDrawdown,
       worstSingleLoss: worstSingleLoss,
-      averageRiskUtilization:
-          frameCount == 0 ? 0 : riskUtilizationSum / frameCount,
-      averageCapitalUtilization:
-          frameCount == 0 ? 0 : capitalUtilizationSum / frameCount,
+      averageRiskUtilization: frameCount == 0
+          ? 0
+          : riskUtilizationSum / frameCount,
+      averageCapitalUtilization: frameCount == 0
+          ? 0
+          : capitalUtilizationSum / frameCount,
       averageIdleRisk: frameCount == 0 ? 0 : idleRiskSum / frameCount,
       averageIdleMargin: frameCount == 0 ? 0 : idleMarginSum / frameCount,
       riskTurnover: riskTurnover,
@@ -563,7 +602,8 @@ abstract final class PortfolioAllocationPolicyReplay {
     final riskLimit = policy == PortfolioAllocationReplayPolicy.reserveCapacity
         ? availableRisk * (1 - configuration.reserveRiskFraction)
         : availableRisk;
-    final marginLimit = policy == PortfolioAllocationReplayPolicy.reserveCapacity
+    final marginLimit =
+        policy == PortfolioAllocationReplayPolicy.reserveCapacity
         ? availableMargin * (1 - configuration.reserveMarginFraction)
         : availableMargin;
     final selected = <PortfolioAllocationReplaySelection>[];
@@ -582,7 +622,10 @@ abstract final class PortfolioAllocationPolicyReplay {
         final positiveScores = pool
             .map((value) => math.max(0.000001, value.utility.score))
             .toList(growable: false);
-        final totalScore = positiveScores.fold<double>(0, (sum, value) => sum + value);
+        final totalScore = positiveScores.fold<double>(
+          0,
+          (sum, value) => sum + value,
+        );
         final index = pool.indexWhere((value) => value.id == proposal.id);
         if (index < 0 || totalScore <= 0) return 0;
         final weighted = riskLimit * positiveScores[index] / totalScore;
@@ -592,7 +635,8 @@ abstract final class PortfolioAllocationPolicyReplay {
     }
 
     for (final proposal in candidates) {
-      if (selected.length >= availableSlots || selectedSymbols.contains(proposal.symbol)) {
+      if (selected.length >= availableSlots ||
+          selectedSymbols.contains(proposal.symbol)) {
         continue;
       }
       final allocatedRisk = requestedRiskFor(proposal);
@@ -659,9 +703,13 @@ abstract final class PortfolioAllocationPolicyReplay {
       'riskBudget': configuration.totalRiskBudget.toStringAsPrecision(16),
       'marginBudget': configuration.totalMarginBudget.toStringAsPrecision(16),
       'maximumSelections': configuration.maximumSelections,
-      'reserveRiskFraction': configuration.reserveRiskFraction.toStringAsPrecision(16),
-      'reserveMarginFraction': configuration.reserveMarginFraction.toStringAsPrecision(16),
-      'correlationFraction': configuration.correlationPolicy.maximumBucketRiskFraction
+      'reserveRiskFraction': configuration.reserveRiskFraction
+          .toStringAsPrecision(16),
+      'reserveMarginFraction': configuration.reserveMarginFraction
+          .toStringAsPrecision(16),
+      'correlationFraction': configuration
+          .correlationPolicy
+          .maximumBucketRiskFraction
           .toStringAsPrecision(16),
       'frames': frames.map((value) => value.toJson()).toList(growable: false),
       'metrics': metrics.toJson(),
