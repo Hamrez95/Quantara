@@ -64,7 +64,19 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test tool
+        shell: bash
+        run: |
+          dart format \
+            lib/features/auto_trade/application/local_live_portfolio_risk_runtime.dart \
+            lib/features/capital_allocator/application/portfolio_allocation_planner.dart \
+            test/local_live_portfolio_risk_preview_test.dart \
+            test/portfolio_allocation_planner_test.dart
+          git diff -- \
+            lib/features/auto_trade/application/local_live_portfolio_risk_runtime.dart \
+            lib/features/capital_allocator/application/portfolio_allocation_planner.dart \
+            test/local_live_portfolio_risk_preview_test.dart \
+            test/portfolio_allocation_planner_test.dart
+          exit 1
 
       - name: Analyze
         shell: bash
