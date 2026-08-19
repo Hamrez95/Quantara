@@ -65,12 +65,20 @@ final class ExchangePositionRecoveryCheckpoint {
         managedPlan.isEmpty) {
       throw const FormatException('Invalid exchange recovery checkpoint.');
     }
-    final stage = ExchangePositionRecoveryStage.values.firstWhere(
+    final parsedStage = ExchangePositionRecoveryStage.values.firstWhere(
       (item) => item.name == stageName,
       orElse: () => throw const FormatException(
         'Unknown exchange recovery checkpoint stage.',
       ),
     );
+
+    // `riskAdopted` used to be persisted before local managed state committed.
+    // Replaying it as `journalCommitted` is intentionally conservative: risk
+    // adoption is idempotent, while blindly restoring a managed position after
+    // the exchange position disappeared could create phantom local exposure.
+    final stage = parsedStage == ExchangePositionRecoveryStage.riskAdopted
+        ? ExchangePositionRecoveryStage.journalCommitted
+        : parsedStage;
     return ExchangePositionRecoveryCheckpoint(
       positionId: positionId,
       symbol: symbol,
@@ -101,9 +109,10 @@ final class ExchangePositionRecoveryTransactionResult {
 }
 
 /// Resumes a cross-store recovery without pretending Journal, risk ledger and
-/// device-local managed state share one ACID transaction. Each completed stage
-/// is persisted before the next side effect. All operations are required to be
-/// idempotent, so a process death can safely retry from the last checkpoint.
+/// device-local managed state share one ACID transaction. Journal progress is
+/// durably checkpointed; risk adoption is deliberately replayable/idempotent so
+/// restart cannot resurrect a position that has already disappeared at the
+/// exchange before local managed state commits.
 abstract final class ExchangePositionRecoveryTransaction {
   static Future<ExchangePositionRecoveryTransactionResult> resume({
     required ExchangePositionRecoveryCheckpoint checkpoint,
@@ -114,6 +123,19 @@ abstract final class ExchangePositionRecoveryTransaction {
     required ExchangeRecoveryCheckpointPersist persistCheckpoint,
   }) async {
     var current = checkpoint;
+
+    // A legacy/in-memory riskAdopted checkpoint is replayed from the last safe
+    // durable boundary. adoptRisk must be idempotent by contract.
+    if (current.stage == ExchangePositionRecoveryStage.riskAdopted) {
+      current = ExchangePositionRecoveryCheckpoint(
+        positionId: current.positionId,
+        symbol: current.symbol,
+        stage: ExchangePositionRecoveryStage.journalCommitted,
+        updatedAtUtc: current.updatedAtUtc,
+        managedPlan: current.managedPlan,
+        reason: 'Risk adoption will be replayed idempotently after restart.',
+      );
+    }
 
     if (current.stage.index <
         ExchangePositionRecoveryStage.journalCommitted.index) {
@@ -133,15 +155,10 @@ abstract final class ExchangePositionRecoveryTransaction {
       await persistCheckpoint(current);
     }
 
-    if (current.stage.index < ExchangePositionRecoveryStage.riskAdopted.index) {
-      await adoptRisk();
-      current = current.advance(
-        ExchangePositionRecoveryStage.riskAdopted,
-        atUtc: clock(),
-        reason: 'Exchange-confirmed open risk is durable.',
-      );
-      await persistCheckpoint(current);
-    }
+    // Do not persist a separate riskAdopted checkpoint. If the process dies
+    // after this idempotent write, restart replays adoption from the durable
+    // journalCommitted boundary and re-verifies current exchange truth first.
+    await adoptRisk();
 
     await commitManaged();
     await persistCheckpoint(null);
