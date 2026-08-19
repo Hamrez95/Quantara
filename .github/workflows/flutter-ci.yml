@@ -53,7 +53,7 @@ jobs:
             src/client/quantara_app/lib/features/capital_allocator/application/portfolio_allocation_planner.dart \
             src/client/quantara_app/test/local_live_portfolio_risk_preview_test.dart \
             src/client/quantara_app/test/portfolio_allocation_planner_test.dart | sort > "$allowed"
-          git diff --name-only | sort > "$changed"
+          git diff HEAD --name-only | sort > "$changed"
           test -s "$changed"
           test -z "$(comm -23 "$changed" "$allowed")"
           grep -Fxq '.github/workflows/flutter-ci.yml' "$changed"
