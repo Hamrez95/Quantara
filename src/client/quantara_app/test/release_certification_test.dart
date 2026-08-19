@@ -75,9 +75,7 @@ void main() {
         maxQueueDepth: 2,
         reconnectCount: 1,
       ),
-      invariantResults: [
-        invariantResult(faultCode: id, passed: !stopShip),
-      ],
+      invariantResults: [invariantResult(faultCode: id, passed: !stopShip)],
       reconciliation: reconciliation,
       cleanupPassed: true,
       rollbackPassed: true,
@@ -160,25 +158,28 @@ void main() {
     );
   });
 
-  test('pending physical evidence blocks Stable without fabricating failure', () {
-    final gates = allPassedGates();
-    gates[ReleaseGateCode.samsungPhysicalQa.index] = ReleaseGateEvidence(
-      code: ReleaseGateCode.samsungPhysicalQa,
-      status: ReleaseGateStatus.pending,
-    );
+  test(
+    'pending physical evidence blocks Stable without fabricating failure',
+    () {
+      final gates = allPassedGates();
+      gates[ReleaseGateCode.samsungPhysicalQa.index] = ReleaseGateEvidence(
+        code: ReleaseGateCode.samsungPhysicalQa,
+        status: ReleaseGateStatus.pending,
+      );
 
-    final artifact = ReleaseCertificationGate.evaluate(
-      buildCommit: 'abc123',
-      releaseVersion: '1.2.0',
-      autonomySoak: soak(),
-      gates: gates,
-    );
+      final artifact = ReleaseCertificationGate.evaluate(
+        buildCommit: 'abc123',
+        releaseVersion: '1.2.0',
+        autonomySoak: soak(),
+        gates: gates,
+      );
 
-    expect(artifact.stopShip, isFalse);
-    expect(artifact.physicalEvidenceComplete, isFalse);
-    expect(artifact.stableEligible, isFalse);
-    expect(artifact.pendingGates, [ReleaseGateCode.samsungPhysicalQa]);
-  });
+      expect(artifact.stopShip, isFalse);
+      expect(artifact.physicalEvidenceComplete, isFalse);
+      expect(artifact.stableEligible, isFalse);
+      expect(artifact.pendingGates, [ReleaseGateCode.samsungPhysicalQa]);
+    },
+  );
 
   test('failed release gate is stop-ship', () {
     final gates = allPassedGates();
@@ -322,10 +323,7 @@ void main() {
       gates: reversed,
     );
 
-    expect(
-      artifact.gates.map((gate) => gate.code),
-      ReleaseGateCode.values,
-    );
+    expect(artifact.gates.map((gate) => gate.code), ReleaseGateCode.values);
   });
 
   test('release build and version metadata are mandatory', () {
