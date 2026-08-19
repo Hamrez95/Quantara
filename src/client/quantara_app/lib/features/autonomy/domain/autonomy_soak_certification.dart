@@ -49,6 +49,16 @@ final class AutonomyCertificationVersions {
     }
   }
 
+  bool sameIdentityAs(AutonomyCertificationVersions other) {
+    return buildCommit.trim() == other.buildCommit.trim() &&
+        strategyVersion.trim() == other.strategyVersion.trim() &&
+        rankingVersion.trim() == other.rankingVersion.trim() &&
+        riskVersion.trim() == other.riskVersion.trim() &&
+        allocatorVersion.trim() == other.allocatorVersion.trim() &&
+        executionVersion.trim() == other.executionVersion.trim() &&
+        adapterVersion.trim() == other.adapterVersion.trim();
+  }
+
   Map<String, Object?> toJson() => {
     'buildCommit': buildCommit,
     'strategyVersion': strategyVersion,
@@ -333,6 +343,26 @@ abstract final class AutonomySoakCertificationGate {
     if (!result.prerequisitePhasesPresent) {
       throw StateError(
         'Soak certification requires fixture, replay, Shadow, and Paper evidence.',
+      );
+    }
+
+    final baseline = result.runs.first;
+    final mixedIdentity = result.runs.any(
+      (run) => !run.versions.sameIdentityAs(baseline.versions),
+    );
+    if (mixedIdentity) {
+      throw StateError(
+        'Soak certification cannot combine evidence from different build or policy versions.',
+      );
+    }
+
+    final baselineFaultSchedule = baseline.faultScheduleVersion.trim();
+    final mixedFaultSchedule = result.runs.any(
+      (run) => run.faultScheduleVersion.trim() != baselineFaultSchedule,
+    );
+    if (mixedFaultSchedule) {
+      throw StateError(
+        'Soak certification cannot combine different fault-schedule versions.',
       );
     }
     return result;
