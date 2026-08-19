@@ -1,8 +1,10 @@
+import '../../ai_supervisor/domain/supervisor_system_evidence.dart';
 import '../../decision_core/domain/economic_opportunity_models.dart';
 import '../../portfolio_risk/application/portfolio_risk_coordinator.dart';
 import '../../portfolio_risk/domain/portfolio_correlation_policy.dart';
 import '../../portfolio_risk/domain/portfolio_risk_models.dart';
 import '../domain/portfolio_allocation_evidence.dart';
+import '../domain/portfolio_allocation_evidence_link.dart';
 import '../domain/portfolio_capital_allocator.dart';
 
 typedef PortfolioAllocationRiskPreview =
@@ -15,33 +17,44 @@ final class PortfolioAllocationPlannerInput {
     required this.utility,
     required this.candidate,
     required this.evidenceAsOfUtc,
+    required this.supervisorEvidence,
   });
 
   final OpportunityUtility utility;
   final PortfolioEntryCandidate candidate;
   final DateTime evidenceAsOfUtc;
+  final SupervisorSystemEvidence supervisorEvidence;
 
   void validate() {
+    final journalTradeId = candidate.journalTradeId.trim();
+    final supervisorEvidenceId = supervisorEvidence.evidenceId.trim();
+    final supervisorCorrelationId = supervisorEvidence.correlationId?.trim() ?? '';
     if (!evidenceAsOfUtc.isUtc ||
         utility.setupId.trim().isEmpty ||
-        utility.setupId.trim() != candidate.candidateId.trim()) {
+        utility.setupId.trim() != candidate.candidateId.trim() ||
+        journalTradeId.isEmpty ||
+        supervisorEvidenceId.isEmpty ||
+        supervisorCorrelationId != journalTradeId ||
+        !supervisorEvidence.observedAtUtc.isUtc) {
       throw const FormatException(
-        'Allocation planner input must bind utility and risk candidate identity.',
+        'Allocation planner input must bind utility, Journal and Supervisor evidence identity.',
       );
     }
   }
 }
 
 final class PortfolioAllocationPlan {
-  const PortfolioAllocationPlan({
+  PortfolioAllocationPlan({
     required this.decision,
     required this.evidence,
+    required Iterable<PortfolioAllocationEvidenceLink> evidenceLinks,
     required this.riskLedgerRevision,
     required this.tradingDayId,
-  });
+  }) : evidenceLinks = List.unmodifiable(evidenceLinks);
 
   final PortfolioAllocationDecision decision;
   final PortfolioAllocationEvidenceSnapshot evidence;
+  final List<PortfolioAllocationEvidenceLink> evidenceLinks;
   final int riskLedgerRevision;
   final String tradingDayId;
 
@@ -90,12 +103,14 @@ final class PortfolioAllocationPlanner {
           decision: decision,
           proposals: const [],
         ),
+        evidenceLinks: const [],
         riskLedgerRevision: 0,
         tradingDayId: '',
       );
     }
 
     final proposals = <PortfolioAllocationProposal>[];
+    final evidenceLinkByProposalId = <String, PortfolioAllocationEvidenceLink>{};
     PortfolioRiskLedger? commonLedger;
     for (final input in orderedInputs) {
       final preview = await previewRisk(input.candidate);
@@ -109,14 +124,19 @@ final class PortfolioAllocationPlanner {
           'Portfolio allocation risk truth changed during preview; recompute from one current snapshot.',
         );
       }
-      proposals.add(
-        PortfolioAllocationProposal(
-          utility: input.utility,
-          candidate: input.candidate,
-          riskDecision: preview.decision,
-          evidenceAsOfUtc: input.evidenceAsOfUtc,
-        ),
+      final proposal = PortfolioAllocationProposal(
+        utility: input.utility,
+        candidate: input.candidate,
+        riskDecision: preview.decision,
+        evidenceAsOfUtc: input.evidenceAsOfUtc,
       );
+      proposals.add(proposal);
+      evidenceLinkByProposalId[proposal.id] =
+          PortfolioAllocationEvidenceLinkBuilder.build(
+            proposal: proposal,
+            supervisorEvidence: input.supervisorEvidence,
+            allocationAtUtc: nowUtc,
+          );
     }
 
     final ledger = commonLedger!;
@@ -134,9 +154,24 @@ final class PortfolioAllocationPlanner {
       decision: decision,
       proposals: proposals,
     );
+    final evidenceLinks = decision.items.map((item) {
+      final link = evidenceLinkByProposalId[item.proposalId];
+      if (link == null) {
+        throw StateError(
+          'Allocation decision is missing its Journal/Supervisor evidence link.',
+        );
+      }
+      return link;
+    }).toList(growable: false);
+    if (evidenceLinks.length != evidenceLinkByProposalId.length) {
+      throw StateError(
+        'Allocation evidence links must cover every considered proposal exactly once.',
+      );
+    }
     return PortfolioAllocationPlan(
       decision: decision,
       evidence: evidence,
+      evidenceLinks: evidenceLinks,
       riskLedgerRevision: ledger.revision,
       tradingDayId: ledger.tradingDay.value,
     );
