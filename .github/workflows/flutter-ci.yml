@@ -64,11 +64,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        shell: bash
-        run: |
-          dart format lib/features/release_acceptance/domain/release_certification.dart test/release_certification_test.dart
-          git diff -- lib/features/release_acceptance/domain/release_certification.dart test/release_certification_test.dart
-          exit 1
+        run: dart format --output=none --set-exit-if-changed lib test tool
 
       - name: Analyze
         shell: bash
