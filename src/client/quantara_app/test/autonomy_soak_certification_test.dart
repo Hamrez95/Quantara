@@ -67,6 +67,8 @@ void main() {
   AutonomySoakRunEvidence run({
     required String id,
     required AutonomySoakPhase phase,
+    AutonomyCertificationVersions runVersions = versions,
+    String faultScheduleVersion = 'fault-schedule/1',
     bool invariantFailure = false,
     AutonomyReconciliationEvidence? reconciliation,
     bool cleanupPassed = true,
@@ -77,8 +79,8 @@ void main() {
     return AutonomySoakRunEvidence(
       runId: id,
       phase: phase,
-      versions: versions,
-      faultScheduleVersion: 'fault-schedule/1',
+      versions: runVersions,
+      faultScheduleVersion: faultScheduleVersion,
       seed: phase.index,
       regimeSampleCounts: const {'trend': 40, 'range': 40, 'volatile': 40},
       metrics: metrics(phase: phase),
@@ -136,6 +138,43 @@ void main() {
     expect(result.promotionEligible, isFalse);
     expect(result.cappedAutoLocked, isTrue);
     expect(result.failedRunIds, ['paper-1']);
+  });
+
+  test('mixed build or policy versions cannot produce promotion evidence', () {
+    const differentVersions = AutonomyCertificationVersions(
+      buildCommit: 'def456',
+      strategyVersion: 'strategy/1',
+      rankingVersion: 'ranking/1',
+      riskVersion: 'risk/1',
+      allocatorVersion: 'allocator/1',
+      executionVersion: 'execution/1',
+      adapterVersion: 'exchange-adapter/1',
+    );
+    final runs = prerequisiteRuns();
+    runs[2] = run(
+      id: 'shadow-1',
+      phase: AutonomySoakPhase.shadow,
+      runVersions: differentVersions,
+    );
+
+    expect(
+      () => AutonomySoakCertificationGate.evaluate(runs: runs),
+      throwsStateError,
+    );
+  });
+
+  test('mixed fault schedule versions cannot produce promotion evidence', () {
+    final runs = prerequisiteRuns();
+    runs[1] = run(
+      id: 'replay-1',
+      phase: AutonomySoakPhase.acceleratedReplay,
+      faultScheduleVersion: 'fault-schedule/2',
+    );
+
+    expect(
+      () => AutonomySoakCertificationGate.evaluate(runs: runs),
+      throwsStateError,
+    );
   });
 
   test('stop-ship run without Supervisor evidence is rejected', () {
