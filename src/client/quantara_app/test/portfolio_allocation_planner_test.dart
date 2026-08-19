@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quantara_app/features/ai_supervisor/domain/supervisor_system_evidence.dart';
 import 'package:quantara_app/features/capital_allocator/application/portfolio_allocation_planner.dart';
 import 'package:quantara_app/features/capital_allocator/domain/portfolio_capital_allocator.dart';
 import 'package:quantara_app/features/decision_core/domain/economic_opportunity_models.dart';
@@ -39,6 +40,14 @@ void main() {
       expect(plan.selectedCandidateIds, ['safe']);
       expect(plan.riskLedgerRevision, ledger.revision);
       expect(plan.tradingDayId, ledger.tradingDay.value);
+      expect(plan.evidenceLinks, hasLength(2));
+      final safeEvidence = plan.evidenceLinks.singleWhere(
+        (item) => item.proposalId == 'safe',
+      );
+      expect(safeEvidence.journalTradeId, 'trade-safe');
+      expect(safeEvidence.supervisorEvidenceId, 'supervisor-safe');
+      expect(safeEvidence.supervisorCorrelationId, 'trade-safe');
+      expect(safeEvidence.utilityFingerprint, 'fingerprint-safe');
       expect(
         plan.decision.items
             .firstWhere((item) => item.proposalId == 'unsafe')
@@ -96,11 +105,72 @@ void main() {
       utility: _utility('different', 10),
       candidate: candidate,
       evidenceAsOfUtc: now,
+      supervisorEvidence: _supervisorEvidence('candidate'),
     );
 
     await expectLater(
       const PortfolioAllocationPlanner().plan(
         inputs: [mismatched],
+        previewRisk: (candidate) async =>
+            _outcome(ledger: _ledger(now), decision: _riskDecision(), now: now),
+        budget: const PortfolioAllocationBudget(
+          availableRisk: 10,
+          availableMargin: 100,
+        ),
+        nowUtc: now,
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('Supervisor correlation must equal the canonical Journal trade ID', () async {
+    var previewCalls = 0;
+    final input = PortfolioAllocationPlannerInput(
+      utility: _utility('candidate', 10),
+      candidate: _candidate('candidate', symbol: 'BTCUSDT'),
+      evidenceAsOfUtc: now,
+      supervisorEvidence: _supervisorEvidence(
+        'candidate',
+        correlationId: 'different-trade',
+      ),
+    );
+
+    await expectLater(
+      const PortfolioAllocationPlanner().plan(
+        inputs: [input],
+        previewRisk: (candidate) async {
+          previewCalls += 1;
+          return _outcome(
+            ledger: _ledger(now),
+            decision: _riskDecision(),
+            now: now,
+          );
+        },
+        budget: const PortfolioAllocationBudget(
+          availableRisk: 10,
+          availableMargin: 100,
+        ),
+        nowUtc: now,
+      ),
+      throwsFormatException,
+    );
+    expect(previewCalls, 0);
+  });
+
+  test('future Supervisor evidence cannot be linked into a current plan', () async {
+    final input = PortfolioAllocationPlannerInput(
+      utility: _utility('candidate', 10),
+      candidate: _candidate('candidate', symbol: 'BTCUSDT'),
+      evidenceAsOfUtc: now,
+      supervisorEvidence: _supervisorEvidence(
+        'candidate',
+        observedAtUtc: now.add(const Duration(seconds: 1)),
+      ),
+    );
+
+    await expectLater(
+      const PortfolioAllocationPlanner().plan(
+        inputs: [input],
         previewRisk: (candidate) async =>
             _outcome(ledger: _ledger(now), decision: _riskDecision(), now: now),
         budget: const PortfolioAllocationBudget(
@@ -122,6 +192,23 @@ PortfolioAllocationPlannerInput _input(
   utility: _utility(id, score),
   candidate: _candidate(id, symbol: symbol),
   evidenceAsOfUtc: DateTime.utc(2026, 8, 19, 12),
+  supervisorEvidence: _supervisorEvidence(id),
+);
+
+SupervisorSystemEvidence _supervisorEvidence(
+  String id, {
+  String? correlationId,
+  DateTime? observedAtUtc,
+}) => SupervisorSystemEvidence(
+  evidenceId: 'supervisor-$id',
+  domain: SupervisorEvidenceDomain.risk,
+  kind: 'allocation-candidate',
+  observedAtUtc: observedAtUtc ?? DateTime.utc(2026, 8, 19, 11, 59),
+  summary: 'Risk evidence for allocation candidate $id.',
+  component: 'portfolio-risk',
+  version: '1',
+  correlationId: correlationId ?? 'trade-$id',
+  attributes: {'candidateId': id},
 );
 
 OpportunityUtility _utility(String id, double score) => OpportunityUtility(
