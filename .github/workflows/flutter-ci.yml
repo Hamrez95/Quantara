@@ -38,25 +38,25 @@ jobs:
           test/performance_release_evidence_test.dart
           tool/hot_path_benchmark.dart
 
-      - name: Restore intended CI and publish formatter-only commit
+      - name: Publish formatter-only source commit
         shell: bash
         run: |
           set -euo pipefail
-          git checkout a973aa71c9504adc9188b9c09ab5870f4b86bf9a -- .github/workflows/flutter-ci.yml
           allowed="$(mktemp)"
           changed="$(mktemp)"
           printf '%s\n' \
-            .github/workflows/flutter-ci.yml \
             src/client/quantara_app/lib/features/release_acceptance/domain/performance_release_evidence.dart \
             src/client/quantara_app/test/performance_release_evidence_test.dart \
             src/client/quantara_app/tool/hot_path_benchmark.dart | sort > "$allowed"
-          git diff HEAD --name-only | sort > "$changed"
-          test -s "$changed"
+          git diff --name-only | sort > "$changed"
           test -z "$(comm -23 "$changed" "$allowed")"
-          grep -Fxq '.github/workflows/flutter-ci.yml' "$changed"
+          if ! test -s "$changed"; then
+            echo 'Performance evidence files are already canonical.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/flutter-ci.yml \
+          git add \
             src/client/quantara_app/lib/features/release_acceptance/domain/performance_release_evidence.dart \
             src/client/quantara_app/test/performance_release_evidence_test.dart \
             src/client/quantara_app/tool/hot_path_benchmark.dart
