@@ -481,6 +481,20 @@ class _LocalLiveTradeControlCardState
               .where((symbol) => symbol.isNotEmpty)
               .toSet()
               .toList(growable: false);
+    final recoverableCount = math.min(
+      unrecoveredCount,
+      status.recoverableOrphanCount,
+    );
+    final recoverableSymbols = status.recoverableOrphanSymbols;
+    final externalCount = math.max(
+      status.externalUnmanagedPositionCount,
+      unrecoveredCount - recoverableCount,
+    );
+    final externalSymbols = status.externalUnmanagedSymbols.isNotEmpty
+        ? status.externalUnmanagedSymbols
+        : unrecoveredSymbols
+              .where((symbol) => !recoverableSymbols.contains(symbol))
+              .toList(growable: false);
     final phaseOneStartBlocked = phaseOneQuarantine && !hasExistingPosition;
     final starting = status.state == LocalLiveTradeState.starting;
     final breaker = status.state == LocalLiveTradeState.circuitBreaker;
@@ -569,14 +583,24 @@ class _LocalLiveTradeControlCardState
               color: QuantaraColors.warning,
             ),
           ],
-          if (unrecoveredCount > 0) ...[
+          if (recoverableCount > 0) ...[
             const SizedBox(height: 10),
             _BoundaryNotice(
               text: _t(
-                'Bitunix تعداد $authoritativeOpenCount پوزیشن باز گزارش می‌کند، اما مالکیت محلی $unrecoveredCount پوزیشن (${unrecoveredSymbols.join(', ')}) بعد از حذف برنامه از بین رفته است. این پوزیشن‌ها اسلات و بودجه را اشغال می‌کنند؛ ورود جدید تا بازیابی امن یا بسته‌شدن در صرافی مسدود می‌ماند.',
-                'Bitunix reports $authoritativeOpenCount open position(s), but local ownership for $unrecoveredCount (${unrecoveredSymbols.join(', ')}) was lost after reinstall. These positions consume slots and budget; new entries stay blocked until secure recovery or exchange closure.',
+                'مالکیت Quantara برای $recoverableCount پوزیشن (${recoverableSymbols.join(', ')}) از روی سفارش q-local، تاریخچه Fill و حفاظت صرافی تأیید شده است. بازیابی durable در حال تکمیل است و تا پایان Journal + Risk Ledger + Managed State ورود جدید بسته می‌ماند.',
+                'Quantara ownership is verified for $recoverableCount position(s) (${recoverableSymbols.join(', ')}) from q-local order identity, fill history, and exchange protection. Durable recovery is finishing; new entries stay blocked until Journal + Risk Ledger + Managed State all commit.',
               ),
               color: QuantaraColors.warning,
+            ),
+          ],
+          if (externalCount > 0) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                '$externalCount پوزیشن صرافی (${externalSymbols.join(', ')}) مالکیت Quantara قابل‌اثبات ندارد یا حقیقت آن مبهم است. این پوزیشن‌ها اسلات و بودجه را اشغال می‌کنند و خودکار Adopt نمی‌شوند؛ ورود جدید تا بسته‌شدن یا اثبات امن مالکیت مسدود است.',
+                '$externalCount exchange position(s) (${externalSymbols.join(', ')}) do not have provable Quantara ownership or remain ambiguous. They consume slots and budget and are never auto-adopted; new entries stay blocked until closure or safe ownership proof.',
+              ),
+              color: QuantaraColors.danger,
             ),
           ],
           if (widget.controller.error != null) ...[
@@ -635,14 +659,23 @@ class _LocalLiveTradeControlCardState
                     ? QuantaraColors.cyan
                     : QuantaraColors.warning,
               ),
-              if (unrecoveredCount > 0)
+              if (recoverableCount > 0)
                 StatusPill(
                   label: _t(
-                    '$unrecoveredCount نیازمند بازیابی امن',
-                    '$unrecoveredCount secure recovery pending',
+                    '$recoverableCount بازیابی Quantara در انتظار',
+                    '$recoverableCount Quantara recovery pending',
                   ),
                   color: QuantaraColors.warning,
                   icon: Icons.sync_lock_rounded,
+                ),
+              if (externalCount > 0)
+                StatusPill(
+                  label: _t(
+                    '$externalCount پوزیشن خارجی/مبهم',
+                    '$externalCount external/ambiguous',
+                  ),
+                  color: QuantaraColors.danger,
+                  icon: Icons.block_rounded,
                 ),
               if (status.portfolioBudget != null)
                 StatusPill(
