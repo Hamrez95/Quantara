@@ -8,81 +8,87 @@ import 'package:quantara_app/features/portfolio_risk/domain/portfolio_risk_model
 void main() {
   final now = DateTime.utc(2026, 8, 19, 12);
 
-  test('planner preserves hard Risk rejection while selecting safe utility', () async {
-    final ledger = _ledger(now);
-    final safe = _input('safe', symbol: 'SOLUSDT', score: 8);
-    final unsafe = _input('unsafe', symbol: 'BTCUSDT', score: 100);
-    const planner = PortfolioAllocationPlanner(
-      configuration: PortfolioAllocationConfiguration(
-        maximumSelections: 2,
-        riskReserveFraction: 0,
-        marginReserveFraction: 0,
-      ),
-    );
+  test(
+    'planner preserves hard Risk rejection while selecting safe utility',
+    () async {
+      final ledger = _ledger(now);
+      final safe = _input('safe', symbol: 'SOLUSDT', score: 8);
+      final unsafe = _input('unsafe', symbol: 'BTCUSDT', score: 100);
+      const planner = PortfolioAllocationPlanner(
+        configuration: PortfolioAllocationConfiguration(
+          maximumSelections: 2,
+          riskReserveFraction: 0,
+          marginReserveFraction: 0,
+        ),
+      );
 
-    final plan = await planner.plan(
-      inputs: [unsafe, safe],
-      previewRisk: (candidate) async => _outcome(
-        ledger: ledger,
-        decision: _riskDecision(allowed: candidate.candidateId != 'unsafe'),
-        now: now,
-      ),
-      budget: const PortfolioAllocationBudget(
-        availableRisk: 10,
-        availableMargin: 100,
-      ),
-      nowUtc: now,
-    );
-
-    expect(plan.selectedCandidateIds, ['safe']);
-    expect(plan.riskLedgerRevision, ledger.revision);
-    expect(plan.tradingDayId, ledger.tradingDay.value);
-    expect(
-      plan.decision.items
-          .firstWhere((item) => item.proposalId == 'unsafe')
-          .reason,
-      PortfolioAllocationReason.hardRiskRejected,
-    );
-  });
-
-  test('planner fails closed when risk ledger changes during previews', () async {
-    final firstLedger = _ledger(now);
-    final secondLedger = PortfolioRiskLedger(
-      schemaVersion: firstLedger.schemaVersion,
-      revision: firstLedger.revision + 1,
-      tradingDay: firstLedger.tradingDay,
-      dailyRiskLimit: firstLedger.dailyRiskLimit,
-      realizedLoss: firstLedger.realizedLoss,
-      realizedProfit: firstLedger.realizedProfit,
-      reservations: firstLedger.reservations,
-      processedEventIds: firstLedger.processedEventIds,
-    );
-    final inputs = [
-      _input('first', symbol: 'BTCUSDT', score: 9),
-      _input('second', symbol: 'SOLUSDT', score: 8),
-    ];
-    var calls = 0;
-
-    await expectLater(
-      const PortfolioAllocationPlanner().plan(
-        inputs: inputs,
-        previewRisk: (candidate) async {
-          calls += 1;
-          return _outcome(
-            ledger: calls == 1 ? firstLedger : secondLedger,
-            decision: _riskDecision(),
-            now: now,
-          );
-        },
+      final plan = await planner.plan(
+        inputs: [unsafe, safe],
+        previewRisk: (candidate) async => _outcome(
+          ledger: ledger,
+          decision: _riskDecision(allowed: candidate.candidateId != 'unsafe'),
+          now: now,
+        ),
         budget: const PortfolioAllocationBudget(
           availableRisk: 10,
           availableMargin: 100,
         ),
         nowUtc: now,
-      ),
-      throwsStateError,
-    );
-  });
+      );
+
+      expect(plan.selectedCandidateIds, ['safe']);
+      expect(plan.riskLedgerRevision, ledger.revision);
+      expect(plan.tradingDayId, ledger.tradingDay.value);
+      expect(
+        plan.decision.items
+            .firstWhere((item) => item.proposalId == 'unsafe')
+            .reason,
+        PortfolioAllocationReason.hardRiskRejected,
+      );
+    },
+  );
+
+  test(
+    'planner fails closed when risk ledger changes during previews',
+    () async {
+      final firstLedger = _ledger(now);
+      final secondLedger = PortfolioRiskLedger(
+        schemaVersion: firstLedger.schemaVersion,
+        revision: firstLedger.revision + 1,
+        tradingDay: firstLedger.tradingDay,
+        dailyRiskLimit: firstLedger.dailyRiskLimit,
+        realizedLoss: firstLedger.realizedLoss,
+        realizedProfit: firstLedger.realizedProfit,
+        reservations: firstLedger.reservations,
+        processedEventIds: firstLedger.processedEventIds,
+      );
+      final inputs = [
+        _input('first', symbol: 'BTCUSDT', score: 9),
+        _input('second', symbol: 'SOLUSDT', score: 8),
+      ];
+      var calls = 0;
+
+      await expectLater(
+        const PortfolioAllocationPlanner().plan(
+          inputs: inputs,
+          previewRisk: (candidate) async {
+            calls += 1;
+            return _outcome(
+              ledger: calls == 1 ? firstLedger : secondLedger,
+              decision: _riskDecision(),
+              now: now,
+            );
+          },
+          budget: const PortfolioAllocationBudget(
+            availableRisk: 10,
+            availableMargin: 100,
+          ),
+          nowUtc: now,
+        ),
+        throwsStateError,
+      );
+    },
+  );
 
   test('utility and risk candidate must share one stable identity', () async {
     final candidate = _candidate('candidate', symbol: 'BTCUSDT');
@@ -95,11 +101,8 @@ void main() {
     await expectLater(
       const PortfolioAllocationPlanner().plan(
         inputs: [mismatched],
-        previewRisk: (candidate) async => _outcome(
-          ledger: _ledger(now),
-          decision: _riskDecision(),
-          now: now,
-        ),
+        previewRisk: (candidate) async =>
+            _outcome(ledger: _ledger(now), decision: _riskDecision(), now: now),
         budget: const PortfolioAllocationBudget(
           availableRisk: 10,
           availableMargin: 100,

@@ -22,11 +22,7 @@ void main() {
       maximumAssetGroupRiskFraction: 1,
     );
     final now = DateTime.utc(2026, 8, 19);
-    final candidate = _candidate(
-      id: 'btc',
-      symbol: 'BTCUSDT',
-      riskDistance: 4,
-    );
+    final candidate = _candidate(id: 'btc', symbol: 'BTCUSDT', riskDistance: 4);
 
     final preview = await runtime.preview(
       candidate: candidate,
@@ -49,69 +45,64 @@ void main() {
     await database.close();
   });
 
-  test('atomic reserve rechecks truth after an earlier allowed preview', () async {
-    final database = SembastQuantaraDurableDatabase(
-      factory: databaseFactoryMemory,
-      path: 'local-live-risk-preview-race.db',
-    );
-    await database.initialize();
-    final runtime = LocalLivePortfolioRiskRuntime(
-      dailyRiskLimit: 6,
-      store: DatabasePortfolioRiskLedgerStore(
-        databaseFactory: () async => database,
-        recordKey: 'preview-race-ledger',
-      ),
-      maximumAssetGroupRiskFraction: 1,
-    );
-    final now = DateTime.utc(2026, 8, 19);
-    final first = _candidate(
-      id: 'btc',
-      symbol: 'BTCUSDT',
-      riskDistance: 4,
-    );
-    final second = _candidate(
-      id: 'sol',
-      symbol: 'SOLUSDT',
-      riskDistance: 4,
-    );
+  test(
+    'atomic reserve rechecks truth after an earlier allowed preview',
+    () async {
+      final database = SembastQuantaraDurableDatabase(
+        factory: databaseFactoryMemory,
+        path: 'local-live-risk-preview-race.db',
+      );
+      await database.initialize();
+      final runtime = LocalLivePortfolioRiskRuntime(
+        dailyRiskLimit: 6,
+        store: DatabasePortfolioRiskLedgerStore(
+          databaseFactory: () async => database,
+          recordKey: 'preview-race-ledger',
+        ),
+        maximumAssetGroupRiskFraction: 1,
+      );
+      final now = DateTime.utc(2026, 8, 19);
+      final first = _candidate(id: 'btc', symbol: 'BTCUSDT', riskDistance: 4);
+      final second = _candidate(id: 'sol', symbol: 'SOLUSDT', riskDistance: 4);
 
-    expect(
-      (await runtime.preview(
+      expect(
+        (await runtime.preview(
+          candidate: first,
+          account: _account(now),
+          now: now,
+        )).decision.allowed,
+        isTrue,
+      );
+      expect(
+        (await runtime.preview(
+          candidate: second,
+          account: _account(now),
+          now: now,
+        )).decision.allowed,
+        isTrue,
+      );
+
+      final firstReservation = await runtime.reserve(
         candidate: first,
         account: _account(now),
         now: now,
-      )).decision.allowed,
-      isTrue,
-    );
-    expect(
-      (await runtime.preview(
+      );
+      expect(firstReservation.decision.allowed, isTrue);
+
+      final staleSecondReservation = await runtime.reserve(
         candidate: second,
         account: _account(now),
         now: now,
-      )).decision.allowed,
-      isTrue,
-    );
-
-    final firstReservation = await runtime.reserve(
-      candidate: first,
-      account: _account(now),
-      now: now,
-    );
-    expect(firstReservation.decision.allowed, isTrue);
-
-    final staleSecondReservation = await runtime.reserve(
-      candidate: second,
-      account: _account(now),
-      now: now,
-    );
-    expect(staleSecondReservation.decision.allowed, isFalse);
-    expect(
-      staleSecondReservation.decision.reason,
-      PortfolioEntryBlockReason.riskBudgetInsufficient,
-    );
-    expect(staleSecondReservation.ledger.activeReservations, hasLength(1));
-    await database.close();
-  });
+      );
+      expect(staleSecondReservation.decision.allowed, isFalse);
+      expect(
+        staleSecondReservation.decision.reason,
+        PortfolioEntryBlockReason.riskBudgetInsufficient,
+      );
+      expect(staleSecondReservation.ledger.activeReservations, hasLength(1));
+      await database.close();
+    },
+  );
 }
 
 PortfolioAccountTruth _account(DateTime now) => PortfolioAccountTruth(
