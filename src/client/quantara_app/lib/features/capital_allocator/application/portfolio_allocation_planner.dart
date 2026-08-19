@@ -6,7 +6,9 @@ import '../domain/portfolio_allocation_evidence.dart';
 import '../domain/portfolio_capital_allocator.dart';
 
 typedef PortfolioAllocationRiskPreview =
-    Future<PortfolioReservationOutcome> Function(PortfolioEntryCandidate candidate);
+    Future<PortfolioReservationOutcome> Function(
+      PortfolioEntryCandidate candidate,
+    );
 
 final class PortfolioAllocationPlannerInput {
   const PortfolioAllocationPlannerInput({
@@ -62,7 +64,9 @@ final class PortfolioAllocationPlanner {
     required DateTime nowUtc,
   }) async {
     if (!nowUtc.isUtc || !configuration.valid || !budget.valid) {
-      throw const FormatException('Allocation planner configuration is invalid.');
+      throw const FormatException(
+        'Allocation planner configuration is invalid.',
+      );
     }
 
     final orderedInputs = inputs.toList(growable: false);
@@ -116,17 +120,16 @@ final class PortfolioAllocationPlanner {
     }
 
     final ledger = commonLedger!;
-    final decision = PortfolioCapitalAllocator(
-      configuration: configuration,
-    ).allocate(
-      proposals: proposals,
-      budget: budget,
-      nowUtc: nowUtc,
-      correlation: PortfolioAllocationCorrelationContext(
-        ledger: ledger,
-        policy: correlationPolicy,
-      ),
-    );
+    final decision = PortfolioCapitalAllocator(configuration: configuration)
+        .allocate(
+          proposals: proposals,
+          budget: budget,
+          nowUtc: nowUtc,
+          correlation: PortfolioAllocationCorrelationContext(
+            ledger: ledger,
+            policy: correlationPolicy,
+          ),
+        );
     final evidence = PortfolioAllocationEvidenceBuilder.build(
       decision: decision,
       proposals: proposals,
