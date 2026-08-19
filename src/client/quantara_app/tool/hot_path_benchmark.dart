@@ -9,13 +9,13 @@ void main(List<String> arguments) {
       ? arguments[outputIndex + 1]
       : 'hot-path-performance.json';
   final buildCommitIndex = arguments.indexOf('--build-commit');
-  final buildCommit = buildCommitIndex >= 0 &&
-          buildCommitIndex + 1 < arguments.length
+  final buildCommit =
+      buildCommitIndex >= 0 && buildCommitIndex + 1 < arguments.length
       ? arguments[buildCommitIndex + 1].trim()
       : (Platform.environment['QUANTARA_BUILD_COMMIT'] ??
-              Platform.environment['GITHUB_SHA'] ??
-              'local')
-          .trim();
+                Platform.environment['GITHUB_SHA'] ??
+                'local')
+            .trim();
   if (buildCommit.isEmpty) {
     stderr.writeln('Hot-path evidence requires a non-empty build commit.');
     exitCode = 2;
@@ -57,8 +57,7 @@ void main(List<String> arguments) {
     'processRssBytesBefore': rssBefore,
     'processRssBytesAfter': rssAfter,
     'combinedElapsedMicros': combinedElapsed.inMicroseconds,
-    'combinedSoftwareGateLimitMicros':
-        combinedSoftwareGateLimit.inMicroseconds,
+    'combinedSoftwareGateLimitMicros': combinedSoftwareGateLimit.inMicroseconds,
     'softwareGatePassed': softwareGatePassed,
   };
   final output = const JsonEncoder.withIndent('  ').convert(report);

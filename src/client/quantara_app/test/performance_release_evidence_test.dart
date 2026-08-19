@@ -63,22 +63,25 @@ void main() {
     );
   });
 
-  test('benchmark below required target universe cannot pass release evidence', () {
-    final server = report(os: 'linux', buildCommit: commit);
-    final profiles = server['profiles']! as List<Object?>;
-    final target = profiles.first as Map<String, Object?>;
-    final config = target['config']! as Map<String, Object?>;
-    config['symbols'] = 99;
+  test(
+    'benchmark below required target universe cannot pass release evidence',
+    () {
+      final server = report(os: 'linux', buildCommit: commit);
+      final profiles = server['profiles']! as List<Object?>;
+      final target = profiles.first as Map<String, Object?>;
+      final config = target['config']! as Map<String, Object?>;
+      config['symbols'] = 99;
 
-    expect(
-      () => PerformanceReleaseEvidenceGate.evaluate(
-        expectedBuildCommit: commit,
-        serverReport: server,
-        windowsReport: report(os: 'windows', buildCommit: commit),
-      ),
-      throwsFormatException,
-    );
-  });
+      expect(
+        () => PerformanceReleaseEvidenceGate.evaluate(
+          expectedBuildCommit: commit,
+          serverReport: server,
+          windowsReport: report(os: 'windows', buildCommit: commit),
+        ),
+        throwsFormatException,
+      );
+    },
+  );
 }
 
 Map<String, Object?> report({

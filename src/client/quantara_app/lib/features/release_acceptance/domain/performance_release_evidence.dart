@@ -60,7 +60,11 @@ abstract final class PerformanceReleaseEvidenceGate {
     final rssAfter = _integer(report['processRssBytesAfter']);
     final elapsed = _integer(report['combinedElapsedMicros']);
     final limit = _integer(report['combinedSoftwareGateLimitMicros']);
-    if (rssBefore <= 0 || rssAfter <= 0 || elapsed <= 0 || limit <= 0 || elapsed > limit) {
+    if (rssBefore <= 0 ||
+        rssAfter <= 0 ||
+        elapsed <= 0 ||
+        limit <= 0 ||
+        elapsed > limit) {
       throw const FormatException(
         'Performance report RSS or elapsed-budget evidence is invalid.',
       );
