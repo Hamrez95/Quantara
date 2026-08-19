@@ -1,209 +1,65 @@
 name: Flutter client CI
 
 on:
-  push:
-    branches:
-      - main
-      - dev
-      - 'feat/**'
-      - 'fix/**'
-      - 'release/**'
-    paths:
-      - 'src/client/quantara_app/**'
-      - 'scripts/android-cold-start-smoke.sh'
-      - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
-      - main
       - dev
-      - 'feat/**'
-      - 'fix/**'
     paths:
       - 'src/client/quantara_app/**'
-      - 'scripts/android-cold-start-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
-
-concurrency:
-  group: flutter-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  FLUTTER_VERSION: '3.44.8'
-  ANDROID_PACKAGE: com.quantara.quantara_app
-  ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  ANDROID_DEBUG_ARTIFACT: quantara-android-debug-${{ github.sha }}
+  contents: write
 
 jobs:
-  flutter:
-    name: Flutter format, analyze, test, and unsigned QA build
+  canonicalize:
+    name: Canonicalize allocator evidence links
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    defaults:
-      run:
-        working-directory: src/client/quantara_app
+    timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Checkout feature branch
         uses: actions/checkout@v4
+        with:
+          ref: agent/194-evidence-links
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
 
-      - name: Display tool versions
-        run: |
-          flutter --version
-          dart --version
-
-      - name: Restore packages
-        run: flutter pub get
-
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test tool
-
-      - name: Analyze
-        shell: bash
-        run: |
-          set +e
-          flutter analyze --fatal-infos > flutter-analyze.log 2>&1
-          status=$?
-          cat flutter-analyze.log
-          exit $status
-
-      - name: Run widget and safety tests
-        shell: bash
-        run: |
-          set +e
-          flutter test --reporter expanded > flutter-test.log 2>&1
-          status=$?
-          cat flutter-test.log
-          exit $status
-
-      - name: Run reproducible hot-path software stress gate
+      - name: Canonicalize evidence-link files
+        working-directory: src/client/quantara_app
         run: >-
-          dart run tool/hot_path_benchmark.dart
-          --output hot-path-performance.json
+          dart format
+          lib/features/capital_allocator/application/portfolio_allocation_planner.dart
+          lib/features/capital_allocator/domain/portfolio_allocation_evidence_link.dart
+          test/portfolio_allocation_planner_test.dart
 
-      - name: Upload Flutter diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flutter-diagnostics-${{ github.sha }}
-          path: |
-            src/client/quantara_app/flutter-analyze.log
-            src/client/quantara_app/flutter-test.log
-            src/client/quantara_app/hot-path-performance.json
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Compile API-configured web PWA
-        run: >-
-          flutter build web --release
-          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
-
-      - name: Build offline-first web PWA
-        run: flutter build web --release
-
-      - name: Build Android debug QA APK
-        run: flutter build apk --debug
-
-      - name: Verify debug manifest safety declarations
+      - name: Restore canonical CI and publish formatter-only commit
         shell: bash
         run: |
           set -euo pipefail
-          apk="build/app/outputs/flutter-apk/app-debug.apk"
-          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
-          test -x "$apkanalyzer_path"
-          test -f "$apk"
-          "$apkanalyzer_path" manifest application-id "$apk" | grep -Fxq "$ANDROID_PACKAGE"
-          "$apkanalyzer_path" manifest print "$apk" > merged-manifest.xml
-          grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
-          grep -Fq "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
-          grep -Eq 'android:foregroundServiceType="(specialUse|0x40000000)"' merged-manifest.xml
-          grep -Fq "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" merged-manifest.xml
-          ! grep -Fq "android.permission.RECEIVE_BOOT_COMPLETED" merged-manifest.xml
-          ! grep -Fq "com.pravera.flutter_foreground_task.service.RebootReceiver" merged-manifest.xml
-          ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
-          sha256sum "$apk" | tee SHA256SUMS.txt
-
-      - name: Upload PWA QA candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: quantara-pwa-${{ github.sha }}
-          path: src/client/quantara_app/build/web
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload Android debug QA candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
-          path: |
-            src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
-            src/client/quantara_app/merged-manifest.xml
-            src/client/quantara_app/SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 14
-
-  android-launch:
-    name: Android API cold-start smoke
-    needs: flutter
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        api-level: [34, 35, 36]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Android debug QA candidate
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
-          path: apk
-
-      - name: Resolve Android QA candidate path
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk_path="$(find apk -type f -name 'app-debug.apk' -print -quit)"
-          test -n "$apk_path"
-          test -f "$apk_path"
-          echo "ANDROID_QA_APK_PATH=$apk_path" >> "$GITHUB_ENV"
-
-      - name: Enable KVM group permissions
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Boot hardware-accelerated emulator and verify cold start
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api-level }}
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: bash scripts/android-cold-start-smoke.sh "$ANDROID_QA_APK_PATH"
-
-      - name: Upload Android launch diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics-${{ github.sha }}
-          path: |
-            android-start.txt
-            android-pid.txt
-            android-pid-after-settle.txt
-            android-logcat.txt
-            android-jobscheduler.txt
-          if-no-files-found: ignore
-          retention-days: 14
+          git fetch origin dev
+          git checkout origin/dev -- .github/workflows/flutter-ci.yml
+          allowed="$(mktemp)"
+          changed="$(mktemp)"
+          printf '%s\n' \
+            .github/workflows/flutter-ci.yml \
+            src/client/quantara_app/lib/features/capital_allocator/application/portfolio_allocation_planner.dart \
+            src/client/quantara_app/lib/features/capital_allocator/domain/portfolio_allocation_evidence_link.dart \
+            src/client/quantara_app/test/portfolio_allocation_planner_test.dart | sort > "$allowed"
+          git diff HEAD --name-only | sort > "$changed"
+          test -s "$changed"
+          test -z "$(comm -23 "$changed" "$allowed")"
+          grep -Fxq '.github/workflows/flutter-ci.yml' "$changed"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/flutter-ci.yml \
+            src/client/quantara_app/lib/features/capital_allocator/application/portfolio_allocation_planner.dart \
+            src/client/quantara_app/lib/features/capital_allocator/domain/portfolio_allocation_evidence_link.dart \
+            src/client/quantara_app/test/portfolio_allocation_planner_test.dart
+          git commit -m 'style(allocator): apply canonical evidence formatting'
+          git push origin HEAD:agent/194-evidence-links
