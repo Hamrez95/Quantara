@@ -28,7 +28,8 @@ final class PortfolioAllocationPlannerInput {
   void validate() {
     final journalTradeId = candidate.journalTradeId.trim();
     final supervisorEvidenceId = supervisorEvidence.evidenceId.trim();
-    final supervisorCorrelationId = supervisorEvidence.correlationId?.trim() ?? '';
+    final supervisorCorrelationId =
+        supervisorEvidence.correlationId?.trim() ?? '';
     if (!evidenceAsOfUtc.isUtc ||
         utility.setupId.trim().isEmpty ||
         utility.setupId.trim() != candidate.candidateId.trim() ||
@@ -110,7 +111,8 @@ final class PortfolioAllocationPlanner {
     }
 
     final proposals = <PortfolioAllocationProposal>[];
-    final evidenceLinkByProposalId = <String, PortfolioAllocationEvidenceLink>{};
+    final evidenceLinkByProposalId =
+        <String, PortfolioAllocationEvidenceLink>{};
     PortfolioRiskLedger? commonLedger;
     for (final input in orderedInputs) {
       final preview = await previewRisk(input.candidate);
@@ -154,15 +156,17 @@ final class PortfolioAllocationPlanner {
       decision: decision,
       proposals: proposals,
     );
-    final evidenceLinks = decision.items.map((item) {
-      final link = evidenceLinkByProposalId[item.proposalId];
-      if (link == null) {
-        throw StateError(
-          'Allocation decision is missing its Journal/Supervisor evidence link.',
-        );
-      }
-      return link;
-    }).toList(growable: false);
+    final evidenceLinks = decision.items
+        .map((item) {
+          final link = evidenceLinkByProposalId[item.proposalId];
+          if (link == null) {
+            throw StateError(
+              'Allocation decision is missing its Journal/Supervisor evidence link.',
+            );
+          }
+          return link;
+        })
+        .toList(growable: false);
     if (evidenceLinks.length != evidenceLinkByProposalId.length) {
       throw StateError(
         'Allocation evidence links must cover every considered proposal exactly once.',

@@ -40,7 +40,8 @@ abstract final class PortfolioAllocationEvidenceLinkBuilder {
     final proposalId = proposal.id.trim();
     final journalTradeId = proposal.candidate.journalTradeId.trim();
     final supervisorEvidenceId = supervisorEvidence.evidenceId.trim();
-    final supervisorCorrelationId = supervisorEvidence.correlationId?.trim() ?? '';
+    final supervisorCorrelationId =
+        supervisorEvidence.correlationId?.trim() ?? '';
     final utilityFingerprint = proposal.utility.fingerprint.trim();
     final supervisorObservedAtUtc = supervisorEvidence.observedAtUtc.toUtc();
     final proposalEvidenceAsOfUtc = proposal.evidenceAsOfUtc.toUtc();

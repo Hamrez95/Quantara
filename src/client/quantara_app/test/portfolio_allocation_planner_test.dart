@@ -123,65 +123,74 @@ void main() {
     );
   });
 
-  test('Supervisor correlation must equal the canonical Journal trade ID', () async {
-    var previewCalls = 0;
-    final input = PortfolioAllocationPlannerInput(
-      utility: _utility('candidate', 10),
-      candidate: _candidate('candidate', symbol: 'BTCUSDT'),
-      evidenceAsOfUtc: now,
-      supervisorEvidence: _supervisorEvidence(
-        'candidate',
-        correlationId: 'different-trade',
-      ),
-    );
+  test(
+    'Supervisor correlation must equal the canonical Journal trade ID',
+    () async {
+      var previewCalls = 0;
+      final input = PortfolioAllocationPlannerInput(
+        utility: _utility('candidate', 10),
+        candidate: _candidate('candidate', symbol: 'BTCUSDT'),
+        evidenceAsOfUtc: now,
+        supervisorEvidence: _supervisorEvidence(
+          'candidate',
+          correlationId: 'different-trade',
+        ),
+      );
 
-    await expectLater(
-      const PortfolioAllocationPlanner().plan(
-        inputs: [input],
-        previewRisk: (candidate) async {
-          previewCalls += 1;
-          return _outcome(
+      await expectLater(
+        const PortfolioAllocationPlanner().plan(
+          inputs: [input],
+          previewRisk: (candidate) async {
+            previewCalls += 1;
+            return _outcome(
+              ledger: _ledger(now),
+              decision: _riskDecision(),
+              now: now,
+            );
+          },
+          budget: const PortfolioAllocationBudget(
+            availableRisk: 10,
+            availableMargin: 100,
+          ),
+          nowUtc: now,
+        ),
+        throwsFormatException,
+      );
+      expect(previewCalls, 0);
+    },
+  );
+
+  test(
+    'future Supervisor evidence cannot be linked into a current plan',
+    () async {
+      final input = PortfolioAllocationPlannerInput(
+        utility: _utility('candidate', 10),
+        candidate: _candidate('candidate', symbol: 'BTCUSDT'),
+        evidenceAsOfUtc: now,
+        supervisorEvidence: _supervisorEvidence(
+          'candidate',
+          observedAtUtc: now.add(const Duration(seconds: 1)),
+        ),
+      );
+
+      await expectLater(
+        const PortfolioAllocationPlanner().plan(
+          inputs: [input],
+          previewRisk: (candidate) async => _outcome(
             ledger: _ledger(now),
             decision: _riskDecision(),
             now: now,
-          );
-        },
-        budget: const PortfolioAllocationBudget(
-          availableRisk: 10,
-          availableMargin: 100,
+          ),
+          budget: const PortfolioAllocationBudget(
+            availableRisk: 10,
+            availableMargin: 100,
+          ),
+          nowUtc: now,
         ),
-        nowUtc: now,
-      ),
-      throwsFormatException,
-    );
-    expect(previewCalls, 0);
-  });
-
-  test('future Supervisor evidence cannot be linked into a current plan', () async {
-    final input = PortfolioAllocationPlannerInput(
-      utility: _utility('candidate', 10),
-      candidate: _candidate('candidate', symbol: 'BTCUSDT'),
-      evidenceAsOfUtc: now,
-      supervisorEvidence: _supervisorEvidence(
-        'candidate',
-        observedAtUtc: now.add(const Duration(seconds: 1)),
-      ),
-    );
-
-    await expectLater(
-      const PortfolioAllocationPlanner().plan(
-        inputs: [input],
-        previewRisk: (candidate) async =>
-            _outcome(ledger: _ledger(now), decision: _riskDecision(), now: now),
-        budget: const PortfolioAllocationBudget(
-          availableRisk: 10,
-          availableMargin: 100,
-        ),
-        nowUtc: now,
-      ),
-      throwsFormatException,
-    );
-  });
+        throwsFormatException,
+      );
+    },
+  );
 }
 
 PortfolioAllocationPlannerInput _input(
