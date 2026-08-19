@@ -29,6 +29,7 @@ concurrency:
 env:
   FLUTTER_VERSION: '3.44.8'
   RC_VERSION: 1.2.0-rc.3
+  QUANTARA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   windows:
@@ -54,14 +55,29 @@ jobs:
           dart --version
           cmake --version
 
+      - name: Restore Flutter packages for profiling
+        shell: pwsh
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Run Windows hot-path software profiling
+        shell: pwsh
+        working-directory: src/client/quantara_app
+        run: >-
+          dart run tool/hot_path_benchmark.dart
+          --output hot-path-performance-windows.json
+          --build-commit "$env:QUANTARA_BUILD_COMMIT"
+
       - name: Build native Windows release candidate
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner -PackageZip
 
-      - name: Upload Windows release candidate
+      - name: Upload Windows release candidate and profiling evidence
         uses: actions/upload-artifact@v4
         with:
           name: quantara-windows-${{ env.RC_VERSION }}
-          path: dist/windows/quantara-windows-release.zip
+          path: |
+            dist/windows/quantara-windows-release.zip
+            src/client/quantara_app/hot-path-performance-windows.json
           if-no-files-found: error
           retention-days: 14

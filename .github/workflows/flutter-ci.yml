@@ -35,6 +35,7 @@ env:
   ANDROID_PACKAGE: com.quantara.quantara_app
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
   ANDROID_DEBUG_ARTIFACT: quantara-android-debug-${{ github.sha }}
+  QUANTARA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   flutter:
@@ -88,6 +89,7 @@ jobs:
         run: >-
           dart run tool/hot_path_benchmark.dart
           --output hot-path-performance.json
+          --build-commit "$QUANTARA_BUILD_COMMIT"
 
       - name: Upload Flutter diagnostics
         if: always()
