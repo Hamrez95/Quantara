@@ -170,8 +170,12 @@ final class LocalLiveCapitalGuardianMonitor {
       key: _localLiveCapitalEquityRecordKey,
       mutation: (current) async {
         final previous = current == null ? null : _EquityTruth.fromRecord(current);
-        final peak = math.max(previous?.peakEquity ?? accountEquity, accountEquity);
-        final drawdown = ((peak - accountEquity) / peak).clamp(0.0, 1.0);
+        final peak = math
+            .max(previous?.peakEquity ?? accountEquity, accountEquity)
+            .toDouble();
+        final drawdown = ((peak - accountEquity) / peak)
+            .clamp(0.0, 1.0)
+            .toDouble();
         final next = _EquityTruth(
           currentEquity: accountEquity,
           peakEquity: peak,
@@ -209,7 +213,9 @@ final class _EquityTruth {
     final current = (record.payload['currentEquity'] as num?)?.toDouble();
     final peak = (record.payload['peakEquity'] as num?)?.toDouble();
     final drawdown = (record.payload['drawdownFraction'] as num?)?.toDouble();
-    final asOf = DateTime.tryParse(record.payload['asOf']?.toString() ?? '')?.toUtc();
+    final asOf = DateTime.tryParse(
+      record.payload['asOf']?.toString() ?? '',
+    )?.toUtc();
     if (current == null ||
         peak == null ||
         drawdown == null ||
@@ -224,7 +230,7 @@ final class _EquityTruth {
         drawdown > 1) {
       throw const FormatException('Persisted live capital equity is invalid.');
     }
-    final expected = ((peak - current) / peak).clamp(0.0, 1.0);
+    final expected = ((peak - current) / peak).clamp(0.0, 1.0).toDouble();
     if ((expected - drawdown).abs() > 1e-8) {
       throw const FormatException(
         'Persisted live capital drawdown failed integrity validation.',
