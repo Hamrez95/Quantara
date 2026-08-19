@@ -31,6 +31,7 @@ void main() {
     );
 
     expect(preview.decision.allowed, isTrue);
+    expect(preview.decision.liveExecutionAllowed, isFalse);
     expect(preview.ledger.activeReservations, isEmpty);
     expect(await store.load(), isNull);
 
@@ -41,6 +42,7 @@ void main() {
     );
 
     expect(reserved.decision.allowed, isTrue);
+    expect(reserved.decision.liveExecutionAllowed, isTrue);
     expect((await store.load())?.activeReservations, hasLength(1));
     await database.close();
   });

@@ -70,8 +70,9 @@ final class LocalLivePortfolioRiskRuntime {
       account: account,
       timestamp: timestamp,
     );
+    final advisoryDecision = _asAdvisoryDecision(evaluation.decision);
     return PortfolioReservationOutcome(
-      decision: evaluation.decision,
+      decision: advisoryDecision,
       ledger: ledger,
       snapshot: ledger.snapshot(account),
       guardianDecision: evaluation.guardianDecision,
@@ -177,6 +178,20 @@ final class LocalLivePortfolioRiskRuntime {
       decision: decision,
       guardianDecision: guardianDecision,
       guardianState: guardianState,
+    );
+  }
+
+  PortfolioEntryDecision _asAdvisoryDecision(PortfolioEntryDecision decision) {
+    if (!decision.allowed || !decision.liveExecutionAllowed) return decision;
+    return PortfolioEntryDecision(
+      allowed: true,
+      liveExecutionAllowed: false,
+      reason: decision.reason,
+      maximumLoss: decision.maximumLoss,
+      requiredMargin: decision.requiredMargin,
+      availableRiskBefore: decision.availableRiskBefore,
+      availableRiskAfter: decision.availableRiskAfter,
+      availableMarginAfter: decision.availableMarginAfter,
     );
   }
 
