@@ -148,11 +148,17 @@ abstract final class ReleaseCertificationGate {
     required AutonomySoakCertificationResult autonomySoak,
     required Iterable<ReleaseGateEvidence> gates,
   }) {
-    if (buildCommit.trim().isEmpty || releaseVersion.trim().isEmpty) {
+    final normalizedBuildCommit = buildCommit.trim();
+    if (normalizedBuildCommit.isEmpty || releaseVersion.trim().isEmpty) {
       throw const FormatException(
         'Release certification requires build and release versions.',
       );
     }
+
+    _validateBuildIdentity(
+      normalizedBuildCommit: normalizedBuildCommit,
+      autonomySoak: autonomySoak,
+    );
 
     final byCode = <ReleaseGateCode, ReleaseGateEvidence>{};
     for (final evidence in gates) {
@@ -175,7 +181,7 @@ abstract final class ReleaseCertificationGate {
         .map((code) => byCode[code]!)
         .toList(growable: false);
     final artifact = ReleaseCertificationArtifact._(
-      buildCommit: buildCommit.trim(),
+      buildCommit: normalizedBuildCommit,
       releaseVersion: releaseVersion.trim(),
       autonomySoak: autonomySoak,
       gates: ordered,
@@ -184,6 +190,21 @@ abstract final class ReleaseCertificationGate {
     _validateShadowEvidence(artifact);
     _validateCanaryOrdering(artifact);
     return artifact;
+  }
+
+  static void _validateBuildIdentity({
+    required String normalizedBuildCommit,
+    required AutonomySoakCertificationResult autonomySoak,
+  }) {
+    final soakBuildCommits = autonomySoak.runs
+        .map((run) => run.versions.buildCommit.trim())
+        .toSet();
+    if (soakBuildCommits.length != 1 ||
+        soakBuildCommits.single != normalizedBuildCommit) {
+      throw StateError(
+        'Release certification build must match the build certified by soak evidence.',
+      );
+    }
   }
 
   static void _validateShadowEvidence(ReleaseCertificationArtifact artifact) {
