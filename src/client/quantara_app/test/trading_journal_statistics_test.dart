@@ -27,6 +27,23 @@ void main() {
     closedAt: DateTime.utc(2026, 8, 1, 2),
   );
 
+  TradingJournalProjection pending({
+    required String id,
+    required String symbol,
+    required String timeframe,
+    required String strategy,
+  }) => TradingJournalProjection.fixture(
+    journalTradeId: id,
+    symbol: symbol,
+    timeframe: timeframe,
+    strategy: strategy,
+    direction: TradingJournalDirection.long,
+    source: TradingJournalSource.localLive,
+    state: TradingJournalTradeState.closed,
+    decidedAt: DateTime.utc(2026, 8, 1),
+    closedAt: DateTime.utc(2026, 8, 1, 3),
+  );
+
   test('statistics include expectancy, profit factor and average R', () {
     final statistics = TradingJournalStatistics.calculate([
       closed(
@@ -59,6 +76,8 @@ void main() {
     ]);
 
     expect(statistics.closedCount, 3);
+    expect(statistics.pricedClosedCount, 3);
+    expect(statistics.economicsPendingCount, 0);
     expect(statistics.winCount, 2);
     expect(statistics.lossCount, 1);
     expect(statistics.winRatePercent, closeTo(66.6667, 0.001));
@@ -70,6 +89,45 @@ void main() {
     expect(statistics.bySymbol['XRPUSDT']!.netPnl, 5);
     expect(statistics.byTimeframe['15m']!.trades, 2);
     expect(statistics.byStrategy['structure']!.trades, 2);
+  });
+
+  test('pending economics are never scored as zero-PnL trades', () {
+    final statistics = TradingJournalStatistics.calculate([
+      closed(
+        id: 'win',
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        strategy: 'trend',
+        net: 4,
+        realizedR: 1,
+        closeReason: TradingJournalCloseReason.takeProfit1,
+      ),
+      closed(
+        id: 'loss',
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        strategy: 'trend',
+        net: -2,
+        realizedR: -0.5,
+        closeReason: TradingJournalCloseReason.stop,
+      ),
+      pending(
+        id: 'pending',
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        strategy: 'trend',
+      ),
+    ]);
+
+    expect(statistics.closedCount, 3);
+    expect(statistics.pricedClosedCount, 2);
+    expect(statistics.economicsPendingCount, 1);
+    expect(statistics.winRatePercent, 50);
+    expect(statistics.expectancy, 1);
+    expect(statistics.averageR, 0.25);
+    expect(statistics.profitFactor, 2);
+    expect(statistics.byStrategy['trend']!.trades, 2);
+    expect(statistics.byStrategy['trend']!.netPnl, 2);
   });
 
   test('equity curve drawdown uses closed trade order', () {
@@ -91,6 +149,12 @@ void main() {
         net: -3,
         realizedR: -0.6,
         closeReason: TradingJournalCloseReason.stop,
+      ),
+      pending(
+        id: 'pending-middle',
+        symbol: 'XRPUSDT',
+        timeframe: '15m',
+        strategy: 's',
       ),
       closed(
         id: 'c',
