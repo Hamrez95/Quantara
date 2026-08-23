@@ -74,41 +74,40 @@ final class LocalLiveCapitalGuardianMonitor {
       now: timestamp,
     );
 
-    return _riskStore
-        .mutateRiskAndGuardian<LocalLiveCapitalGuardianSnapshot>((
-          ledger,
-          guardian,
-        ) async {
-          if (ledger == null) {
-            throw StateError(
-              'Capital Guardian cannot update before the Local Live risk ledger exists.',
-            );
-          }
-          final base =
-              guardian ??
-              CapitalGuardianState.initial(
-                now: timestamp,
-                timezoneOffsetMinutes:
-                    ledger.tradingDay.timezoneOffsetMinutes,
-              );
-          final next = base.recordEnvironment(
-            drawdownFraction: equityTruth.drawdownFraction,
-            abnormalVolatility: abnormalVolatility,
+    return _riskStore.mutateRiskAndGuardian<LocalLiveCapitalGuardianSnapshot>((
+      ledger,
+      guardian,
+    ) async {
+      if (ledger == null) {
+        throw StateError(
+          'Capital Guardian cannot update before the Local Live risk ledger exists.',
+        );
+      }
+      final base =
+          guardian ??
+          CapitalGuardianState.initial(
             now: timestamp,
             timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
-            policy: _policy,
           );
-          final snapshot = _snapshot(
-            equity: equityTruth,
-            guardian: next,
-            riskLimit: ledger.dailyRisk.limit,
-            openRisk: ledger.dailyRisk.openRisk,
-            remainingRisk: ledger.dailyRisk.available,
-          );
-          return PortfolioRiskAndGuardianMutation<
-            LocalLiveCapitalGuardianSnapshot
-          >(value: snapshot, nextGuardian: next);
-        });
+      final next = base.recordEnvironment(
+        drawdownFraction: equityTruth.drawdownFraction,
+        abnormalVolatility: abnormalVolatility,
+        now: timestamp,
+        timezoneOffsetMinutes: ledger.tradingDay.timezoneOffsetMinutes,
+        policy: _policy,
+      );
+      final snapshot = _snapshot(
+        equity: equityTruth,
+        guardian: next,
+        riskLimit: ledger.dailyRisk.limit,
+        openRisk: ledger.dailyRisk.openRisk,
+        remainingRisk: ledger.dailyRisk.available,
+      );
+      return PortfolioRiskAndGuardianMutation<LocalLiveCapitalGuardianSnapshot>(
+        value: snapshot,
+        nextGuardian: next,
+      );
+    });
   }
 
   Future<LocalLiveCapitalGuardianSnapshot?> load() async {
@@ -169,7 +168,9 @@ final class LocalLiveCapitalGuardianMonitor {
       category: QuantaraDurableCategory.managedPositions,
       key: _localLiveCapitalEquityRecordKey,
       mutation: (current) async {
-        final previous = current == null ? null : _EquityTruth.fromRecord(current);
+        final previous = current == null
+            ? null
+            : _EquityTruth.fromRecord(current);
         final peak = math
             .max(previous?.peakEquity ?? accountEquity, accountEquity)
             .toDouble();

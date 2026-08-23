@@ -9,11 +9,14 @@ import 'package:sembast/sembast_memory.dart';
 void main() {
   final now = DateTime.utc(2026, 8, 19, 12);
 
-  Future<({
-    SembastQuantaraDurableDatabase database,
-    DatabasePortfolioRiskLedgerStore store,
-    LocalLiveCapitalGuardianMonitor monitor,
-  })> harness(String path) async {
+  Future<
+    ({
+      SembastQuantaraDurableDatabase database,
+      DatabasePortfolioRiskLedgerStore store,
+      LocalLiveCapitalGuardianMonitor monitor,
+    })
+  >
+  harness(String path) async {
     final database = SembastQuantaraDurableDatabase(
       factory: databaseFactoryMemory,
       path: path,
@@ -102,20 +105,23 @@ void main() {
     expect(recovering.riskMultiplier, 0.25);
   });
 
-  test('a new equity high advances the durable peak without adding risk', () async {
-    final testHarness = await harness('local-live-capital-peak.db');
-    await testHarness.monitor.refresh(accountEquity: 1000, now: now);
-    final higher = await testHarness.monitor.refresh(
-      accountEquity: 1100,
-      now: now.add(const Duration(minutes: 1)),
-    );
+  test(
+    'a new equity high advances the durable peak without adding risk',
+    () async {
+      final testHarness = await harness('local-live-capital-peak.db');
+      await testHarness.monitor.refresh(accountEquity: 1000, now: now);
+      final higher = await testHarness.monitor.refresh(
+        accountEquity: 1100,
+        now: now.add(const Duration(minutes: 1)),
+      );
 
-    expect(higher.currentEquity, 1100);
-    expect(higher.peakEquity, 1100);
-    expect(higher.drawdownFraction, 0);
-    expect(higher.openRisk, 0);
-    expect(higher.remainingRisk, 10);
-  });
+      expect(higher.currentEquity, 1100);
+      expect(higher.peakEquity, 1100);
+      expect(higher.drawdownFraction, 0);
+      expect(higher.openRisk, 0);
+      expect(higher.remainingRisk, 10);
+    },
+  );
 
   test('invalid account equity fails closed', () async {
     final testHarness = await harness('local-live-capital-invalid.db');
