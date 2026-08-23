@@ -26,6 +26,16 @@ void main() {
           liveExecutionAllowed: true,
           blockReason: 'none',
         ),
+        capitalGuardian: LocalLiveCapitalGuardianStatus(
+          currentEquity: 1000,
+          peakEquity: 1060,
+          drawdownFraction: 0.0566037736,
+          drawdownTier: 'soft',
+          riskMultiplier: 0.5,
+          openRisk: 0.075,
+          remainingRisk: 0.225,
+          asOf: DateTime.utc(2026, 8, 5, 4, 45),
+        ),
       );
 
       final restored = LocalLiveTradeStatus.fromJson(status.toJson());
@@ -38,6 +48,13 @@ void main() {
       expect(restored.portfolioBudget!.spendableMargin, 26.40);
       expect(restored.portfolioBudget!.liveExecutionAllowed, isTrue);
       expect(restored.portfolioBudget!.blockReason, 'none');
+      expect(restored.capitalGuardian, isNotNull);
+      expect(restored.capitalGuardian!.currentEquity, 1000);
+      expect(restored.capitalGuardian!.peakEquity, 1060);
+      expect(restored.capitalGuardian!.drawdownTier, 'soft');
+      expect(restored.capitalGuardian!.riskMultiplier, 0.5);
+      expect(restored.capitalGuardian!.openRisk, 0.075);
+      expect(restored.capitalGuardian!.remainingRisk, 0.225);
     },
   );
 }

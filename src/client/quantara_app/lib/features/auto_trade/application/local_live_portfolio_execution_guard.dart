@@ -228,7 +228,7 @@ final class LocalLivePortfolioExecutionGuard {
     return ledger;
   }
 
-  Future<PortfolioRiskSnapshot> snapshot({
+  Future<LocalLivePortfolioGuardSnapshot> snapshot({
     required AutoTradeAccountSnapshot account,
     required bool allOpenPositionsProtected,
     required DateTime now,
@@ -241,10 +241,27 @@ final class LocalLivePortfolioExecutionGuard {
       ),
       now: now,
     );
-    await _capitalGuardianMonitor.refresh(
+    final guardian = await _capitalGuardianMonitor.refresh(
       accountEquity: account.estimatedEquity,
       now: now,
     );
-    return riskSnapshot;
+    return LocalLivePortfolioGuardSnapshot(
+      risk: riskSnapshot,
+      guardian: guardian,
+    );
   }
+}
+
+/// One coherent projection from the existing atomic risk/Guardian refresh.
+///
+/// Keeping the values together prevents the UI from triggering a second durable
+/// read merely to display the Capital Guardian state.
+final class LocalLivePortfolioGuardSnapshot {
+  const LocalLivePortfolioGuardSnapshot({
+    required this.risk,
+    required this.guardian,
+  });
+
+  final PortfolioRiskSnapshot risk;
+  final LocalLiveCapitalGuardianSnapshot guardian;
 }

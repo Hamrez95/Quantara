@@ -77,6 +77,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   int _closedPositionCount = 0;
   TradingPnlProjection? _sessionPnlProjection;
   LocalLivePortfolioBudgetStatus? _portfolioBudget;
+  LocalLiveCapitalGuardianStatus? _capitalGuardian;
   int _exchangeOpenPositionCount = 0;
   List<String> _unmanagedSymbols = const [];
   List<String> _recoverableOrphanSymbols = const [];
@@ -238,6 +239,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           _sessionStartEquity = null;
           _sessionPnlProjection = null;
           _portfolioBudget = null;
+          _capitalGuardian = null;
           _portfolioGuard = null;
           _sessionPositionIds.clear();
           await _persistSessionMetadata();
@@ -484,18 +486,28 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           );
           _portfolioBudget = LocalLivePortfolioBudgetStatus(
             asOf: now,
-            riskLimit: snapshot.dailyRisk.limit,
-            riskConsumed: snapshot.dailyRisk.consumed,
-            riskAvailable: snapshot.dailyRisk.available,
-            openRisk: snapshot.dailyRisk.openRisk,
-            pendingRisk: snapshot.dailyRisk.pendingRisk,
-            ambiguousRisk: snapshot.dailyRisk.ambiguousRisk,
-            reservedMargin: snapshot.margin.reservedMargin,
-            spendableMargin: snapshot.margin.spendable,
-            accountFresh: snapshot.accountFresh,
-            allPositionsProtected: snapshot.allPositionsProtected,
-            liveExecutionAllowed: snapshot.liveExecutionAllowed,
-            blockReason: snapshot.blockReason.name,
+            riskLimit: snapshot.risk.dailyRisk.limit,
+            riskConsumed: snapshot.risk.dailyRisk.consumed,
+            riskAvailable: snapshot.risk.dailyRisk.available,
+            openRisk: snapshot.risk.dailyRisk.openRisk,
+            pendingRisk: snapshot.risk.dailyRisk.pendingRisk,
+            ambiguousRisk: snapshot.risk.dailyRisk.ambiguousRisk,
+            reservedMargin: snapshot.risk.margin.reservedMargin,
+            spendableMargin: snapshot.risk.margin.spendable,
+            accountFresh: snapshot.risk.accountFresh,
+            allPositionsProtected: snapshot.risk.allPositionsProtected,
+            liveExecutionAllowed: snapshot.risk.liveExecutionAllowed,
+            blockReason: snapshot.risk.blockReason.name,
+          );
+          _capitalGuardian = LocalLiveCapitalGuardianStatus(
+            currentEquity: snapshot.guardian.currentEquity,
+            peakEquity: snapshot.guardian.peakEquity,
+            drawdownFraction: snapshot.guardian.drawdownFraction,
+            drawdownTier: snapshot.guardian.drawdownTier.name,
+            riskMultiplier: snapshot.guardian.riskMultiplier,
+            openRisk: snapshot.guardian.openRisk,
+            remainingRisk: snapshot.guardian.remainingRisk,
+            asOf: snapshot.guardian.asOf,
           );
           if (_unmanagedSymbols.isNotEmpty) {
             final limit = _portfolioBudget!.riskLimit;
@@ -2505,6 +2517,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
       realizedPnl: null,
       pnlProjection: _sessionPnlProjection,
       portfolioBudget: _portfolioBudget,
+      capitalGuardian: _capitalGuardian,
       consecutiveFailures: _consecutiveFailures,
       entriesEnabled: _entriesEnabled,
     );
