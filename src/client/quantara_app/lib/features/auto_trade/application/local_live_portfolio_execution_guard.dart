@@ -19,6 +19,10 @@ final class LocalLivePortfolioExecutionGuard {
 
   final LocalLivePortfolioRiskRuntime _runtime;
   final LocalLiveCapitalGuardianMonitor _capitalGuardianMonitor;
+  LocalLiveCapitalGuardianSnapshot? _lastCapitalGuardianSnapshot;
+
+  LocalLiveCapitalGuardianSnapshot? get lastCapitalGuardianSnapshot =>
+      _lastCapitalGuardianSnapshot;
 
   Future<PortfolioReservationOutcome> preview({
     required TradeIdea idea,
@@ -241,7 +245,7 @@ final class LocalLivePortfolioExecutionGuard {
       ),
       now: now,
     );
-    await _capitalGuardianMonitor.refresh(
+    _lastCapitalGuardianSnapshot = await _capitalGuardianMonitor.refresh(
       accountEquity: account.estimatedEquity,
       now: now,
     );

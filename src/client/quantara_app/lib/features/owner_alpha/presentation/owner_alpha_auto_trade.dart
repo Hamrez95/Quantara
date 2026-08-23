@@ -386,6 +386,22 @@ class _LocalLiveTradeControlCardState
 
   String _t(String fa, String en) => _fa ? fa : en;
 
+  String _drawdownTierLabel(String? tier) => switch (tier) {
+    'normal' => _t('عادی', 'Normal'),
+    'soft' => _t('کاهش ریسک', 'Risk reduced'),
+    'hardStop' => _t('توقف سخت', 'Hard stop'),
+    'recovery' => _t('بازیابی محدود', 'Controlled recovery'),
+    _ => _t('نامشخص', 'Unknown'),
+  };
+
+  Color _drawdownTierColor(String? tier) => switch (tier) {
+    'normal' => QuantaraColors.success,
+    'soft' => QuantaraColors.warning,
+    'hardStop' => QuantaraColors.danger,
+    'recovery' => QuantaraColors.violet,
+    _ => QuantaraColors.warning,
+  };
+
   void _supervisorSetState(VoidCallback callback) => setState(callback);
 
   @override
@@ -677,11 +693,34 @@ class _LocalLiveTradeControlCardState
                   color: QuantaraColors.danger,
                   icon: Icons.block_rounded,
                 ),
+              if (status.portfolioBudget?.currentEquity != null &&
+                  status.portfolioBudget?.peakEquity != null)
+                StatusPill(
+                  label: _t(
+                    'سرمایه ${status.portfolioBudget!.currentEquity!.toStringAsFixed(2)} · اوج ${status.portfolioBudget!.peakEquity!.toStringAsFixed(2)} USDT',
+                    'Equity ${status.portfolioBudget!.currentEquity!.toStringAsFixed(2)} · Peak ${status.portfolioBudget!.peakEquity!.toStringAsFixed(2)} USDT',
+                  ),
+                  color: QuantaraColors.cyan,
+                  icon: Icons.account_balance_wallet_outlined,
+                ),
+              if (status.portfolioBudget?.drawdownFraction != null &&
+                  status.portfolioBudget?.drawdownTier != null &&
+                  status.portfolioBudget?.riskMultiplier != null)
+                StatusPill(
+                  label: _t(
+                    'افت سرمایه ${(status.portfolioBudget!.drawdownFraction! * 100).toStringAsFixed(2)}% · ${_drawdownTierLabel(status.portfolioBudget!.drawdownTier)} · ضریب ریسک ×${status.portfolioBudget!.riskMultiplier!.toStringAsFixed(2)}',
+                    'Drawdown ${(status.portfolioBudget!.drawdownFraction! * 100).toStringAsFixed(2)}% · ${_drawdownTierLabel(status.portfolioBudget!.drawdownTier)} · risk ×${status.portfolioBudget!.riskMultiplier!.toStringAsFixed(2)}',
+                  ),
+                  color: _drawdownTierColor(
+                    status.portfolioBudget!.drawdownTier,
+                  ),
+                  icon: Icons.health_and_safety_outlined,
+                ),
               if (status.portfolioBudget != null)
                 StatusPill(
                   label: _t(
-                    'ریسک آزاد ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
-                    'Risk free ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
+                    'ریسک باز ${status.portfolioBudget!.openRisk.toStringAsFixed(3)} · آزاد ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
+                    'Open risk ${status.portfolioBudget!.openRisk.toStringAsFixed(3)} · Free ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
                   ),
                   color: status.portfolioBudget!.ambiguousRisk > 0
                       ? QuantaraColors.danger

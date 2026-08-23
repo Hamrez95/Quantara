@@ -323,6 +323,11 @@ final class LocalLivePortfolioBudgetStatus {
     required this.allPositionsProtected,
     required this.liveExecutionAllowed,
     required this.blockReason,
+    this.currentEquity,
+    this.peakEquity,
+    this.drawdownFraction,
+    this.drawdownTier,
+    this.riskMultiplier,
   });
 
   final DateTime asOf;
@@ -338,6 +343,11 @@ final class LocalLivePortfolioBudgetStatus {
   final bool allPositionsProtected;
   final bool liveExecutionAllowed;
   final String blockReason;
+  final double? currentEquity;
+  final double? peakEquity;
+  final double? drawdownFraction;
+  final String? drawdownTier;
+  final double? riskMultiplier;
 
   Map<String, Object?> toJson() => {
     'asOf': asOf.toUtc().toIso8601String(),
@@ -353,6 +363,11 @@ final class LocalLivePortfolioBudgetStatus {
     'allPositionsProtected': allPositionsProtected,
     'liveExecutionAllowed': liveExecutionAllowed,
     'blockReason': blockReason,
+    'currentEquity': currentEquity,
+    'peakEquity': peakEquity,
+    'drawdownFraction': drawdownFraction,
+    'drawdownTier': drawdownTier,
+    'riskMultiplier': riskMultiplier,
   };
 
   factory LocalLivePortfolioBudgetStatus.fromJson(Map<String, Object?> json) =>
@@ -372,6 +387,11 @@ final class LocalLivePortfolioBudgetStatus {
         allPositionsProtected: json['allPositionsProtected'] == true,
         liveExecutionAllowed: json['liveExecutionAllowed'] == true,
         blockReason: json['blockReason']?.toString() ?? 'unknown',
+        currentEquity: (json['currentEquity'] as num?)?.toDouble(),
+        peakEquity: (json['peakEquity'] as num?)?.toDouble(),
+        drawdownFraction: (json['drawdownFraction'] as num?)?.toDouble(),
+        drawdownTier: json['drawdownTier']?.toString(),
+        riskMultiplier: (json['riskMultiplier'] as num?)?.toDouble(),
       );
 }
 

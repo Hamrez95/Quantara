@@ -482,6 +482,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             allOpenPositionsProtected: allOpenPositionsProtected,
             now: now,
           );
+          final guardian = _portfolioGuard!.lastCapitalGuardianSnapshot;
           _portfolioBudget = LocalLivePortfolioBudgetStatus(
             asOf: now,
             riskLimit: snapshot.dailyRisk.limit,
@@ -496,6 +497,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             allPositionsProtected: snapshot.allPositionsProtected,
             liveExecutionAllowed: snapshot.liveExecutionAllowed,
             blockReason: snapshot.blockReason.name,
+            currentEquity: guardian?.currentEquity,
+            peakEquity: guardian?.peakEquity,
+            drawdownFraction: guardian?.drawdownFraction,
+            drawdownTier: guardian?.drawdownTier.name,
+            riskMultiplier: guardian?.riskMultiplier,
           );
           if (_unmanagedSymbols.isNotEmpty) {
             final limit = _portfolioBudget!.riskLimit;
@@ -513,6 +519,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               allPositionsProtected: false,
               liveExecutionAllowed: false,
               blockReason: 'unmanagedExchangeExposure',
+              currentEquity: _portfolioBudget!.currentEquity,
+              peakEquity: _portfolioBudget!.peakEquity,
+              drawdownFraction: _portfolioBudget!.drawdownFraction,
+              drawdownTier: _portfolioBudget!.drawdownTier,
+              riskMultiplier: _portfolioBudget!.riskMultiplier,
             );
           }
         } on LocalLiveTradeSafeException catch (error) {
