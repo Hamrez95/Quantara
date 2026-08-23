@@ -1,8 +1,8 @@
 {
   "schema_version": "source-registry-v1",
-  "registry_version": "1.0.0",
-  "reviewed_at": "2026-07-20",
-  "review_due_at": "2026-08-20",
+  "registry_version": "1.0.1",
+  "reviewed_at": "2026-08-23",
+  "review_due_at": "2026-09-23",
   "execution_authority": "none",
   "sources": [
     {
@@ -268,7 +268,7 @@
       "access_class": "public_api_with_terms",
       "ingestion_mode": "api",
       "decision_role": "direct_fact",
-      "commercial_use_status": "approved_subject_to_terms",
+      "commercial_use_status": "blocked_pending_license",
       "update_cadence": "per-series release and revision schedule",
       "domains": [
         "macroeconomic releases",
@@ -277,16 +277,16 @@
         "historical data vintages"
       ],
       "permitted_uses": [
-        "retrieve approved series through the documented API",
-        "store release and vintage timestamps with source-series metadata",
-        "build revision-aware macro event features",
-        "display required FRED attribution and non-endorsement notice"
+        "manual terms and series-license evaluation only until a compatible usage and retention design is approved",
+        "design provider-neutral macro ingestion contracts without retrieving or persisting FRED API content",
+        "use public citation metadata to plan a future compliant connector"
       ],
       "prohibited_uses": [
         "assume every series has identical redistribution rights",
         "ignore third-party series restrictions",
         "replace the essential FRED user experience",
-        "use revised values as if they were known at the historical decision time"
+        "use revised values as if they were known at the historical decision time",
+        "store, cache, archive, or use FRED API content in machine learning where current terms prohibit it"
       ],
       "validation_requirements": [
         "allowlist series individually with source-owner restrictions",
@@ -296,9 +296,10 @@
       ],
       "attribution_required": true,
       "automated_scraping_allowed": false,
-      "retention_policy": "Retain only allowlisted API results and provenance according to each series owner's restrictions.",
-      "revision_policy": "Track vintages; never silently overwrite a historically consumed value.",
-      "enabled": true
+      "retention_policy": "Production ingestion disabled. Do not store, cache, or archive FRED API content until a terms review approves an explicit compliant design.",
+      "revision_policy": "Re-review current FRED API and series-owner terms before re-enabling; provider and series restrictions are authoritative.",
+      "enabled": false,
+      "notes": "Disabled on 2026-08-23 after current FRED terms no longer matched the previously registered storage and machine-use assumptions."
     },
     {
       "id": "cftc-cot-public-data",
@@ -394,7 +395,7 @@
       "publisher": "Coin Metrics",
       "canonical_url": "https://docs.coinmetrics.io/api",
       "terms_urls": [
-        "https://coinmetrics.io/terms-of-use/"
+        "https://www.talos.com/legals/terms"
       ],
       "source_class": "live_market_data",
       "authority_tier": "vendor_primary",
@@ -431,7 +432,7 @@
       "retention_policy": "Disabled for commercial production until licensing is approved; retain only permitted research artifacts.",
       "revision_policy": "Review terms and metric definitions before every production release.",
       "enabled": false,
-      "notes": "The registry blocks commercial use by default because Community access is described as non-commercial."
+      "notes": "Community access remains non-commercial and production-disabled. Coin Metrics is now presented under Talos; re-check the current Coin Metrics Master Terms before any enablement."
     },
     {
       "id": "bitunix-official-futures-api",
@@ -439,7 +440,8 @@
       "publisher": "Bitunix",
       "canonical_url": "https://www.bitunix.com/api-docs/futures/common/introduction.html",
       "terms_urls": [
-        "https://www.bitunix.com/terms"
+        "https://www.bitunix.com/hub/helpcenter/article/bitunix-user-agreement?id=144",
+        "https://www.bitunix.com/hub/helpcenter/article/risk-disclosure?id=149"
       ],
       "source_class": "live_market_data",
       "authority_tier": "vendor_primary",
@@ -475,7 +477,7 @@
       "attribution_required": true,
       "automated_scraping_allowed": false,
       "retention_policy": "Retain normalized market data and immutable connector evidence according to exchange terms; never retain secrets.",
-      "revision_policy": "Pin observed API schema versions and fail closed on undocumented changes.",
+      "revision_policy": "Review current OpenAPI documentation, User Agreement, and risk disclosures before each production release or after a published revision.",
       "enabled": true
     },
     {
