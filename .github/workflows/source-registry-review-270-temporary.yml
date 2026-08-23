@@ -1,0 +1,64 @@
+name: Temporary source-registry review #270
+
+on:
+  push:
+    branches:
+      - chore/270-renew-source-registry-review
+
+permissions:
+  contents: write
+
+jobs:
+  update-registry:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chore/270-renew-source-registry-review
+          fetch-depth: 0
+      - name: Apply reviewed registry policy changes
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('docs/research/source-registry.v1.yaml')
+          registry = json.loads(path.read_text(encoding='utf-8'))
+          registry['registry_version'] = '1.0.1'
+          registry['reviewed_at'] = '2026-08-23'
+          registry['review_due_at'] = '2026-09-23'
+
+          sources = {source['id']: source for source in registry['sources']}
+
+          fred = sources['fred-alfred-api']
+          fred['commercial_use_status'] = 'blocked_pending_license'
+          fred['enabled'] = False
+          fred['permitted_uses'] = [
+            'manual terms and series-license evaluation only until a compatible usage and retention design is approved',
+            'design provider-neutral macro ingestion contracts without retrieving or persisting FRED API content',
+            'use public citation metadata to plan a future compliant connector'
+          ]
+          fred['prohibited_uses'] = [
+            'assume every series has identical redistribution rights',
+            'ignore third-party series restrictions',
+            'replace the essential FRED user experience',
+            'use revised values as if they were known at the historical decision time',
+            'store, cache, archive, or use FRED API content in machine learning where current terms prohibit it'
+          ]
+          fred['retention_policy'] = 'Production ingestion disabled. Do not store, cache, or archive FRED API content until a terms review approves an explicit compliant design.'
+          fred['revision_policy'] = 'Re-review current FRED API and series-owner terms before re-enabling; provider and series restrictions are authoritative.'
+          fred['notes'] = 'Disabled on 2026-08-23 after current FRED terms no longer matched the previously registered storage and machine-use assumptions.'
+
+          coinmetrics = sources['coinmetrics-community-api']
+          coinmetrics['terms_urls'] = ['https://www.talos.com/legals/terms']
+          coinmetrics['notes'] = 'Community access remains non-commercial and production-disabled. Coin Metrics is now presented under Talos; re-check the current Coin Metrics Master Terms before any enablement.'
+
+          path.write_text(json.dumps(registry, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+          git rm .github/workflows/source-registry-review-270-temporary.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/research/source-registry.v1.yaml
+          git commit -m "fix(research): fail closed stale source terms for #270"
+          git push origin HEAD:chore/270-renew-source-registry-review
