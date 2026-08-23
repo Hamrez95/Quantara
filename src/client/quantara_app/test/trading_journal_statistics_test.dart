@@ -113,9 +113,9 @@ void main() {
       ),
       pending(
         id: 'pending',
-        symbol: 'BTCUSDT',
-        timeframe: '1h',
-        strategy: 'trend',
+        symbol: 'ETHUSDT',
+        timeframe: '15m',
+        strategy: 'mean-reversion',
       ),
     ]);
 
@@ -128,6 +128,8 @@ void main() {
     expect(statistics.profitFactor, 2);
     expect(statistics.byStrategy['trend']!.trades, 2);
     expect(statistics.byStrategy['trend']!.netPnl, 2);
+    expect(statistics.bySymbol.containsKey('ETHUSDT'), isFalse);
+    expect(statistics.byStrategy.containsKey('mean-reversion'), isFalse);
   });
 
   test('equity curve drawdown uses closed trade order', () {
