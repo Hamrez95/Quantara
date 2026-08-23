@@ -116,8 +116,7 @@ abstract final class TradingPerformanceAnalytics {
     final payoffRatio = averageLoss <= 0 ? 0.0 : averageWin / averageLoss;
     final expectancyR = rValues.isEmpty
         ? 0.0
-        : rValues.fold<double>(0, (sum, value) => sum + value) /
-              rValues.length;
+        : rValues.fold<double>(0, (sum, value) => sum + value) / rValues.length;
     final profitFactor = grossLossAbs <= 0
         ? (grossProfit > 0 ? double.infinity : 0.0)
         : grossProfit / grossLossAbs;
@@ -353,10 +352,7 @@ abstract final class TradingPerformanceAnalytics {
     final buckets = <String, _GroupAccumulator>{};
     for (final item in items) {
       final key = keyOf(item);
-      final bucket = buckets.putIfAbsent(
-        key,
-        () => _GroupAccumulator(key),
-      );
+      final bucket = buckets.putIfAbsent(key, () => _GroupAccumulator(key));
       bucket.add(item);
     }
     return {

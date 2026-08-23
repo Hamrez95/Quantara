@@ -76,8 +76,8 @@ abstract final class TradingPerformanceReporting {
       'symbols': report.filter.symbols.toList(growable: false)..sort(),
       'timeframes': report.filter.timeframes.toList(growable: false)..sort(),
       'strategies': report.filter.strategies.toList(growable: false)..sort(),
-      'strategyVersions':
-          report.filter.strategyVersions.toList(growable: false)..sort(),
+      'strategyVersions': report.filter.strategyVersions.toList(growable: false)
+        ..sort(),
       'regimes': report.filter.regimes.toList(growable: false)..sort(),
       'sources':
           report.filter.sources.map((item) => item.name).toList(growable: false)

@@ -233,32 +233,35 @@ void main() {
     expect(first.sharpeLike, isNotNull);
   });
 
-  test('analytics fails closed when the bounded closed-trade budget is exceeded', () {
-    final items = List.generate(
-      3,
-      (index) => _projection(
-        id: 'trade-$index',
-        symbol: 'BTCUSDT',
-        strategy: 'trendPullback',
-        version: 'trend-v2',
-        net: 1,
-        gross: 1.5,
-        fees: 0.5,
-        funding: 0,
-        r: 0.1,
-      ),
-    );
+  test(
+    'analytics fails closed when the bounded closed-trade budget is exceeded',
+    () {
+      final items = List.generate(
+        3,
+        (index) => _projection(
+          id: 'trade-$index',
+          symbol: 'BTCUSDT',
+          strategy: 'trendPullback',
+          version: 'trend-v2',
+          net: 1,
+          gross: 1.5,
+          fees: 0.5,
+          funding: 0,
+          r: 0.1,
+        ),
+      );
 
-    expect(
-      () => TradingPerformanceAnalytics.build(
-        projections: items,
-        generatedAtUtc: DateTime.utc(2026, 8, 15),
-        bootstrapIterations: 300,
-        maximumClosedTrades: 2,
-      ),
-      throwsStateError,
-    );
-  });
+      expect(
+        () => TradingPerformanceAnalytics.build(
+          projections: items,
+          generatedAtUtc: DateTime.utc(2026, 8, 15),
+          bootstrapIterations: 300,
+          maximumClosedTrades: 2,
+        ),
+        throwsStateError,
+      );
+    },
+  );
 }
 
 TradingJournalProjection _projection({
