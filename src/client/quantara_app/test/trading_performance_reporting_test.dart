@@ -44,6 +44,7 @@ void main() {
     final json = TradingPerformanceReporting.toJson(report);
     final csv = TradingPerformanceReporting.toCsv(report);
 
+    expect(report.pricedTrades, 2);
     expect(json['schemaVersion'], 2);
     expect((json['summary']! as Map)['netPnl'], report.netPnl);
     expect((json['summary']! as Map)['riskHours'], report.riskHours);
