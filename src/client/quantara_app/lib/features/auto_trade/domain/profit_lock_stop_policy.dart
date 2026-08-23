@@ -90,6 +90,18 @@ final class ProfitLockStopDecision {
   final String reason;
 }
 
+final class RunnerTrailDecision {
+  const RunnerTrailDecision({
+    required this.stopDecision,
+    required this.favorableExtreme,
+    required this.usedAtr,
+  });
+
+  final ProfitLockStopDecision stopDecision;
+  final double favorableExtreme;
+  final bool usedAtr;
+}
+
 abstract final class ProfitLockStopPolicy {
   static ProfitLockStopDecision afterTp1({
     required TradeDirection direction,
@@ -147,6 +159,92 @@ abstract final class ProfitLockStopPolicy {
     );
   }
 
+  static RunnerTrailDecision runnerTrail({
+    required TradeDirection direction,
+    required double markPrice,
+    required double currentConfirmedStop,
+    required double tp1Price,
+    required double initialRiskDistance,
+    required int pricePrecision,
+    double? previousFavorableExtreme,
+    double? atr,
+    double? swingStop,
+    double? structureStop,
+    bool scalp = false,
+  }) {
+    final values = [
+      markPrice,
+      currentConfirmedStop,
+      tp1Price,
+      initialRiskDistance,
+    ];
+    if (direction == TradeDirection.wait ||
+        values.any((value) => !value.isFinite || value <= 0)) {
+      return RunnerTrailDecision(
+        stopDecision: ProfitLockStopDecision(
+          proposedStop: currentConfirmedStop,
+          requiresMutation: false,
+          reason: 'Runner trail evidence is invalid; existing stop is preserved.',
+        ),
+        favorableExtreme: previousFavorableExtreme ?? markPrice,
+        usedAtr: false,
+      );
+    }
+
+    final priorExtremeValid =
+        previousFavorableExtreme != null &&
+        previousFavorableExtreme.isFinite &&
+        previousFavorableExtreme > 0;
+    final favorableExtreme = direction == TradeDirection.long
+        ? math.max(
+            priorExtremeValid ? previousFavorableExtreme : markPrice,
+            markPrice,
+          )
+        : math.min(
+            priorExtremeValid ? previousFavorableExtreme : markPrice,
+            markPrice,
+          );
+    final atrValid = atr != null && atr.isFinite && atr > 0;
+    final distance = atrValid
+        ? atr * (scalp ? 1.5 : 2.5)
+        : initialRiskDistance * (scalp ? 0.75 : 1.25);
+    final chandelierRaw = direction == TradeDirection.long
+        ? favorableExtreme - distance
+        : favorableExtreme + distance;
+    final candidates = <double>[
+      tp1Price,
+      chandelierRaw,
+      if (_validOptionalStop(swingStop)) swingStop!,
+      if (_validOptionalStop(structureStop)) structureStop!,
+    ];
+    final safestRaw = direction == TradeDirection.long
+        ? candidates.reduce(math.max)
+        : candidates.reduce(math.min);
+    final candidate = _roundTowardProfit(
+      safestRaw,
+      direction: direction,
+      pricePrecision: pricePrecision,
+    );
+    final stopDecision = _neverWorsen(
+      direction: direction,
+      currentStop: currentConfirmedStop,
+      candidateStop: candidate,
+      reason: atrValid
+          ? 'Runner trail advanced from ATR/chandelier evidence without widening.'
+          : scalp
+          ? 'Scalp runner trail advanced from the bounded risk-distance chandelier without widening.'
+          : 'Runner trail advanced from the bounded structure/chandelier fallback without widening.',
+    );
+    return RunnerTrailDecision(
+      stopDecision: stopDecision,
+      favorableExtreme: favorableExtreme,
+      usedAtr: atrValid,
+    );
+  }
+
+  static bool _validOptionalStop(double? value) =>
+      value != null && value.isFinite && value > 0;
+
   static ProfitLockStopDecision _neverWorsen({
     required TradeDirection direction,
     required double currentStop,
@@ -198,6 +296,7 @@ final class ProfitLockProgress {
     this.pendingProposedStop,
     this.processedTradeIds = const {},
     this.warning,
+    this.runnerFavorableExtreme,
   });
 
   final int confirmedStage;
@@ -205,6 +304,7 @@ final class ProfitLockProgress {
   final double? pendingProposedStop;
   final Set<String> processedTradeIds;
   final String? warning;
+  final double? runnerFavorableExtreme;
 
   bool get hasPendingPromotion =>
       pendingStage != null && pendingProposedStop != null;
@@ -218,6 +318,7 @@ final class ProfitLockProgress {
     Set<String>? processedTradeIds,
     String? warning,
     bool clearWarning = false,
+    double? runnerFavorableExtreme,
   }) => ProfitLockProgress(
     confirmedStage: confirmedStage ?? this.confirmedStage,
     pendingStage: clearPendingStage ? null : pendingStage ?? this.pendingStage,
@@ -228,20 +329,24 @@ final class ProfitLockProgress {
       processedTradeIds ?? this.processedTradeIds,
     ),
     warning: clearWarning ? null : warning ?? this.warning,
+    runnerFavorableExtreme:
+        runnerFavorableExtreme ?? this.runnerFavorableExtreme,
   );
 
   Map<String, Object?> toJson() => {
-    'version': 1,
+    'version': 2,
     'confirmedStage': confirmedStage,
     'pendingStage': pendingStage,
     'pendingProposedStop': pendingProposedStop,
     'processedTradeIds': processedTradeIds.toList(growable: false)..sort(),
     'warning': warning,
+    'runnerFavorableExtreme': runnerFavorableExtreme,
   };
 
   factory ProfitLockProgress.fromJson(Object? value) {
     if (value is! Map<Object?, Object?>) return const ProfitLockProgress();
     final json = value.map((key, item) => MapEntry(key.toString(), item));
+    final extreme = (json['runnerFavorableExtreme'] as num?)?.toDouble();
     return ProfitLockProgress(
       confirmedStage: (json['confirmedStage'] as num?)?.toInt() ?? 0,
       pendingStage: (json['pendingStage'] as num?)?.toInt(),
@@ -253,6 +358,8 @@ final class ProfitLockProgress {
             .toSet(),
       ),
       warning: json['warning']?.toString(),
+      runnerFavorableExtreme:
+          extreme != null && extreme.isFinite && extreme > 0 ? extreme : null,
     );
   }
 
@@ -263,7 +370,8 @@ final class ProfitLockProgress {
       other.pendingStage == pendingStage &&
       other.pendingProposedStop == pendingProposedStop &&
       _setEquals(other.processedTradeIds, processedTradeIds) &&
-      other.warning == warning;
+      other.warning == warning &&
+      other.runnerFavorableExtreme == runnerFavorableExtreme;
 
   @override
   int get hashCode => Object.hash(
@@ -272,6 +380,7 @@ final class ProfitLockProgress {
     pendingProposedStop,
     Object.hashAll(processedTradeIds.toList()..sort()),
     warning,
+    runnerFavorableExtreme,
   );
 
   static bool _setEquals(Set<String> left, Set<String> right) =>
