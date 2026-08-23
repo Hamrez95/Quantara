@@ -71,7 +71,9 @@ final class TradingJournalStatistics {
     final priced = closed
         .where((item) => item.netPnl != null)
         .toList(growable: false);
-    final netValues = priced.map((item) => item.netPnl!).toList(growable: false);
+    final netValues = priced
+        .map((item) => item.netPnl!)
+        .toList(growable: false);
     final rValues = priced
         .map((item) => item.realizedR)
         .whereType<double>()
