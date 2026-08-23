@@ -1,0 +1,33 @@
+name: Temporary format 109 pending
+
+on:
+  push:
+    branches:
+      - fix/109-journal-pending-economics
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/109-journal-pending-economics
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+      - name: Format exact changed files
+        run: |
+          dart format src/client/quantara_app/lib/features/trading_journal/domain/trading_journal_statistics.dart src/client/quantara_app/test/trading_journal_statistics_test.dart
+      - name: Commit formatter output and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/format-109-pending-temp.yml
+          git add src/client/quantara_app/lib/features/trading_journal/domain/trading_journal_statistics.dart src/client/quantara_app/test/trading_journal_statistics_test.dart
+          git commit -m 'style(journal): apply Dart formatter'
+          git push origin HEAD:fix/109-journal-pending-economics
