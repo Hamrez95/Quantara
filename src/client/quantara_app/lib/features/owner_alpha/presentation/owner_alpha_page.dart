@@ -926,6 +926,8 @@ class _OwnerAlphaBody extends StatelessWidget {
                         locale: locale,
                         projections: journalController.projections,
                         statistics: journalController.statistics,
+                        performance: journalController.performance,
+                        counterfactual: journalController.counterfactual,
                         liveAnalyses: journalLiveAnalyses,
                         liveIdeas: journalLiveIdeas,
                         isLoading: journalController.isLoading,

@@ -8,6 +8,9 @@ import '../data/trading_journal_store.dart';
 import '../domain/trading_journal_models.dart';
 import '../domain/trading_journal_projection.dart';
 import '../domain/trading_journal_statistics.dart';
+import '../domain/trading_counterfactual_performance.dart';
+import '../domain/trading_performance_analytics.dart';
+import '../domain/trading_performance_models.dart';
 import 'trading_journal_exchange_backfill.dart';
 import 'trading_journal_exchange_history_recovery.dart';
 
@@ -20,6 +23,12 @@ final class TradingJournalController extends ChangeNotifier {
   TradingJournalStatistics _statistics = TradingJournalStatistics.calculate(
     const [],
   );
+  TradingPerformanceReport _performance = TradingPerformanceAnalytics.build(
+    projections: const [],
+    generatedAtUtc: DateTime.utc(2026),
+  );
+  TradingCounterfactualPerformanceSummary _counterfactual =
+      TradingCounterfactualPerformance.calculate(projections: const []);
   Timer? _localRefreshTimer;
   bool _isLoading = false;
   String? _error;
@@ -27,6 +36,8 @@ final class TradingJournalController extends ChangeNotifier {
   TradingJournalLedger get ledger => _ledger;
   List<TradingJournalProjection> get projections => _projections;
   TradingJournalStatistics get statistics => _statistics;
+  TradingPerformanceReport get performance => _performance;
+  TradingCounterfactualPerformanceSummary get counterfactual => _counterfactual;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -130,6 +141,13 @@ final class TradingJournalController extends ChangeNotifier {
   void _rebuild() {
     _projections = TradingJournalProjector.projectAll(_ledger);
     _statistics = TradingJournalStatistics.calculate(_projections);
+    _performance = TradingPerformanceAnalytics.build(
+      projections: _projections,
+      generatedAtUtc: DateTime.now().toUtc(),
+    );
+    _counterfactual = TradingCounterfactualPerformance.calculate(
+      projections: _projections,
+    );
     if (_ledger.integrity == TradingJournalIntegrity.unverified) {
       _error = _ledger.warnings.isEmpty
           ? 'Journal integrity check failed.'

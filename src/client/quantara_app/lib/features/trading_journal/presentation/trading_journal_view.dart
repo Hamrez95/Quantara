@@ -10,6 +10,8 @@ import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../domain/trading_journal_models.dart';
 import '../domain/trading_journal_projection.dart';
 import '../domain/trading_journal_statistics.dart';
+import '../domain/trading_counterfactual_performance.dart';
+import '../domain/trading_performance_models.dart';
 
 enum _JournalFilter { all, open, closed, missed, simulated }
 
@@ -18,6 +20,8 @@ final class TradingJournalView extends StatefulWidget {
     required this.locale,
     required this.projections,
     this.statistics,
+    this.performance,
+    this.counterfactual,
     this.liveAnalyses = const {},
     this.liveIdeas = const {},
     this.isLoading = false,
@@ -28,6 +32,8 @@ final class TradingJournalView extends StatefulWidget {
   final Locale locale;
   final List<TradingJournalProjection> projections;
   final TradingJournalStatistics? statistics;
+  final TradingPerformanceReport? performance;
+  final TradingCounterfactualPerformanceSummary? counterfactual;
   final Map<String, TimeframeChartAnalysis> liveAnalyses;
   final Map<String, TradeIdea> liveIdeas;
   final bool isLoading;
@@ -144,6 +150,14 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
         if (widget.statistics != null) ...[
           const SizedBox(height: 16),
           _StatisticsPanel(statistics: widget.statistics!, persian: _persian),
+        ],
+        if (widget.performance != null && widget.counterfactual != null) ...[
+          const SizedBox(height: 16),
+          _PerformancePanel(
+            report: widget.performance!,
+            counterfactual: widget.counterfactual!,
+            persian: _persian,
+          ),
         ],
         const SizedBox(height: 16),
         SectionCard(
@@ -320,6 +334,133 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
     _JournalFilter.missed => Icons.timer_off_outlined,
     _JournalFilter.simulated => Icons.science_outlined,
   };
+}
+
+final class _PerformancePanel extends StatelessWidget {
+  const _PerformancePanel({
+    required this.report,
+    required this.counterfactual,
+    required this.persian,
+  });
+
+  final TradingPerformanceReport report;
+  final TradingCounterfactualPerformanceSummary counterfactual;
+  final bool persian;
+
+  String _t(String fa, String en) => persian ? fa : en;
+
+  @override
+  Widget build(BuildContext context) {
+    final smallSample = report.uncertainty.sampleSize < 20;
+    return SectionCard(
+      accentColor: QuantaraColors.cyan,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeading(
+            title: _t('عملکرد معامله‌ها', 'Trading performance'),
+            subtitle: _t(
+              'فقط معاملات با اقتصاد تأییدشده؛ نتیجه فرضی جداست.',
+              'Confirmed trade economics only; counterfactuals stay separate.',
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              StatusPill(
+                label: _t(
+                  '${report.pricedTrades} معامله قیمت‌گذاری‌شده',
+                  '${report.pricedTrades} priced trades',
+                ),
+                color: QuantaraColors.cyan,
+              ),
+              StatusPill(
+                label: _t(
+                  '${report.economicsPendingTrades} اقتصاد در انتظار',
+                  '${report.economicsPendingTrades} economics pending',
+                ),
+                color: report.economicsPendingTrades > 0
+                    ? QuantaraColors.warning
+                    : QuantaraColors.cyan,
+              ),
+              StatusPill(
+                label: _t(
+                  'خالص ${report.netPnl.toStringAsFixed(2)} USDT',
+                  'Net ${report.netPnl.toStringAsFixed(2)} USDT',
+                ),
+                color: report.netPnl >= 0
+                    ? QuantaraColors.success
+                    : QuantaraColors.danger,
+              ),
+              StatusPill(
+                label: _t(
+                  'برد ${report.winRatePercent.toStringAsFixed(1)}٪',
+                  'Win ${report.winRatePercent.toStringAsFixed(1)}%',
+                ),
+                color: QuantaraColors.violet,
+              ),
+              StatusPill(
+                label: _t(
+                  'Expectancy ${report.expectancyR.toStringAsFixed(2)}R',
+                  'Expectancy ${report.expectancyR.toStringAsFixed(2)}R',
+                ),
+                color: QuantaraColors.violet,
+              ),
+              StatusPill(
+                label: _t(
+                  'Profit factor ${report.profitFactor.isFinite ? report.profitFactor.toStringAsFixed(2) : '—'}',
+                  'Profit factor ${report.profitFactor.isFinite ? report.profitFactor.toStringAsFixed(2) : '—'}',
+                ),
+                color: QuantaraColors.violet,
+              ),
+              StatusPill(
+                label: _t(
+                  'افت بیشینه ${report.maximumDrawdown.toStringAsFixed(2)} USDT',
+                  'Max drawdown ${report.maximumDrawdown.toStringAsFixed(2)} USDT',
+                ),
+                color: QuantaraColors.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _StateCard(
+            compact: true,
+            icon: smallSample
+                ? Icons.info_outline_rounded
+                : Icons.insights_rounded,
+            title: smallSample
+                ? _t('نمونه کوچک', 'Small sample')
+                : _t(
+                    'بینش هفتگی مبتنی بر داده',
+                    'Evidence-based weekly insight',
+                  ),
+            message: smallSample
+                ? _t(
+                    'نمونه برای نتیجه‌گیری یا تغییر تنظیمات Live کافی نیست.',
+                    'The sample is not sufficient for conclusions or Live parameter changes.',
+                  )
+                : report.warnings.isEmpty
+                ? _t(
+                    'داده تأییدشده را قبل از هر آزمایش بررسی کن؛ هیچ تغییری خودکار نیست.',
+                    'Review confirmed evidence before proposing an experiment; no change is automatic.',
+                  )
+                : report.warnings.first,
+            color: smallSample ? QuantaraColors.warning : QuantaraColors.cyan,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _t(
+              'سیگنال‌های از دست‌رفته: ${counterfactual.missedSignals} · حل‌شده: ${counterfactual.resolvedSignals} · میانگین فرضی ${counterfactual.averageResolvedR.toStringAsFixed(2)}R',
+              'Missed signals: ${counterfactual.missedSignals} · resolved: ${counterfactual.resolvedSignals} · counterfactual average ${counterfactual.averageResolvedR.toStringAsFixed(2)}R',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 final class _JournalHero extends StatelessWidget {
