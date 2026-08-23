@@ -22,16 +22,15 @@ void main() {
       path: path,
     );
     await database.initialize();
-    final factory = () async => database;
+    Future<QuantaraDurableDatabase> factory() async => database;
     final store = DatabasePortfolioRiskLedgerStore(
       databaseFactory: factory,
       recordKey: localLivePortfolioRiskLedgerRecordKey,
     );
     await store.save(
       PortfolioRiskLedger.initial(
-        now: now,
+        tradingDay: TradingDayId.start(now: now, timezoneOffsetMinutes: 0),
         dailyRiskLimit: 10,
-        timezoneOffsetMinutes: 0,
       ),
     );
     return (
@@ -76,7 +75,7 @@ void main() {
 
   test('restart preserves the high-water mark and recovery state', () async {
     final testHarness = await harness('local-live-capital-restart.db');
-    final factory = () async => testHarness.database;
+    Future<QuantaraDurableDatabase> factory() async => testHarness.database;
     await testHarness.monitor.refresh(accountEquity: 1000, now: now);
     await testHarness.monitor.refresh(
       accountEquity: 890,
