@@ -64,7 +64,8 @@ final class TradingCounterfactualPerformanceSummary {
     'averageResolvedR': averageResolvedR,
     'resolutionRatePercent': resolutionRatePercent,
     'byStrategy': {
-      for (final entry in byStrategy.entries) entry.key: _groupJson(entry.value),
+      for (final entry in byStrategy.entries)
+        entry.key: _groupJson(entry.value),
     },
     'bySymbol': {
       for (final entry in bySymbol.entries) entry.key: _groupJson(entry.value),
@@ -151,7 +152,8 @@ abstract final class TradingCounterfactualPerformance {
           entry.key: entry.value.freeze(),
       },
       bySymbol: {
-        for (final entry in symbolGroups.entries) entry.key: entry.value.freeze(),
+        for (final entry in symbolGroups.entries)
+          entry.key: entry.value.freeze(),
       },
     );
   }

@@ -57,11 +57,7 @@ void main() {
           realizedR: 0,
         ),
       ),
-      missed(
-        id: 'unknown',
-        symbol: 'ETHUSDT',
-        strategy: 'range',
-      ),
+      missed(id: 'unknown', symbol: 'ETHUSDT', strategy: 'range'),
       TradingJournalProjection.fixture(
         journalTradeId: 'actual',
         symbol: 'BTCUSDT',
@@ -102,8 +98,7 @@ void main() {
           symbol: 'BTCUSDT',
           strategy: 'trend',
           outcome: const TradingJournalCounterfactualOutcome(
-            classification:
-                TradingJournalCounterfactualClassification.wouldWin,
+            classification: TradingJournalCounterfactualClassification.wouldWin,
             highestTargetReached: 0,
             priceMovePercent: -1,
             realizedR: -0.5,
@@ -126,8 +121,7 @@ void main() {
           symbol: 'BTCUSDT',
           strategy: 'trend',
           outcome: const TradingJournalCounterfactualOutcome(
-            classification:
-                TradingJournalCounterfactualClassification.wouldWin,
+            classification: TradingJournalCounterfactualClassification.wouldWin,
             highestTargetReached: 1,
             priceMovePercent: 2,
             realizedR: 1,
