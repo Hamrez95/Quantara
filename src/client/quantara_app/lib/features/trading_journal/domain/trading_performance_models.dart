@@ -221,5 +221,5 @@ final class TradingPerformanceReport {
   final UnmodifiableMapView<String, TradingPerformanceGroup> byConfidenceBand;
   final UnmodifiableListView<String> warnings;
 
-  bool get sampleSupportsRiskAdjustedRatios => pricedTrades >= 30;
+  bool get sampleSupportsRiskAdjustedRatios => uncertainty.sampleSize >= 30;
 }
