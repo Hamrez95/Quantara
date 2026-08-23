@@ -265,28 +265,90 @@ final class LocalLiveManagedPosition {
     final parsedProgress = json.containsKey('profitLockProgress')
         ? ProfitLockProgress.fromJson(json['profitLockProgress'])
         : ProfitLockProgress(confirmedStage: legacyStage);
+    final setupId = json['setupId']?.toString().trim() ?? '';
+    final symbol = json['symbol']?.toString().trim().toUpperCase() ?? '';
+    final timeframe = json['timeframe']?.toString().trim() ?? '';
+    final direction = TradeDirection.values.firstWhere(
+      (item) => item.name == json['direction'],
+      orElse: () => TradeDirection.wait,
+    );
+    final positionId = json['positionId']?.toString().trim() ?? '';
+    final entryOrderId = json['entryOrderId']?.toString().trim() ?? '';
+    final clientId = json['clientId']?.toString().trim() ?? '';
+    final initialQuantity = (json['initialQuantity'] as num?)?.toDouble() ?? 0;
+    final entryPrice = (json['entryPrice'] as num?)?.toDouble() ?? 0;
+    final originalStopLoss =
+        (json['originalStopLoss'] as num?)?.toDouble() ?? 0;
+    final targets = (json['targets'] as List<Object?>? ?? const [])
+        .whereType<num>()
+        .map((item) => item.toDouble())
+        .toList(growable: false);
+    final leverage = (json['leverage'] as num?)?.toInt() ?? 0;
+    final openedAt = DateTime.tryParse(
+      json['openedAt']?.toString() ?? '',
+    )?.toUtc();
+    final costBufferRate =
+        (json['costBufferRate'] as num?)?.toDouble() ?? 0.0017;
+
+    final ownershipValid =
+        setupId.isNotEmpty &&
+        symbol.isNotEmpty &&
+        timeframe.isNotEmpty &&
+        positionId.isNotEmpty &&
+        entryOrderId.isNotEmpty &&
+        RegExp(r'^q-local-[0-9a-f]{8}$').hasMatch(clientId);
+    final economicsValid =
+        direction != TradeDirection.wait &&
+        initialQuantity.isFinite &&
+        initialQuantity > 0 &&
+        entryPrice.isFinite &&
+        entryPrice > 0 &&
+        originalStopLoss.isFinite &&
+        originalStopLoss > 0 &&
+        leverage >= 1 &&
+        leverage <= 125 &&
+        openedAt != null &&
+        costBufferRate.isFinite &&
+        costBufferRate >= 0 &&
+        costBufferRate <= 0.1;
+    final stopValid = direction == TradeDirection.long
+        ? originalStopLoss < entryPrice
+        : direction == TradeDirection.short
+        ? originalStopLoss > entryPrice
+        : false;
+    final targetsValid =
+        targets.isNotEmpty &&
+        targets.length <= 3 &&
+        targets.every(
+          (target) =>
+              target.isFinite &&
+              target > 0 &&
+              (direction == TradeDirection.long
+                  ? target > entryPrice
+                  : direction == TradeDirection.short
+                  ? target < entryPrice
+                  : false),
+        );
+    if (!ownershipValid || !economicsValid || !stopValid || !targetsValid) {
+      throw const FormatException(
+        'Persisted Local Live managed position failed restart integrity validation.',
+      );
+    }
+
     return LocalLiveManagedPosition(
-      setupId: json['setupId']?.toString() ?? '',
-      symbol: json['symbol']?.toString() ?? '',
-      timeframe: json['timeframe']?.toString() ?? '',
-      direction: TradeDirection.values.firstWhere(
-        (item) => item.name == json['direction'],
-        orElse: () => TradeDirection.wait,
-      ),
-      positionId: json['positionId']?.toString() ?? '',
-      entryOrderId: json['entryOrderId']?.toString() ?? '',
-      clientId: json['clientId']?.toString() ?? '',
-      initialQuantity: (json['initialQuantity'] as num?)?.toDouble() ?? 0,
-      entryPrice: (json['entryPrice'] as num?)?.toDouble() ?? 0,
-      originalStopLoss: (json['originalStopLoss'] as num?)?.toDouble() ?? 0,
-      targets: (json['targets'] as List<Object?>? ?? const [])
-          .whereType<num>()
-          .map((item) => item.toDouble())
-          .toList(growable: false),
-      leverage: (json['leverage'] as num?)?.toInt() ?? 1,
-      openedAt:
-          DateTime.tryParse(json['openedAt']?.toString() ?? '')?.toUtc() ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      setupId: setupId,
+      symbol: symbol,
+      timeframe: timeframe,
+      direction: direction,
+      positionId: positionId,
+      entryOrderId: entryOrderId,
+      clientId: clientId,
+      initialQuantity: initialQuantity,
+      entryPrice: entryPrice,
+      originalStopLoss: originalStopLoss,
+      targets: targets,
+      leverage: leverage,
+      openedAt: openedAt,
       stopOrderId: json['stopOrderId']?.toString(),
       targetAllocation: json.containsKey('targetAllocation')
           ? ProfitProtectionTargetAllocation.fromJson(json['targetAllocation'])
@@ -299,7 +361,7 @@ final class LocalLiveManagedPosition {
           .whereType<String>()
           .toList(growable: false),
       profitLockProgress: parsedProgress,
-      costBufferRate: (json['costBufferRate'] as num?)?.toDouble() ?? 0.0017,
+      costBufferRate: costBufferRate,
       marketRegime: MarketRegime.values.firstWhere(
         (item) => item.name == json['marketRegime'],
         orElse: () => MarketRegime.transition,
