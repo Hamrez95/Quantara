@@ -31,6 +31,27 @@ void main() {
     expect(monthly.endedAtUtc, DateTime.utc(2027));
   });
 
+  test('custom window requires explicit bounded UTC start and end', () {
+    expect(
+      () => TradingPerformanceReporting.periodFilter(
+        period: TradingPerformancePeriod.custom,
+        anchorUtc: DateTime.utc(2026, 8, 15),
+        customStartedAtUtc: DateTime.utc(2026, 8, 1),
+      ),
+      throwsArgumentError,
+    );
+
+    final filter = TradingPerformanceReporting.periodFilter(
+      period: TradingPerformancePeriod.custom,
+      anchorUtc: DateTime.utc(2026, 8, 15),
+      customStartedAtUtc: DateTime.utc(2026, 8, 1),
+      customEndedAtUtc: DateTime.utc(2026, 8, 15),
+    );
+
+    expect(filter.startedAtUtc, DateTime.utc(2026, 8, 1));
+    expect(filter.endedAtUtc, DateTime.utc(2026, 8, 15));
+  });
+
   test('JSON and CSV exports use the same report truth', () {
     final report = TradingPerformanceAnalytics.build(
       projections: [
