@@ -24,7 +24,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -48,6 +48,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -63,6 +65,22 @@ jobs:
 
       - name: Restore packages
         run: flutter pub get
+
+      - name: Apply runner integration patch once
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tool/apply_105_runner_patch.py
+          dart format lib/features/auto_trade/application/local_live_trade_service.dart
+          if git diff --quiet; then
+            echo "Runner integration already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/features/auto_trade/application/local_live_trade_service.dart
+          git commit -m "feat(profit-saver): integrate post-TP2 runner trail"
+          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test tool
