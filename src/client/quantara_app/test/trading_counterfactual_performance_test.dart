@@ -175,6 +175,7 @@ void main() {
     expect(json['missedSignals'], 1);
     expect(json['resolvedSignals'], 0);
     expect(json['unresolved'], 1);
+    expect(json['resolutionRatePercent'], 0);
     expect((json['byStrategy']! as Map).containsKey('trend'), isTrue);
   });
 }
