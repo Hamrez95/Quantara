@@ -1,35 +1,45 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quantara_app/features/auto_trade/domain/local_live_preferences.dart';
 import 'package:quantara_app/features/auto_trade/domain/local_live_trade_models.dart';
-import 'package:quantara_app/features/auto_trade/domain/profit_protection_policy.dart';
-import 'package:quantara_app/features/trading/domain/trade_idea.dart';
+import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
+import 'package:quantara_app/features/owner_alpha/domain/profit_protection_policy.dart';
 
 void main() {
-  test('new Local Live plans default to 65/20/15', () {
-    const allocation = ProfitProtectionTargetAllocation.defaultAllocation;
+  LocalLiveTradeConfiguration configuration({
+    ProfitProtectionTargetAllocation targetAllocation =
+        ProfitProtectionTargetAllocation.standard,
+  }) => LocalLiveTradeConfiguration(
+    symbols: const ['XRPUSDT'],
+    timeframes: const ['15m'],
+    leverage: 10,
+    riskPercent: 0.5,
+    dailyLossLimitPercent: 2,
+    maximumConcurrentPositions: 1,
+    strategy: AnalysisStrategy.structureZones,
+    cadence: SignalCadence.balanced,
+    languageCode: 'fa',
+    targetAllocation: targetAllocation,
+  );
 
-    expect(allocation.fractions, const [0.65, 0.20, 0.15]);
-    expect(allocation.activeTargetCount, 3);
+  test('new Local Live plans default to 65/20/15', () {
+    final value = configuration();
+
+    expect(value.targetAllocation.tp1Fraction, closeTo(0.65, 0.0000001));
+    expect(value.targetAllocation.tp2Fraction, closeTo(0.20, 0.0000001));
+    expect(value.targetAllocation.tp3Fraction, closeTo(0.15, 0.0000001));
+    value.validate();
   });
 
   test('custom 70/20/10 allocation survives configuration JSON round-trip', () {
-    final config = LocalLiveTradingConfig(
-      apiKey: 'key',
-      secretKey: 'secret',
-      riskPerTradeUsdt: 2,
-      maxConcurrentPositions: 2,
-      stopCooldownMinutes: 15,
-      symbols: const ['BTCUSDT'],
-      timeframes: const ['15m'],
-      strategyIds: const ['professional_auto'],
-      targetAllocation: ProfitProtectionTargetAllocation.checked(
-        tp1Fraction: 0.70,
-        tp2Fraction: 0.20,
-        tp3Fraction: 0.10,
-      ),
+    final allocation = ProfitProtectionTargetAllocation.checked(
+      tp1Fraction: 0.70,
+      tp2Fraction: 0.20,
+      tp3Fraction: 0.10,
+    );
+    final restored = LocalLiveTradeConfiguration.fromJson(
+      configuration(targetAllocation: allocation).toJson(),
     );
 
-    final restored = LocalLiveTradingConfig.fromJson(config.toJson());
+    expect(restored.targetAllocation, allocation);
     expect(restored.targetAllocation.fractions, const [0.70, 0.20, 0.10]);
   });
 
@@ -40,65 +50,83 @@ void main() {
       tp3Fraction: 0,
     );
     final twoTargets = ProfitProtectionTargetAllocation.checked(
-      tp1Fraction: 0.70,
-      tp2Fraction: 0.30,
+      tp1Fraction: 0.80,
+      tp2Fraction: 0.20,
       tp3Fraction: 0,
     );
 
     expect(
-      ProfitProtectionTargetAllocation.fromJson(oneTarget.toJson()).fractions,
-      const [1.0, 0.0, 0.0],
+      LocalLiveTradeConfiguration.fromJson(
+        configuration(targetAllocation: oneTarget).toJson(),
+      ).targetAllocation,
+      oneTarget,
     );
     expect(
-      ProfitProtectionTargetAllocation.fromJson(twoTargets.toJson()).fractions,
-      const [0.70, 0.30, 0.0],
+      LocalLiveTradeConfiguration.fromJson(
+        configuration(targetAllocation: twoTargets).toJson(),
+      ).targetAllocation,
+      twoTargets,
     );
   });
 
   test('invalid totals, zero TP1 and target gaps fail before arming', () {
     expect(
       () => ProfitProtectionTargetAllocation.checked(
-        tp1Fraction: 0.50,
-        tp2Fraction: 0.30,
-        tp3Fraction: 0.10,
+        tp1Fraction: 0.70,
+        tp2Fraction: 0.20,
+        tp3Fraction: 0.20,
       ),
-      throwsArgumentError,
+      throwsFormatException,
     );
     expect(
       () => ProfitProtectionTargetAllocation.checked(
         tp1Fraction: 0,
-        tp2Fraction: 1,
-        tp3Fraction: 0,
+        tp2Fraction: 0.80,
+        tp3Fraction: 0.20,
       ),
-      throwsArgumentError,
+      throwsFormatException,
     );
     expect(
       () => ProfitProtectionTargetAllocation.checked(
-        tp1Fraction: 0.70,
+        tp1Fraction: 0.80,
         tp2Fraction: 0,
-        tp3Fraction: 0.30,
+        tp3Fraction: 0.20,
       ),
-      throwsArgumentError,
+      throwsFormatException,
+    );
+    expect(
+      () => ProfitProtectionTargetAllocation.checked(
+        tp1Fraction: 0.80,
+        tp2Fraction: -0.05,
+        tp3Fraction: 0.25,
+      ),
+      throwsFormatException,
     );
   });
 
   test(
     'allocation rounds down safely and assigns only exchange dust to TP1',
     () {
-      final allocation = ProfitProtectionTargetAllocation.checked(
-        tp1Fraction: 0.65,
-        tp2Fraction: 0.20,
-        tp3Fraction: 0.15,
-      ).allocate(
-        totalQuantity: 1.003,
-        quantityPrecision: 3,
+      final plan = ProfitProtectionPlan(
+        profile: ProfitProtectionProfile.transitionBalance,
+        targetAllocation: ProfitProtectionTargetAllocation.checked(
+          tp1Fraction: 0.65,
+          tp2Fraction: 0.20,
+          tp3Fraction: 0.15,
+        ),
+      );
+      final allocation = ProfitProtectionAllocation.allocate(
+        totalQuantity: 21.4,
+        plan: plan,
+        roundDown: (value) => (value * 10).floor() / 10,
       );
 
-      expect(allocation.quantities, const [0.652, 0.200, 0.151]);
+      expect(allocation.quantities, const [14.0, 4.2, 3.2]);
       expect(
-        allocation.quantities.reduce((value, element) => value + element),
-        closeTo(1.003, 1e-12),
+        allocation.quantities.fold<double>(0, (sum, value) => sum + value),
+        closeTo(21.4, 0.0000001),
       );
+      expect(allocation.residualQuantity, closeTo(0, 0.0000001));
       expect(allocation.quantities.every((value) => value > 0), isTrue);
     },
   );
