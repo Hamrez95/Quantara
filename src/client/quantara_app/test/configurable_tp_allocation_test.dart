@@ -139,7 +139,7 @@ void main() {
       direction: TradeDirection.short,
       positionId: 'position-xrp',
       entryOrderId: 'entry-order',
-      clientId: 'q-local-xrp',
+      clientId: 'q-local-0000abcd',
       openedAt: DateTime.utc(2026, 8, 4),
       entryPrice: 1.01,
       initialQuantity: 100,
