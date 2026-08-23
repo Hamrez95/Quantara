@@ -184,7 +184,8 @@ abstract final class ProfitLockStopPolicy {
         stopDecision: ProfitLockStopDecision(
           proposedStop: currentConfirmedStop,
           requiresMutation: false,
-          reason: 'Runner trail evidence is invalid; existing stop is preserved.',
+          reason:
+              'Runner trail evidence is invalid; existing stop is preserved.',
         ),
         favorableExtreme: previousFavorableExtreme ?? markPrice,
         usedAtr: false,
@@ -358,8 +359,9 @@ final class ProfitLockProgress {
             .toSet(),
       ),
       warning: json['warning']?.toString(),
-      runnerFavorableExtreme:
-          extreme != null && extreme.isFinite && extreme > 0 ? extreme : null,
+      runnerFavorableExtreme: extreme != null && extreme.isFinite && extreme > 0
+          ? extreme
+          : null,
     );
   }
 

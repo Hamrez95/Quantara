@@ -26,10 +26,7 @@ void main() {
       previousFavorableExtreme: first.favorableExtreme,
     );
     expect(pullback.favorableExtreme, 120);
-    expect(
-      pullback.stopDecision.proposedStop,
-      first.stopDecision.proposedStop,
-    );
+    expect(pullback.stopDecision.proposedStop, first.stopDecision.proposedStop);
     expect(pullback.stopDecision.requiresMutation, isFalse);
   });
 
@@ -109,7 +106,10 @@ void main() {
       scalp: true,
     );
 
-    expect(scalp.stopDecision.proposedStop, greaterThan(standard.stopDecision.proposedStop));
+    expect(
+      scalp.stopDecision.proposedStop,
+      greaterThan(standard.stopDecision.proposedStop),
+    );
   });
 
   test('runner favorable extreme survives durable restart round trip', () {
