@@ -1,0 +1,383 @@
+name: Temporary 109 performance dashboard patch
+
+on:
+  push:
+    branches:
+      - feat/109-performance-dashboard
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/109-performance-dashboard
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Patch controller and existing Journal dashboard
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one marker, found {count}')
+              path.write_text(text.replace(old, new, 1))
+
+          controller = Path('src/client/quantara_app/lib/features/trading_journal/application/trading_journal_controller.dart')
+          replace_once(
+              controller,
+              """import '../domain/trading_journal_statistics.dart';\n""",
+              """import '../domain/trading_counterfactual_performance.dart';\nimport '../domain/trading_journal_statistics.dart';\nimport '../domain/trading_performance_analytics.dart';\nimport '../domain/trading_performance_models.dart';\nimport '../domain/trading_performance_reporting.dart';\n""",
+          )
+          replace_once(
+              controller,
+              """  TradingJournalStatistics _statistics = TradingJournalStatistics.calculate(\n    const [],\n  );\n  Timer? _localRefreshTimer;\n""",
+              """  TradingJournalStatistics _statistics = TradingJournalStatistics.calculate(\n    const [],\n  );\n  TradingPerformanceReport? _performanceReport;\n  TradingCounterfactualPerformanceSummary? _counterfactualSummary;\n  List<TradingPerformanceInsight> _weeklyInsights = const [];\n  String? _analyticsWarning;\n  Timer? _localRefreshTimer;\n""",
+          )
+          replace_once(
+              controller,
+              """  TradingJournalStatistics get statistics => _statistics;\n  bool get isLoading => _isLoading;\n""",
+              """  TradingJournalStatistics get statistics => _statistics;\n  TradingPerformanceReport? get performanceReport => _performanceReport;\n  TradingCounterfactualPerformanceSummary? get counterfactualSummary =>\n      _counterfactualSummary;\n  List<TradingPerformanceInsight> get weeklyInsights => _weeklyInsights;\n  String? get analyticsWarning => _analyticsWarning;\n  bool get isLoading => _isLoading;\n""",
+          )
+          replace_once(
+              controller,
+              """  void _rebuild() {\n    _projections = TradingJournalProjector.projectAll(_ledger);\n    _statistics = TradingJournalStatistics.calculate(_projections);\n    if (_ledger.integrity == TradingJournalIntegrity.unverified) {\n""",
+              """  void _rebuild() {\n    _projections = TradingJournalProjector.projectAll(_ledger);\n    _statistics = TradingJournalStatistics.calculate(_projections);\n    _rebuildPerformanceAnalytics();\n    if (_ledger.integrity == TradingJournalIntegrity.unverified) {\n""",
+          )
+          replace_once(
+              controller,
+              """  @override\n  void dispose() {\n""",
+              """  void _rebuildPerformanceAnalytics() {\n    try {\n      final now = DateTime.now().toUtc();\n      _performanceReport = TradingPerformanceAnalytics.build(\n        projections: _projections,\n        generatedAtUtc: now,\n        bootstrapIterations: 200,\n      );\n      _counterfactualSummary = TradingCounterfactualPerformance.calculate(\n        projections: _projections,\n      );\n      final weekly = TradingPerformanceAnalytics.build(\n        projections: _projections,\n        filter: TradingPerformanceReporting.periodFilter(\n          period: TradingPerformancePeriod.weekly,\n          anchorUtc: now,\n        ),\n        generatedAtUtc: now,\n        bootstrapIterations: 200,\n      );\n      _weeklyInsights = TradingPerformanceReporting.evidenceInsights(weekly);\n      _analyticsWarning = null;\n    } on Object {\n      _performanceReport = null;\n      _counterfactualSummary = null;\n      _weeklyInsights = const [];\n      _analyticsWarning =\n          'Performance analytics are unavailable because the bounded evidence window could not be evaluated safely.';\n    }\n  }\n\n  @override\n  void dispose() {\n""",
+          )
+
+          view = Path('src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart')
+          replace_once(
+              view,
+              """import '../domain/trading_journal_models.dart';\nimport '../domain/trading_journal_projection.dart';\nimport '../domain/trading_journal_statistics.dart';\n""",
+              """import '../domain/trading_counterfactual_performance.dart';\nimport '../domain/trading_journal_models.dart';\nimport '../domain/trading_journal_projection.dart';\nimport '../domain/trading_journal_statistics.dart';\nimport '../domain/trading_performance_models.dart';\nimport '../domain/trading_performance_reporting.dart';\n""",
+          )
+          replace_once(
+              view,
+              """    this.statistics,\n    this.liveAnalyses = const {},\n""",
+              """    this.statistics,\n    this.performanceReport,\n    this.counterfactualSummary,\n    this.weeklyInsights = const [],\n    this.analyticsWarning,\n    this.liveAnalyses = const {},\n""",
+          )
+          replace_once(
+              view,
+              """  final TradingJournalStatistics? statistics;\n  final Map<String, TimeframeChartAnalysis> liveAnalyses;\n""",
+              """  final TradingJournalStatistics? statistics;\n  final TradingPerformanceReport? performanceReport;\n  final TradingCounterfactualPerformanceSummary? counterfactualSummary;\n  final List<TradingPerformanceInsight> weeklyInsights;\n  final String? analyticsWarning;\n  final Map<String, TimeframeChartAnalysis> liveAnalyses;\n""",
+          )
+          replace_once(
+              view,
+              """        if (widget.statistics != null) ...[\n          const SizedBox(height: 16),\n          _StatisticsPanel(statistics: widget.statistics!, persian: _persian),\n        ],\n        const SizedBox(height: 16),\n""",
+              """        if (widget.statistics != null) ...[\n          const SizedBox(height: 16),\n          _StatisticsPanel(statistics: widget.statistics!, persian: _persian),\n        ],\n        if (widget.performanceReport != null ||\n            widget.counterfactualSummary != null ||\n            widget.analyticsWarning != null) ...[\n          const SizedBox(height: 16),\n          _PerformanceAnalyticsPanel(\n            report: widget.performanceReport,\n            counterfactual: widget.counterfactualSummary,\n            weeklyInsights: widget.weeklyInsights,\n            warning: widget.analyticsWarning,\n            persian: _persian,\n          ),\n        ],\n        const SizedBox(height: 16),\n""",
+          )
+          panel = r'''
+
+final class _PerformanceAnalyticsPanel extends StatelessWidget {
+  const _PerformanceAnalyticsPanel({
+    required this.report,
+    required this.counterfactual,
+    required this.weeklyInsights,
+    required this.warning,
+    required this.persian,
+  });
+
+  final TradingPerformanceReport? report;
+  final TradingCounterfactualPerformanceSummary? counterfactual;
+  final List<TradingPerformanceInsight> weeklyInsights;
+  final String? warning;
+  final bool persian;
+
+  String _t(String fa, String en) => persian ? fa : en;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = report;
+    final missed = counterfactual;
+    return SectionCard(
+      accentColor: QuantaraColors.cyan,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeading(
+            title: _t('تحلیل عملکرد', 'Performance analytics'),
+            subtitle: _t(
+              'واقعیت معاملات قیمت‌گذاری‌شده و نتیجه فرضی سیگنال‌های از‌دست‌رفته جدا نگه داشته می‌شوند.',
+              'Priced trade truth and missed-signal counterfactual evidence stay strictly separate.',
+            ),
+          ),
+          if (warning != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _t(
+                'تحلیل عملکرد به‌دلیل محدودیت ایمنی داده فعلاً در دسترس نیست.',
+                warning!,
+              ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: QuantaraColors.warning,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          if (value != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                StatusPill(
+                  label: _t(
+                    '${value.pricedTrades}/${value.closedTrades} معامله قیمت‌گذاری‌شده',
+                    '${value.pricedTrades}/${value.closedTrades} priced trades',
+                  ),
+                  color: value.economicsPendingTrades > 0
+                      ? QuantaraColors.warning
+                      : QuantaraColors.cyan,
+                ),
+                StatusPill(
+                  label: _t(
+                    'خالص ${value.netPnl.toStringAsFixed(2)}',
+                    'Net ${value.netPnl.toStringAsFixed(2)}',
+                  ),
+                  color: value.netPnl >= 0
+                      ? QuantaraColors.success
+                      : QuantaraColors.danger,
+                ),
+                StatusPill(
+                  label: _t(
+                    'برد ${value.winRatePercent.toStringAsFixed(1)}%',
+                    'Win ${value.winRatePercent.toStringAsFixed(1)}%',
+                  ),
+                  color: QuantaraColors.violet,
+                ),
+                StatusPill(
+                  label: _t(
+                    'امیدریاضی ${value.expectancyR.toStringAsFixed(2)}R',
+                    'Expectancy ${value.expectancyR.toStringAsFixed(2)}R',
+                  ),
+                  color: value.expectancyR >= 0
+                      ? QuantaraColors.success
+                      : QuantaraColors.danger,
+                ),
+                StatusPill(
+                  label: _t(
+                    'بیشترین افت ${value.maximumDrawdown.toStringAsFixed(2)}',
+                    'Max drawdown ${value.maximumDrawdown.toStringAsFixed(2)}',
+                  ),
+                  color: value.maximumDrawdown > 0
+                      ? QuantaraColors.warning
+                      : QuantaraColors.cyan,
+                ),
+                if (value.averageCapturePercent != null)
+                  StatusPill(
+                    label: _t(
+                      'میانگین Capture ${value.averageCapturePercent!.toStringAsFixed(1)}%',
+                      'Avg capture ${value.averageCapturePercent!.toStringAsFixed(1)}%',
+                    ),
+                    color: QuantaraColors.cyan,
+                  ),
+                if (value.averageGivebackPercent != null)
+                  StatusPill(
+                    label: _t(
+                      'میانگین Giveback ${value.averageGivebackPercent!.toStringAsFixed(2)}%',
+                      'Avg giveback ${value.averageGivebackPercent!.toStringAsFixed(2)}%',
+                    ),
+                    color: QuantaraColors.warning,
+                  ),
+              ],
+            ),
+            if (value.economicsPendingTrades > 0) ...[
+              const SizedBox(height: 10),
+              Text(
+                _t(
+                  '${value.economicsPendingTrades} معامله بسته هنوز اقتصاد قطعی ندارد و به‌جای صفر فرض‌شدن از PnL حذف شده است.',
+                  '${value.economicsPendingTrades} closed trade(s) still have pending economics and are excluded from PnL instead of being treated as zero.',
+                ),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: QuantaraColors.warning,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            if (value.pricedTrades < 20) ...[
+              const SizedBox(height: 8),
+              Text(
+                _t(
+                  'نمونه هنوز کوچک است؛ این اعداد توصیفی‌اند و نباید باعث تغییر خودکار پارامترهای Live شوند.',
+                  'The sample is still small; these metrics are descriptive and must not auto-tune Live parameters.',
+                ),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+          if (missed != null && missed.missedSignals > 0) ...[
+            const SizedBox(height: 14),
+            Text(
+              _t('فرصت‌های از‌دست‌رفته', 'Missed-signal evidence'),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                StatusPill(
+                  label: _t(
+                    '${missed.resolvedSignals}/${missed.missedSignals} حل‌شده',
+                    '${missed.resolvedSignals}/${missed.missedSignals} resolved',
+                  ),
+                  color: missed.unresolved > 0
+                      ? QuantaraColors.warning
+                      : QuantaraColors.cyan,
+                ),
+                StatusPill(
+                  label: _t(
+                    '${missed.wouldWin} برد فرضی · ${missed.wouldLose} باخت فرضی',
+                    '${missed.wouldWin} would-win · ${missed.wouldLose} would-lose',
+                  ),
+                  color: QuantaraColors.violet,
+                ),
+                if (missed.unresolved > 0)
+                  StatusPill(
+                    label: _t(
+                      '${missed.unresolved} نامشخص',
+                      '${missed.unresolved} unresolved',
+                    ),
+                    color: QuantaraColors.warning,
+                  ),
+              ],
+            ),
+          ],
+          if (weeklyInsights.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              _t('این هفته چه چیزی کار کرد؟', 'What worked this week?'),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final insight in weeklyInsights.take(3))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text(
+                  _insightText(insight),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _insightText(TradingPerformanceInsight insight) {
+    return switch (insight.kind) {
+      TradingPerformanceInsightKind.worked => _t(
+        '• ${insight.key}: در ${insight.sampleSize} نمونه عملکرد مثبت داشت (${insight.expectancyR.toStringAsFixed(2)}R).',
+        '• ${insight.key}: positive across ${insight.sampleSize} samples (${insight.expectancyR.toStringAsFixed(2)}R).',
+      ),
+      TradingPerformanceInsightKind.didNotWork => _t(
+        '• ${insight.key}: در ${insight.sampleSize} نمونه ضعیف بود (${insight.expectancyR.toStringAsFixed(2)}R)؛ فقط به‌عنوان فرضیه آزمایش شود.',
+        '• ${insight.key}: weak across ${insight.sampleSize} samples (${insight.expectancyR.toStringAsFixed(2)}R); treat this only as an experiment hypothesis.',
+      ),
+      TradingPerformanceInsightKind.insufficientEvidence => _t(
+        '• شواهد هفتگی هنوز برای نتیجه‌گیری کافی نیست (${insight.sampleSize} نمونه).',
+        '• Weekly evidence is still insufficient for a conclusion (${insight.sampleSize} samples).',
+      ),
+    };
+  }
+}
+'''
+          view.write_text(view.read_text() + panel)
+
+          owner = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          replace_once(
+              owner,
+              """                        statistics: journalController.statistics,\n                        liveAnalyses: journalLiveAnalyses,\n""",
+              """                        statistics: journalController.statistics,\n                        performanceReport: journalController.performanceReport,\n                        counterfactualSummary:\n                            journalController.counterfactualSummary,\n                        weeklyInsights: journalController.weeklyInsights,\n                        analyticsWarning: journalController.analyticsWarning,\n                        liveAnalyses: journalLiveAnalyses,\n""",
+          )
+
+          test = Path('src/client/quantara_app/test/trading_journal_performance_dashboard_source_test.dart')
+          test.write_text(r'''import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('Journal controller computes bounded performance truth only on rebuild', () {
+    final source = File(
+      'lib/features/trading_journal/application/trading_journal_controller.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('_rebuildPerformanceAnalytics();'));
+    expect(source, contains('bootstrapIterations: 200'));
+    expect(source, contains('TradingCounterfactualPerformance.calculate'));
+    expect(source, contains('TradingPerformancePeriod.weekly'));
+    expect(source, contains('evidenceInsights(weekly)'));
+    expect(
+      source,
+      contains('Performance analytics are unavailable because the bounded evidence window'),
+    );
+  });
+
+  test('existing bilingual Journal surface receives analytics without live authority', () {
+    final view = File(
+      'lib/features/trading_journal/presentation/trading_journal_view.dart',
+    ).readAsStringSync();
+    final owner = File(
+      'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
+    ).readAsStringSync();
+
+    expect(view, contains('Performance analytics'));
+    expect(view, contains('تحلیل عملکرد'));
+    expect(view, contains('Missed-signal evidence'));
+    expect(view, contains('فرصت‌های از‌دست‌رفته'));
+    expect(view, contains('must not auto-tune Live parameters'));
+    expect(view, isNot(contains('placeOrder(')));
+    expect(owner, contains('journalController.performanceReport'));
+    expect(owner, contains('journalController.counterfactualSummary'));
+    expect(owner, contains('journalController.weeklyInsights'));
+  });
+}
+''')
+          PY
+      - name: Format changed Dart files
+        working-directory: src/client/quantara_app
+        run: |
+          dart format \
+            lib/features/trading_journal/application/trading_journal_controller.dart \
+            lib/features/trading_journal/presentation/trading_journal_view.dart \
+            lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            test/trading_journal_performance_dashboard_source_test.dart
+      - name: Run focused tests
+        working-directory: src/client/quantara_app
+        run: |
+          flutter pub get
+          flutter test \
+            test/trading_journal_performance_summary_test.dart \
+            test/trading_performance_reporting_test.dart \
+            test/trading_counterfactual_performance_test.dart \
+            test/trading_journal_performance_dashboard_source_test.dart
+      - name: Commit product changes and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/tmp-109-performance-dashboard.yml
+          git add src/client/quantara_app/lib src/client/quantara_app/test/trading_journal_performance_dashboard_source_test.dart
+          git commit -m "feat(analytics): wire bounded performance dashboard for #109"
+          git push origin HEAD:feat/109-performance-dashboard
