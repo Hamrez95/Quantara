@@ -27,6 +27,7 @@ void main() {
     expect(restored.symbol, 'BTCUSDT');
     expect(restored.direction, TradeDirection.long);
     expect(restored.openedAt.isUtc, isTrue);
+    expect(restored.targets, const [105, 110, 115]);
   });
 
   test('restart rejects incomplete or non-Quantara ownership identity', () {
