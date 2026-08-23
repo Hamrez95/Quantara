@@ -376,8 +376,24 @@ final class _PerformancePanel extends StatelessWidget {
                 ),
                 color: QuantaraColors.cyan,
               ),
-              StatusPill(label: _t('${report.economicsPendingTrades} اقتصاد در انتظار', '${report.economicsPendingTrades} economics pending'), color: report.economicsPendingTrades > 0 ? QuantaraColors.warning : QuantaraColors.cyan),
-              StatusPill(label: _t('خالص ${report.netPnl.toStringAsFixed(2)} USDT', 'Net ${report.netPnl.toStringAsFixed(2)} USDT'), color: report.netPnl >= 0 ? QuantaraColors.success : QuantaraColors.danger),
+              StatusPill(
+                label: _t(
+                  '${report.economicsPendingTrades} اقتصاد در انتظار',
+                  '${report.economicsPendingTrades} economics pending',
+                ),
+                color: report.economicsPendingTrades > 0
+                    ? QuantaraColors.warning
+                    : QuantaraColors.cyan,
+              ),
+              StatusPill(
+                label: _t(
+                  'خالص ${report.netPnl.toStringAsFixed(2)} USDT',
+                  'Net ${report.netPnl.toStringAsFixed(2)} USDT',
+                ),
+                color: report.netPnl >= 0
+                    ? QuantaraColors.success
+                    : QuantaraColors.danger,
+              ),
               StatusPill(
                 label: _t(
                   'برد ${report.winRatePercent.toStringAsFixed(1)}٪',
@@ -411,12 +427,25 @@ final class _PerformancePanel extends StatelessWidget {
           const SizedBox(height: 12),
           _StateCard(
             compact: true,
-            icon: smallSample ? Icons.info_outline_rounded : Icons.insights_rounded,
-            title: smallSample ? _t('نمونه کوچک', 'Small sample') : _t('بینش هفتگی مبتنی بر داده', 'Evidence-based weekly insight'),
+            icon: smallSample
+                ? Icons.info_outline_rounded
+                : Icons.insights_rounded,
+            title: smallSample
+                ? _t('نمونه کوچک', 'Small sample')
+                : _t(
+                    'بینش هفتگی مبتنی بر داده',
+                    'Evidence-based weekly insight',
+                  ),
             message: smallSample
-                ? _t('نمونه برای نتیجه‌گیری یا تغییر تنظیمات Live کافی نیست.', 'The sample is not sufficient for conclusions or Live parameter changes.')
+                ? _t(
+                    'نمونه برای نتیجه‌گیری یا تغییر تنظیمات Live کافی نیست.',
+                    'The sample is not sufficient for conclusions or Live parameter changes.',
+                  )
                 : report.warnings.isEmpty
-                ? _t('داده تأییدشده را قبل از هر آزمایش بررسی کن؛ هیچ تغییری خودکار نیست.', 'Review confirmed evidence before proposing an experiment; no change is automatic.')
+                ? _t(
+                    'داده تأییدشده را قبل از هر آزمایش بررسی کن؛ هیچ تغییری خودکار نیست.',
+                    'Review confirmed evidence before proposing an experiment; no change is automatic.',
+                  )
                 : report.warnings.first,
             color: smallSample ? QuantaraColors.warning : QuantaraColors.cyan,
           ),
