@@ -723,8 +723,12 @@ final class LocalLiveCapitalGuardianStatus {
     final openRisk = (json['openRisk'] as num?)?.toDouble();
     final remainingRisk = (json['remainingRisk'] as num?)?.toDouble();
     final asOf = DateTime.tryParse(json['asOf']?.toString() ?? '')?.toUtc();
-    if (currentEquity == null || peakEquity == null || drawdownFraction == null ||
-        riskMultiplier == null || openRisk == null || remainingRisk == null ||
+    if (currentEquity == null ||
+        peakEquity == null ||
+        drawdownFraction == null ||
+        riskMultiplier == null ||
+        openRisk == null ||
+        remainingRisk == null ||
         asOf == null) {
       throw const FormatException('Capital Guardian status is incomplete.');
     }
