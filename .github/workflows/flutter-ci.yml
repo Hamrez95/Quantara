@@ -24,7 +24,7 @@ on:
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: flutter-${{ github.workflow }}-${{ github.ref }}
@@ -48,8 +48,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -65,22 +63,6 @@ jobs:
 
       - name: Restore packages
         run: flutter pub get
-
-      - name: Apply formatter to journal UI and commit
-        working-directory: .
-        shell: bash
-        run: |
-          set -euo pipefail
-          dart format src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart
-          if git diff --quiet; then
-            echo "No formatting changes required."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart
-          git commit -m "style(journal): apply dart formatter"
-          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test tool
