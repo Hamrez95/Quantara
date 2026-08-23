@@ -512,6 +512,7 @@ final class LocalLiveTradeStatus {
     this.realizedPnl,
     this.pnlProjection,
     this.portfolioBudget,
+    this.capitalGuardian,
     this.consecutiveFailures = 0,
     this.entriesEnabled = false,
   });
@@ -554,6 +555,7 @@ final class LocalLiveTradeStatus {
   final double? realizedPnl;
   final TradingPnlProjection? pnlProjection;
   final LocalLivePortfolioBudgetStatus? portfolioBudget;
+  final LocalLiveCapitalGuardianStatus? capitalGuardian;
 
   double? get effectiveSessionNetPnl =>
       pnlProjection?.accountNetRealized.value ?? realizedPnl;
@@ -601,6 +603,7 @@ final class LocalLiveTradeStatus {
     'realizedPnl': realizedPnl,
     'pnlProjection': pnlProjection?.toJson(),
     'portfolioBudget': portfolioBudget?.toJson(),
+    'capitalGuardian': capitalGuardian?.toJson(),
     'consecutiveFailures': consecutiveFailures,
     'entriesEnabled': entriesEnabled,
   };
@@ -672,9 +675,70 @@ final class LocalLiveTradeStatus {
     realizedPnl: (json['realizedPnl'] as num?)?.toDouble(),
     pnlProjection: _pnlProjectionFromJson(json['pnlProjection']),
     portfolioBudget: _portfolioBudgetFromJson(json['portfolioBudget']),
+    capitalGuardian: _capitalGuardianFromJson(json['capitalGuardian']),
     consecutiveFailures: (json['consecutiveFailures'] as num?)?.toInt() ?? 0,
     entriesEnabled: json['entriesEnabled'] == true,
   );
+}
+
+/// Read-only Local Live projection of the single durable Capital Guardian.
+/// It is a status payload, not a second risk or equity source of truth.
+final class LocalLiveCapitalGuardianStatus {
+  const LocalLiveCapitalGuardianStatus({
+    required this.currentEquity,
+    required this.peakEquity,
+    required this.drawdownFraction,
+    required this.drawdownTier,
+    required this.riskMultiplier,
+    required this.openRisk,
+    required this.remainingRisk,
+    required this.asOf,
+  });
+
+  final double currentEquity;
+  final double peakEquity;
+  final double drawdownFraction;
+  final String drawdownTier;
+  final double riskMultiplier;
+  final double openRisk;
+  final double remainingRisk;
+  final DateTime asOf;
+
+  Map<String, Object?> toJson() => {
+    'currentEquity': currentEquity,
+    'peakEquity': peakEquity,
+    'drawdownFraction': drawdownFraction,
+    'drawdownTier': drawdownTier,
+    'riskMultiplier': riskMultiplier,
+    'openRisk': openRisk,
+    'remainingRisk': remainingRisk,
+    'asOf': asOf.toUtc().toIso8601String(),
+  };
+
+  factory LocalLiveCapitalGuardianStatus.fromJson(Map<String, Object?> json) {
+    final currentEquity = (json['currentEquity'] as num?)?.toDouble();
+    final peakEquity = (json['peakEquity'] as num?)?.toDouble();
+    final drawdownFraction = (json['drawdownFraction'] as num?)?.toDouble();
+    final riskMultiplier = (json['riskMultiplier'] as num?)?.toDouble();
+    final openRisk = (json['openRisk'] as num?)?.toDouble();
+    final remainingRisk = (json['remainingRisk'] as num?)?.toDouble();
+    final asOf = DateTime.tryParse(json['asOf']?.toString() ?? '')?.toUtc();
+    if (currentEquity == null || peakEquity == null || drawdownFraction == null ||
+        riskMultiplier == null || openRisk == null || remainingRisk == null ||
+        asOf == null) {
+      throw const FormatException('Capital Guardian status is incomplete.');
+    }
+    return LocalLiveCapitalGuardianStatus(
+      currentEquity: currentEquity,
+      peakEquity: peakEquity,
+      drawdownFraction: drawdownFraction,
+      drawdownTier: json['drawdownTier']?.toString() ?? 'unknown',
+      riskMultiplier: riskMultiplier,
+      openRisk: openRisk,
+      remainingRisk: remainingRisk,
+      asOf: asOf,
+    );
+  }
 }
 
 Map<String, String> _stringStringMap(Object? value) {
@@ -700,6 +764,18 @@ LocalLivePortfolioBudgetStatus? _portfolioBudgetFromJson(Object? value) {
   }
   if (value is Map<Object?, Object?>) {
     return LocalLivePortfolioBudgetStatus.fromJson(
+      value.map((key, item) => MapEntry(key.toString(), item)),
+    );
+  }
+  return null;
+}
+
+LocalLiveCapitalGuardianStatus? _capitalGuardianFromJson(Object? value) {
+  if (value is Map<String, Object?>) {
+    return LocalLiveCapitalGuardianStatus.fromJson(value);
+  }
+  if (value is Map<Object?, Object?>) {
+    return LocalLiveCapitalGuardianStatus.fromJson(
       value.map((key, item) => MapEntry(key.toString(), item)),
     );
   }

@@ -689,6 +689,18 @@ class _LocalLiveTradeControlCardState
                       ? QuantaraColors.cyan
                       : QuantaraColors.warning,
                 ),
+              if (status.capitalGuardian != null)
+                StatusPill(
+                  label: _t(
+                    'گاردین: سرمایه ${status.capitalGuardian!.currentEquity.toStringAsFixed(2)} · اوج ${status.capitalGuardian!.peakEquity.toStringAsFixed(2)} · افت ${(status.capitalGuardian!.drawdownFraction * 100).toStringAsFixed(2)}٪ · ${status.capitalGuardian!.drawdownTier} · ریسک ×${status.capitalGuardian!.riskMultiplier.toStringAsFixed(2)} · باز ${status.capitalGuardian!.openRisk.toStringAsFixed(3)} · آزاد ${status.capitalGuardian!.remainingRisk.toStringAsFixed(3)} USDT',
+                    'Guardian: equity ${status.capitalGuardian!.currentEquity.toStringAsFixed(2)} · peak ${status.capitalGuardian!.peakEquity.toStringAsFixed(2)} · drawdown ${(status.capitalGuardian!.drawdownFraction * 100).toStringAsFixed(2)}% · ${status.capitalGuardian!.drawdownTier} · risk ×${status.capitalGuardian!.riskMultiplier.toStringAsFixed(2)} · open ${status.capitalGuardian!.openRisk.toStringAsFixed(3)} · free ${status.capitalGuardian!.remainingRisk.toStringAsFixed(3)} USDT',
+                  ),
+                  color: status.capitalGuardian!.riskMultiplier == 0
+                      ? QuantaraColors.danger
+                      : status.capitalGuardian!.riskMultiplier < 1
+                      ? QuantaraColors.warning
+                      : QuantaraColors.cyan,
+                ),
               if (status.portfolioBudget != null)
                 StatusPill(
                   label: _t(
