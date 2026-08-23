@@ -53,6 +53,8 @@ void main() {
     expect(initial.drawdownFraction, 0);
     expect(initial.drawdownTier, CapitalGuardianDrawdownTier.normal);
     expect(initial.riskMultiplier, 1);
+    expect(initial.riskLimit, 10);
+    expect(initial.remainingRisk, 10);
     expect(initial.asOf.isUtc, isTrue);
 
     final soft = await monitor.refresh(
