@@ -58,9 +58,9 @@ abstract final class TradingPerformanceReporting {
             ? DateTime.utc(anchorUtc.year + 1)
             : DateTime.utc(anchorUtc.year, anchorUtc.month + 1),
       ),
-      TradingPerformancePeriod.custom => TradingPerformanceFilter(
-        startedAtUtc: customStartedAtUtc,
-        endedAtUtc: customEndedAtUtc,
+      TradingPerformancePeriod.custom => _custom(
+        customStartedAtUtc,
+        customEndedAtUtc,
       ),
     };
   }
@@ -283,6 +283,21 @@ abstract final class TradingPerformanceReporting {
         ? 'There is not enough segment evidence for a mature conclusion.'
         : 'Strongest observed segment: ${best.first.dimension}=${best.first.key}; weakest: ${worst.first.dimension}=${worst.first.key}.';
     return 'Quantara performance — ${report.pricedTrades} priced of ${report.closedTrades} closed trades, net PnL ${report.netPnl.toStringAsFixed(2)}, expectancy ${report.expectancyR.toStringAsFixed(3)}R, profit factor ${_finiteText(report.profitFactor)}, max drawdown ${report.maximumDrawdown.toStringAsFixed(2)}, PnL/risk-hour ${report.netPnlPerRiskHour.toStringAsFixed(3)}. $evidenceLine This report is evidence, not a profit guarantee or an automatic parameter change.';
+  }
+
+  static TradingPerformanceFilter _custom(
+    DateTime? startedAtUtc,
+    DateTime? endedAtUtc,
+  ) {
+    if (startedAtUtc == null || endedAtUtc == null) {
+      throw ArgumentError(
+        'Custom performance window requires both start and end.',
+      );
+    }
+    return TradingPerformanceFilter(
+      startedAtUtc: startedAtUtc,
+      endedAtUtc: endedAtUtc,
+    );
   }
 
   static TradingPerformanceFilter _weekly(DateTime anchorUtc) {
