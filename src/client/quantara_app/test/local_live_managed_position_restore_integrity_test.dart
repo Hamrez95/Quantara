@@ -24,6 +24,7 @@ void main() {
 
     expect(restored.positionId, 'position-107');
     expect(restored.clientId, 'q-local-1234abcd');
+    expect(restored.symbol, 'BTCUSDT');
     expect(restored.direction, TradeDirection.long);
     expect(restored.openedAt.isUtc, isTrue);
   });
