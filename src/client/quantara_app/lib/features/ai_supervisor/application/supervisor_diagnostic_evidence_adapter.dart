@@ -20,6 +20,9 @@ abstract final class SupervisorDiagnosticEvidenceAdapter {
     'tradingJournal': SupervisorEvidenceDomain.journal,
     'tradeEvidencePackets': SupervisorEvidenceDomain.journal,
     'supportSessionFoundation': SupervisorEvidenceDomain.app,
+    'supportVisibleAppState': SupervisorEvidenceDomain.app,
+    'supportDecisionTrace': SupervisorEvidenceDomain.runtime,
+    'supportCapacityExplanation': SupervisorEvidenceDomain.risk,
     'persistedLocalServiceState': SupervisorEvidenceDomain.persistence,
   };
 
