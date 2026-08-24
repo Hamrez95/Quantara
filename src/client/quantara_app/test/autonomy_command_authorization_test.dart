@@ -7,15 +7,9 @@ void main() {
     final decision = _decision(AutonomyExecutionMode.guardedAuto);
     final authorizedAt = DateTime.utc(2026, 8, 18, 14);
 
-    final authorization = AutonomyCommandAuthorization.fromPolicyDecision(
+    final authorization = _authorization(
       decision: decision,
       runtime: AutonomyCommandRuntime.localAndroid,
-      idempotencyKey: 'account-a:setup-42:v7',
-      clientId: 'q-live-setup-42-v7',
-      policyDecisionId: 'policy-decision-42',
-      canonicalDecisionId: 'canonical-42',
-      riskDecisionId: 'risk-42',
-      allocationDecisionId: 'allocation-42',
       authorizedAtUtc: authorizedAt,
     );
     final json = authorization.toJson();
@@ -35,6 +29,14 @@ void main() {
     expect(json['allocationDecisionId'], 'allocation-42');
     expect(json['runtime'], 'localAndroid');
     expect(json['authorizedAtUtc'], authorizedAt.toIso8601String());
+    expect(
+      json['riskDecisionObservedAtUtc'],
+      authorizedAt.subtract(const Duration(seconds: 10)).toIso8601String(),
+    );
+    expect(
+      json['allocationDecisionObservedAtUtc'],
+      authorizedAt.subtract(const Duration(seconds: 5)).toIso8601String(),
+    );
     expect(authorization.policyEvidence, contains('risk:true'));
     expect(authorization.policyEvidence, contains('allocation:true'));
   });
@@ -43,15 +45,9 @@ void main() {
     final decision = _decision(AutonomyExecutionMode.readOnly);
 
     expect(
-      () => AutonomyCommandAuthorization.fromPolicyDecision(
+      () => _authorization(
         decision: decision,
         runtime: AutonomyCommandRuntime.localAndroid,
-        idempotencyKey: 'account-a:setup-42:v7',
-        clientId: 'q-live-setup-42-v7',
-        policyDecisionId: 'policy-decision-42',
-        canonicalDecisionId: 'canonical-42',
-        riskDecisionId: 'risk-42',
-        allocationDecisionId: 'allocation-42',
         authorizedAtUtc: DateTime.utc(2026, 8, 18, 14),
       ),
       throwsStateError,
@@ -60,6 +56,7 @@ void main() {
 
   test('authorization fails closed on incomplete identity or non-UTC time', () {
     final decision = _decision(AutonomyExecutionMode.guardedAuto);
+    final authorizedAt = DateTime.utc(2026, 8, 18, 14);
 
     expect(
       () => AutonomyCommandAuthorization.fromPolicyDecision(
@@ -70,8 +67,10 @@ void main() {
         policyDecisionId: 'policy-decision-42',
         canonicalDecisionId: 'canonical-42',
         riskDecisionId: 'risk-42',
+        riskDecisionObservedAtUtc: authorizedAt,
         allocationDecisionId: 'allocation-42',
-        authorizedAtUtc: DateTime.utc(2026, 8, 18, 14),
+        allocationDecisionObservedAtUtc: authorizedAt,
+        authorizedAtUtc: authorizedAt,
       ),
       throwsFormatException,
     );
@@ -84,10 +83,65 @@ void main() {
         policyDecisionId: 'policy-decision-42',
         canonicalDecisionId: 'canonical-42',
         riskDecisionId: 'risk-42',
+        riskDecisionObservedAtUtc: authorizedAt,
         allocationDecisionId: 'allocation-42',
+        allocationDecisionObservedAtUtc: authorizedAt,
         authorizedAtUtc: DateTime(2026, 8, 18, 14),
       ),
       throwsFormatException,
+    );
+  });
+
+  test('stale Risk decision cannot mint live command provenance', () {
+    final authorizedAt = DateTime.utc(2026, 8, 18, 14);
+
+    expect(
+      () => _authorization(
+        decision: _decision(AutonomyExecutionMode.guardedAuto),
+        runtime: AutonomyCommandRuntime.localAndroid,
+        authorizedAtUtc: authorizedAt,
+        riskObservedAtUtc: authorizedAt.subtract(const Duration(seconds: 31)),
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('stale Allocation decision cannot mint live command provenance', () {
+    final authorizedAt = DateTime.utc(2026, 8, 18, 14);
+
+    expect(
+      () => _authorization(
+        decision: _decision(AutonomyExecutionMode.guardedAuto),
+        runtime: AutonomyCommandRuntime.localAndroid,
+        authorizedAtUtc: authorizedAt,
+        allocationObservedAtUtc: authorizedAt.subtract(
+          const Duration(seconds: 31),
+        ),
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('future Risk or Allocation evidence fails closed', () {
+    final authorizedAt = DateTime.utc(2026, 8, 18, 14);
+
+    expect(
+      () => _authorization(
+        decision: _decision(AutonomyExecutionMode.guardedAuto),
+        runtime: AutonomyCommandRuntime.localAndroid,
+        authorizedAtUtc: authorizedAt,
+        riskObservedAtUtc: authorizedAt.add(const Duration(seconds: 1)),
+      ),
+      throwsStateError,
+    );
+    expect(
+      () => _authorization(
+        decision: _decision(AutonomyExecutionMode.guardedAuto),
+        runtime: AutonomyCommandRuntime.localAndroid,
+        authorizedAtUtc: authorizedAt,
+        allocationObservedAtUtc: authorizedAt.add(const Duration(seconds: 1)),
+      ),
+      throwsStateError,
     );
   });
 
@@ -95,15 +149,9 @@ void main() {
     final decision = _durableDecision(AutonomyExecutionMode.cappedAuto);
 
     expect(
-      () => AutonomyCommandAuthorization.fromPolicyDecision(
+      () => _authorization(
         decision: decision,
         runtime: AutonomyCommandRuntime.localAndroid,
-        idempotencyKey: 'account-a:setup-42:v7',
-        clientId: 'q-live-setup-42-v7',
-        policyDecisionId: 'policy-decision-42',
-        canonicalDecisionId: 'canonical-42',
-        riskDecisionId: 'risk-42',
-        allocationDecisionId: 'allocation-42',
         authorizedAtUtc: DateTime.utc(2026, 8, 18, 14),
       ),
       throwsStateError,
@@ -111,17 +159,9 @@ void main() {
   });
 
   test('persistent autonomy records a certified durable runtime', () {
-    final decision = _durableDecision(AutonomyExecutionMode.autonomous);
-
-    final authorization = AutonomyCommandAuthorization.fromPolicyDecision(
-      decision: decision,
+    final authorization = _authorization(
+      decision: _durableDecision(AutonomyExecutionMode.autonomous),
       runtime: AutonomyCommandRuntime.durableService,
-      idempotencyKey: 'account-a:setup-42:v7',
-      clientId: 'q-live-setup-42-v7',
-      policyDecisionId: 'policy-decision-42',
-      canonicalDecisionId: 'canonical-42',
-      riskDecisionId: 'risk-42',
-      allocationDecisionId: 'allocation-42',
       authorizedAtUtc: DateTime.utc(2026, 8, 18, 14),
     );
 
@@ -129,6 +169,30 @@ void main() {
     expect(authorization.toJson()['runtime'], 'durableService');
   });
 }
+
+AutonomyCommandAuthorization _authorization({
+  required AutonomyPolicyDecision decision,
+  required AutonomyCommandRuntime runtime,
+  required DateTime authorizedAtUtc,
+  DateTime? riskObservedAtUtc,
+  DateTime? allocationObservedAtUtc,
+}) => AutonomyCommandAuthorization.fromPolicyDecision(
+  decision: decision,
+  runtime: runtime,
+  idempotencyKey: 'account-a:setup-42:v7',
+  clientId: 'q-live-setup-42-v7',
+  policyDecisionId: 'policy-decision-42',
+  canonicalDecisionId: 'canonical-42',
+  riskDecisionId: 'risk-42',
+  riskDecisionObservedAtUtc:
+      riskObservedAtUtc ??
+      authorizedAtUtc.subtract(const Duration(seconds: 10)),
+  allocationDecisionId: 'allocation-42',
+  allocationDecisionObservedAtUtc:
+      allocationObservedAtUtc ??
+      authorizedAtUtc.subtract(const Duration(seconds: 5)),
+  authorizedAtUtc: authorizedAtUtc,
+);
 
 AutonomyPolicyDecision _decision(AutonomyExecutionMode mode) =>
     const AutonomyPolicyGateway(version: 'autonomy-policy/test').evaluate(
