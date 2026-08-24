@@ -65,31 +65,34 @@ void main() {
     expect(replay.zones.single.upper, 122);
   });
 
-  test('refuses incomplete or unbounded snapshot instead of inventing data', () {
-    final encoded = TradingJournalChartSnapshot.encodeIntoIndicatorSnapshot(
-      analysis(),
-    );
-    final missingCandle = Map<String, double>.from(encoded)
-      ..remove('journalChart.v1.c0.open');
-    final oversized = Map<String, double>.from(encoded)
-      ..['journalChart.v1.candleCount'] =
-          (TradingJournalChartSnapshot.maximumCandles + 1).toDouble();
+  test(
+    'refuses incomplete or unbounded snapshot instead of inventing data',
+    () {
+      final encoded = TradingJournalChartSnapshot.encodeIntoIndicatorSnapshot(
+        analysis(),
+      );
+      final missingCandle = Map<String, double>.from(encoded)
+        ..remove('journalChart.v1.c0.open');
+      final oversized = Map<String, double>.from(encoded)
+        ..['journalChart.v1.candleCount'] =
+            (TradingJournalChartSnapshot.maximumCandles + 1).toDouble();
 
-    expect(
-      TradingJournalChartSnapshot.decodeFromIndicatorSnapshot(
-        missingCandle,
-        symbol: 'BTCUSDT',
-        timeframe: '15m',
-      ),
-      isNull,
-    );
-    expect(
-      TradingJournalChartSnapshot.decodeFromIndicatorSnapshot(
-        oversized,
-        symbol: 'BTCUSDT',
-        timeframe: '15m',
-      ),
-      isNull,
-    );
-  });
+      expect(
+        TradingJournalChartSnapshot.decodeFromIndicatorSnapshot(
+          missingCandle,
+          symbol: 'BTCUSDT',
+          timeframe: '15m',
+        ),
+        isNull,
+      );
+      expect(
+        TradingJournalChartSnapshot.decodeFromIndicatorSnapshot(
+          oversized,
+          symbol: 'BTCUSDT',
+          timeframe: '15m',
+        ),
+        isNull,
+      );
+    },
+  );
 }
