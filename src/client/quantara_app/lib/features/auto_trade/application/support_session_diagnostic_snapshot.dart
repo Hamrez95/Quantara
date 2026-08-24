@@ -170,19 +170,19 @@ final class SupportSessionDiagnosticSnapshot {
   final SupportCapacityExplanation capacity;
 
   Map<String, Object?> toDiagnosticSections() {
-    final stageByType = {
-      for (final item in decisionTrace) item.stage: item,
-    };
-    final completeTrace = SupportDecisionStage.values.map((stage) {
-      final item = stageByType[stage];
-      return item?.toJson() ??
-          <String, Object?>{
-            'stage': stage.name,
-            'status': 'missing',
-            'reasonCode': 'support.trace.stage_missing',
-            'evidenceIds': const <String>[],
-          };
-    }).toList(growable: false);
+    final stageByType = {for (final item in decisionTrace) item.stage: item};
+    final completeTrace = SupportDecisionStage.values
+        .map((stage) {
+          final item = stageByType[stage];
+          return item?.toJson() ??
+              <String, Object?>{
+                'stage': stage.name,
+                'status': 'missing',
+                'reasonCode': 'support.trace.stage_missing',
+                'evidenceIds': const <String>[],
+              };
+        })
+        .toList(growable: false);
 
     return <String, Object?>{
       'supportVisibleAppState': <String, Object?>{
