@@ -124,24 +124,29 @@ void main() {
     },
   );
 
-  test('credential-shaped visible text is redacted before support evidence', () {
-    final evidence = ReadOnlySupportSessionEvidence.fromCorrelatedSnapshot(
-      buildSnapshot(
-        visibleValues: const [
-          SupportVisibleValue(
-            key: 'statusText',
-            value: 'authorization=Bearer super-secret-value',
-            sourceType: 'uiText',
-            sourceEvidenceId: 'ui:42',
-          ),
-        ],
-      ),
-    );
+  test(
+    'credential-shaped visible text is redacted before support evidence',
+    () {
+      final evidence = ReadOnlySupportSessionEvidence.fromCorrelatedSnapshot(
+        buildSnapshot(
+          visibleValues: const [
+            SupportVisibleValue(
+              key: 'statusText',
+              value: 'authorization=Bearer super-secret-value',
+              sourceType: 'uiText',
+              sourceEvidenceId: 'ui:42',
+            ),
+          ],
+        ),
+      );
 
-    final encoded = jsonEncode(evidence.map((item) => item.toJson()).toList());
-    expect(encoded, isNot(contains('super-secret-value')));
-    expect(encoded, contains('[REDACTED_CREDENTIAL]'));
-  });
+      final encoded = jsonEncode(
+        evidence.map((item) => item.toJson()).toList(),
+      );
+      expect(encoded, isNot(contains('super-secret-value')));
+      expect(encoded, contains('[REDACTED_CREDENTIAL]'));
+    },
+  );
 
   test('bounds visible values and rejects duplicate decision stages', () {
     expect(
