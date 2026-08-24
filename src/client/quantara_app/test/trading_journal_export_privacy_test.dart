@@ -77,30 +77,39 @@ void main() {
     return result;
   }
 
-  test('JSON and CSV remove raw exchange identifiers but preserve correlation', () {
-    final source = ledger();
-    final json = TradingJournalExport.toPrivacySafeJson(source);
-    final csv = TradingJournalExport.toPrivacySafeCsv(source);
+  test(
+    'JSON and CSV remove raw exchange identifiers but preserve correlation',
+    () {
+      final source = ledger();
+      final json = TradingJournalExport.toPrivacySafeJson(source);
+      final csv = TradingJournalExport.toPrivacySafeCsv(source);
 
-    for (final raw in [
-      rawJournalId,
-      rawPositionId,
-      rawOrderId,
-      rawTradeId,
-      rawClientId,
-    ]) {
-      expect(json, isNot(contains(raw)));
-      expect(csv, isNot(contains(raw)));
-    }
-    expect(json, contains('journal-'));
-    expect(json, contains('position-'));
-    expect(json, contains('order-'));
-    expect(json, contains('trade-'));
+      for (final raw in [
+        rawJournalId,
+        rawPositionId,
+        rawOrderId,
+        rawTradeId,
+        rawClientId,
+      ]) {
+        expect(json, isNot(contains(raw)));
+        expect(csv, isNot(contains(raw)));
+      }
+      expect(json, contains('journal-'));
+      expect(json, contains('position-'));
+      expect(json, contains('order-'));
+      expect(json, contains('trade-'));
 
-    final imported = TradingJournalExport.fromPrivacySafeJson(json);
-    expect(imported.plans, hasLength(1));
-    expect(imported.events, hasLength(1));
-    expect(imported.events.single.journalTradeId, imported.plans.single.journalTradeId);
-    expect(imported.events.single.positionId, imported.plans.single.positionId);
-  });
+      final imported = TradingJournalExport.fromPrivacySafeJson(json);
+      expect(imported.plans, hasLength(1));
+      expect(imported.events, hasLength(1));
+      expect(
+        imported.events.single.journalTradeId,
+        imported.plans.single.journalTradeId,
+      );
+      expect(
+        imported.events.single.positionId,
+        imported.plans.single.positionId,
+      );
+    },
+  );
 }
