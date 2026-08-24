@@ -18,9 +18,9 @@ abstract final class TradingJournalChartSnapshot {
         ? analysis.candles
         : analysis.candles.skip(analysis.candles.length - maximumCandles);
     final candles = sourceCandles.toList(growable: false);
-    final zones = analysis.strongestZones.take(maximumZones).toList(
-      growable: false,
-    );
+    final zones = analysis.strongestZones
+        .take(maximumZones)
+        .toList(growable: false);
     final result = <String, double>{
       '${_prefix}schema': schemaVersion.toDouble(),
       '${_prefix}generatedAtMs': analysis.generatedAt
