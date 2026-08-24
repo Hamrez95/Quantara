@@ -121,12 +121,132 @@ abstract final class ReadOnlySupportSessionEvidence {
     required String bundleId,
     required DateTime observedAtUtc,
     required Map<String, Object?> sections,
-  }) => SupervisorDiagnosticEvidenceAdapter.fromDiagnosticBundle(
-    bundleId: bundleId,
-    observedAtUtc: observedAtUtc,
-    diagnosticBundle: <String, Object?>{'sections': sections},
-    correlationId: bundleId,
-  );
+  }) {
+    final correlated = _correlatedSections(
+      bundleId: bundleId,
+      observedAtUtc: observedAtUtc,
+      sections: sections,
+    );
+    return SupervisorDiagnosticEvidenceAdapter.fromDiagnosticBundle(
+      bundleId: bundleId,
+      observedAtUtc: observedAtUtc,
+      diagnosticBundle: <String, Object?>{
+        'sections': <String, Object?>{...sections, ...correlated},
+      },
+      correlationId: bundleId,
+    );
+  }
+
+  static Map<String, Object?> _correlatedSections({
+    required String bundleId,
+    required DateTime observedAtUtc,
+    required Map<String, Object?> sections,
+  }) {
+    Map<String, Object?> map(String key) {
+      final value = sections[key];
+      if (value is Map<String, Object?>) return value;
+      if (value is Map<Object?, Object?>) {
+        return value.map((key, value) => MapEntry(key.toString(), value));
+      }
+      return const {};
+    }
+
+    final status = map('localLiveStatus');
+    final analysis = map('analysisRuntime');
+    final configuration = map('configuration');
+    final reconciliation = map('privateAccountReconciliation');
+    final portfolioRaw = status['portfolioBudget'];
+    final portfolio = portfolioRaw is Map<Object?, Object?>
+        ? portfolioRaw.map((key, value) => MapEntry(key.toString(), value))
+        : const <String, Object?>{};
+    final managed = (status['managedPositionCount'] as num?)?.toInt() ?? 0;
+    final totalSlots =
+        (configuration['maximumConcurrentPositions'] as num?)?.toInt() ?? 0;
+    final availableSlots = max(0, totalSlots - managed);
+    final heartbeat =
+        DateTime.tryParse(status['lastScanAt']?.toString() ?? '')?.toUtc() ??
+        observedAtUtc.toUtc();
+    final blockReason = status['entryBlockReason']?.toString().trim();
+    final blocked = blockReason != null && blockReason.isNotEmpty;
+    final reconciliationHealth = reconciliation['health']?.toString() ?? '';
+    final journalAvailable = sections['tradingJournal'] != null;
+
+    final snapshot = SupportSessionDiagnosticSnapshot(
+      correlationId: bundleId,
+      observedAtUtc: observedAtUtc,
+      route: '/owner-alpha/auto-trade',
+      selectedTab: 'auto-trade',
+      symbol: analysis['selectedSymbol']?.toString() ?? '',
+      timeframe: analysis['selectedTimeframe']?.toString() ?? '',
+      strategyId: analysis['primaryStrategy']?.toString() ?? '',
+      mode: status['entriesEnabled'] == true ? 'local-live' : 'read-only',
+      autoTradeState: reconciliationHealth.isEmpty
+          ? 'unknown'
+          : reconciliationHealth,
+      localLiveState: status['state']?.toString() ?? 'unknown',
+      uiState: status['message']?.toString() ?? 'unknown',
+      appBuild: 'runtime-current',
+      configVersion: 'local-live-v1',
+      visibleValues: [
+        SupportVisibleValue(
+          key: 'localLiveState',
+          value: status['state']?.toString() ?? 'unknown',
+          sourceType: 'localLiveStatus',
+          sourceEvidenceId: 'diagnostic:$bundleId:localLiveStatus',
+        ),
+        SupportVisibleValue(
+          key: 'reconciliationHealth',
+          value: reconciliationHealth.isEmpty ? 'unknown' : reconciliationHealth,
+          sourceType: 'privateAccountReconciliation',
+          sourceEvidenceId:
+              'diagnostic:$bundleId:privateAccountReconciliation',
+        ),
+        SupportVisibleValue(
+          key: 'managedPositions',
+          value: managed.toString(),
+          sourceType: 'localLiveStatus',
+          sourceEvidenceId: 'diagnostic:$bundleId:localLiveStatus',
+        ),
+      ],
+      decisionTrace: [
+        if (reconciliation.isNotEmpty)
+          SupportDecisionTraceStage(
+            stage: SupportDecisionStage.reconciliation,
+            status: reconciliationHealth == 'fresh' ? 'accepted' : 'observed',
+            reasonCode: reconciliationHealth.isEmpty
+                ? 'reconciliation.status_unknown'
+                : 'reconciliation.$reconciliationHealth',
+            evidenceIds: [
+              'diagnostic:$bundleId:privateAccountReconciliation',
+            ],
+          ),
+        if (journalAvailable)
+          SupportDecisionTraceStage(
+            stage: SupportDecisionStage.journal,
+            status: 'observed',
+            reasonCode: 'journal.snapshot_available',
+            evidenceIds: ['diagnostic:$bundleId:tradingJournal'],
+          ),
+      ],
+      capacity: SupportCapacityExplanation(
+        scannerHeartbeatAtUtc: heartbeat,
+        managedPositionCount: managed,
+        totalSlots: totalSlots,
+        availableSlots: availableSlots,
+        riskCapacity: portfolio['riskAvailable']?.toString() ?? 'unknown',
+        marginCapacity: portfolio['spendableMargin']?.toString() ?? 'unknown',
+        correlationCapacity: blocked ? 'blocked' : 'unknown',
+        reservedCapacity: portfolio['reservedMargin']?.toString() ?? 'unknown',
+        disposition: blocked ? 'blocked' : 'observable',
+        reasonCode: blocked ? blockReason : 'support.capacity.no_block_reported',
+        evidenceIds: [
+          'diagnostic:$bundleId:localLiveStatus',
+          if (portfolio.isNotEmpty) 'diagnostic:$bundleId:accountSnapshot',
+        ],
+      ),
+    );
+    return snapshot.toDiagnosticSections();
+  }
 
   static List<SupervisorSystemEvidence> fromCorrelatedSnapshot(
     SupportSessionDiagnosticSnapshot snapshot,
