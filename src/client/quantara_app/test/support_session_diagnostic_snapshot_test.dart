@@ -63,56 +63,66 @@ void main() {
     ),
   );
 
-  test('publishes visible app state, full trace and capacity as read-only evidence', () {
-    final evidence = ReadOnlySupportSessionEvidence.fromCorrelatedSnapshot(
-      buildSnapshot(),
-    );
+  test(
+    'publishes visible app state, full trace and capacity as read-only evidence',
+    () {
+      final evidence = ReadOnlySupportSessionEvidence.fromCorrelatedSnapshot(
+        buildSnapshot(),
+      );
 
-    expect(evidence, hasLength(3));
-    expect(
-      evidence.map((item) => item.evidenceId),
-      containsAll(<String>[
-        'diagnostic:decision-42:supportVisibleAppState',
-        'diagnostic:decision-42:supportDecisionTrace',
-        'diagnostic:decision-42:supportCapacityExplanation',
-      ]),
-    );
-    expect(evidence.every((item) => item.correlationId == 'decision-42'), isTrue);
+      expect(evidence, hasLength(3));
+      expect(
+        evidence.map((item) => item.evidenceId),
+        containsAll(<String>[
+          'diagnostic:decision-42:supportVisibleAppState',
+          'diagnostic:decision-42:supportDecisionTrace',
+          'diagnostic:decision-42:supportCapacityExplanation',
+        ]),
+      );
+      expect(
+        evidence.every((item) => item.correlationId == 'decision-42'),
+        isTrue,
+      );
 
-    final visible = evidence.firstWhere(
-      (item) => item.attributes['section'] == 'supportVisibleAppState',
-    );
-    final visiblePayload = jsonDecode(visible.attributes['payload']!) as Map;
-    expect(visiblePayload['route'], '/owner-alpha');
-    expect(visiblePayload['symbol'], 'BTCUSDT');
-    final values = visiblePayload['visibleValues'] as List;
-    expect((values.single as Map)['sourceEvidenceId'], 'runtime:scanner:42');
+      final visible = evidence.firstWhere(
+        (item) => item.attributes['section'] == 'supportVisibleAppState',
+      );
+      final visiblePayload = jsonDecode(visible.attributes['payload']!) as Map;
+      expect(visiblePayload['route'], '/owner-alpha');
+      expect(visiblePayload['symbol'], 'BTCUSDT');
+      final values = visiblePayload['visibleValues'] as List;
+      expect((values.single as Map)['sourceEvidenceId'], 'runtime:scanner:42');
 
-    final trace = evidence.firstWhere(
-      (item) => item.attributes['section'] == 'supportDecisionTrace',
-    );
-    final tracePayload = jsonDecode(trace.attributes['payload']!) as Map;
-    final stages = tracePayload['stages'] as List;
-    expect(stages, hasLength(SupportDecisionStage.values.length));
-    expect(
-      stages.where(
-        (item) =>
-            (item as Map)['stage'] == 'allocator' &&
-            item['status'] == 'missing' &&
-            item['reasonCode'] == 'support.trace.stage_missing',
-      ),
-      hasLength(1),
-    );
+      final trace = evidence.firstWhere(
+        (item) => item.attributes['section'] == 'supportDecisionTrace',
+      );
+      final tracePayload = jsonDecode(trace.attributes['payload']!) as Map;
+      final stages = tracePayload['stages'] as List;
+      expect(stages, hasLength(SupportDecisionStage.values.length));
+      expect(
+        stages.where(
+          (item) =>
+              (item as Map)['stage'] == 'allocator' &&
+              item['status'] == 'missing' &&
+              item['reasonCode'] == 'support.trace.stage_missing',
+        ),
+        hasLength(1),
+      );
 
-    final capacity = evidence.firstWhere(
-      (item) => item.attributes['section'] == 'supportCapacityExplanation',
-    );
-    final capacityPayload = jsonDecode(capacity.attributes['payload']!) as Map;
-    expect(capacityPayload['managedPositionCount'], 1);
-    expect(capacityPayload['availableSlots'], 2);
-    expect(capacityPayload['reasonCode'], 'allocator.correlation_limit');
-    expect(capacityPayload['evidenceIds'], ['allocator:42', 'position:active:7']);
-  });
+      final capacity = evidence.firstWhere(
+        (item) => item.attributes['section'] == 'supportCapacityExplanation',
+      );
+      final capacityPayload =
+          jsonDecode(capacity.attributes['payload']!) as Map;
+      expect(capacityPayload['managedPositionCount'], 1);
+      expect(capacityPayload['availableSlots'], 2);
+      expect(capacityPayload['reasonCode'], 'allocator.correlation_limit');
+      expect(capacityPayload['evidenceIds'], [
+        'allocator:42',
+        'position:active:7',
+      ]);
+    },
+  );
 
   test('credential-shaped visible text is redacted before support evidence', () {
     final evidence = ReadOnlySupportSessionEvidence.fromCorrelatedSnapshot(
