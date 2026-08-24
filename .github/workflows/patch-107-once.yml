@@ -1,17 +1,17 @@
 name: One-shot issue 107 safety patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/107-ambiguous-entry-durable-block
-    paths:
-      - .github/workflows/patch-107-once.yml
+      - dev
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.head_ref == 'fix/107-ambiguous-entry-durable-block'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
