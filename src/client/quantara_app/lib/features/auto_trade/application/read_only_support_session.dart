@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../ai_supervisor/application/supervisor_diagnostic_evidence_adapter.dart';
 import '../../ai_supervisor/domain/supervisor_system_evidence.dart';
 import '../domain/unattended_auto_trade_models.dart';
+import 'support_session_diagnostic_snapshot.dart';
 
 final class ReadOnlySupportSessionGrant {
   const ReadOnlySupportSessionGrant({
@@ -125,6 +126,17 @@ abstract final class ReadOnlySupportSessionEvidence {
     observedAtUtc: observedAtUtc,
     diagnosticBundle: <String, Object?>{'sections': sections},
     correlationId: bundleId,
+  );
+
+  static List<SupervisorSystemEvidence> fromCorrelatedSnapshot(
+    SupportSessionDiagnosticSnapshot snapshot,
+  ) => SupervisorDiagnosticEvidenceAdapter.fromDiagnosticBundle(
+    bundleId: snapshot.correlationId,
+    observedAtUtc: snapshot.observedAtUtc,
+    diagnosticBundle: <String, Object?>{
+      'sections': snapshot.toDiagnosticSections(),
+    },
+    correlationId: snapshot.correlationId,
   );
 }
 
