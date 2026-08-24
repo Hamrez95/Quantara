@@ -117,8 +117,12 @@ final class SupportSessionDiagnosticSnapshot {
     required Iterable<SupportVisibleValue> visibleValues,
     required Iterable<SupportDecisionTraceStage> decisionTrace,
     required this.capacity,
-  }) : visibleValues = UnmodifiableListView(visibleValues.toList(growable: false)),
-       decisionTrace = UnmodifiableListView(decisionTrace.toList(growable: false)) {
+  }) : visibleValues = UnmodifiableListView(
+         visibleValues.toList(growable: false),
+       ),
+       decisionTrace = UnmodifiableListView(
+         decisionTrace.toList(growable: false),
+       ) {
     if (correlationId.trim().isEmpty ||
         route.trim().isEmpty ||
         mode.trim().isEmpty ||
@@ -134,7 +138,9 @@ final class SupportSessionDiagnosticSnapshot {
     }
     final stages = this.decisionTrace.map((item) => item.stage).toList();
     if (stages.toSet().length != stages.length) {
-      throw const FormatException('Support diagnostic decision stages must be unique.');
+      throw const FormatException(
+        'Support diagnostic decision stages must be unique.',
+      );
     }
     if (capacity.managedPositionCount < 0 ||
         capacity.totalSlots < 0 ||
@@ -192,7 +198,9 @@ final class SupportSessionDiagnosticSnapshot {
         'appBuild': appBuild,
         'configVersion': configVersion,
         'correlationId': correlationId,
-        'visibleValues': visibleValues.map((item) => item.toJson()).toList(growable: false),
+        'visibleValues': visibleValues
+            .map((item) => item.toJson())
+            .toList(growable: false),
       },
       'supportDecisionTrace': <String, Object?>{
         'correlationId': correlationId,
