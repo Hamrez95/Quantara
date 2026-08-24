@@ -19,6 +19,7 @@ import '../domain/auto_trade_models.dart';
 import '../domain/exchange_position_ownership.dart';
 import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_management_only_after_flat.dart';
+import '../domain/local_live_no_chase_gate.dart';
 import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/private_truth_models.dart';
@@ -756,6 +757,25 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         );
         final markPrice = await exchange.fetchMarkPrice(idea.symbol);
         final rules = await exchange.fetchInstrumentRules(idea.symbol);
+        final topOfBook = await exchange.fetchOrderBookTop(idea.symbol);
+        final noChase = const LocalLiveNoChaseGate().evaluate(
+          idea: idea,
+          topOfBook: topOfBook,
+          evaluatedAtUtc: DateTime.now().toUtc(),
+        );
+        if (!noChase.allowed) {
+          await _recordRankingOutcome(
+            rankedIdea,
+            OpportunityRankingOutcome.canonicalRejected,
+            'Live no-chase gate rejected executable price: ${noChase.reason.name}.',
+          );
+          _auditEvent(
+            'no_chase_block',
+            'Executable top-of-book price failed the no-chase policy: ${noChase.reason.name}.',
+            symbol: idea.symbol,
+          );
+          continue;
+        }
         final canonical = evaluateLocalLiveCanonicalDecision(
           idea: idea,
           configuration: configuration,

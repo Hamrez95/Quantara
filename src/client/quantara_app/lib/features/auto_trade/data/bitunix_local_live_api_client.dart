@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'bitunix_order_book_top.dart';
 import 'bitunix_pnl_mapper.dart';
 import 'bitunix_request_signer.dart';
 
@@ -175,6 +176,20 @@ final class BitunixLocalLiveApiClient {
       );
     }
     return price;
+  }
+
+  Future<BitunixOrderBookTop> fetchOrderBookTop(String symbol) async {
+    final payload = await _publicGet('/api/v1/futures/market/depth', {
+      'symbol': symbol,
+      'limit': '1',
+    });
+    try {
+      return BitunixOrderBookTop.fromApiPayload(payload);
+    } on FormatException catch (error) {
+      throw LocalLiveTradeSafeException(
+        'Bitunix order book top was unavailable or malformed: ${error.message}',
+      );
+    }
   }
 
   Future<BitunixInstrumentRules> fetchInstrumentRules(String symbol) async {
