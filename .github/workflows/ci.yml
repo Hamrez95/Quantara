@@ -15,98 +15,13 @@ on:
       - 'feat/**'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  patch-issue-107:
-    if: github.event_name == 'pull_request' && github.head_ref == 'fix/107-ambiguous-entry-durable-block'
-    name: Apply one-shot #107 safety patch
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout head branch
-        uses: actions/checkout@v4
-        with:
-          ref: fix/107-ambiguous-entry-durable-block
-          fetch-depth: 0
-      - name: Apply patch, regression test, and restore CI
-        shell: python
-        run: |
-          from pathlib import Path
-          service = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
-          text = service.read_text()
-          needle = """          await _recordRankingOutcome(
-            rankedIdea,
-            OpportunityRankingOutcome.executionAttempted,
-            'All deterministic pre-order gates passed; protected entry request may start.',
-          );
-          orderRequestStarted = true;
-"""
-          replacement = """          await _recordRankingOutcome(
-            rankedIdea,
-            OpportunityRankingOutcome.executionAttempted,
-            'All deterministic pre-order gates passed; protected entry request may start.',
-          );
-          // Persist the setup identity before the first exchange entry mutation.
-          // If transport fails after Bitunix accepted the request, restart/retry
-          // must reconcile exchange truth instead of blindly submitting again.
-          _executedSetupIds.add(idea.setupId);
-          await _persistState();
-          orderRequestStarted = true;
-"""
-          if text.count(needle) != 1:
-              raise SystemExit(f'expected exactly one entry-mutation needle, found {text.count(needle)}')
-          service.write_text(text.replace(needle, replacement))
-
-          test = Path('src/client/quantara_app/test/local_live_ambiguous_entry_restart_contract_test.dart')
-          test.write_text("""import 'dart:io';
-
-import 'package:flutter_test/flutter_test.dart';
-
-void main() {
-  test('entry attempt is durable before exchange mutation', () {
-    final source = File(
-      'lib/features/auto_trade/application/local_live_trade_service.dart',
-    ).readAsStringSync();
-
-    final durableAttempt = source.indexOf(
-      '_executedSetupIds.add(idea.setupId);\\n          await _persistState();',
-    );
-    final mutation = source.indexOf(
-      'final placed = await exchange.placeMarketEntry(',
-    );
-
-    expect(durableAttempt, greaterThanOrEqualTo(0));
-    expect(mutation, greaterThan(durableAttempt));
-  });
-
-  test('ambiguous post-submit failures remain fail closed', () {
-    final source = File(
-      'lib/features/auto_trade/application/local_live_trade_service.dart',
-    ).readAsStringSync();
-
-    expect(source, contains('if (orderRequestStarted) {'));
-    expect(source, contains('await portfolioGuard.markAmbiguous('));
-    expect(source, isNot(contains('_executedSetupIds.remove(idea.setupId)')));
-  });
-}
-""")
-          helper = Path('.github/workflows/patch-107-once.yml')
-          if helper.exists():
-              helper.unlink()
-      - name: Restore canonical CI and commit product patch
-        run: |
-          git checkout origin/dev -- .github/workflows/ci.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --check
-          git commit -m "fix(execution): durably block ambiguous entry retries for #107"
-          git push origin HEAD:fix/107-ambiguous-entry-durable-block
-
   dotnet:
     name: .NET build and tests
     runs-on: ubuntu-latest
