@@ -196,10 +196,11 @@ abstract final class ReadOnlySupportSessionEvidence {
         ),
         SupportVisibleValue(
           key: 'reconciliationHealth',
-          value: reconciliationHealth.isEmpty ? 'unknown' : reconciliationHealth,
+          value: reconciliationHealth.isEmpty
+              ? 'unknown'
+              : reconciliationHealth,
           sourceType: 'privateAccountReconciliation',
-          sourceEvidenceId:
-              'diagnostic:$bundleId:privateAccountReconciliation',
+          sourceEvidenceId: 'diagnostic:$bundleId:privateAccountReconciliation',
         ),
         SupportVisibleValue(
           key: 'managedPositions',
@@ -216,9 +217,7 @@ abstract final class ReadOnlySupportSessionEvidence {
             reasonCode: reconciliationHealth.isEmpty
                 ? 'reconciliation.status_unknown'
                 : 'reconciliation.$reconciliationHealth',
-            evidenceIds: [
-              'diagnostic:$bundleId:privateAccountReconciliation',
-            ],
+            evidenceIds: ['diagnostic:$bundleId:privateAccountReconciliation'],
           ),
         if (journalAvailable)
           SupportDecisionTraceStage(
@@ -238,7 +237,9 @@ abstract final class ReadOnlySupportSessionEvidence {
         correlationCapacity: blocked ? 'blocked' : 'unknown',
         reservedCapacity: portfolio['reservedMargin']?.toString() ?? 'unknown',
         disposition: blocked ? 'blocked' : 'observable',
-        reasonCode: blocked ? blockReason : 'support.capacity.no_block_reported',
+        reasonCode: blocked
+            ? blockReason
+            : 'support.capacity.no_block_reported',
         evidenceIds: [
           'diagnostic:$bundleId:localLiveStatus',
           if (portfolio.isNotEmpty) 'diagnostic:$bundleId:accountSnapshot',
