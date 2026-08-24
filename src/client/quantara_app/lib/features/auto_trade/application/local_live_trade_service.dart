@@ -865,6 +865,11 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             OpportunityRankingOutcome.executionAttempted,
             'All deterministic pre-order gates passed; protected entry request may start.',
           );
+          // Persist the setup identity before the first exchange entry mutation.
+          // If transport fails after Bitunix accepted the request, restart/retry
+          // must reconcile exchange truth instead of blindly submitting again.
+          _executedSetupIds.add(idea.setupId);
+          await _persistState();
           orderRequestStarted = true;
           privateTruth.recordOrderSubmission(correlationId: clientId);
           final placed = await exchange.placeMarketEntry(
