@@ -8,15 +8,26 @@ void main() {
       'lib/features/auto_trade/application/local_live_trade_service.dart',
     ).readAsStringSync();
 
-    final durableAttempt = source.indexOf(
-      '_executedSetupIds.add(idea.setupId);\n          await _persistState();',
+    final attempted = source.indexOf(
+      'OpportunityRankingOutcome.executionAttempted',
+    );
+    final durableIdentity = source.indexOf(
+      '_executedSetupIds.add(idea.setupId);',
+      attempted,
+    );
+    final durablePersist = source.indexOf(
+      'await _persistState();',
+      durableIdentity,
     );
     final mutation = source.indexOf(
       'final placed = await exchange.placeMarketEntry(',
+      attempted,
     );
 
-    expect(durableAttempt, greaterThanOrEqualTo(0));
-    expect(mutation, greaterThan(durableAttempt));
+    expect(attempted, greaterThanOrEqualTo(0));
+    expect(durableIdentity, greaterThan(attempted));
+    expect(durablePersist, greaterThan(durableIdentity));
+    expect(mutation, greaterThan(durablePersist));
   });
 
   test('ambiguous post-submit failures remain fail closed', () {
