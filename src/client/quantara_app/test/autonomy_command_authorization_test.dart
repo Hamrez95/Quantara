@@ -185,7 +185,8 @@ AutonomyCommandAuthorization _authorization({
   canonicalDecisionId: 'canonical-42',
   riskDecisionId: 'risk-42',
   riskDecisionObservedAtUtc:
-      riskObservedAtUtc ?? authorizedAtUtc.subtract(const Duration(seconds: 10)),
+      riskObservedAtUtc ??
+      authorizedAtUtc.subtract(const Duration(seconds: 10)),
   allocationDecisionId: 'allocation-42',
   allocationDecisionObservedAtUtc:
       allocationObservedAtUtc ??
