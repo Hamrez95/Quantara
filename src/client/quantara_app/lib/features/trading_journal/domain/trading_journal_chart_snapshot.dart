@@ -1,94 +1,109 @@
 import '../../market_analysis/domain/market_chart_models.dart';
 
 /// Versioned, bounded codec for the market chart that existed when a journal
-/// decision was made. The snapshot contains market evidence only and never
-/// fetches newer candles while decoding.
+/// decision was made. The compact representation deliberately fits inside the
+/// existing immutable numeric indicator snapshot, so it inherits the journal's
+/// durability/checksum/restart behavior without adding a second persistence
+/// path or consulting newer market data while decoding.
 abstract final class TradingJournalChartSnapshot {
   static const schemaVersion = 1;
-  static const maximumCandles = 120;
+  static const maximumCandles = 64;
   static const maximumZones = 8;
+  static const _prefix = 'journalChart.v1.';
 
-  static Map<String, Object?> encode(TimeframeChartAnalysis analysis) {
-    final candles = analysis.candles.length <= maximumCandles
+  static Map<String, double> encodeIntoIndicatorSnapshot(
+    TimeframeChartAnalysis analysis,
+  ) {
+    final sourceCandles = analysis.candles.length <= maximumCandles
         ? analysis.candles
         : analysis.candles.skip(analysis.candles.length - maximumCandles);
-    final zones = analysis.zones.length <= maximumZones
-        ? analysis.zones
-        : analysis.zones.take(maximumZones);
-    return <String, Object?>{
-      'schemaVersion': schemaVersion,
-      'symbol': analysis.symbol,
-      'timeframe': analysis.timeframe,
-      'generatedAt': analysis.generatedAt.toUtc().toIso8601String(),
-      'fingerprint': analysis.fingerprint,
-      'direction': analysis.direction.name,
-      'directionStrength': analysis.directionStrength,
-      'volatilityPercent': analysis.volatilityPercent,
-      'summary': analysis.summary,
-      'candles': candles
-          .map(
-            (candle) => <String, Object?>{
-              'openTime': candle.openTime.toUtc().toIso8601String(),
-              'open': candle.open,
-              'high': candle.high,
-              'low': candle.low,
-              'close': candle.close,
-              'volume': candle.volume,
-            },
-          )
-          .toList(growable: false),
-      'zones': zones
-          .map(
-            (zone) => <String, Object?>{
-              'lower': zone.lower,
-              'upper': zone.upper,
-              'role': zone.role.name,
-              'state': zone.state.name,
-              'touchCount': zone.touchCount,
-              'strength': zone.strength,
-              'distancePercent': zone.distancePercent,
-              'lastTouchedAt': zone.lastTouchedAt.toUtc().toIso8601String(),
-              'explanation': zone.explanation,
-            },
-          )
-          .toList(growable: false),
+    final candles = sourceCandles.toList(growable: false);
+    final zones = analysis.strongestZones.take(maximumZones).toList(
+      growable: false,
+    );
+    final result = <String, double>{
+      '${_prefix}schema': schemaVersion.toDouble(),
+      '${_prefix}generatedAtMs': analysis.generatedAt
+          .toUtc()
+          .millisecondsSinceEpoch
+          .toDouble(),
+      '${_prefix}direction': analysis.direction.index.toDouble(),
+      '${_prefix}directionStrength': analysis.directionStrength,
+      '${_prefix}volatilityPercent': analysis.volatilityPercent,
+      '${_prefix}candleCount': candles.length.toDouble(),
+      '${_prefix}zoneCount': zones.length.toDouble(),
     };
+    for (var index = 0; index < candles.length; index++) {
+      final candle = candles[index];
+      final base = '${_prefix}c$index.';
+      result['${base}timeMs'] = candle.openTime
+          .toUtc()
+          .millisecondsSinceEpoch
+          .toDouble();
+      result['${base}open'] = candle.open;
+      result['${base}high'] = candle.high;
+      result['${base}low'] = candle.low;
+      result['${base}close'] = candle.close;
+      result['${base}volume'] = candle.volume;
+    }
+    for (var index = 0; index < zones.length; index++) {
+      final zone = zones[index];
+      final base = '${_prefix}z$index.';
+      result['${base}lower'] = zone.lower;
+      result['${base}upper'] = zone.upper;
+      result['${base}role'] = zone.role.index.toDouble();
+      result['${base}state'] = zone.state.index.toDouble();
+      result['${base}touchCount'] = zone.touchCount.toDouble();
+      result['${base}strength'] = zone.strength;
+      result['${base}distancePercent'] = zone.distancePercent;
+      result['${base}lastTouchedMs'] = zone.lastTouchedAt
+          .toUtc()
+          .millisecondsSinceEpoch
+          .toDouble();
+    }
+    return result;
   }
 
-  static TimeframeChartAnalysis? decode(Object? raw) {
-    if (raw is! Map<Object?, Object?>) return null;
-    final json = raw.map((key, value) => MapEntry(key.toString(), value));
-    if ((json['schemaVersion'] as num?)?.toInt() != schemaVersion) return null;
-    final symbol = json['symbol']?.toString().trim() ?? '';
-    final timeframe = json['timeframe']?.toString().trim() ?? '';
-    final generatedAt = DateTime.tryParse(json['generatedAt']?.toString() ?? '')
-        ?.toUtc();
-    final fingerprint = json['fingerprint']?.toString().trim() ?? '';
-    if (symbol.isEmpty ||
-        timeframe.isEmpty ||
-        generatedAt == null ||
-        fingerprint.isEmpty) {
+  static TimeframeChartAnalysis? decodeFromIndicatorSnapshot(
+    Map<String, double> snapshot, {
+    required String symbol,
+    required String timeframe,
+  }) {
+    final schema = snapshot['${_prefix}schema']?.round();
+    final generatedAtMs = snapshot['${_prefix}generatedAtMs']?.round();
+    final directionIndex = snapshot['${_prefix}direction']?.round();
+    final directionStrength = snapshot['${_prefix}directionStrength'];
+    final volatilityPercent = snapshot['${_prefix}volatilityPercent'];
+    final candleCount = snapshot['${_prefix}candleCount']?.round();
+    final zoneCount = snapshot['${_prefix}zoneCount']?.round();
+    if (schema != schemaVersion ||
+        generatedAtMs == null ||
+        directionIndex == null ||
+        directionIndex < 0 ||
+        directionIndex >= ChartDirection.values.length ||
+        directionStrength == null ||
+        volatilityPercent == null ||
+        candleCount == null ||
+        candleCount < 20 ||
+        candleCount > maximumCandles ||
+        zoneCount == null ||
+        zoneCount < 0 ||
+        zoneCount > maximumZones ||
+        symbol.trim().isEmpty ||
+        timeframe.trim().isEmpty) {
       return null;
     }
 
-    final candleRows = json['candles'];
-    if (candleRows is! List<Object?> ||
-        candleRows.length < 20 ||
-        candleRows.length > maximumCandles) {
-      return null;
-    }
     final candles = <ChartCandle>[];
-    for (final row in candleRows) {
-      if (row is! Map<Object?, Object?>) return null;
-      final item = row.map((key, value) => MapEntry(key.toString(), value));
-      final openTime = DateTime.tryParse(item['openTime']?.toString() ?? '')
-          ?.toUtc();
-      final open = (item['open'] as num?)?.toDouble();
-      final high = (item['high'] as num?)?.toDouble();
-      final low = (item['low'] as num?)?.toDouble();
-      final close = (item['close'] as num?)?.toDouble();
-      final volume = (item['volume'] as num?)?.toDouble();
-      if (openTime == null ||
+    for (var index = 0; index < candleCount; index++) {
+      final base = '${_prefix}c$index.';
+      final timeMs = snapshot['${base}timeMs']?.round();
+      final open = snapshot['${base}open'];
+      final high = snapshot['${base}high'];
+      final low = snapshot['${base}low'];
+      final close = snapshot['${base}close'];
+      final volume = snapshot['${base}volume'];
+      if (timeMs == null ||
           open == null ||
           high == null ||
           low == null ||
@@ -97,7 +112,7 @@ abstract final class TradingJournalChartSnapshot {
         return null;
       }
       final candle = ChartCandle(
-        openTime: openTime,
+        openTime: DateTime.fromMillisecondsSinceEpoch(timeMs, isUtc: true),
         open: open,
         high: high,
         low: low,
@@ -109,77 +124,69 @@ abstract final class TradingJournalChartSnapshot {
     }
 
     final zones = <ChartPriceZone>[];
-    final zoneRows = json['zones'];
-    if (zoneRows is List<Object?>) {
-      if (zoneRows.length > maximumZones) return null;
-      for (final row in zoneRows) {
-        if (row is! Map<Object?, Object?>) return null;
-        final item = row.map((key, value) => MapEntry(key.toString(), value));
-        final lower = (item['lower'] as num?)?.toDouble();
-        final upper = (item['upper'] as num?)?.toDouble();
-        final touchCount = (item['touchCount'] as num?)?.toInt();
-        final strength = (item['strength'] as num?)?.toDouble();
-        final distancePercent = (item['distancePercent'] as num?)?.toDouble();
-        final lastTouchedAt =
-            DateTime.tryParse(item['lastTouchedAt']?.toString() ?? '')?.toUtc();
-        final role = ChartZoneRole.values
-            .where((value) => value.name == item['role']?.toString())
-            .firstOrNull;
-        final state = ChartZoneState.values
-            .where((value) => value.name == item['state']?.toString())
-            .firstOrNull;
-        if (lower == null ||
-            upper == null ||
-            touchCount == null ||
-            strength == null ||
-            distancePercent == null ||
-            lastTouchedAt == null ||
-            role == null ||
-            state == null) {
-          return null;
-        }
-        zones.add(
-          ChartPriceZone(
-            lower: lower,
-            upper: upper,
-            role: role,
-            state: state,
-            touchCount: touchCount,
-            strength: strength,
-            distancePercent: distancePercent,
-            lastTouchedAt: lastTouchedAt,
-            explanation: item['explanation']?.toString() ?? '',
-          ),
-        );
+    for (var index = 0; index < zoneCount; index++) {
+      final base = '${_prefix}z$index.';
+      final lower = snapshot['${base}lower'];
+      final upper = snapshot['${base}upper'];
+      final roleIndex = snapshot['${base}role']?.round();
+      final stateIndex = snapshot['${base}state']?.round();
+      final touchCount = snapshot['${base}touchCount']?.round();
+      final strength = snapshot['${base}strength'];
+      final distancePercent = snapshot['${base}distancePercent'];
+      final lastTouchedMs = snapshot['${base}lastTouchedMs']?.round();
+      if (lower == null ||
+          upper == null ||
+          roleIndex == null ||
+          roleIndex < 0 ||
+          roleIndex >= ChartZoneRole.values.length ||
+          stateIndex == null ||
+          stateIndex < 0 ||
+          stateIndex >= ChartZoneState.values.length ||
+          touchCount == null ||
+          strength == null ||
+          distancePercent == null ||
+          lastTouchedMs == null) {
+        return null;
       }
-    }
-
-    final direction = ChartDirection.values
-        .where((value) => value.name == json['direction']?.toString())
-        .firstOrNull;
-    final directionStrength = (json['directionStrength'] as num?)?.toDouble();
-    final volatilityPercent = (json['volatilityPercent'] as num?)?.toDouble();
-    if (direction == null ||
-        directionStrength == null ||
-        volatilityPercent == null) {
-      return null;
+      zones.add(
+        ChartPriceZone(
+          lower: lower,
+          upper: upper,
+          role: ChartZoneRole.values[roleIndex],
+          state: ChartZoneState.values[stateIndex],
+          touchCount: touchCount,
+          strength: strength,
+          distancePercent: distancePercent,
+          lastTouchedAt: DateTime.fromMillisecondsSinceEpoch(
+            lastTouchedMs,
+            isUtc: true,
+          ),
+          explanation: 'Persisted decision-time zone',
+        ),
+      );
     }
 
     try {
       return TimeframeChartAnalysis(
-        symbol: symbol,
-        timeframe: timeframe,
+        symbol: symbol.trim().toUpperCase(),
+        timeframe: timeframe.trim(),
         candles: candles,
         zones: zones,
-        direction: direction,
+        direction: ChartDirection.values[directionIndex],
         directionStrength: directionStrength,
         volatilityPercent: volatilityPercent,
-        summary: json['summary']?.toString() ?? '',
-        generatedAt: generatedAt,
-        fingerprint: fingerprint,
+        summary: 'Persisted decision-time journal snapshot',
+        generatedAt: DateTime.fromMillisecondsSinceEpoch(
+          generatedAtMs,
+          isUtc: true,
+        ),
+        fingerprint: 'journal-snapshot-v1-$generatedAtMs-$candleCount',
       );
     } on ArgumentError {
       return null;
     }
   }
+
+  static bool containsSnapshot(Map<String, double> snapshot) =>
+      snapshot['${_prefix}schema']?.round() == schemaVersion;
 }
