@@ -139,10 +139,7 @@ void main() {
       expect(journalSource, contains('analysis: historicalAnalysis,'));
       expect(journalSource, contains('currentIdea: null,'));
       expect(journalSource, contains('بازپخش نمودار لحظه تصمیم'));
-      expect(
-        journalSource,
-        contains('داده زنده جایگزین تاریخچه نمی‌شود'),
-      );
+      expect(journalSource, contains('داده زنده جایگزین تاریخچه نمی‌شود'));
       expect(journalSource, contains('previousDonchianHigh20'));
       expect(journalSource, contains('live.strongestZones'));
       expect(pageSource, contains('journalLiveAnalyses'));
