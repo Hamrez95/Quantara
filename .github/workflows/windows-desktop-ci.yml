@@ -8,6 +8,7 @@ on:
       - 'release/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'installer/windows/**'
       - 'scripts/build-windows.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - main
     paths:
       - 'src/client/quantara_app/**'
+      - 'installer/windows/**'
       - 'scripts/build-windows.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
 
@@ -72,12 +74,42 @@ jobs:
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner -PackageZip
 
+      - name: Ensure Inno Setup compiler
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+          if (-not (Test-Path $iscc)) {
+            throw 'Inno Setup compiler is unavailable after installation.'
+          }
+          & $iscc /?
+
+      - name: Build unsigned internal installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          $buildRoot = (Resolve-Path 'src/client/quantara_app/build/windows/x64/runner/Release').Path
+          $outputDir = Join-Path $PWD 'dist/windows'
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+          & $iscc "/DMyAppVersion=$env:RC_VERSION" "/DMyAppBuildRoot=$buildRoot" "/DMyOutputDir=$outputDir" 'installer/windows/Quantara.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE"
+          }
+          $installer = Get-ChildItem -Path $outputDir -Filter 'QuantaraSetup-*-unsigned.exe' | Select-Object -First 1
+          if ($null -eq $installer) {
+            throw 'Unsigned Windows installer was not produced.'
+          }
+          Write-Host "Installer: $($installer.FullName)"
+
       - name: Upload Windows release candidate and profiling evidence
         uses: actions/upload-artifact@v4
         with:
           name: quantara-windows-${{ env.RC_VERSION }}
           path: |
             dist/windows/quantara-windows-release.zip
+            dist/windows/QuantaraSetup-*-unsigned.exe
             src/client/quantara_app/hot-path-performance-windows.json
           if-no-files-found: error
           retention-days: 14
