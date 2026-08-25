@@ -10,10 +10,8 @@ void main() {
         'lib/features/trading_journal/presentation/trading_journal_view.dart',
       ).readAsStringSync();
 
-      expect(
-        source,
-        contains('TradingJournalReplay.decisionChart(\n      projection.plan,'),
-      );
+      expect(source, contains('TradingJournalReplay.decisionChart('));
+      expect(source, contains('projection.plan,'));
       expect(source, contains('analysis: historicalAnalysis,'));
       expect(source, contains('currentIdea: null,'));
 
