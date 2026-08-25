@@ -9,6 +9,12 @@ import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 String checksum(String character) => List.filled(64, character).join();
 
+http.Response manifestResponse(Map<String, Object?> body) => http.Response.bytes(
+  utf8.encode(jsonEncode(body)),
+  200,
+  headers: const {'content-type': 'application/json; charset=utf-8'},
+);
+
 Map<String, Object?> manifestJson({
   String channel = 'canary',
   String version = '0.14.0',
@@ -81,8 +87,7 @@ void main() {
 
   test('client rejects a channel mismatch', () async {
     final client = MockClient(
-      (_) async =>
-          http.Response(jsonEncode(manifestJson(channel: 'stable')), 200),
+      (_) async => manifestResponse(manifestJson(channel: 'stable')),
     );
     final manifestClient = AppUpdateManifestClient(
       client: client,
@@ -98,7 +103,7 @@ void main() {
 
   test('controller reports an available Android update', () async {
     final client = MockClient(
-      (_) async => http.Response(jsonEncode(manifestJson()), 200),
+      (_) async => manifestResponse(manifestJson()),
     );
     final controller = AppUpdateController(
       manifestClient: AppUpdateManifestClient(
@@ -125,15 +130,12 @@ void main() {
 
   test('revoked current build becomes a mandatory recovery update', () async {
     final client = MockClient(
-      (_) async => http.Response(
-        jsonEncode(
-          manifestJson(
-            version: '0.13.0',
-            buildNumber: 16,
-            revokedBuilds: const [16],
-          ),
+      (_) async => manifestResponse(
+        manifestJson(
+          version: '0.13.0',
+          buildNumber: 16,
+          revokedBuilds: const [16],
         ),
-        200,
       ),
     );
     final controller = AppUpdateController(
