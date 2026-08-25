@@ -165,7 +165,8 @@ void main() {
     expect(jsonText.toLowerCase(), isNot(contains('secretkey')));
     expect(jsonText.toLowerCase(), isNot(contains('credential')));
     expect(csvText, contains('journalTradeId'));
-    expect(csvText, contains('trade-1'));
+    expect(csvText, isNot(contains('trade-1')));
+    expect(csvText, contains('trade_'));
     expect(csvText.toLowerCase(), isNot(contains('secret')));
   });
 }

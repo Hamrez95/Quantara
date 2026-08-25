@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:cryptography/cryptography.dart';
 
 import '../domain/trading_journal_models.dart';
@@ -78,14 +79,22 @@ abstract final class TradingJournalExport {
     return fromPrivacySafeJson(utf8.decode(clearText));
   }
 
-  static String toPrivacySafeJson(TradingJournalLedger ledger) =>
-      const JsonEncoder.withIndent('  ').convert({
-        'schemaVersion': ledger.schemaVersion,
-        'plans': ledger.plans.map(_privacySafePlan).toList(growable: false),
-        'events': ledger.events.map(_privacySafeEvent).toList(growable: false),
-        'integrity': ledger.integrity.name,
-        'warnings': ledger.warnings,
-      });
+  static String toPrivacySafeJson(TradingJournalLedger ledger) {
+    final privacy = _PrivacyContext.fromLedger(ledger);
+    return const JsonEncoder.withIndent('  ').convert({
+      'schemaVersion': ledger.schemaVersion,
+      'plans': ledger.plans
+          .map((plan) => _privacySafePlan(plan, privacy))
+          .toList(growable: false),
+      'events': ledger.events
+          .map((event) => _privacySafeEvent(event, privacy))
+          .toList(growable: false),
+      'integrity': ledger.integrity.name,
+      'warnings': ledger.warnings
+          .map(privacy.sanitizeText)
+          .toList(growable: false),
+    });
+  }
 
   static TradingJournalLedger fromPrivacySafeJson(String text) {
     final decoded = jsonDecode(text);
@@ -125,13 +134,14 @@ abstract final class TradingJournalExport {
       'remainingQuantity',
       'currency',
     ];
+    final privacy = _PrivacyContext.fromLedger(ledger);
     final plans = {for (final plan in ledger.plans) plan.journalTradeId: plan};
     final rows = <List<Object?>>[columns];
     for (final event in ledger.events) {
       final plan = plans[event.journalTradeId];
       rows.add([
-        event.journalTradeId,
-        event.eventId,
+        privacy.identifier('journal', event.journalTradeId),
+        privacy.identifier('event', event.eventId),
         event.type.name,
         event.occurredAt.toUtc().toIso8601String(),
         event.source.name,
@@ -139,9 +149,9 @@ abstract final class TradingJournalExport {
         plan?.symbol ?? '',
         plan?.timeframe ?? '',
         plan?.direction.name ?? '',
-        event.positionId ?? '',
-        event.orderId ?? '',
-        event.tradeId ?? '',
+        privacy.identifier('position', event.positionId),
+        privacy.identifier('order', event.orderId),
+        privacy.identifier('trade', event.tradeId),
         event.quantity ?? '',
         event.price ?? '',
         event.grossPnl ?? '',
@@ -154,32 +164,72 @@ abstract final class TradingJournalExport {
     return rows.map((row) => row.map(_csv).join(',')).join('\n');
   }
 
-  static Map<String, Object?> _privacySafePlan(TradingJournalPlan plan) {
+  static Map<String, Object?> _privacySafePlan(
+    TradingJournalPlan plan,
+    _PrivacyContext privacy,
+  ) {
     final result = Map<String, Object?>.from(plan.toJson());
-    // Client IDs are correlation hints and can contain implementation details;
-    // public exports intentionally omit them along with all credentials.
     result.remove('clientId');
-    return _privacySafeMap(result);
+    return _privacySafeMap(result, privacy);
   }
 
-  static Map<String, Object?> _privacySafeEvent(TradingJournalEvent event) {
+  static Map<String, Object?> _privacySafeEvent(
+    TradingJournalEvent event,
+    _PrivacyContext privacy,
+  ) {
     final result = Map<String, Object?>.from(event.toJson());
     result.remove('clientId');
-    return _privacySafeMap(result);
+    return _privacySafeMap(result, privacy);
   }
 
-  static Map<String, Object?> _privacySafeMap(Map<Object?, Object?> value) => {
+  static Map<String, Object?> _privacySafeMap(
+    Map<Object?, Object?> value,
+    _PrivacyContext privacy,
+  ) => {
     for (final entry in value.entries)
       if (!_secretLike(entry.key.toString()))
-        entry.key.toString(): _privacySafeValue(entry.value),
+        entry.key.toString(): _privacySafeField(
+          entry.key.toString(),
+          entry.value,
+          privacy,
+        ),
   };
 
-  static Object? _privacySafeValue(Object? value) {
-    if (value is Map<Object?, Object?>) return _privacySafeMap(value);
-    if (value is List<Object?>) {
-      return value.map(_privacySafeValue).toList(growable: false);
+  static Object? _privacySafeField(
+    String key,
+    Object? value,
+    _PrivacyContext privacy,
+  ) {
+    final identifierKind = _identifierKind(key);
+    if (identifierKind != null && value is String) {
+      return privacy.identifier(identifierKind, value);
     }
+    return _privacySafeValue(value, privacy);
+  }
+
+  static Object? _privacySafeValue(Object? value, _PrivacyContext privacy) {
+    if (value is Map<Object?, Object?>) return _privacySafeMap(value, privacy);
+    if (value is List<Object?>) {
+      return value
+          .map((item) => _privacySafeValue(item, privacy))
+          .toList(growable: false);
+    }
+    if (value is String) return privacy.sanitizeText(value);
     return value;
+  }
+
+  static String? _identifierKind(String key) {
+    final normalized = key.toLowerCase().replaceAll(RegExp('[^a-z]'), '');
+    return switch (normalized) {
+      'journaltradeid' => 'journal',
+      'eventid' => 'event',
+      'exchangeeventid' => 'exchange_event',
+      'positionid' => 'position',
+      'entryorderid' || 'orderid' => 'order',
+      'tradeid' => 'trade',
+      'clientid' => 'client',
+      _ => null,
+    };
   }
 
   static bool _secretLike(String key) {
@@ -206,5 +256,61 @@ abstract final class TradingJournalExport {
               item.map((key, itemValue) => MapEntry(key.toString(), itemValue)),
         )
         .toList(growable: false);
+  }
+}
+
+final class _PrivacyContext {
+  _PrivacyContext(this._knownIdentifiers);
+
+  factory _PrivacyContext.fromLedger(TradingJournalLedger ledger) {
+    final known = <String, String>{};
+
+    void remember(String kind, String? raw) {
+      final value = raw?.trim() ?? '';
+      if (value.isEmpty) return;
+      known[value] = _pseudonym(kind, value);
+    }
+
+    for (final plan in ledger.plans) {
+      remember('journal', plan.journalTradeId);
+      remember('position', plan.positionId);
+      remember('order', plan.entryOrderId);
+      remember('client', plan.clientId);
+    }
+    for (final event in ledger.events) {
+      remember('journal', event.journalTradeId);
+      remember('event', event.eventId);
+      remember('exchange_event', event.exchangeEventId);
+      remember('position', event.positionId);
+      remember('order', event.orderId);
+      remember('client', event.clientId);
+      remember('trade', event.tradeId);
+    }
+    return _PrivacyContext(known);
+  }
+
+  final Map<String, String> _knownIdentifiers;
+
+  String identifier(String kind, String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return '';
+    return _knownIdentifiers[value] ?? _pseudonym(kind, value);
+  }
+
+  String sanitizeText(String text) {
+    var result = text;
+    final identifiers = _knownIdentifiers.entries.toList(growable: false)
+      ..sort((left, right) => right.key.length.compareTo(left.key.length));
+    for (final entry in identifiers) {
+      result = result.replaceAll(entry.key, entry.value);
+    }
+    return result;
+  }
+
+  static String _pseudonym(String kind, String raw) {
+    final digest = crypto.sha256
+        .convert(utf8.encode('quantara-journal-id-v1:$kind:$raw'))
+        .toString();
+    return '${kind}_${digest.substring(0, 16)}';
   }
 }
