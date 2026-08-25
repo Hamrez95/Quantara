@@ -40,7 +40,8 @@ Map<String, Object?> manifestJson({
     'windows': {
       'version': version,
       'buildNumber': buildNumber,
-      'url': 'https://updates.quantara.app/releases/$version/QuantaraSetup.exe',
+      'url':
+          'https://updates.quantara.app/releases/$version/QuantaraSetup.exe',
       'sha256': checksum('b'),
       'signingIdentity': 'Quantara',
       'architecture': 'x64',
@@ -53,7 +54,10 @@ void main() {
     final manifest = AppUpdateManifest.fromJson(manifestJson());
 
     expect(manifest.channel, AppReleaseChannel.canary);
-    expect(manifest.artifactFor(AppReleasePlatform.android)?.buildNumber, 17);
+    expect(
+      manifest.artifactFor(AppReleasePlatform.android)?.buildNumber,
+      17,
+    );
     expect(
       manifest.artifactFor(AppReleasePlatform.windows)?.downloadUri.scheme,
       'https',
@@ -86,8 +90,12 @@ void main() {
     );
     final manifestClient = AppUpdateManifestClient(
       client: client,
-      stableManifestUri: Uri.parse('https://updates.quantara.app/stable.json'),
-      canaryManifestUri: Uri.parse('https://updates.quantara.app/canary.json'),
+      stableManifestUri: Uri.parse(
+        'https://updates.quantara.app/stable.json',
+      ),
+      canaryManifestUri: Uri.parse(
+        'https://updates.quantara.app/canary.json',
+      ),
     );
 
     expect(
