@@ -173,7 +173,9 @@ void _expectDecisionIndicatorSnapshot(TradeIdea idea) {
   );
   expect(strategyIndicators, hasLength(23));
   expect(
-    idea.indicatorSnapshot.keys.any((key) => key.startsWith('journalChart.v1.')),
+    idea.indicatorSnapshot.keys.any(
+      (key) => key.startsWith('journalChart.v1.'),
+    ),
     isTrue,
   );
   for (final key in const [
