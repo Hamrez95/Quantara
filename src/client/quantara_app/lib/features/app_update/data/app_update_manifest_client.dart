@@ -1,3 +1,6 @@
+// Keep stable public named constructor parameters while storing dependencies privately.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
