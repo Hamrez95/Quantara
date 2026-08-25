@@ -1,0 +1,37 @@
+name: PR288 format once
+
+on:
+  push:
+    branches:
+      - feat/108-journal-historical-chart-ui
+    paths:
+      - '.github/workflows/pr288-format-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/108-journal-historical-chart-ui
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Canonical Dart format
+        working-directory: src/client/quantara_app
+        run: dart format test/issue_173_physical_qa_regression_test.dart test/issue_173_post_reinstall_regression_test.dart
+      - name: Commit canonical formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/client/quantara_app/test/issue_173_physical_qa_regression_test.dart src/client/quantara_app/test/issue_173_post_reinstall_regression_test.dart
+          git commit -m 'style(journal): apply canonical Dart formatting'
+          git push origin HEAD:feat/108-journal-historical-chart-ui
