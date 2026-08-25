@@ -94,10 +94,10 @@ void main() {
         expect(json, isNot(contains(raw)));
         expect(csv, isNot(contains(raw)));
       }
-      expect(json, contains('journal-'));
-      expect(json, contains('position-'));
-      expect(json, contains('order-'));
-      expect(json, contains('trade-'));
+      expect(json, contains('journal_'));
+      expect(json, contains('position_'));
+      expect(json, contains('order_'));
+      expect(json, contains('trade_'));
 
       final imported = TradingJournalExport.fromPrivacySafeJson(json);
       expect(imported.plans, hasLength(1));
