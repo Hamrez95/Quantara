@@ -1,6 +1,6 @@
 #define MyAppName "Quantara"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.0-rc.1"
+  #define MyAppVersion "1.2.0-rc.3"
 #endif
 #ifndef MyAppBuildRoot
   #define MyAppBuildRoot "..\..\src\client\quantara_app\build\windows\x64\runner\Release"
@@ -18,8 +18,8 @@ DefaultDirName={autopf}\Quantara
 DefaultGroupName=Quantara
 DisableProgramGroupPage=yes
 OutputDir={#MyOutputDir}
-OutputBaseFilename=QuantaraSetup-{#MyAppVersion}
-Compression=lzma2/ultra64
+OutputBaseFilename=QuantaraSetup-{#MyAppVersion}-unsigned
+Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
@@ -37,7 +37,7 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
-Name: "startup"; Description: "Start Quantara with Windows (UI only, trading remains disarmed)"; GroupDescription: "Startup:"; Flags: unchecked
+Name: "startup"; Description: "Start Quantara with Windows (UI only; trading remains disarmed)"; GroupDescription: "Startup:"; Flags: unchecked
 
 [Files]
 Source: "{#MyAppBuildRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -58,6 +58,8 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  // No background execution worker is installed by the RC foundation.
+  // This foundation installs the UI only. It intentionally does not install,
+  // start, arm, or replace an execution worker. A later service-aware updater
+  // must reconcile protected positions before replacing a running worker.
   Result := '';
 end;
