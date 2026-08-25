@@ -77,6 +77,23 @@ function Copy-BuildArtifact(
     Copy-Item -LiteralPath $Source -Destination (Join-Path $TargetDirectory $Name) -Force
 }
 
+function Install-QuantaraPwaWorker {
+    $source = Join-Path $AppDirectory "web/quantara_service_worker.js"
+    $destination = Join-Path $AppDirectory "build/web/flutter_service_worker.js"
+    if (-not (Test-Path -LiteralPath $source)) {
+        Fail-Build "Quantara service worker پیدا نشد: $source"
+    }
+    if (-not (Test-Path -LiteralPath (Split-Path -Parent $destination))) {
+        Fail-Build "خروجی PWA برای نصب service worker پیدا نشد."
+    }
+    Copy-Item -LiteralPath $source -Destination $destination -Force
+    $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash
+    $destinationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash
+    if ($sourceHash -ne $destinationHash) {
+        Fail-Build "service worker بسته PWA با worker مالکیت‌شده Quantara یکسان نیست."
+    }
+}
+
 Require-Command "flutter"
 Require-Command "git"
 if (-not (Test-Path -LiteralPath (Join-Path $AppDirectory "pubspec.yaml"))) {
@@ -140,6 +157,8 @@ try {
                 "pwa" {
                     Write-Step "ساخت PWA"
                     Invoke-Checked "flutter" @("build", "web", $mode)
+                    Write-Step "نصب service worker مالکیت‌شده Quantara"
+                    Install-QuantaraPwaWorker
                     $directory = Join-Path $artifactRoot "pwa"
                     New-Item -ItemType Directory -Force -Path $directory | Out-Null
                     $zip = Join-Path $directory "Quantara-$safeVersion-pwa.zip"
