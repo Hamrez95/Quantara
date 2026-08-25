@@ -9,11 +9,13 @@ import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 String checksum(String character) => List.filled(64, character).join();
 
-http.Response manifestResponse(Map<String, Object?> body) => http.Response.bytes(
-  utf8.encode(jsonEncode(body)),
-  200,
-  headers: const {'content-type': 'application/json; charset=utf-8'},
-);
+http.Response manifestResponse(Map<String, Object?> body) {
+  return http.Response.bytes(
+    utf8.encode(jsonEncode(body)),
+    200,
+    headers: const {'content-type': 'application/json; charset=utf-8'},
+  );
+}
 
 Map<String, Object?> manifestJson({
   String channel = 'canary',
