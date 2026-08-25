@@ -26,65 +26,74 @@ void main() {
     ),
   );
 
-  test('runner executes and certifies every required fault exactly once', () async {
-    final executed = <AutonomyFaultCode>[];
+  test(
+    'runner executes and certifies every required fault exactly once',
+    () async {
+      final executed = <AutonomyFaultCode>[];
 
-    final result = await AutonomyFaultCampaignRunner.run(
-      scenarios: campaign(),
-      execute: (scenario) async {
-        executed.add(scenario.fault);
-        return observations();
-      },
-    );
-
-    expect(executed, AutonomyFaultCode.values);
-    expect(result.certifications, hasLength(AutonomyFaultCode.values.length));
-    expect(result.stopShip, isFalse);
-    expect(result.promotionEligible, isTrue);
-    expect(result.failedFaultCodes, isEmpty);
-  });
-
-  test('one machine-asserted invariant failure stop-ships the campaign', () async {
-    final result = await AutonomyFaultCampaignRunner.run(
-      scenarios: campaign(),
-      execute: (scenario) async {
-        if (scenario.fault == AutonomyFaultCode.submitTimeoutUnknownOutcome) {
-          return observations(
-            failed: AutonomyStopShipInvariant.ambiguousMutationReleasedRisk,
-            evidenceId: 'supervisor:unknown-submit-risk-release',
-          );
-        }
-        return observations();
-      },
-    );
-
-    expect(result.stopShip, isTrue);
-    expect(result.promotionEligible, isFalse);
-    expect(result.failedFaultCodes, [
-      AutonomyFaultCode.submitTimeoutUnknownOutcome.name,
-    ]);
-  });
-
-  test('runner fails closed before execution when campaign is incomplete', () async {
-    final incomplete = campaign().toList()
-      ..removeWhere(
-        (scenario) =>
-            scenario.fault == AutonomyFaultCode.databaseWriteInterruption,
-      );
-    var executed = false;
-
-    await expectLater(
-      AutonomyFaultCampaignRunner.run(
-        scenarios: incomplete,
+      final result = await AutonomyFaultCampaignRunner.run(
+        scenarios: campaign(),
         execute: (scenario) async {
-          executed = true;
+          executed.add(scenario.fault);
           return observations();
         },
-      ),
-      throwsStateError,
-    );
-    expect(executed, isFalse);
-  });
+      );
+
+      expect(executed, AutonomyFaultCode.values);
+      expect(result.certifications, hasLength(AutonomyFaultCode.values.length));
+      expect(result.stopShip, isFalse);
+      expect(result.promotionEligible, isTrue);
+      expect(result.failedFaultCodes, isEmpty);
+    },
+  );
+
+  test(
+    'one machine-asserted invariant failure stop-ships the campaign',
+    () async {
+      final result = await AutonomyFaultCampaignRunner.run(
+        scenarios: campaign(),
+        execute: (scenario) async {
+          if (scenario.fault == AutonomyFaultCode.submitTimeoutUnknownOutcome) {
+            return observations(
+              failed: AutonomyStopShipInvariant.ambiguousMutationReleasedRisk,
+              evidenceId: 'supervisor:unknown-submit-risk-release',
+            );
+          }
+          return observations();
+        },
+      );
+
+      expect(result.stopShip, isTrue);
+      expect(result.promotionEligible, isFalse);
+      expect(result.failedFaultCodes, [
+        AutonomyFaultCode.submitTimeoutUnknownOutcome.name,
+      ]);
+    },
+  );
+
+  test(
+    'runner fails closed before execution when campaign is incomplete',
+    () async {
+      final incomplete = campaign().toList()
+        ..removeWhere(
+          (scenario) =>
+              scenario.fault == AutonomyFaultCode.databaseWriteInterruption,
+        );
+      var executed = false;
+
+      await expectLater(
+        AutonomyFaultCampaignRunner.run(
+          scenarios: incomplete,
+          execute: (scenario) async {
+            executed = true;
+            return observations();
+          },
+        ),
+        throwsStateError,
+      );
+      expect(executed, isFalse);
+    },
+  );
 
   test('runner rejects missing invariant evidence from any fault', () async {
     await expectLater(
