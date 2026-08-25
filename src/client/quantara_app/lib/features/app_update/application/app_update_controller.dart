@@ -54,8 +54,11 @@ final class AppUpdateController extends ChangeNotifier {
       }
       final revoked = manifest.revokedBuilds.contains(currentBuildNumber);
       final newerBuild = artifact.buildNumber > currentBuildNumber;
-      final newerVersion =
-          _compareVersions(artifact.version, currentVersion) > 0;
+      final newerVersion = _compareVersions(
+            artifact.version,
+            currentVersion,
+          ) >
+          0;
       _result = AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuildNumber: currentBuildNumber,
