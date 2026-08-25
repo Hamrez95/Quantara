@@ -65,7 +65,13 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test tool
+        shell: bash
+        run: |
+          set +e
+          dart format lib test tool
+          git diff -- lib/features/app_update test/app_update_manifest_test.dart
+          git diff --quiet -- lib test tool
+          exit $?
 
       - name: Analyze
         shell: bash
