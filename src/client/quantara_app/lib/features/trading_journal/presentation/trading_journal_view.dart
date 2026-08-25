@@ -9,6 +9,7 @@ import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../domain/trading_journal_models.dart';
 import '../domain/trading_journal_projection.dart';
+import '../domain/trading_journal_replay.dart';
 import '../domain/trading_journal_statistics.dart';
 import '../domain/trading_counterfactual_performance.dart';
 import '../domain/trading_performance_models.dart';
@@ -232,29 +233,9 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
 
   Widget _buildDetail(BuildContext context) {
     final projection = _selected!;
-    final symbolKey = projection.symbol.trim().toUpperCase();
-    final requestedTimeframe = projection.timeframe.trim();
-    final requestedKey = '$symbolKey|$requestedTimeframe';
-    var liveAnalysis = widget.liveAnalyses[requestedKey];
-    var liveIdea = widget.liveIdeas[requestedKey];
-    if (liveAnalysis == null) {
-      for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h']) {
-        final fallbackKey = '$symbolKey|$fallbackTimeframe';
-        final fallbackAnalysis = widget.liveAnalyses[fallbackKey];
-        if (fallbackAnalysis == null) continue;
-        liveAnalysis = fallbackAnalysis;
-        liveIdea = widget.liveIdeas[fallbackKey];
-        break;
-      }
-    }
-    if (liveAnalysis == null) {
-      for (final entry in widget.liveAnalyses.entries) {
-        if (!entry.key.startsWith('$symbolKey|')) continue;
-        liveAnalysis = entry.value;
-        liveIdea = widget.liveIdeas[entry.key];
-        break;
-      }
-    }
+    final historicalAnalysis = TradingJournalReplay.decisionChart(
+      projection.plan,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -275,8 +256,8 @@ final class _TradingJournalViewState extends State<TradingJournalView> {
         const SizedBox(height: 16),
         _JournalLivePositionChart(
           projection: projection,
-          analysis: liveAnalysis,
-          currentIdea: liveIdea,
+          analysis: historicalAnalysis,
+          currentIdea: null,
           persian: _persian,
         ),
         const SizedBox(height: 16),
@@ -1808,8 +1789,8 @@ class _JournalLivePositionChart extends StatelessWidget {
         accentColor: QuantaraColors.warning,
         child: Text(
           persian
-              ? 'برای این رکورد پلن تصمیم‌گیری قابل اتکا ثبت نشده است؛ نمودار زنده چیزی را حدس نمی‌زند.'
-              : 'No attributable decision plan is stored for this record; the live chart will not invent one.',
+              ? 'برای این رکورد پلن تصمیم‌گیری قابل اتکا ثبت نشده است؛ بازپخش تاریخی چیزی را حدس نمی‌زند.'
+              : 'No attributable decision plan is stored for this record; historical replay will not invent one.',
         ),
       );
     }
@@ -1824,8 +1805,8 @@ class _JournalLivePositionChart extends StatelessWidget {
             SectionHeading(
               title: persian ? 'نمودار پوزیشن' : 'Position chart',
               subtitle: persian
-                  ? 'پلن ورود ثابت مانده؛ داده زنده این نماد/تایم‌فریم فعلاً در اسنپ‌شات بازار موجود نیست.'
-                  : 'The entry plan remains frozen; live market data for this symbol/timeframe is not currently available.',
+                  ? 'برای این رکورد اسنپ‌شات معتبر لحظه تصمیم ذخیره نشده است؛ داده زنده جایگزین تاریخچه نمی‌شود.'
+                  : 'No valid decision-time chart snapshot is stored for this record; newer live data is never substituted for history.',
             ),
             const SizedBox(height: 10),
             Text(
@@ -1882,9 +1863,9 @@ class _JournalLivePositionChart extends StatelessWidget {
     ];
 
     String zoneRole(ChartZoneRole role) => switch (role) {
-      ChartZoneRole.support => persian ? 'حمایت زنده' : 'Live support',
-      ChartZoneRole.resistance => persian ? 'مقاومت زنده' : 'Live resistance',
-      ChartZoneRole.pivot => persian ? 'پیوت زنده' : 'Live pivot',
+      ChartZoneRole.support => persian ? 'حمایت لحظه تصمیم' : 'Decision-time support',
+      ChartZoneRole.resistance => persian ? 'مقاومت لحظه تصمیم' : 'Decision-time resistance',
+      ChartZoneRole.pivot => persian ? 'پیوت لحظه تصمیم' : 'Decision-time pivot',
     };
 
     return SectionCard(
@@ -1893,10 +1874,10 @@ class _JournalLivePositionChart extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SectionHeading(
-            title: persian ? 'نمودار زنده پوزیشن' : 'Live position chart',
+            title: persian ? 'بازپخش نمودار لحظه تصمیم' : 'Decision-time chart replay',
             subtitle: persian
-                ? 'کندل‌ها و نواحی، زنده‌اند؛ Entry / SL / TP از پلن تغییرناپذیر لحظه ورود می‌آیند.'
-                : 'Candles and zones are live; Entry / SL / TP come from the immutable decision-time plan.',
+                ? 'کندل‌ها، نواحی و Entry / SL / TP همگی از اسنپ‌شات تغییرناپذیر همان تصمیم می‌آیند.'
+                : 'Candles, zones and Entry / SL / TP all come from the immutable snapshot captured for this decision.',
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -1906,7 +1887,7 @@ class _JournalLivePositionChart extends StatelessWidget {
               Chip(
                 avatar: const Icon(Icons.show_chart_rounded, size: 17),
                 label: Text(
-                  '${persian ? 'قیمت فعلی' : 'Current'} ${QuantaraNumberFormat.marketValue(currentPrice)}',
+                  '${persian ? 'بسته‌شدن آخر اسنپ‌شات' : 'Snapshot close'} ${QuantaraNumberFormat.marketValue(currentPrice)}',
                 ),
               ),
               Chip(
@@ -1986,7 +1967,7 @@ class _JournalLivePositionChart extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            persian ? 'نواحی فعلی بازار' : 'Current market zones',
+            persian ? 'نواحی لحظه تصمیم' : 'Decision-time zones',
             style: Theme.of(
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
