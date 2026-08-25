@@ -74,6 +74,15 @@ void main() {
     expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
   });
 
+  test('rejects a 64-character checksum that is not hexadecimal', () {
+    final json = manifestJson();
+    final artifacts = json['artifacts']! as Map<String, Object?>;
+    final android = artifacts['android']! as Map<String, Object?>;
+    android['sha256'] = checksum('z');
+
+    expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
+  });
+
   test('client rejects a channel mismatch', () async {
     final client = MockClient(
       (_) async =>
