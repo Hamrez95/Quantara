@@ -1863,9 +1863,12 @@ class _JournalLivePositionChart extends StatelessWidget {
     ];
 
     String zoneRole(ChartZoneRole role) => switch (role) {
-      ChartZoneRole.support => persian ? 'حمایت لحظه تصمیم' : 'Decision-time support',
-      ChartZoneRole.resistance => persian ? 'مقاومت لحظه تصمیم' : 'Decision-time resistance',
-      ChartZoneRole.pivot => persian ? 'پیوت لحظه تصمیم' : 'Decision-time pivot',
+      ChartZoneRole.support =>
+        persian ? 'حمایت لحظه تصمیم' : 'Decision-time support',
+      ChartZoneRole.resistance =>
+        persian ? 'مقاومت لحظه تصمیم' : 'Decision-time resistance',
+      ChartZoneRole.pivot =>
+        persian ? 'پیوت لحظه تصمیم' : 'Decision-time pivot',
     };
 
     return SectionCard(
@@ -1874,7 +1877,9 @@ class _JournalLivePositionChart extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SectionHeading(
-            title: persian ? 'بازپخش نمودار لحظه تصمیم' : 'Decision-time chart replay',
+            title: persian
+                ? 'بازپخش نمودار لحظه تصمیم'
+                : 'Decision-time chart replay',
             subtitle: persian
                 ? 'کندل‌ها، نواحی و Entry / SL / TP همگی از اسنپ‌شات تغییرناپذیر همان تصمیم می‌آیند.'
                 : 'Candles, zones and Entry / SL / TP all come from the immutable snapshot captured for this decision.',
