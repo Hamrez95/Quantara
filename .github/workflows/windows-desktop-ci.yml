@@ -97,7 +97,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Inno Setup failed with exit code $LASTEXITCODE"
           }
-          $installer = Get-ChildItem -Path $outputDir -Filter 'QuantaraSetup-*-unsigned.exe' | Select-Object -First 1
+          $installer = Get-ChildItem -Path $outputDir -Filter 'QuantaraSetup-*.exe' | Select-Object -First 1
           if ($null -eq $installer) {
             throw 'Unsigned Windows installer was not produced.'
           }
@@ -109,7 +109,7 @@ jobs:
           name: quantara-windows-${{ env.RC_VERSION }}
           path: |
             dist/windows/quantara-windows-release.zip
-            dist/windows/QuantaraSetup-*-unsigned.exe
+            dist/windows/QuantaraSetup-*.exe
             src/client/quantara_app/hot-path-performance-windows.json
           if-no-files-found: error
           retention-days: 14
