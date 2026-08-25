@@ -1,9 +1,10 @@
 name: Temporary journal replay patch
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/108-journal-historical-chart-ui
+      - dev
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
