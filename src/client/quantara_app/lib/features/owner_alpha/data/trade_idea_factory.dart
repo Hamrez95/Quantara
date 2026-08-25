@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../market_analysis/domain/market_chart_models.dart';
+import '../../trading_journal/domain/trading_journal_chart_snapshot.dart';
 import '../domain/owner_alpha_models.dart';
 import 'professional_strategy_engine.dart';
 
@@ -18,7 +19,7 @@ abstract final class TradeIdeaFactory {
     SignalCadence cadence = SignalCadence.balanced,
     ProfessionalStrategyContext? professionalContext,
   }) {
-    final idea = ProfessionalStrategyEngine.create(
+    final rawIdea = ProfessionalStrategyEngine.create(
       analysis: analysis,
       capital: capital,
       riskPercent: riskPercent,
@@ -28,6 +29,7 @@ abstract final class TradeIdeaFactory {
       cadence: cadence,
       context: professionalContext,
     );
+    final idea = _withJournalChartSnapshot(rawIdea, analysis);
     if (!idea.isActionable) return idea;
 
     final requiredMargin = idea.requiredMargin;
@@ -115,6 +117,49 @@ abstract final class TradeIdeaFactory {
     };
   }
 
+  static TradeIdea _withJournalChartSnapshot(
+    TradeIdea idea,
+    TimeframeChartAnalysis analysis,
+  ) {
+    final indicatorSnapshot = <String, double>{
+      ...idea.indicatorSnapshot,
+      ...TradingJournalChartSnapshot.encodeIntoIndicatorSnapshot(analysis),
+    };
+    return TradeIdea(
+      symbol: idea.symbol,
+      timeframe: idea.timeframe,
+      direction: idea.direction,
+      confidencePercent: idea.confidencePercent,
+      entryLower: idea.entryLower,
+      entryUpper: idea.entryUpper,
+      stopLoss: idea.stopLoss,
+      targets: idea.targets,
+      riskReward: idea.riskReward,
+      maximumLoss: idea.maximumLoss,
+      positionSize: idea.positionSize,
+      notionalValue: idea.notionalValue,
+      recommendedLeverage: idea.recommendedLeverage,
+      maximumSafeLeverage: idea.maximumSafeLeverage,
+      requiredMargin: idea.requiredMargin,
+      estimatedRoundTripCosts: idea.estimatedRoundTripCosts,
+      setupId: idea.setupId,
+      candleClosedAt: idea.candleClosedAt,
+      summary: idea.summary,
+      invalidation: idea.invalidation,
+      reasons: idea.reasons,
+      rejectionReason: idea.rejectionReason,
+      strategy: idea.strategy,
+      strategyVersion: idea.strategyVersion,
+      marketRegime: idea.marketRegime,
+      indicatorSnapshot: Map.unmodifiable(indicatorSnapshot),
+      setupQualityScore: idea.setupQualityScore,
+      expectation: idea.expectation,
+      trigger: idea.trigger,
+      contextVersion: idea.contextVersion,
+      evidenceBreakdown: idea.evidenceBreakdown,
+    );
+  }
+
   static TradeIdea _blockedIdea({
     required TradeIdea idea,
     required double maximumLoss,
@@ -149,5 +194,11 @@ abstract final class TradeIdeaFactory {
     strategy: idea.strategy,
     strategyVersion: idea.strategyVersion,
     marketRegime: idea.marketRegime,
+    indicatorSnapshot: idea.indicatorSnapshot,
+    setupQualityScore: idea.setupQualityScore,
+    expectation: idea.expectation,
+    trigger: idea.trigger,
+    contextVersion: idea.contextVersion,
+    evidenceBreakdown: idea.evidenceBreakdown,
   );
 }

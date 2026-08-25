@@ -166,7 +166,18 @@ void main() {
 }
 
 void _expectDecisionIndicatorSnapshot(TradeIdea idea) {
-  expect(idea.indicatorSnapshot, hasLength(23));
+  final strategyIndicators = Map<String, double>.fromEntries(
+    idea.indicatorSnapshot.entries.where(
+      (entry) => !entry.key.startsWith('journalChart.'),
+    ),
+  );
+  expect(strategyIndicators, hasLength(23));
+  expect(
+    idea.indicatorSnapshot.keys.any(
+      (key) => key.startsWith('journalChart.v1.'),
+    ),
+    isTrue,
+  );
   for (final key in const [
     'ema20',
     'ema50',
@@ -192,7 +203,7 @@ void _expectDecisionIndicatorSnapshot(TradeIdea idea) {
     'recentSwingHigh',
     'recentSwingLow',
   ]) {
-    final value = idea.indicatorSnapshot[key];
+    final value = strategyIndicators[key];
     expect(value, isNotNull, reason: 'missing $key');
     expect(value!.isFinite, isTrue, reason: '$key must be finite');
   }
