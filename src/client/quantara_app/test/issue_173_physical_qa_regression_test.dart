@@ -108,39 +108,45 @@ void main() {
     expect(snapshot.allOpenPositionsFullyProtected, isTrue);
   });
 
-  test('Issue 173 wiring preserves frozen plan and live market separation', () {
-    final projectionSource = File(
-      'lib/features/auto_trade/domain/trading_pnl_projection.dart',
-    ).readAsStringSync();
-    final serviceSource = File(
-      'lib/features/auto_trade/application/local_live_trade_service.dart',
-    ).readAsStringSync();
-    final accountSource = File(
-      'lib/features/auto_trade/domain/auto_trade_models.dart',
-    ).readAsStringSync();
-    final chartSource = File(
-      'lib/features/market_analysis/presentation/tradingview_lightweight_chart.dart',
-    ).readAsStringSync();
-    final journalSource = File(
-      'lib/features/trading_journal/presentation/trading_journal_view.dart',
-    ).readAsStringSync();
-    final pageSource = File(
-      'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
-    ).readAsStringSync();
+  test(
+    'Issue 173 wiring preserves frozen plan and immutable historical replay',
+    () {
+      final projectionSource = File(
+        'lib/features/auto_trade/domain/trading_pnl_projection.dart',
+      ).readAsStringSync();
+      final serviceSource = File(
+        'lib/features/auto_trade/application/local_live_trade_service.dart',
+      ).readAsStringSync();
+      final accountSource = File(
+        'lib/features/auto_trade/domain/auto_trade_models.dart',
+      ).readAsStringSync();
+      final chartSource = File(
+        'lib/features/market_analysis/presentation/tradingview_lightweight_chart.dart',
+      ).readAsStringSync();
+      final journalSource = File(
+        'lib/features/trading_journal/presentation/trading_journal_view.dart',
+      ).readAsStringSync();
+      final pageSource = File(
+        'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
+      ).readAsStringSync();
 
-    expect(projectionSource, contains('pendingNetFromHistory'));
-    expect(projectionSource, contains('pendingFeeExpense'));
-    expect(serviceSource, contains('clearWarning: true'));
-    expect(accountSource, contains('expectedTakeProfitCount: 1'));
-    expect(chartSource, contains('this.tradeOverlay'));
-    expect(journalSource, contains('نمودار زنده پوزیشن'));
-    expect(
-      journalSource,
-      contains('تحلیل بازار از زمان ورود تغییر جهت داده است'),
-    );
-    expect(journalSource, contains('previousDonchianHigh20'));
-    expect(journalSource, contains('live.strongestZones'));
-    expect(pageSource, contains('journalLiveAnalyses'));
-    expect(pageSource, contains('await _controller.refresh();'));
-  });
+      expect(projectionSource, contains('pendingNetFromHistory'));
+      expect(projectionSource, contains('pendingFeeExpense'));
+      expect(serviceSource, contains('clearWarning: true'));
+      expect(accountSource, contains('expectedTakeProfitCount: 1'));
+      expect(chartSource, contains('this.tradeOverlay'));
+      expect(journalSource, contains('TradingJournalReplay.decisionChart('));
+      expect(journalSource, contains('analysis: historicalAnalysis,'));
+      expect(journalSource, contains('currentIdea: null,'));
+      expect(journalSource, contains('بازپخش نمودار لحظه تصمیم'));
+      expect(
+        journalSource,
+        contains('داده زنده جایگزین تاریخچه نمی‌شود'),
+      );
+      expect(journalSource, contains('previousDonchianHigh20'));
+      expect(journalSource, contains('live.strongestZones'));
+      expect(pageSource, contains('journalLiveAnalyses'));
+      expect(pageSource, contains('await _controller.refresh();'));
+    },
+  );
 }
