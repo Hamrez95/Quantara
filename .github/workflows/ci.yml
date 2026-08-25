@@ -109,21 +109,3 @@ jobs:
 
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
-
-  patch-journal-replay:
-    name: Apply journal replay product patch
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: feat/108-journal-historical-chart-ui
-      - run: python3 scripts/_temp_patch_journal_replay.py
-      - run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/client/quantara_app/lib/features/trading_journal/presentation/trading_journal_view.dart
-          git diff --cached --quiet && exit 0
-          git commit -m 'feat(journal): render immutable decision-time replay'
-          git push origin HEAD:feat/108-journal-historical-chart-ui
