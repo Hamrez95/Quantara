@@ -84,9 +84,8 @@ final class AppUpdateManifest {
       (item) => item.name == json['channel'],
       orElse: () => throw const FormatException('Unknown release channel.'),
     );
-    final publishedAt = DateTime.tryParse(
-      json['publishedAt']?.toString() ?? '',
-    )?.toUtc();
+    final publishedAt = DateTime.tryParse(json['publishedAt']?.toString() ?? '')
+        ?.toUtc();
     if (publishedAt == null) {
       throw const FormatException('Manifest publication time is invalid.');
     }
