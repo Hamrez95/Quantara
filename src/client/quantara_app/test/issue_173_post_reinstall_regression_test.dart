@@ -55,20 +55,28 @@ void main() {
     },
   );
 
-  test('recovered journal uses live context without rewriting frozen plan', () {
+  test('recovered journal replays decision snapshot without live substitution', () {
     final source = File(
       'lib/features/trading_journal/presentation/trading_journal_view.dart',
     ).readAsStringSync();
 
+    expect(source, contains('TradingJournalReplay.decisionChart('));
+    expect(source, contains('analysis: historicalAnalysis,'));
+    expect(source, contains('currentIdea: null,'));
     expect(
       source,
-      contains(
-        "for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h'])",
+      isNot(
+        contains(
+          "for (final fallbackTimeframe in const ['1h', '15m', '5m', '4h'])",
+        ),
       ),
+    );
+    expect(
+      source,
+      contains('newer live data is never substituted for history'),
     );
     expect(source, contains('activeTargets'));
     expect(source, contains('targets: activeTargets'));
-    expect(source, contains('پلن تاریخی بازنویسی نشده'));
   });
 
   test('initial target confirmation treats an exact lot as active', () {
