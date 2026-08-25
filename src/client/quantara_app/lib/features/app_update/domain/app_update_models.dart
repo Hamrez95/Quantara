@@ -31,11 +31,12 @@ final class AppReleaseArtifact {
     final buildNumber = (json['buildNumber'] as num?)?.toInt() ?? 0;
     final downloadUri = Uri.tryParse(json['url']?.toString() ?? '');
     final sha256 = json['sha256']?.toString().trim().toLowerCase() ?? '';
+    final validSha256 = RegExp(r'^[a-f0-9]{64}$').hasMatch(sha256);
     if (version.isEmpty ||
         buildNumber < 1 ||
         downloadUri == null ||
         downloadUri.scheme != 'https' ||
-        sha256.length != 64) {
+        !validSha256) {
       throw const FormatException('Release artifact metadata is invalid.');
     }
     return AppReleaseArtifact(
