@@ -22,16 +22,19 @@ void main() {
     },
   );
 
-  test('update request stops entries but keeps existing management available', () {
-    final snapshot = WindowsServiceUpdatePolicy.resolve(
-      event: WindowsServiceUpdateEvent.updateRequested,
-      hasExchangeReportedOpenPositions: true,
-    );
+  test(
+    'update request stops entries but keeps existing management available',
+    () {
+      final snapshot = WindowsServiceUpdatePolicy.resolve(
+        event: WindowsServiceUpdateEvent.updateRequested,
+        hasExchangeReportedOpenPositions: true,
+      );
 
-    expect(snapshot.mode, WindowsServiceUpdateMode.preparing);
-    expect(snapshot.blocksNewEntries, isTrue);
-    expect(snapshot.localManagementAvailable, isTrue);
-  });
+      expect(snapshot.mode, WindowsServiceUpdateMode.preparing);
+      expect(snapshot.blocksNewEntries, isTrue);
+      expect(snapshot.localManagementAvailable, isTrue);
+    },
+  );
 
   test('service stop hands authority back to exchange-native protection', () {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
@@ -67,18 +70,21 @@ void main() {
     expect(snapshot.blocksNewEntries, isTrue);
   });
 
-  test('reconciled open positions resume management without re-arming entries', () {
-    final snapshot = WindowsServiceUpdatePolicy.resolve(
-      event: WindowsServiceUpdateEvent.reconciliationSucceeded,
-      hasExchangeReportedOpenPositions: true,
-    );
+  test(
+    'reconciled open positions resume management without re-arming entries',
+    () {
+      final snapshot = WindowsServiceUpdatePolicy.resolve(
+        event: WindowsServiceUpdateEvent.reconciliationSucceeded,
+        hasExchangeReportedOpenPositions: true,
+      );
 
-    expect(snapshot.mode, WindowsServiceUpdateMode.managingExisting);
-    expect(snapshot.reconciliationRequired, isFalse);
-    expect(snapshot.localManagementAvailable, isTrue);
-    expect(snapshot.blocksNewEntries, isTrue);
-    expect(snapshot.requiresExplicitStart, isTrue);
-  });
+      expect(snapshot.mode, WindowsServiceUpdateMode.managingExisting);
+      expect(snapshot.reconciliationRequired, isFalse);
+      expect(snapshot.localManagementAvailable, isTrue);
+      expect(snapshot.blocksNewEntries, isTrue);
+      expect(snapshot.requiresExplicitStart, isTrue);
+    },
+  );
 
   test('successful reconciliation without positions ends disarmed', () {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
