@@ -75,10 +75,16 @@ if (-not (Test-Path $listenerTestExe)) {
     throw "Windows service listener test executable was not produced at $listenerTestExe"
 }
 
+$networkChangeTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_network_change_test.exe"
+if (-not (Test-Path $networkChangeTestExe)) {
+    throw "Windows service network-change test executable was not produced at $networkChangeTestExe"
+}
+
 Invoke-BoundedNativeTest -Path $serviceExe -Name 'quantara_windows_service --self-test' -Arguments @('--self-test')
 Invoke-BoundedNativeTest -Path $credentialVaultTestExe -Name 'quantara_windows_service_credential_vault_test'
 Invoke-BoundedNativeTest -Path $responseTestExe -Name 'quantara_windows_service_response_test'
 Invoke-BoundedNativeTest -Path $sessionTestExe -Name 'quantara_windows_service_session_test'
 Invoke-BoundedNativeTest -Path $listenerTestExe -Name 'quantara_windows_service_listener_test'
+Invoke-BoundedNativeTest -Path $networkChangeTestExe -Name 'quantara_windows_service_network_change_test'
 
 Write-Host "Windows service host: $serviceExe"
