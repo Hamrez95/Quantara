@@ -42,20 +42,16 @@ std::optional<std::string> EncodeCanonicalReadOnlyResponse(
       return std::nullopt;
     }
 
-    const char* kind = nullptr;
     switch (request.kind) {
       case ReadOnlyRequestKind::kHandshake:
-        kind = "handshakeResponse";
-        break;
       case ReadOnlyRequestKind::kStatusRequest:
-        kind = "statusResponse";
         break;
     }
 
     std::string response =
         "{\"protocolVersion\":1,\"requestId\":\"" + request.request_id +
-        "\",\"kind\":\"" + kind +
-        "\",\"payload\":{\"serviceState\":\"" + std::string(state_name) +
+        "\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"" +
+        std::string(state_name) +
         "\",\"entryAuthority\":false}}";
     if (response.size() > kWindowsServiceMaxFrameBytes) {
       return std::nullopt;
