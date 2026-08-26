@@ -8,38 +8,41 @@ import 'package:quantara_app/features/app_update/data/app_update_download_verifi
 import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 void main() {
-  test('native download fails closed when identity policy is unavailable', () async {
-    final payload = utf8.encode('native-artifact');
-    var requested = false;
-    final verifier = AppUpdateDownloadVerifier(
-      client: MockClient((request) async {
-        requested = true;
-        return http.Response.bytes(payload, 200);
-      }),
-    );
-    addTearDown(verifier.close);
-    final artifact = AppReleaseArtifact(
-      platform: AppReleasePlatform.android,
-      version: '1.2.1',
-      buildNumber: 127,
-      downloadUri: Uri.parse('https://releases.example.com/quantara.apk'),
-      sha256: sha256.convert(payload).toString(),
-      packageId: 'com.quantara.quantara_app',
-      signingIdentity: 'AA:BB',
-    );
+  test(
+    'native download fails closed when identity policy is unavailable',
+    () async {
+      final payload = utf8.encode('native-artifact');
+      var requested = false;
+      final verifier = AppUpdateDownloadVerifier(
+        client: MockClient((request) async {
+          requested = true;
+          return http.Response.bytes(payload, 200);
+        }),
+      );
+      addTearDown(verifier.close);
+      final artifact = AppReleaseArtifact(
+        platform: AppReleasePlatform.android,
+        version: '1.2.1',
+        buildNumber: 127,
+        downloadUri: Uri.parse('https://releases.example.com/quantara.apk'),
+        sha256: sha256.convert(payload).toString(),
+        packageId: 'com.quantara.quantara_app',
+        signingIdentity: 'AA:BB',
+      );
 
-    await expectLater(
-      verifier.downloadAndVerify(artifact),
-      throwsA(
-        isA<AppUpdateDownloadException>().having(
-          (error) => error.message,
-          'message',
-          contains('identity policy is unavailable'),
+      await expectLater(
+        verifier.downloadAndVerify(artifact),
+        throwsA(
+          isA<AppUpdateDownloadException>().having(
+            (error) => error.message,
+            'message',
+            contains('identity policy is unavailable'),
+          ),
         ),
-      ),
-    );
-    expect(requested, isFalse);
-  });
+      );
+      expect(requested, isFalse);
+    },
+  );
 
   test('Windows signing policy is required before native download', () async {
     final payload = utf8.encode('windows-artifact');
