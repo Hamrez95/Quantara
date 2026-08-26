@@ -95,4 +95,38 @@ void main() {
       ),
     );
   });
+
+  test('bounds a streamed artifact when content length is unknown', () async {
+    final expected = utf8.encode('expected');
+    final verifier = AppUpdateDownloadVerifier(
+      maxBytes: 4,
+      client: _StreamingClient([
+        <int>[1, 2, 3],
+        <int>[4, 5, 6],
+      ]),
+    );
+    addTearDown(verifier.close);
+
+    await expectLater(
+      verifier.downloadAndVerify(artifactFor(expected)),
+      throwsA(
+        isA<AppUpdateDownloadException>().having(
+          (error) => error.message,
+          'message',
+          contains('allowed download size'),
+        ),
+      ),
+    );
+  });
+}
+
+final class _StreamingClient extends http.BaseClient {
+  _StreamingClient(this.chunks);
+
+  final List<List<int>> chunks;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(Stream<List<int>>.fromIterable(chunks), 200);
+  }
 }
