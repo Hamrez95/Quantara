@@ -11,7 +11,7 @@ void main() {
     version: '1.2.0',
     buildNumber: 120,
     downloadUri: Uri.parse('https://releases.example.com/quantara.bin'),
-    sha256: 'a' * 64,
+    sha256: List.filled(64, 'a').join(),
     packageId: platform == AppReleasePlatform.android
         ? 'com.quantara.quantara_app'
         : null,
