@@ -36,6 +36,11 @@ if (-not (Test-Path $serviceExe)) {
     throw "Windows service executable was not produced at $serviceExe"
 }
 
+$credentialVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_vault_test.exe"
+if (-not (Test-Path $credentialVaultTestExe)) {
+    throw "Windows service credential vault test executable was not produced at $credentialVaultTestExe"
+}
+
 $responseTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_response_test.exe"
 if (-not (Test-Path $responseTestExe)) {
     throw "Windows service response test executable was not produced at $responseTestExe"
@@ -53,6 +58,9 @@ if (-not (Test-Path $listenerTestExe)) {
 
 & $serviceExe --self-test
 Assert-LastExitCode 'quantara_windows_service --self-test'
+
+& $credentialVaultTestExe
+Assert-LastExitCode 'quantara_windows_service_credential_vault_test'
 
 & $responseTestExe
 Assert-LastExitCode 'quantara_windows_service_response_test'
