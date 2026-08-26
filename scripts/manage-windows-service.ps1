@@ -16,16 +16,13 @@ $displayName = 'Quantara Execution Service'
 function Invoke-Sc {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
-        [string[]]$Arguments,
-        [switch]$AllowFailure
+        [string[]]$Arguments
     )
 
     & sc.exe @Arguments
-    $exitCode = $LASTEXITCODE
-    if (-not $AllowFailure -and $exitCode -ne 0) {
-        throw "sc.exe $($Arguments -join ' ') failed with exit code $exitCode"
+    if ($LASTEXITCODE -ne 0) {
+        throw "sc.exe $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
     }
-    return $exitCode
 }
 
 function Test-ServiceExists {
@@ -61,7 +58,7 @@ function Stop-ServiceIfPresent {
         return
     }
 
-    Invoke-Sc stop $serviceName | Out-Null
+    Invoke-Sc stop $serviceName
     Wait-ServiceStopped
 }
 
@@ -87,13 +84,13 @@ switch ($Action) {
         $binPath = '"' + $resolvedServiceExe + '"'
 
         if (Test-ServiceExists) {
-            Invoke-Sc config $serviceName "binPath= $binPath" 'start= auto' "DisplayName= $displayName" | Out-Null
+            Invoke-Sc config $serviceName 'binPath=' $binPath 'start=' 'auto' 'DisplayName=' $displayName
         }
         else {
-            Invoke-Sc create $serviceName "binPath= $binPath" 'start= auto' "DisplayName= $displayName" | Out-Null
+            Invoke-Sc create $serviceName 'binPath=' $binPath 'start=' 'auto' 'DisplayName=' $displayName
         }
 
-        Invoke-Sc description $serviceName 'Quantara fail-closed local execution host. Starts disarmed and requires reconciliation before any future entry authority.' | Out-Null
+        Invoke-Sc description $serviceName 'Quantara fail-closed local execution host. Starts disarmed and requires reconciliation before any future entry authority.'
 
         # Intentionally do not start the service from the installer. This keeps
         # installation/update from silently restoring execution authority. The
@@ -107,6 +104,6 @@ switch ($Action) {
         }
 
         Stop-ServiceIfPresent
-        Invoke-Sc delete $serviceName | Out-Null
+        Invoke-Sc delete $serviceName
     }
 }
