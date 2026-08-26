@@ -1,0 +1,37 @@
+name: Temporary format issue 81
+
+on:
+  push:
+    branches:
+      - feat/81-update-download-verification
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/81-update-download-verification
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.5'
+          channel: stable
+          cache: true
+      - name: Format exact files
+        working-directory: src/client/quantara_app
+        run: |
+          dart format lib/features/app_update/data/app_update_download_verifier.dart test/app_update_download_verifier_test.dart
+      - name: Commit canonical format
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/app_update/data/app_update_download_verifier.dart src/client/quantara_app/test/app_update_download_verifier_test.dart
+          git commit -m "style(updates): canonicalize download verifier"
+          git push origin HEAD:feat/81-update-download-verification
