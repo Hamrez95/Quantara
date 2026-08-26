@@ -13,7 +13,8 @@ constexpr DWORD kMaxAuthenticatedPipeMessageBytes = 64 * 1024;
 // The peer is authenticated from the Windows token before any bytes are
 // accepted. Oversized/truncated frames fail closed. This transport grants no
 // command or execution authority; callers must separately validate protocol
-// version, message kind and replay/idempotency policy.
+// version, message kind and replay/idempotency policy before interpreting the
+// returned bytes.
 bool ReadAuthenticatedLocalMessage(HANDLE pipe,
                                    std::vector<std::uint8_t>& message) noexcept;
 
