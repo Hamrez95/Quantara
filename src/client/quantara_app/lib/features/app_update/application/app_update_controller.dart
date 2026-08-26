@@ -55,16 +55,26 @@ final class AppUpdateController extends ChangeNotifier {
           'No update artifact is published for this platform.',
         );
       }
+      if (_compareVersions(artifact.version, manifest.minimumSupportedVersion) <
+          0) {
+        throw const FormatException(
+          'Published update is below the minimum supported version.',
+        );
+      }
       final revoked = manifest.revokedBuilds.contains(currentBuildNumber);
       final newerBuild = artifact.buildNumber > currentBuildNumber;
       final newerVersion =
           _compareVersions(artifact.version, currentVersion) > 0;
+      final belowMinimumSupported =
+          _compareVersions(currentVersion, manifest.minimumSupportedVersion) <
+          0;
       _result = AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuildNumber: currentBuildNumber,
         channel: _channel,
-        updateAvailable: revoked || newerBuild || newerVersion,
-        mandatory: manifest.mandatory || revoked,
+        updateAvailable:
+            revoked || belowMinimumSupported || newerBuild || newerVersion,
+        mandatory: manifest.mandatory || revoked || belowMinimumSupported,
         revoked: revoked,
         artifact: artifact,
         releaseNotes:
