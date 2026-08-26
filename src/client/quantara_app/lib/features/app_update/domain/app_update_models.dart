@@ -46,7 +46,7 @@ final class AppReleaseArtifact {
         rawBuildNumber < 1 ||
         downloadUri == null ||
         downloadUri.scheme != 'https' ||
-        downloadUri.hasUserInfo ||
+        downloadUri.userInfo.isNotEmpty ||
         downloadUri.host.isEmpty ||
         !validSha256) {
       throw const FormatException('Release artifact metadata is invalid.');
@@ -185,7 +185,10 @@ final class AppUpdateManifest {
     }
     final revokedBuilds = <int>{};
     for (final value in rawRevokedBuilds) {
-      if (value is! int || value < 1 || !revokedBuilds.add(value)) {
+      if (value is! int || value < 1) {
+        throw const FormatException('Revoked build metadata is invalid.');
+      }
+      if (!revokedBuilds.add(value)) {
         throw const FormatException('Revoked build metadata is invalid.');
       }
     }
