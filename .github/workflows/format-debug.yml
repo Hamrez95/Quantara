@@ -1,15 +1,14 @@
 name: Temporary Dart format diff
 
 on:
-  pull_request:
-    branches: [dev]
+  push:
+    branches: [feat/80-windows-ipc-protocol-foundation]
 
 permissions:
   contents: read
 
 jobs:
   format-diff:
-    if: github.head_ref == 'feat/80-windows-ipc-protocol-foundation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
