@@ -18,7 +18,7 @@ jobs:
           ref: feat/81-update-download-verification
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.5'
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
       - name: Format exact files
