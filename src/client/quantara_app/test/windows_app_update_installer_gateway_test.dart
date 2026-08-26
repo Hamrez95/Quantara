@@ -104,6 +104,36 @@ void main() {
     },
   );
 
+  test('deletes installer when Explorer handoff fails', () async {
+    String? persistedPath;
+    final gateway = WindowsAppUpdateInstallerGateway(
+      isWindows: true,
+      temporaryDirectoryProvider: () async => tempDirectory,
+      processRunner: (executable, arguments, {environment}) async {
+        persistedPath = environment?['QUANTARA_UPDATE_PATH'];
+        return ProcessResult(1, 0, 'AA-BB-CC', '');
+      },
+      processStarter:
+          (executable, arguments, {mode = ProcessStartMode.normal}) async {
+            throw const FileSystemException('Explorer unavailable');
+          },
+    );
+
+    await expectLater(
+      gateway.handoff(_download()),
+      throwsA(
+        isA<AppUpdateInstallException>().having(
+          (error) => error.message,
+          'message',
+          contains('handoff failed safely'),
+        ),
+      ),
+    );
+
+    expect(persistedPath, isNotNull);
+    expect(await File(persistedPath!).exists(), isFalse);
+  });
+
   test('rejects unapproved artifact types before signature check', () async {
     var signatureChecks = 0;
     final gateway = WindowsAppUpdateInstallerGateway(
