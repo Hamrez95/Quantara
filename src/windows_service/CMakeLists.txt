@@ -4,6 +4,8 @@ project(quantara_windows_service LANGUAGES CXX)
 
 add_executable(quantara_windows_service
   main.cpp
+  credential_vault.cpp
+  credential_vault.h
 )
 
 target_compile_features(quantara_windows_service PRIVATE cxx_std_20)
@@ -18,4 +20,4 @@ target_compile_options(quantara_windows_service PRIVATE
   /WX
   /permissive-
 )
-target_link_libraries(quantara_windows_service PRIVATE advapi32)
+target_link_libraries(quantara_windows_service PRIVATE advapi32 crypt32)
