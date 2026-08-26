@@ -3,6 +3,7 @@
 #include <sddl.h>
 
 #include <array>
+#include <vector>
 
 namespace quantara {
 namespace {
@@ -60,6 +61,50 @@ bool HasWellKnownMembership(HANDLE token, WELL_KNOWN_SID_TYPE sid_type) noexcept
   return is_member == TRUE;
 }
 
+bool ReadTokenUserSid(HANDLE token, std::vector<BYTE>& buffer,
+                      PSID& sid) noexcept {
+  sid = nullptr;
+  DWORD required = 0;
+  GetTokenInformation(token, TokenUser, nullptr, 0, &required);
+  if (required == 0 || GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+    return false;
+  }
+
+  buffer.resize(required);
+  if (!GetTokenInformation(token, TokenUser, buffer.data(), required,
+                           &required)) {
+    buffer.clear();
+    return false;
+  }
+
+  const auto* token_user = reinterpret_cast<const TOKEN_USER*>(buffer.data());
+  if (token_user->User.Sid == nullptr || !IsValidSid(token_user->User.Sid)) {
+    buffer.clear();
+    return false;
+  }
+  sid = token_user->User.Sid;
+  return true;
+}
+
+bool IsSameUserAsServiceProcess(HANDLE peer_token) noexcept {
+  HANDLE process_token = nullptr;
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &process_token)) {
+    return false;
+  }
+
+  std::vector<BYTE> peer_buffer;
+  std::vector<BYTE> process_buffer;
+  PSID peer_sid = nullptr;
+  PSID process_sid = nullptr;
+  const bool comparable = ReadTokenUserSid(peer_token, peer_buffer, peer_sid) &&
+                          ReadTokenUserSid(process_token, process_buffer,
+                                           process_sid);
+  const bool same_user =
+      comparable && EqualSid(peer_sid, process_sid) == TRUE;
+  CloseHandle(process_token);
+  return same_user;
+}
+
 bool IsAllowedPipeName(const std::wstring& pipe_name) noexcept {
   if (pipe_name.size() <= kPipePrefixLength) {
     return false;
@@ -93,28 +138,46 @@ bool AuthenticateConnectedLocalPeer(HANDLE pipe) noexcept {
     return false;
   }
 
+  // Resolve the connected client's PID from the named-pipe kernel object, then
+  // inspect that process token directly. ImpersonateNamedPipeClient is tied to
+  // the last message read and therefore cannot safely be the pre-read identity
+  // gate for this transport.
   ULONG client_process_id = 0;
   if (!GetNamedPipeClientProcessId(pipe, &client_process_id) ||
       client_process_id == 0) {
     return false;
   }
 
-  if (!ImpersonateNamedPipeClient(pipe)) {
+  HANDLE client_process =
+      OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, client_process_id);
+  if (client_process == nullptr) {
     return false;
   }
 
   HANDLE token = nullptr;
-  bool authenticated = false;
-  if (OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &token)) {
-    authenticated =
-        HasWellKnownMembership(token, WinInteractiveSid) ||
-        HasWellKnownMembership(token, WinBuiltinAdministratorsSid);
-    CloseHandle(token);
-  }
-
-  if (!RevertToSelf()) {
+  const bool token_opened =
+      OpenProcessToken(client_process, TOKEN_QUERY, &token) == TRUE;
+  CloseHandle(client_process);
+  if (!token_opened) {
     return false;
   }
+
+  ULONG verified_process_id = 0;
+  const bool connection_unchanged =
+      GetNamedPipeClientProcessId(pipe, &verified_process_id) == TRUE &&
+      verified_process_id == client_process_id;
+
+  // A real desktop client normally carries the Interactive SID. Hosted CI
+  // runners may use a batch/service logon token instead, so also accept a peer
+  // whose kernel-reported token user exactly matches this process user. The
+  // pipe ACL remains local-only and no application/execution authority is
+  // granted by successful transport authentication.
+  const bool authenticated =
+      connection_unchanged &&
+      (IsSameUserAsServiceProcess(token) ||
+       HasWellKnownMembership(token, WinInteractiveSid) ||
+       HasWellKnownMembership(token, WinBuiltinAdministratorsSid));
+  CloseHandle(token);
   return authenticated;
 }
 

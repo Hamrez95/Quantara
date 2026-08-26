@@ -1,12 +1,16 @@
 #include <windows.h>
 
 #include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <string_view>
+#include <thread>
+#include <vector>
 
 #include "credential_vault.h"
 #include "local_pipe_security.h"
+#include "local_pipe_transport.h"
 
 namespace {
 constexpr wchar_t kServiceName[] = L"QuantaraExecutionService";
@@ -152,6 +156,70 @@ bool RunLocalPipeSecuritySelfTest() noexcept {
   return unauthenticated_rejected;
 }
 
+bool RunAuthenticatedPipeTransportSelfTest() noexcept {
+  const std::wstring pipe_name =
+      L"\\\\.\\pipe\\QuantaraExecutionService.transport-self-test." +
+      std::to_wstring(GetCurrentProcessId());
+  HANDLE pipe = quantara::CreateLocalPipeServer(pipe_name);
+  if (pipe == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+
+  HANDLE client_release = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (client_release == nullptr) {
+    CloseHandle(pipe);
+    return false;
+  }
+
+  constexpr std::uint8_t kPayload[] = {0x51, 0x54, 0x52, 0x41};
+  std::atomic<bool> client_ok{false};
+  std::thread client([&]() {
+    if (!WaitNamedPipeW(pipe_name.c_str(), 5000)) {
+      return;
+    }
+    HANDLE handle = CreateFileW(pipe_name.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                0, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+      return;
+    }
+    DWORD message_mode = PIPE_READMODE_MESSAGE;
+    if (!SetNamedPipeHandleState(handle, &message_mode, nullptr, nullptr)) {
+      CloseHandle(handle);
+      return;
+    }
+    DWORD written = 0;
+    const bool write_ok =
+        WriteFile(handle, kPayload, sizeof(kPayload), &written, nullptr) == TRUE &&
+        written == sizeof(kPayload);
+    client_ok.store(write_ok, std::memory_order_relaxed);
+    if (write_ok) {
+      // Keep the authenticated peer connected until the server has consumed
+      // the frame. Closing immediately after WriteFile can race token lookup.
+      WaitForSingleObject(client_release, 5000);
+    }
+    CloseHandle(handle);
+  });
+
+  const BOOL connected = ConnectNamedPipe(pipe, nullptr);
+  const DWORD connect_error = connected ? ERROR_SUCCESS : GetLastError();
+  bool server_ok = connected == TRUE || connect_error == ERROR_PIPE_CONNECTED;
+  std::vector<std::uint8_t> message;
+  if (server_ok) {
+    server_ok = quantara::ReadAuthenticatedLocalMessage(pipe, message) &&
+                message.size() == sizeof(kPayload);
+    for (size_t index = 0; server_ok && index < message.size(); ++index) {
+      server_ok = message[index] == kPayload[index];
+    }
+  }
+
+  SetEvent(client_release);
+  DisconnectNamedPipe(pipe);
+  CloseHandle(pipe);
+  client.join();
+  CloseHandle(client_release);
+  return server_ok && client_ok.load(std::memory_order_relaxed);
+}
+
 bool RunSelfTest() noexcept {
   g_safety_state.store(RuntimeSafetyState::kDisarmed,
                        std::memory_order_relaxed);
@@ -173,7 +241,15 @@ bool RunSelfTest() noexcept {
     return false;
   }
 
-  return RunCredentialVaultSelfTest() && RunLocalPipeSecuritySelfTest();
+  std::vector<std::uint8_t> rejected_message{0x51};
+  if (quantara::ReadAuthenticatedLocalMessage(INVALID_HANDLE_VALUE,
+                                              rejected_message) ||
+      !rejected_message.empty()) {
+    return false;
+  }
+
+  return RunCredentialVaultSelfTest() && RunLocalPipeSecuritySelfTest() &&
+         RunAuthenticatedPipeTransportSelfTest();
 }
 }  // namespace
 
