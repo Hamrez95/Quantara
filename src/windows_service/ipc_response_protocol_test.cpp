@@ -31,7 +31,8 @@ int wmain() {
   const auto interrupted = quantara::EncodeCanonicalReadOnlyResponse(
       ReadOnlyRequest{"status-2", ReadOnlyRequestKind::kStatusRequest},
       ServiceSafetyState::kInterrupted);
-  if (!interrupted.has_value() || interrupted->find("\"entryAuthority\":false") == std::string::npos ||
+  if (!interrupted.has_value() ||
+      interrupted->find("\"entryAuthority\":false") == std::string::npos ||
       interrupted->find("\"serviceState\":\"interrupted\"") == std::string::npos) {
     std::wcerr << L"Interrupted state must remain fail-closed.\n";
     return 1;
@@ -42,6 +43,14 @@ int wmain() {
           ServiceSafetyState::kDisarmed)
           .has_value()) {
     std::wcerr << L"Empty request id was accepted.\n";
+    return 1;
+  }
+
+  if (quantara::EncodeCanonicalReadOnlyResponse(
+          ReadOnlyRequest{"unsafe\"id", ReadOnlyRequestKind::kStatusRequest},
+          ServiceSafetyState::kDisarmed)
+          .has_value()) {
+    std::wcerr << L"Unsafe request id was accepted for JSON encoding.\n";
     return 1;
   }
 
