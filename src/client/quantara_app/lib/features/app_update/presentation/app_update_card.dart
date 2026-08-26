@@ -23,6 +23,43 @@ final class AppUpdateCard extends StatelessWidget {
 
   bool get _persian => locale.languageCode == 'fa';
 
+  Future<void> _confirmDownload(
+    BuildContext context,
+    AppReleaseArtifact artifact,
+  ) async {
+    final callback = onDownloadVerifiedArtifact;
+    if (callback == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('app-update-confirm-dialog'),
+        title: Text(_persian ? 'دریافت به‌روزرسانی؟' : 'Download update?'),
+        content: Text(
+          _persian
+              ? 'Quantara فایل نصب را دانلود و صحت آن را بررسی می‌کند. نصب یا راه‌اندازی مجدد فقط با اقدام صریح بعدی شما انجام می‌شود.'
+              : 'Quantara will download and verify the installer. Installation or restart still requires your next explicit action.',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('app-update-confirm-cancel'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(_persian ? 'انصراف' : 'Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('app-update-confirm-download'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(_persian ? 'دانلود و بررسی' : 'Download & verify'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await callback(artifact);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final updateController = controller;
@@ -130,7 +167,7 @@ final class AppUpdateCard extends StatelessWidget {
                         onDownloadVerifiedArtifact == null ||
                             updateController.isBusy
                         ? null
-                        : () => onDownloadVerifiedArtifact!(artifact),
+                        : () => _confirmDownload(context, artifact),
                     icon: const Icon(Icons.download_rounded),
                     label: Text(
                       _persian
