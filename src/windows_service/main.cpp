@@ -1,8 +1,11 @@
 #include <windows.h>
 
 #include <atomic>
+#include <filesystem>
 #include <iostream>
 #include <string_view>
+
+#include "credential_vault.h"
 
 namespace {
 constexpr wchar_t kServiceName[] = L"QuantaraExecutionService";
@@ -98,6 +101,42 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   ReportServiceStatus(SERVICE_STOPPED);
 }
 
+bool RunCredentialVaultSelfTest() noexcept {
+  std::filesystem::path root;
+  std::error_code cleanup_error;
+  try {
+    root = std::filesystem::temp_directory_path() /
+           (L"quantara-service-self-test-" +
+            std::to_wstring(GetCurrentProcessId()));
+    std::filesystem::remove_all(root, cleanup_error);
+
+    quantara::CredentialVault vault(root);
+    vault.Store(L"self-test", "first-secret");
+    const auto first = vault.Load(L"self-test");
+    if (!first.has_value() || *first != "first-secret") {
+      std::filesystem::remove_all(root, cleanup_error);
+      return false;
+    }
+
+    vault.Store(L"self-test", "rotated-secret");
+    const auto rotated = vault.Load(L"self-test");
+    if (!rotated.has_value() || *rotated != "rotated-secret") {
+      std::filesystem::remove_all(root, cleanup_error);
+      return false;
+    }
+
+    vault.Remove(L"self-test");
+    const bool removed = !vault.Load(L"self-test").has_value();
+    std::filesystem::remove_all(root, cleanup_error);
+    return removed;
+  } catch (...) {
+    if (!root.empty()) {
+      std::filesystem::remove_all(root, cleanup_error);
+    }
+    return false;
+  }
+}
+
 bool RunSelfTest() noexcept {
   g_safety_state.store(RuntimeSafetyState::kDisarmed,
                        std::memory_order_relaxed);
@@ -115,7 +154,11 @@ bool RunSelfTest() noexcept {
 
   g_safety_state.store(RuntimeSafetyState::kDisarmed,
                        std::memory_order_relaxed);
-  return SafetyStateAfterPowerEvent(0) == RuntimeSafetyState::kDisarmed;
+  if (SafetyStateAfterPowerEvent(0) != RuntimeSafetyState::kDisarmed) {
+    return false;
+  }
+
+  return RunCredentialVaultSelfTest();
 }
 }  // namespace
 

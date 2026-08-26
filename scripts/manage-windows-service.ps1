@@ -25,9 +25,15 @@ function Invoke-Sc {
     }
 }
 
+function Get-QuantaraService {
+    # Missing service is an expected install/upgrade/uninstall state. Avoid
+    # probing it through sc.exe because GitHub's PowerShell wrappers can treat
+    # the native 1060 exit code as a failed step before we can inspect it.
+    return Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+}
+
 function Test-ServiceExists {
-    & sc.exe query $serviceName *> $null
-    return $LASTEXITCODE -eq 0
+    return $null -ne (Get-QuantaraService)
 }
 
 function Wait-ServiceStopped {
@@ -35,11 +41,12 @@ function Wait-ServiceStopped {
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     while ([DateTime]::UtcNow -lt $deadline) {
-        $output = & sc.exe query $serviceName 2>&1
-        if ($LASTEXITCODE -ne 0) {
+        $service = Get-QuantaraService
+        if ($null -eq $service) {
             return
         }
-        if (($output -join "`n") -match 'STATE\s*:\s*1\s+STOPPED') {
+        $service.Refresh()
+        if ($service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
             return
         }
         Start-Sleep -Milliseconds 250
@@ -48,13 +55,28 @@ function Wait-ServiceStopped {
     throw "Windows service '$serviceName' did not stop within $TimeoutSeconds seconds."
 }
 
+function Wait-ServiceRemoved {
+    param([int]$TimeoutSeconds = 20)
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if (-not (Test-ServiceExists)) {
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "Windows service '$serviceName' was not removed within $TimeoutSeconds seconds."
+}
+
 function Stop-ServiceIfPresent {
-    if (-not (Test-ServiceExists)) {
+    $service = Get-QuantaraService
+    if ($null -eq $service) {
         return
     }
 
-    $output = & sc.exe query $serviceName 2>&1
-    if (($output -join "`n") -match 'STATE\s*:\s*1\s+STOPPED') {
+    $service.Refresh()
+    if ($service.Status -eq [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
         return
     }
 
@@ -105,5 +127,9 @@ switch ($Action) {
 
         Stop-ServiceIfPresent
         Invoke-Sc delete $serviceName
+        # Service deletion is asynchronous in SCM. Wait until the registration
+        # is actually gone so installer/CI callers do not race a service still
+        # marked for deletion into the next install or verification step.
+        Wait-ServiceRemoved
     }
 }
