@@ -4,11 +4,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
 
 #include "credential_vault.h"
+#include "ipc_request_protocol.h"
 #include "local_pipe_security.h"
 #include "local_pipe_transport.h"
 
@@ -156,6 +158,45 @@ bool RunLocalPipeSecuritySelfTest() noexcept {
   return unauthenticated_rejected;
 }
 
+bool RunIpcProtocolSelfTest() noexcept {
+  try {
+    const std::string valid =
+        "{\"protocolVersion\":1,\"requestId\":\"status-1\",\"kind\":\"statusRequest\",\"payload\":{}}";
+    const std::vector<std::uint8_t> valid_bytes(valid.begin(), valid.end());
+    const auto decoded = quantara::DecodeCanonicalReadOnlyRequest(valid_bytes);
+    if (!decoded.has_value() || decoded->request_id != "status-1" ||
+        decoded->kind != quantara::ReadOnlyRequestKind::kStatusRequest) {
+      return false;
+    }
+
+    const std::string mutating =
+        "{\"protocolVersion\":1,\"requestId\":\"trade-1\",\"kind\":\"executeTrade\",\"payload\":{}}";
+    const std::vector<std::uint8_t> mutating_bytes(mutating.begin(),
+                                                   mutating.end());
+    if (quantara::DecodeCanonicalReadOnlyRequest(mutating_bytes).has_value()) {
+      return false;
+    }
+
+    const std::string incompatible =
+        "{\"protocolVersion\":2,\"requestId\":\"status-2\",\"kind\":\"statusRequest\",\"payload\":{}}";
+    const std::vector<std::uint8_t> incompatible_bytes(incompatible.begin(),
+                                                       incompatible.end());
+    if (quantara::DecodeCanonicalReadOnlyRequest(incompatible_bytes).has_value()) {
+      return false;
+    }
+
+    quantara::RequestReplayGuard guard(2);
+    if (!guard.Accept("request-1") || !guard.Accept("request-2") ||
+        guard.Accept("request-1") || !guard.Accept("request-3") ||
+        guard.size() != 2 || !guard.Accept("request-1")) {
+      return false;
+    }
+    return guard.size() == 2;
+  } catch (...) {
+    return false;
+  }
+}
+
 bool RunAuthenticatedPipeTransportSelfTest() noexcept {
   const std::wstring pipe_name =
       L"\\\\.\\pipe\\QuantaraExecutionService.transport-self-test." +
@@ -171,7 +212,8 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
     return false;
   }
 
-  constexpr std::uint8_t kPayload[] = {0x51, 0x54, 0x52, 0x41};
+  const std::string payload =
+      "{\"protocolVersion\":1,\"requestId\":\"transport-1\",\"kind\":\"statusRequest\",\"payload\":{}}";
   std::atomic<bool> client_ok{false};
   std::thread client([&]() {
     if (!WaitNamedPipeW(pipe_name.c_str(), 5000)) {
@@ -189,8 +231,9 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
     }
     DWORD written = 0;
     const bool write_ok =
-        WriteFile(handle, kPayload, sizeof(kPayload), &written, nullptr) == TRUE &&
-        written == sizeof(kPayload);
+        WriteFile(handle, payload.data(), static_cast<DWORD>(payload.size()),
+                  &written, nullptr) == TRUE &&
+        written == payload.size();
     client_ok.store(write_ok, std::memory_order_relaxed);
     if (write_ok) {
       // Keep the authenticated peer connected until the server has consumed
@@ -205,11 +248,15 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
   bool server_ok = connected == TRUE || connect_error == ERROR_PIPE_CONNECTED;
   std::vector<std::uint8_t> message;
   if (server_ok) {
-    server_ok = quantara::ReadAuthenticatedLocalMessage(pipe, message) &&
-                message.size() == sizeof(kPayload);
-    for (size_t index = 0; server_ok && index < message.size(); ++index) {
-      server_ok = message[index] == kPayload[index];
-    }
+    server_ok = quantara::ReadAuthenticatedLocalMessage(pipe, message);
+  }
+  if (server_ok) {
+    const auto request = quantara::DecodeCanonicalReadOnlyRequest(message);
+    quantara::RequestReplayGuard replay_guard;
+    server_ok = request.has_value() && request->request_id == "transport-1" &&
+                request->kind == quantara::ReadOnlyRequestKind::kStatusRequest &&
+                replay_guard.Accept(request->request_id) &&
+                !replay_guard.Accept(request->request_id);
   }
 
   SetEvent(client_release);
@@ -249,7 +296,7 @@ bool RunSelfTest() noexcept {
   }
 
   return RunCredentialVaultSelfTest() && RunLocalPipeSecuritySelfTest() &&
-         RunAuthenticatedPipeTransportSelfTest();
+         RunIpcProtocolSelfTest() && RunAuthenticatedPipeTransportSelfTest();
 }
 }  // namespace
 
