@@ -34,6 +34,25 @@ target_compile_options(quantara_windows_service PRIVATE
 )
 target_link_libraries(quantara_windows_service PRIVATE advapi32 crypt32)
 
+add_executable(quantara_windows_service_credential_vault_test
+  credential_vault.cpp
+  credential_vault.h
+  credential_vault_test.cpp
+)
+target_compile_features(quantara_windows_service_credential_vault_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_credential_vault_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_credential_vault_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
+target_link_libraries(quantara_windows_service_credential_vault_test PRIVATE advapi32 crypt32)
+
 add_executable(quantara_windows_service_response_test
   ipc_request_protocol.cpp
   ipc_request_protocol.h
