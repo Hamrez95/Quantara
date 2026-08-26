@@ -23,15 +23,18 @@ void main() {
     expect(snapshot.reconciliationRequired, isTrue);
   });
 
-  test('cold launch remains disarmed without forcing recovery reconciliation', () {
-    final snapshot = WindowsServiceStartupPolicy.resolve(
-      reason: WindowsServiceStartupReason.coldLaunch,
-      hasExchangeReportedOpenPositions: false,
-    );
+  test(
+    'cold launch remains disarmed without forcing recovery reconciliation',
+    () {
+      final snapshot = WindowsServiceStartupPolicy.resolve(
+        reason: WindowsServiceStartupReason.coldLaunch,
+        hasExchangeReportedOpenPositions: false,
+      );
 
-    expect(snapshot.authority, WindowsServiceAuthorityState.disarmed);
-    expect(snapshot.reconciliationRequired, isFalse);
-  });
+      expect(snapshot.authority, WindowsServiceAuthorityState.disarmed);
+      expect(snapshot.reconciliationRequired, isFalse);
+    },
+  );
 
   for (final reason in WindowsServiceStartupReason.values) {
     test('$reason with exchange positions is reconciliation-only', () {
