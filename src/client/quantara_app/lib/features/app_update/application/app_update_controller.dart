@@ -57,20 +57,20 @@ final class AppUpdateController extends ChangeNotifier {
 
   Future<void> setChannel(AppReleaseChannel channel) async {
     if (_busy || channel == _channel || _disposed) return;
-    final previous = _channel;
-    _channel = channel;
-    _result = null;
-    _error = null;
-    notifyListeners();
     try {
       await _channelStore?.save(channel);
     } on Object catch (error) {
       if (_disposed) return;
-      _channel = previous;
       _result = null;
       _error = 'Update channel could not be saved safely (${error.runtimeType}).';
       notifyListeners();
+      return;
     }
+    if (_disposed) return;
+    _channel = channel;
+    _result = null;
+    _error = null;
+    notifyListeners();
   }
 
   Future<bool> check() async {
