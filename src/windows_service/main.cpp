@@ -241,6 +241,13 @@ bool RunSelfTest() noexcept {
     return false;
   }
 
+  std::vector<std::uint8_t> rejected_message{0x51};
+  if (quantara::ReadAuthenticatedLocalMessage(INVALID_HANDLE_VALUE,
+                                              rejected_message) ||
+      !rejected_message.empty()) {
+    return false;
+  }
+
   return RunCredentialVaultSelfTest() && RunLocalPipeSecuritySelfTest() &&
          RunAuthenticatedPipeTransportSelfTest();
 }
