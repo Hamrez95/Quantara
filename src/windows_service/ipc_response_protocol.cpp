@@ -3,6 +3,24 @@
 #include <string>
 
 namespace quantara {
+namespace {
+
+bool IsSafeResponseRequestId(std::string_view value) noexcept {
+  if (value.empty() || value.size() > 64) {
+    return false;
+  }
+  for (const char ch : value) {
+    const bool safe = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                      (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' ||
+                      ch == '-';
+    if (!safe) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
 
 std::string_view ServiceSafetyStateName(ServiceSafetyState state) noexcept {
   switch (state) {
@@ -20,8 +38,7 @@ std::optional<std::string> EncodeCanonicalReadOnlyResponse(
     const ReadOnlyRequest& request, ServiceSafetyState state) noexcept {
   try {
     const auto state_name = ServiceSafetyStateName(state);
-    if (state_name == "unknown" || request.request_id.empty() ||
-        request.request_id.size() > 64) {
+    if (state_name == "unknown" || !IsSafeResponseRequestId(request.request_id)) {
       return std::nullopt;
     }
 
