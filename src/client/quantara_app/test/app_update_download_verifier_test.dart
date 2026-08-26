@@ -9,14 +9,14 @@ import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 void main() {
   AppReleaseArtifact artifactFor(List<int> bytes) => AppReleaseArtifact(
-        platform: AppReleasePlatform.android,
-        version: '1.2.1',
-        buildNumber: 127,
-        downloadUri: Uri.parse('https://releases.example.com/quantara.apk'),
-        sha256: sha256.convert(bytes).toString(),
-        packageId: 'com.quantara.quantara_app',
-        signingIdentity: 'AA:BB',
-      );
+    platform: AppReleasePlatform.android,
+    version: '1.2.1',
+    buildNumber: 127,
+    downloadUri: Uri.parse('https://releases.example.com/quantara.apk'),
+    sha256: sha256.convert(bytes).toString(),
+    packageId: 'com.quantara.quantara_app',
+    signingIdentity: 'AA:BB',
+  );
 
   test('returns verified bytes only when SHA-256 matches the manifest', () async {
     final payload = utf8.encode('signed-release-artifact');
