@@ -8,8 +8,10 @@ on:
       - 'release/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'src/windows_service/**'
       - 'installer/windows/**'
       - 'scripts/build-windows.ps1'
+      - 'scripts/build-windows-service.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
   pull_request:
     branches:
@@ -17,8 +19,10 @@ on:
       - main
     paths:
       - 'src/client/quantara_app/**'
+      - 'src/windows_service/**'
       - 'installer/windows/**'
       - 'scripts/build-windows.ps1'
+      - 'scripts/build-windows-service.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
 
 permissions:
@@ -74,6 +78,10 @@ jobs:
         shell: pwsh
         run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner -PackageZip
 
+      - name: Build fail-closed Windows service host
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release
+
       - name: Ensure Inno Setup compiler
         shell: pwsh
         run: |
@@ -110,6 +118,7 @@ jobs:
           path: |
             dist/windows/quantara-windows-release.zip
             dist/windows/QuantaraSetup-*.exe
+            build/windows-service/Release/quantara_windows_service.exe
             src/client/quantara_app/hot-path-performance-windows.json
           if-no-files-found: error
           retention-days: 14
