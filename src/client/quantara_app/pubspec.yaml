@@ -21,6 +21,7 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   flutter_local_notifications: ^22.2.0
   flutter_foreground_task: ^10.0.0
+  package_info_plus: ^10.2.1
   shared_preferences: ^2.5.3
   sembast: ^3.8.9+1
   sembast_web: ^2.4.5+1
