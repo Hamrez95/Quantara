@@ -27,27 +27,49 @@ final class AppReleaseArtifact {
     AppReleasePlatform platform,
     Map<String, Object?> json,
   ) {
-    final version = json['version']?.toString().trim() ?? '';
-    final buildNumber = (json['buildNumber'] as num?)?.toInt() ?? 0;
-    final downloadUri = Uri.tryParse(json['url']?.toString() ?? '');
-    final sha256 = json['sha256']?.toString().trim().toLowerCase() ?? '';
+    final rawVersion = json['version'];
+    final rawBuildNumber = json['buildNumber'];
+    final rawUrl = json['url'];
+    final rawSha256 = json['sha256'];
+    if (rawVersion is! String ||
+        rawBuildNumber is! int ||
+        rawUrl is! String ||
+        rawSha256 is! String) {
+      throw const FormatException('Release artifact metadata is invalid.');
+    }
+
+    final version = rawVersion.trim();
+    final downloadUri = Uri.tryParse(rawUrl);
+    final sha256 = rawSha256.trim().toLowerCase();
     final validSha256 = RegExp(r'^[a-f0-9]{64}$').hasMatch(sha256);
     if (version.isEmpty ||
-        buildNumber < 1 ||
+        rawBuildNumber < 1 ||
         downloadUri == null ||
         downloadUri.scheme != 'https' ||
+        downloadUri.hasUserInfo ||
+        downloadUri.host.isEmpty ||
         !validSha256) {
       throw const FormatException('Release artifact metadata is invalid.');
     }
+
+    String? optionalString(String key) {
+      final value = json[key];
+      if (value == null) return null;
+      if (value is! String || value.trim().isEmpty) {
+        throw const FormatException('Release artifact metadata is invalid.');
+      }
+      return value.trim();
+    }
+
     return AppReleaseArtifact(
       platform: platform,
       version: version,
-      buildNumber: buildNumber,
+      buildNumber: rawBuildNumber,
       downloadUri: downloadUri,
       sha256: sha256,
-      packageId: json['packageId']?.toString(),
-      signingIdentity: json['signingIdentity']?.toString(),
-      architecture: json['architecture']?.toString(),
+      packageId: optionalString('packageId'),
+      signingIdentity: optionalString('signingIdentity'),
+      architecture: optionalString('architecture'),
     );
   }
 }
@@ -76,57 +98,96 @@ final class AppUpdateManifest {
   final Set<int> revokedBuilds;
 
   factory AppUpdateManifest.fromJson(Map<String, Object?> json) {
-    final schemaVersion = (json['schemaVersion'] as num?)?.toInt() ?? 0;
+    final schemaVersion = json['schemaVersion'];
     if (schemaVersion != 1) {
       throw const FormatException('Unsupported update manifest schema.');
     }
+
+    final rawChannel = json['channel'];
+    if (rawChannel is! String) {
+      throw const FormatException('Unknown release channel.');
+    }
     final channel = AppReleaseChannel.values.firstWhere(
-      (item) => item.name == json['channel'],
+      (item) => item.name == rawChannel,
       orElse: () => throw const FormatException('Unknown release channel.'),
     );
-    final publishedAt = DateTime.tryParse(
-      json['publishedAt']?.toString() ?? '',
-    )?.toUtc();
+
+    final rawPublishedAt = json['publishedAt'];
+    final publishedAt = rawPublishedAt is String
+        ? DateTime.tryParse(rawPublishedAt)?.toUtc()
+        : null;
     if (publishedAt == null) {
       throw const FormatException('Manifest publication time is invalid.');
     }
-    final rolloutPercent = (json['rolloutPercent'] as num?)?.toInt() ?? 100;
-    if (rolloutPercent < 0 || rolloutPercent > 100) {
-      throw const FormatException('Rollout percent must be between 0 and 100.');
+
+    final minimumSupportedVersion = json['minimumSupportedVersion'];
+    final mandatory = json['mandatory'];
+    final rolloutPercent = json['rolloutPercent'];
+    if (minimumSupportedVersion is! String ||
+        minimumSupportedVersion.trim().isEmpty ||
+        mandatory is! bool ||
+        rolloutPercent is! int ||
+        rolloutPercent < 0 ||
+        rolloutPercent > 100) {
+      throw const FormatException('Release manifest metadata is invalid.');
     }
 
     final artifactJson = json['artifacts'];
     if (artifactJson is! Map<Object?, Object?>) {
       throw const FormatException('Release artifacts are missing.');
     }
+    final supportedArtifactKeys = AppReleasePlatform.values
+        .map((platform) => platform.name)
+        .toSet();
+    if (artifactJson.keys.any(
+      (key) => key is! String || !supportedArtifactKeys.contains(key),
+    )) {
+      throw const FormatException('Release artifacts contain an unknown platform.');
+    }
     final artifacts = <AppReleasePlatform, AppReleaseArtifact>{};
     for (final platform in AppReleasePlatform.values) {
       final raw = artifactJson[platform.name];
-      if (raw is Map<Object?, Object?>) {
-        artifacts[platform] = AppReleaseArtifact.fromJson(
-          platform,
-          raw.map((key, value) => MapEntry(key.toString(), value)),
-        );
+      if (raw == null) continue;
+      if (raw is! Map<Object?, Object?>) {
+        throw const FormatException('Release artifact metadata is invalid.');
       }
+      artifacts[platform] = AppReleaseArtifact.fromJson(
+        platform,
+        raw.map((key, value) => MapEntry(key.toString(), value)),
+      );
     }
     if (artifacts.isEmpty) {
       throw const FormatException('Manifest has no supported artifacts.');
     }
 
-    final notes = (json['releaseNotes'] as Map<Object?, Object?>? ?? const {})
-        .map((key, value) => MapEntry(key.toString(), value.toString()));
-    final revokedBuilds = (json['revokedBuilds'] as List<Object?>? ?? const [])
-        .whereType<num>()
-        .map((value) => value.toInt())
-        .toSet();
+    final rawNotes = json['releaseNotes'];
+    if (rawNotes is! Map<Object?, Object?> || rawNotes.isEmpty) {
+      throw const FormatException('Release notes are missing.');
+    }
+    final notes = <String, String>{};
+    for (final entry in rawNotes.entries) {
+      if (entry.key is! String || entry.value is! String) {
+        throw const FormatException('Release notes are invalid.');
+      }
+      notes[(entry.key! as String)] = entry.value! as String;
+    }
+
+    final rawRevokedBuilds = json['revokedBuilds'];
+    if (rawRevokedBuilds is! List<Object?> ||
+        rawRevokedBuilds.any((value) => value is! int || value < 1)) {
+      throw const FormatException('Revoked build metadata is invalid.');
+    }
+    final revokedBuilds = rawRevokedBuilds.cast<int>().toSet();
+    if (revokedBuilds.length != rawRevokedBuilds.length) {
+      throw const FormatException('Revoked build metadata contains duplicates.');
+    }
 
     return AppUpdateManifest(
       schemaVersion: schemaVersion,
       channel: channel,
       publishedAt: publishedAt,
-      minimumSupportedVersion:
-          json['minimumSupportedVersion']?.toString() ?? '0.0.0',
-      mandatory: json['mandatory'] == true,
+      minimumSupportedVersion: minimumSupportedVersion.trim(),
+      mandatory: mandatory,
       releaseNotes: Map.unmodifiable(notes),
       artifacts: Map.unmodifiable(artifacts),
       rolloutPercent: rolloutPercent,
