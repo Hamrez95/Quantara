@@ -17,6 +17,7 @@ enum WindowsServiceUpdateMode {
   preparing,
   installing,
   reconciliationOnly,
+  managingExisting,
   rollbackRequired,
   disarmed,
   blocked,
@@ -53,7 +54,11 @@ final class WindowsServiceUpdatePolicy {
   }) {
     switch (event) {
       case WindowsServiceUpdateEvent.updateRequested:
-        return _snapshot(event, WindowsServiceUpdateMode.preparing);
+        return _snapshot(
+          event,
+          WindowsServiceUpdateMode.preparing,
+          localManagementAvailable: true,
+        );
       case WindowsServiceUpdateEvent.serviceStoppedForInstall:
         return _snapshot(event, WindowsServiceUpdateMode.installing);
       case WindowsServiceUpdateEvent.installSucceeded:
@@ -79,9 +84,9 @@ final class WindowsServiceUpdatePolicy {
         return _snapshot(
           event,
           hasExchangeReportedOpenPositions
-              ? WindowsServiceUpdateMode.reconciliationOnly
+              ? WindowsServiceUpdateMode.managingExisting
               : WindowsServiceUpdateMode.disarmed,
-          reconciliationRequired: hasExchangeReportedOpenPositions,
+          localManagementAvailable: hasExchangeReportedOpenPositions,
         );
     }
   }
@@ -89,13 +94,14 @@ final class WindowsServiceUpdatePolicy {
   static WindowsServiceUpdateSnapshot _snapshot(
     WindowsServiceUpdateEvent event,
     WindowsServiceUpdateMode mode, {
+    bool localManagementAvailable = false,
     bool reconciliationRequired = false,
     bool rollbackRequired = false,
   }) => WindowsServiceUpdateSnapshot(
     event: event,
     mode: mode,
     blocksNewEntries: true,
-    localManagementAvailable: false,
+    localManagementAvailable: localManagementAvailable,
     exchangeProtectionAuthoritative: true,
     reconciliationRequired: reconciliationRequired,
     rollbackRequired: rollbackRequired,
