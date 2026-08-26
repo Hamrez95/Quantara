@@ -168,6 +168,9 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
   constexpr std::uint8_t kPayload[] = {0x51, 0x54, 0x52, 0x41};
   std::atomic<bool> client_ok{false};
   std::thread client([&]() {
+    if (!WaitNamedPipeW(pipe_name.c_str(), 5000)) {
+      return;
+    }
     HANDLE handle = CreateFileW(pipe_name.c_str(), GENERIC_READ | GENERIC_WRITE,
                                 0, nullptr, OPEN_EXISTING, 0, nullptr);
     if (handle == INVALID_HANDLE_VALUE) {
