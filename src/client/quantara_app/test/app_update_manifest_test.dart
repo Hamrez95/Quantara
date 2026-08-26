@@ -21,13 +21,14 @@ Map<String, Object?> manifestJson({
   String channel = 'canary',
   String version = '0.14.0',
   int buildNumber = 17,
+  String minimumSupportedVersion = '0.13.0',
   bool mandatory = false,
   List<int> revokedBuilds = const [],
 }) => {
   'schemaVersion': 1,
   'channel': channel,
   'publishedAt': '2026-08-01T00:00:00Z',
-  'minimumSupportedVersion': '0.13.0',
+  'minimumSupportedVersion': minimumSupportedVersion,
   'mandatory': mandatory,
   'releaseNotes': {
     'fa': 'مدیریت ریسک داینامیک',
@@ -185,5 +186,65 @@ void main() {
     expect(controller.result?.revoked, isTrue);
     expect(controller.result?.mandatory, isTrue);
     expect(controller.result?.updateAvailable, isTrue);
+  });
+
+  test('below-minimum current version requires a mandatory recovery', () async {
+    final client = MockClient(
+      (_) async => manifestResponse(
+        manifestJson(minimumSupportedVersion: '0.14.0'),
+      ),
+    );
+    final controller = AppUpdateController(
+      manifestClient: AppUpdateManifestClient(
+        client: client,
+        stableManifestUri: Uri.parse(
+          'https://updates.quantara.app/stable.json',
+        ),
+        canaryManifestUri: Uri.parse(
+          'https://updates.quantara.app/canary.json',
+        ),
+      ),
+      currentVersion: '0.13.9',
+      currentBuildNumber: 16,
+      platform: AppReleasePlatform.android,
+      initialChannel: AppReleaseChannel.canary,
+      languageCode: 'en',
+    );
+
+    expect(await controller.check(), isTrue);
+    expect(controller.result?.updateAvailable, isTrue);
+    expect(controller.result?.mandatory, isTrue);
+    expect(controller.result?.revoked, isFalse);
+  });
+
+  test('fails closed when published recovery is below the minimum', () async {
+    final client = MockClient(
+      (_) async => manifestResponse(
+        manifestJson(
+          version: '0.14.0',
+          minimumSupportedVersion: '0.15.0',
+        ),
+      ),
+    );
+    final controller = AppUpdateController(
+      manifestClient: AppUpdateManifestClient(
+        client: client,
+        stableManifestUri: Uri.parse(
+          'https://updates.quantara.app/stable.json',
+        ),
+        canaryManifestUri: Uri.parse(
+          'https://updates.quantara.app/canary.json',
+        ),
+      ),
+      currentVersion: '0.13.9',
+      currentBuildNumber: 16,
+      platform: AppReleasePlatform.android,
+      initialChannel: AppReleaseChannel.canary,
+      languageCode: 'en',
+    );
+
+    expect(await controller.check(), isFalse);
+    expect(controller.result, isNull);
+    expect(controller.error, contains('minimum supported version'));
   });
 }
