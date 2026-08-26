@@ -36,7 +36,10 @@ void main() {
       processRunner: (executable, arguments, {environment}) async {
         signatureChecks += 1;
         expect(executable, 'powershell.exe');
-        expect(arguments, contains('Get-AuthenticodeSignature'));
+        expect(
+          arguments,
+          contains(predicate<String>((value) => value.contains('Get-AuthenticodeSignature'))),
+        );
         checkedPath = environment?['QUANTARA_UPDATE_PATH'];
         return ProcessResult(1, 0, 'AA:BB:CC\n', '');
       },
