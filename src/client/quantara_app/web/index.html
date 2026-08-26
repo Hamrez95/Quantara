@@ -35,12 +35,113 @@
       color: #DCE7F7;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+
+    .update-ready {
+      position: fixed;
+      inset-inline: 16px;
+      bottom: 16px;
+      z-index: 2147483647;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      max-width: 560px;
+      margin-inline: auto;
+      padding: 12px 14px;
+      border: 1px solid rgba(124, 92, 255, 0.45);
+      border-radius: 14px;
+      background: #111B2D;
+      color: #DCE7F7;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }
+
+    .update-ready[data-visible="true"] {
+      display: flex;
+    }
+
+    .update-ready button {
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: #7C5CFF;
+      color: #FFFFFF;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .update-ready button:focus-visible {
+      outline: 2px solid #DCE7F7;
+      outline-offset: 2px;
+    }
   </style>
 </head>
 <body>
   <noscript>
     <div class="boot-message">برای اجرای Quantara باید JavaScript فعال باشد.</div>
   </noscript>
+
+  <div id="quantara-update-ready" class="update-ready" role="status" aria-live="polite" data-visible="false">
+    <span>نسخه جدید Quantara آماده است. برای اعمال به‌روزرسانی صفحه را تازه‌سازی کنید.</span>
+    <button id="quantara-update-apply" type="button">به‌روزرسانی</button>
+  </div>
+
+  <script>
+    (() => {
+      if (!('serviceWorker' in navigator)) return;
+
+      let waitingWorker = null;
+      let reloadForUpdate = false;
+      const prompt = document.getElementById('quantara-update-ready');
+      const applyButton = document.getElementById('quantara-update-apply');
+
+      const showUpdatePrompt = (worker) => {
+        if (!worker) return;
+        waitingWorker = worker;
+        prompt.dataset.visible = 'true';
+      };
+
+      const watchRegistration = (registration) => {
+        if (!registration) return;
+        if (registration.waiting) showUpdatePrompt(registration.waiting);
+
+        registration.addEventListener('updatefound', () => {
+          const installing = registration.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            if (
+              installing.state === 'installed' &&
+              navigator.serviceWorker.controller
+            ) {
+              showUpdatePrompt(registration.waiting || installing);
+            }
+          });
+        });
+      };
+
+      applyButton.addEventListener('click', () => {
+        if (!waitingWorker) return;
+        applyButton.disabled = true;
+        reloadForUpdate = true;
+        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      });
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadForUpdate) window.location.reload();
+      });
+
+      window.addEventListener('load', async () => {
+        try {
+          watchRegistration(await navigator.serviceWorker.getRegistration());
+        } catch (_) {
+          // Update discovery is best-effort; the Flutter app remains usable.
+        }
+      });
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
