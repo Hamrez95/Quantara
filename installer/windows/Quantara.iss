@@ -5,6 +5,9 @@
 #ifndef MyAppBuildRoot
   #define MyAppBuildRoot "..\..\src\client\quantara_app\build\windows\x64\runner\Release"
 #endif
+#ifndef MyServiceBuildRoot
+  #define MyServiceBuildRoot "..\..\build\windows-service\Release"
+#endif
 #ifndef MyOutputDir
   #define MyOutputDir "..\..\dist\windows"
 #endif
@@ -41,6 +44,9 @@ Name: "startup"; Description: "Start Quantara with Windows (UI only, trading rem
 
 [Files]
 Source: "{#MyAppBuildRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyServiceBuildRoot}\quantara_windows_service.exe"; DestDir: "{app}\service"; Flags: ignoreversion
+Source: "..\..\scripts\manage-windows-service.ps1"; DestDir: "{app}\service"; Flags: ignoreversion
+Source: "..\..\scripts\manage-windows-service.ps1"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\Quantara"; Filename: "{app}\quantara_app.exe"
@@ -48,16 +54,44 @@ Name: "{autodesktop}\Quantara"; Filename: "{app}\quantara_app.exe"; Tasks: deskt
 Name: "{userstartup}\Quantara"; Filename: "{app}\quantara_app.exe"; Tasks: startup
 
 [Run]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\service\manage-windows-service.ps1"" -Action Install -ServiceExe ""{app}\service\quantara_windows_service.exe"""; StatusMsg: "Registering Quantara service in a disarmed state..."; Flags: runhidden waituntilterminated
 Filename: "{app}\quantara_app.exe"; Description: "Launch Quantara"; Flags: nowait postinstall skipifsilent
 
-[Code]
-function InitializeSetup(): Boolean;
-begin
-  Result := True;
-end;
+[UninstallRun]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\service\manage-windows-service.ps1"" -Action Uninstall"; RunOnceId: "QuantaraExecutionServiceRemove"; Flags: runhidden waituntilterminated
 
+[Code]
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  ScriptPath: String;
+  Parameters: String;
 begin
-  // No background execution worker is installed by the RC foundation.
+  // Stop an already-installed service before replacing its executable. The
+  // helper treats a missing service as success and never starts/arms trading.
+  ExtractTemporaryFile('manage-windows-service.ps1');
+  ScriptPath := ExpandConstant('{tmp}\manage-windows-service.ps1');
+  Parameters := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ScriptPath + '" -Action PrepareUpgrade';
+
+  if not Exec(
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    Parameters,
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+  begin
+    Result := 'Unable to prepare the Quantara background service for installation.';
+    exit;
+  end;
+
+  if ResultCode <> 0 then
+  begin
+    Result := 'Quantara background service did not stop safely. Installation was cancelled.';
+    exit;
+  end;
+
   Result := '';
 end;

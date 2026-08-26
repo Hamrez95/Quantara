@@ -12,6 +12,7 @@ on:
       - 'installer/windows/**'
       - 'scripts/build-windows.ps1'
       - 'scripts/build-windows-service.ps1'
+      - 'scripts/manage-windows-service.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
   pull_request:
     branches:
@@ -23,6 +24,7 @@ on:
       - 'installer/windows/**'
       - 'scripts/build-windows.ps1'
       - 'scripts/build-windows-service.ps1'
+      - 'scripts/manage-windows-service.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
 
 permissions:
@@ -82,6 +84,44 @@ jobs:
         shell: pwsh
         run: ./scripts/build-windows-service.ps1 -Configuration Release
 
+      - name: Smoke service SCM lifecycle
+        shell: pwsh
+        run: |
+          $serviceName = 'QuantaraExecutionService'
+          $serviceExe = (Resolve-Path 'build/windows-service/Release/quantara_windows_service.exe').Path
+          try {
+            ./scripts/manage-windows-service.ps1 -Action PrepareUpgrade
+            ./scripts/manage-windows-service.ps1 -Action Install -ServiceExe $serviceExe
+
+            $query = & sc.exe query $serviceName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installed service cannot be queried: $($query -join ' ')"
+            }
+            if (($query -join "`n") -notmatch 'STATE\s*:\s*1\s+STOPPED') {
+              throw 'Installer lifecycle must leave the service stopped/disarmed.'
+            }
+
+            $config = & sc.exe qc $serviceName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installed service configuration cannot be queried: $($config -join ' ')"
+            }
+            $configText = $config -join "`n"
+            if ($configText -notmatch 'START_TYPE\s*:\s*2\s+AUTO_START') {
+              throw 'Service is not configured for automatic boot startup.'
+            }
+            if ($configText -notmatch [regex]::Escape($serviceExe)) {
+              throw 'Service executable path does not match the packaged host.'
+            }
+          }
+          finally {
+            ./scripts/manage-windows-service.ps1 -Action Uninstall
+          }
+
+          & sc.exe query $serviceName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw 'Service remained registered after uninstall smoke.'
+          }
+
       - name: Ensure Inno Setup compiler
         shell: pwsh
         run: |
@@ -99,9 +139,10 @@ jobs:
         run: |
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
           $buildRoot = (Resolve-Path 'src/client/quantara_app/build/windows/x64/runner/Release').Path
+          $serviceBuildRoot = (Resolve-Path 'build/windows-service/Release').Path
           $outputDir = Join-Path $PWD 'dist/windows'
           New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
-          & $iscc "/DMyAppVersion=$env:RC_VERSION" "/DMyAppBuildRoot=$buildRoot" "/DMyOutputDir=$outputDir" 'installer/windows/Quantara.iss'
+          & $iscc "/DMyAppVersion=$env:RC_VERSION" "/DMyAppBuildRoot=$buildRoot" "/DMyServiceBuildRoot=$serviceBuildRoot" "/DMyOutputDir=$outputDir" 'installer/windows/Quantara.iss'
           if ($LASTEXITCODE -ne 0) {
             throw "Inno Setup failed with exit code $LASTEXITCODE"
           }
