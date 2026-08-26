@@ -54,12 +54,11 @@ final class AppUpdateDownloadVerifier {
       );
     }
 
-    late http.Response response;
+    late http.StreamedResponse response;
     try {
-      response = await _client.get(
-        uri,
-        headers: const {'Accept': 'application/octet-stream'},
-      );
+      final request = http.Request('GET', uri)
+        ..headers['Accept'] = 'application/octet-stream';
+      response = await _client.send(request);
     } on Object catch (error) {
       throw AppUpdateDownloadException(
         'Update download failed safely (${error.runtimeType}).',
@@ -78,14 +77,29 @@ final class AppUpdateDownloadVerifier {
       );
     }
 
-    final bytes = response.bodyBytes;
+    final builder = BytesBuilder(copy: false);
+    var receivedBytes = 0;
+    try {
+      await for (final chunk in response.stream) {
+        receivedBytes += chunk.length;
+        if (receivedBytes > maxBytes) {
+          throw const AppUpdateDownloadException(
+            'Update artifact exceeds the allowed download size.',
+          );
+        }
+        builder.add(chunk);
+      }
+    } on AppUpdateDownloadException {
+      rethrow;
+    } on Object catch (error) {
+      throw AppUpdateDownloadException(
+        'Update download failed safely (${error.runtimeType}).',
+      );
+    }
+
+    final bytes = builder.takeBytes();
     if (bytes.isEmpty) {
       throw const AppUpdateDownloadException('Update artifact is empty.');
-    }
-    if (bytes.length > maxBytes) {
-      throw const AppUpdateDownloadException(
-        'Update artifact exceeds the allowed download size.',
-      );
     }
 
     final actualSha256 = sha256.convert(bytes).toString().toLowerCase();
@@ -96,10 +110,7 @@ final class AppUpdateDownloadVerifier {
       );
     }
 
-    return VerifiedAppUpdateDownload(
-      artifact: artifact,
-      bytes: Uint8List.fromList(bytes),
-    );
+    return VerifiedAppUpdateDownload(artifact: artifact, bytes: bytes);
   }
 
   void close() => _client.close();
