@@ -13,7 +13,7 @@ typedef AppUpdateProcessRunner = Future<ProcessResult> Function(
   Map<String, String>? environment,
 });
 
-typedef AppUpdateProcessStarter = Future<Process> Function(
+typedef AppUpdateProcessStarter = Future<void> Function(
   String executable,
   List<String> arguments, {
   ProcessStartMode mode,
@@ -136,11 +136,13 @@ final class WindowsAppUpdateInstallerGateway
     Map<String, String>? environment,
   }) => Process.run(executable, arguments, environment: environment);
 
-  static Future<Process> _startProcess(
+  static Future<void> _startProcess(
     String executable,
     List<String> arguments, {
     ProcessStartMode mode = ProcessStartMode.normal,
-  }) => Process.start(executable, arguments, mode: mode);
+  }) async {
+    await Process.start(executable, arguments, mode: mode);
+  }
 
   static String? _approvedInstallerExtension(String path) {
     final normalized = path.toLowerCase();
