@@ -6,6 +6,8 @@ add_executable(quantara_windows_service
   main.cpp
   credential_vault.cpp
   credential_vault.h
+  local_pipe_security.cpp
+  local_pipe_security.h
 )
 
 target_compile_features(quantara_windows_service PRIVATE cxx_std_20)
