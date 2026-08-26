@@ -13,8 +13,8 @@ int wmain() {
       ServiceSafetyState::kDisarmed);
   if (!status.has_value() ||
       *status !=
-          "{\"protocolVersion\":1,\"requestId\":\"status-1\",\"kind\":\"statusResponse\",\"payload\":{\"serviceState\":\"disarmed\",\"entryAuthority\":false}}") {
-    std::wcerr << L"Disarmed status response mismatch.\n";
+          "{\"protocolVersion\":1,\"requestId\":\"status-1\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"disarmed\",\"entryAuthority\":false}}") {
+    std::wcerr << L"Disarmed status snapshot mismatch.\n";
     return 1;
   }
 
@@ -23,8 +23,8 @@ int wmain() {
       ServiceSafetyState::kReconciliationRequired);
   if (!handshake.has_value() ||
       *handshake !=
-          "{\"protocolVersion\":1,\"requestId\":\"hello-1\",\"kind\":\"handshakeResponse\",\"payload\":{\"serviceState\":\"reconciliationRequired\",\"entryAuthority\":false}}") {
-    std::wcerr << L"Handshake response mismatch.\n";
+          "{\"protocolVersion\":1,\"requestId\":\"hello-1\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"reconciliationRequired\",\"entryAuthority\":false}}") {
+    std::wcerr << L"Handshake status snapshot mismatch.\n";
     return 1;
   }
 
@@ -32,6 +32,7 @@ int wmain() {
       ReadOnlyRequest{"status-2", ReadOnlyRequestKind::kStatusRequest},
       ServiceSafetyState::kInterrupted);
   if (!interrupted.has_value() ||
+      interrupted->find("\"kind\":\"statusSnapshot\"") == std::string::npos ||
       interrupted->find("\"entryAuthority\":false") == std::string::npos ||
       interrupted->find("\"serviceState\":\"interrupted\"") == std::string::npos) {
     std::wcerr << L"Interrupted state must remain fail-closed.\n";
