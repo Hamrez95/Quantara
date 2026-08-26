@@ -34,15 +34,11 @@ bool ReadAuthenticatedLocalMessage(HANDLE pipe,
     return false;
   }
 
-  DWORD trailing_bytes = 0;
-  DWORD trailing_message_bytes = 0;
-  if (!PeekNamedPipe(pipe, nullptr, 0, nullptr, &trailing_bytes,
-                     &trailing_message_bytes) ||
-      trailing_message_bytes != 0) {
-    message.clear();
-    return false;
-  }
-
+  // Message-mode pipes preserve the frame boundary. Because the buffer is
+  // sized from the current message length, a successful exact-length ReadFile
+  // has consumed precisely one frame. Do not probe the pipe again here: the
+  // peer may legitimately close immediately after sending, and that must not
+  // turn a valid frame into a false failure.
   return true;
 }
 
