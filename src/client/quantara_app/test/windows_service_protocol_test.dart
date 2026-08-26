@@ -106,9 +106,6 @@ void main() {
     original['state'] = 'tampered';
 
     expect(decoded.payload['state'], 'connected');
-    expect(
-      () => decoded.payload['state'] = 'tampered',
-      throwsUnsupportedError,
-    );
+    expect(() => decoded.payload['state'] = 'tampered', throwsUnsupportedError);
   });
 }
