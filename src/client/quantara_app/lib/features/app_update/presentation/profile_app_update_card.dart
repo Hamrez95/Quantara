@@ -38,7 +38,8 @@ final class AppUpdateProfileConfiguration {
   Uri? get canaryManifestUri => _validatedHttpsUri(canaryManifestUrl);
   Uri? get internalManifestUri => _validatedHttpsUri(internalManifestUrl);
 
-  bool get isConfigured => stableManifestUri != null && canaryManifestUri != null;
+  bool get isConfigured =>
+      stableManifestUri != null && canaryManifestUri != null;
   bool get internalEnabled => internalManifestUri != null;
 
   static Uri? _validatedHttpsUri(String raw) {
@@ -72,16 +73,19 @@ class _ProfileAppUpdateCardState extends State<ProfileAppUpdateCard> {
   AppUpdateController? _controller;
   String? _initializationError;
   bool _initializing = true;
+  bool _initializationStarted = false;
 
   bool get _persian => Localizations.localeOf(context).languageCode == 'fa';
 
   @override
-  void initState() {
-    super.initState();
-    unawaited(_initialize());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initializationStarted) return;
+    _initializationStarted = true;
+    unawaited(_initialize(Localizations.localeOf(context).languageCode));
   }
 
-  Future<void> _initialize() async {
+  Future<void> _initialize(String languageCode) async {
     final configuration = widget.configuration;
     if (!configuration.isConfigured) {
       if (mounted) {
@@ -98,7 +102,8 @@ class _ProfileAppUpdateCardState extends State<ProfileAppUpdateCard> {
     if (platform == null) {
       if (mounted) {
         setState(() {
-          _initializationError = 'In-app update checks are unavailable on this platform.';
+          _initializationError =
+              'In-app update checks are unavailable on this platform.';
           _initializing = false;
         });
       }
@@ -108,7 +113,9 @@ class _ProfileAppUpdateCardState extends State<ProfileAppUpdateCard> {
     try {
       final package = await PackageInfo.fromPlatform();
       final buildNumber = int.tryParse(package.buildNumber.trim());
-      if (package.version.trim().isEmpty || buildNumber == null || buildNumber < 1) {
+      if (package.version.trim().isEmpty ||
+          buildNumber == null ||
+          buildNumber < 1) {
         throw const FormatException('Installed app version metadata is invalid.');
       }
       final client = http.Client();
@@ -123,7 +130,7 @@ class _ProfileAppUpdateCardState extends State<ProfileAppUpdateCard> {
         currentBuildNumber: buildNumber,
         platform: platform,
         initialChannel: AppReleaseChannel.stable,
-        languageCode: Localizations.localeOf(context).languageCode,
+        languageCode: languageCode,
         channelStore: const PlatformAppUpdateChannelStore(),
       );
       await controller.restoreChannel();
@@ -174,7 +181,10 @@ class _ProfileAppUpdateCardState extends State<ProfileAppUpdateCard> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.system_update_alt_rounded, color: QuantaraColors.cyan),
+              const Icon(
+                Icons.system_update_alt_rounded,
+                color: QuantaraColors.cyan,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -233,14 +243,19 @@ class _UnavailableUpdateState extends StatelessWidget {
       decoration: BoxDecoration(
         color: QuantaraColors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: QuantaraColors.warning.withValues(alpha: 0.24)),
+        border: Border.all(
+          color: QuantaraColors.warning.withValues(alpha: 0.24),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.info_outline_rounded, color: QuantaraColors.warning),
+            const Icon(
+              Icons.info_outline_rounded,
+              color: QuantaraColors.warning,
+            ),
             const SizedBox(width: 9),
             Expanded(
               child: Text(
@@ -301,11 +316,15 @@ class _UpdateControllerView extends StatelessWidget {
           showSelectedIcon: false,
           onSelectionChanged: controller.isBusy
               ? null
-              : (selection) => unawaited(controller.setChannel(selection.first)),
+              : (selection) => unawaited(
+                  controller.setChannel(selection.first),
+                ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
-          onPressed: controller.isBusy ? null : () => unawaited(controller.check()),
+          onPressed: controller.isBusy
+              ? null
+              : () => unawaited(controller.check()),
           icon: controller.isBusy
               ? const SizedBox.square(
                   dimension: 16,
