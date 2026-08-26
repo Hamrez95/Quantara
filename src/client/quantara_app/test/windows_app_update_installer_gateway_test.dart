@@ -23,74 +23,86 @@ void main() {
     }
   });
 
-  test('re-verifies persisted bytes and Authenticode before Explorer handoff', () async {
-    final download = _download();
-    var signatureChecks = 0;
-    var launches = 0;
-    String? checkedPath;
-    String? launchedPath;
+  test(
+    're-verifies persisted bytes and Authenticode before Explorer handoff',
+    () async {
+      final download = _download();
+      var signatureChecks = 0;
+      var launches = 0;
+      String? checkedPath;
+      String? launchedPath;
 
-    final gateway = WindowsAppUpdateInstallerGateway(
-      isWindows: true,
-      temporaryDirectoryProvider: () async => tempDirectory,
-      processRunner: (executable, arguments, {environment}) async {
-        signatureChecks += 1;
-        expect(executable, 'powershell.exe');
-        expect(
-          arguments,
-          contains(predicate<String>((value) => value.contains('Get-AuthenticodeSignature'))),
-        );
-        checkedPath = environment?['QUANTARA_UPDATE_PATH'];
-        return ProcessResult(1, 0, 'AA:BB:CC\n', '');
-      },
-      processStarter: (executable, arguments, {mode = ProcessStartMode.normal}) async {
-        launches += 1;
-        expect(executable, 'explorer.exe');
-        expect(mode, ProcessStartMode.detached);
-        launchedPath = arguments.single;
-      },
-    );
+      final gateway = WindowsAppUpdateInstallerGateway(
+        isWindows: true,
+        temporaryDirectoryProvider: () async => tempDirectory,
+        processRunner: (executable, arguments, {environment}) async {
+          signatureChecks += 1;
+          expect(executable, 'powershell.exe');
+          expect(
+            arguments,
+            contains(
+              predicate<String>(
+                (value) => value.contains('Get-AuthenticodeSignature'),
+              ),
+            ),
+          );
+          checkedPath = environment?['QUANTARA_UPDATE_PATH'];
+          return ProcessResult(1, 0, 'AA:BB:CC\n', '');
+        },
+        processStarter:
+            (executable, arguments, {mode = ProcessStartMode.normal}) async {
+              launches += 1;
+              expect(executable, 'explorer.exe');
+              expect(mode, ProcessStartMode.detached);
+              launchedPath = arguments.single;
+            },
+      );
 
-    await gateway.handoff(download);
+      await gateway.handoff(download);
 
-    expect(signatureChecks, 1);
-    expect(launches, 1);
-    expect(checkedPath, isNotNull);
-    expect(launchedPath, checkedPath);
-    expect(await File(checkedPath!).readAsBytes(), download.bytes);
-  });
+      expect(signatureChecks, 1);
+      expect(launches, 1);
+      expect(checkedPath, isNotNull);
+      expect(launchedPath, checkedPath);
+      expect(await File(checkedPath!).readAsBytes(), download.bytes);
+    },
+  );
 
-  test('blocks handoff and deletes installer when Authenticode does not match', () async {
-    final download = _download();
-    var launches = 0;
-    String? checkedPath;
-    final gateway = WindowsAppUpdateInstallerGateway(
-      isWindows: true,
-      temporaryDirectoryProvider: () async => tempDirectory,
-      processRunner: (executable, arguments, {environment}) async {
-        checkedPath = environment?['QUANTARA_UPDATE_PATH'];
-        return ProcessResult(1, 0, 'DD-EE-FF', '');
-      },
-      processStarter: (executable, arguments, {mode = ProcessStartMode.normal}) async {
-        launches += 1;
-      },
-    );
+  test(
+    'blocks handoff and deletes installer when Authenticode does not match',
+    () async {
+      final download = _download();
+      var launches = 0;
+      String? checkedPath;
+      final gateway = WindowsAppUpdateInstallerGateway(
+        isWindows: true,
+        temporaryDirectoryProvider: () async => tempDirectory,
+        processRunner: (executable, arguments, {environment}) async {
+          checkedPath = environment?['QUANTARA_UPDATE_PATH'];
+          return ProcessResult(1, 0, 'DD-EE-FF', '');
+        },
+        processStarter:
+            (executable, arguments, {mode = ProcessStartMode.normal}) async {
+              launches += 1;
+            },
+      );
 
-    await expectLater(
-      gateway.handoff(download),
-      throwsA(
-        isA<AppUpdateInstallException>().having(
-          (error) => error.message,
-          'message',
-          contains('Authenticode verification failed'),
+      await expectLater(
+        gateway.handoff(download),
+        throwsA(
+          isA<AppUpdateInstallException>().having(
+            (error) => error.message,
+            'message',
+            contains('Authenticode verification failed'),
+          ),
         ),
-      ),
-    );
+      );
 
-    expect(launches, 0);
-    expect(checkedPath, isNotNull);
-    expect(await File(checkedPath!).exists(), isFalse);
-  });
+      expect(launches, 0);
+      expect(checkedPath, isNotNull);
+      expect(await File(checkedPath!).exists(), isFalse);
+    },
+  );
 
   test('rejects unapproved artifact types before signature check', () async {
     var signatureChecks = 0;
@@ -101,7 +113,8 @@ void main() {
         signatureChecks += 1;
         return ProcessResult(1, 0, 'AA:BB:CC', '');
       },
-      processStarter: (executable, arguments, {mode = ProcessStartMode.normal}) async {},
+      processStarter:
+          (executable, arguments, {mode = ProcessStartMode.normal}) async {},
     );
 
     await expectLater(
@@ -121,7 +134,8 @@ void main() {
         signatureChecks += 1;
         return ProcessResult(1, 0, 'AA:BB:CC', '');
       },
-      processStarter: (executable, arguments, {mode = ProcessStartMode.normal}) async {},
+      processStarter:
+          (executable, arguments, {mode = ProcessStartMode.normal}) async {},
     );
 
     await expectLater(

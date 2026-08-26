@@ -7,17 +7,19 @@ import '../data/app_update_download_verifier.dart';
 import '../domain/app_update_models.dart';
 import 'app_update_install_coordinator.dart';
 
-typedef AppUpdateProcessRunner = Future<ProcessResult> Function(
-  String executable,
-  List<String> arguments, {
-  Map<String, String>? environment,
-});
+typedef AppUpdateProcessRunner =
+    Future<ProcessResult> Function(
+      String executable,
+      List<String> arguments, {
+      Map<String, String>? environment,
+    });
 
-typedef AppUpdateProcessStarter = Future<void> Function(
-  String executable,
-  List<String> arguments, {
-  ProcessStartMode mode,
-});
+typedef AppUpdateProcessStarter =
+    Future<void> Function(
+      String executable,
+      List<String> arguments, {
+      ProcessStartMode mode,
+    });
 
 typedef AppUpdateTemporaryDirectoryProvider = Future<Directory> Function();
 
@@ -89,7 +91,9 @@ final class WindowsAppUpdateInstallerGateway
     );
     await installer.writeAsBytes(download.bytes, flush: true);
 
-    final persistedSha256 = sha256.convert(await installer.readAsBytes()).toString();
+    final persistedSha256 = sha256
+        .convert(await installer.readAsBytes())
+        .toString();
     if (persistedSha256.toLowerCase() !=
         download.artifact.sha256.trim().toLowerCase()) {
       await _deleteQuietly(installer);
@@ -109,7 +113,9 @@ final class WindowsAppUpdateInstallerGateway
       ],
       environment: {'QUANTARA_UPDATE_PATH': installer.path},
     );
-    final actualIdentity = _normalizeIdentity(signatureResult.stdout.toString());
+    final actualIdentity = _normalizeIdentity(
+      signatureResult.stdout.toString(),
+    );
     if (signatureResult.exitCode != 0 || actualIdentity != signingIdentity) {
       await _deleteQuietly(installer);
       throw const AppUpdateInstallException(
@@ -118,11 +124,9 @@ final class WindowsAppUpdateInstallerGateway
     }
 
     try {
-      await _processStarter(
-        'explorer.exe',
-        [installer.path],
-        mode: ProcessStartMode.detached,
-      );
+      await _processStarter('explorer.exe', [
+        installer.path,
+      ], mode: ProcessStartMode.detached);
     } on Object catch (error) {
       throw AppUpdateInstallException(
         'Windows installer handoff failed safely (${error.runtimeType}).',
