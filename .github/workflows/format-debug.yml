@@ -1,0 +1,24 @@
+name: Temporary Dart format diff
+
+on:
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    if: github.head_ref == 'feat/80-windows-ipc-protocol-foundation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - working-directory: src/client/quantara_app
+        run: |
+          dart format test/windows_service_protocol_test.dart
+          git diff -- test/windows_service_protocol_test.dart
