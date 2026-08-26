@@ -9,7 +9,7 @@ enum WindowsServiceStartupReason {
 enum WindowsServiceAuthorityState {
   disarmed,
   monitoring,
-  managingProtectedPositions,
+  reconciliationOnly,
 }
 
 final class WindowsServiceStartupSnapshot {
@@ -29,8 +29,9 @@ final class WindowsServiceStartupSnapshot {
 /// Fail-closed startup policy for the future Windows background service.
 ///
 /// Persisted state must never restore new-entry authority after a process,
-/// service, device or update boundary. Recovery may retain only the minimum
-/// authority required to reconcile and manage already-protected positions.
+/// service, device or update boundary. Exchange-reported positions only grant
+/// enough authority to reconcile truth; ownership/protection must be verified
+/// separately before any management path can be enabled.
 final class WindowsServiceStartupPolicy {
   const WindowsServiceStartupPolicy._();
 
@@ -41,7 +42,7 @@ final class WindowsServiceStartupPolicy {
     if (hasExchangeReportedOpenPositions) {
       return WindowsServiceStartupSnapshot(
         reason: reason,
-        authority: WindowsServiceAuthorityState.managingProtectedPositions,
+        authority: WindowsServiceAuthorityState.reconciliationOnly,
         requiresExplicitStart: true,
         reconciliationRequired: true,
       );
