@@ -7,11 +7,11 @@ namespace quantara {
 namespace {
 
 constexpr std::string_view kPrefix =
-    R"({"protocolVersion":1,"requestId":")";
+    "{\"protocolVersion\":1,\"requestId\":\"";
 constexpr std::string_view kHandshakeSuffix =
-    R"(","kind":"handshake","payload":{}})";
+    "\",\"kind\":\"handshake\",\"payload\":{}}";
 constexpr std::string_view kStatusSuffix =
-    R"(","kind":"statusRequest","payload":{}})";
+    "\",\"kind\":\"statusRequest\",\"payload\":{}}";
 
 bool IsSafeRequestId(std::string_view value) noexcept {
   if (value.empty() || value.size() > 64) {
