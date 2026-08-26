@@ -1,0 +1,25 @@
+name: Temporary Dart format probe
+
+on:
+  push:
+    branches:
+      - feat/80-windows-service-startup-policy
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Print canonical format diff
+        working-directory: src/client/quantara_app
+        run: |
+          dart format lib/features/windows_desktop/domain/windows_service_startup_policy.dart test/windows_service_startup_policy_test.dart
+          git diff -- lib/features/windows_desktop/domain/windows_service_startup_policy.dart test/windows_service_startup_policy_test.dart
