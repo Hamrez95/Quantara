@@ -6,6 +6,35 @@
 #include "local_pipe_security.h"
 
 namespace quantara {
+namespace {
+
+bool WaitForClientOrStop(HANDLE pipe, HANDLE stop_event) noexcept {
+  DWORD mode = PIPE_READMODE_MESSAGE | PIPE_NOWAIT;
+  if (!SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr)) {
+    return false;
+  }
+
+  while (WaitForSingleObject(stop_event, 0) == WAIT_TIMEOUT) {
+    const BOOL connected = ConnectNamedPipe(pipe, nullptr);
+    if (connected == TRUE) {
+      mode = PIPE_READMODE_MESSAGE | PIPE_WAIT;
+      return SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr) == TRUE;
+    }
+
+    const DWORD error = GetLastError();
+    if (error == ERROR_PIPE_CONNECTED) {
+      mode = PIPE_READMODE_MESSAGE | PIPE_WAIT;
+      return SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr) == TRUE;
+    }
+    if (error != ERROR_PIPE_LISTENING && error != ERROR_NO_DATA) {
+      return false;
+    }
+    Sleep(10);
+  }
+  return false;
+}
+
+}  // namespace
 
 bool RunReadOnlyStatusListener(
     HANDLE stop_event, const std::wstring& pipe_name,
@@ -23,18 +52,10 @@ bool RunReadOnlyStatusListener(
         return false;
       }
 
-      const BOOL connected = ConnectNamedPipe(pipe, nullptr);
-      const DWORD connect_error = connected ? ERROR_SUCCESS : GetLastError();
-      const bool connection_ok =
-          connected == TRUE || connect_error == ERROR_PIPE_CONNECTED;
-
+      const bool connection_ok = WaitForClientOrStop(pipe, stop_event);
       if (!connection_ok) {
         CloseHandle(pipe);
-        if (connect_error == ERROR_OPERATION_ABORTED &&
-            WaitForSingleObject(stop_event, 0) == WAIT_OBJECT_0) {
-          return true;
-        }
-        return false;
+        return WaitForSingleObject(stop_event, 0) == WAIT_OBJECT_0;
       }
 
       if (WaitForSingleObject(stop_event, 0) == WAIT_OBJECT_0) {
