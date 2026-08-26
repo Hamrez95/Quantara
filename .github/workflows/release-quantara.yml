@@ -1,0 +1,139 @@
+name: Release Quantara
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Semantic bump
+        type: choice
+        required: true
+        default: patch
+        options: [patch, minor, major]
+      channel:
+        description: Release channel
+        type: choice
+        required: true
+        default: beta
+        options: [beta, stable]
+      release_notes:
+        description: Optional notes
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: quantara-release
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.44.8'
+  APP_DIR: src/client/quantara_app
+  PRODUCT: Quantara
+  TAG_PREFIX: quantara-v
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Guard canonical source branch
+        run: test "${{ github.ref_name }}" = dev
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Calculate immutable product version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$APP_DIR/pubspec.yaml")"
+          test -n "$previous"
+          output="$(python scripts/release/release_version.py --previous "$previous" --release-type '${{ inputs.release_type }}' --channel '${{ inputs.channel }}' --prefix "$TAG_PREFIX")"
+          printf '%s\n' "$output" >> "$GITHUB_OUTPUT"
+          version="$(printf '%s\n' "$output" | sed -n 's/^version=//p')"
+          tag="$(printf '%s\n' "$output" | sed -n 's/^tag=//p')"
+          ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null
+          echo "build_number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Quality gates
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --fatal-infos
+          flutter test
+
+      - name: Decode permanent Android signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.QUANTARA_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/quantara.jks"
+          chmod 600 "$RUNNER_TEMP/quantara.jks"
+      - name: Build signed Android and PWA artifacts
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          QUANTARA_STABLE_RELEASE: 'true'
+          QUANTARA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/quantara.jks
+          QUANTARA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.QUANTARA_ANDROID_KEYSTORE_PASSWORD }}
+          QUANTARA_ANDROID_KEY_ALIAS: ${{ secrets.QUANTARA_ANDROID_KEY_ALIAS }}
+          QUANTARA_ANDROID_KEY_PASSWORD: ${{ secrets.QUANTARA_ANDROID_KEY_PASSWORD }}
+        run: |
+          flutter build apk --release --build-name='${{ steps.version.outputs.version }}' --build-number='${{ steps.version.outputs.build_number }}'
+          flutter build appbundle --release --build-name='${{ steps.version.outputs.version }}' --build-number='${{ steps.version.outputs.build_number }}'
+          flutter build web --release --base-href '/Quantara/' --dart-define=APP_VERSION='${{ steps.version.outputs.version }}' --dart-define=APP_COMMIT='${{ github.sha }}'
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-release.apk "release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.aab"
+          (cd build/web && zip -qr "../../release/Quantara-${{ steps.version.outputs.version }}-pwa.zip" .)
+
+      - name: Verify Android identity, signature and artifacts
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          set -euo pipefail
+          apk="release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.apk"
+          apkanalyzer="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          "$apkanalyzer" manifest application-id "$apk" | grep -Fxq com.quantara.quantara_app
+          "$apksigner" verify --verbose "$apk"
+          test -s "release/Quantara-${{ steps.version.outputs.version }}-pwa.zip"
+          (cd release && sha256sum * > SHA256SUMS.txt)
+
+      - name: Release summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Quantara release candidate
+          - Source: `dev` @ `${{ github.sha }}`
+          - Version: `${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}`
+          - Tag: `${{ steps.version.outputs.tag }}`
+          - Platforms: Android (signed APK/AAB), PWA archive
+          - Windows/iOS: not built or verified
+          EOF
+      - name: Publish immutable GitHub release
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prerelease=''
+          if [ '${{ inputs.channel }}' = beta ]; then prerelease='--prerelease'; fi
+          gh release create '${{ steps.version.outputs.tag }}' release/* \
+            --target '${{ github.sha }}' --title "Quantara ${{ steps.version.outputs.version }}" $prerelease \
+            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nPlatforms: signed Android APK/AAB, PWA archive."
+      - name: Remove temporary key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/quantara.jks"
