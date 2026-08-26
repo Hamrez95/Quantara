@@ -47,18 +47,22 @@ std::optional<ReadOnlyRequest> DecodeWithSuffix(std::string_view text,
 
 std::optional<ReadOnlyRequest> DecodeCanonicalReadOnlyRequest(
     std::span<const std::uint8_t> frame) noexcept {
-  if (frame.empty() || frame.size() > kWindowsServiceMaxFrameBytes) {
+  try {
+    if (frame.empty() || frame.size() > kWindowsServiceMaxFrameBytes) {
+      return std::nullopt;
+    }
+    const std::string_view text(reinterpret_cast<const char*>(frame.data()),
+                                frame.size());
+    if (const auto handshake =
+            DecodeWithSuffix(text, kHandshakeSuffix,
+                             ReadOnlyRequestKind::kHandshake)) {
+      return handshake;
+    }
+    return DecodeWithSuffix(text, kStatusSuffix,
+                            ReadOnlyRequestKind::kStatusRequest);
+  } catch (...) {
     return std::nullopt;
   }
-  const std::string_view text(reinterpret_cast<const char*>(frame.data()),
-                              frame.size());
-  if (const auto handshake =
-          DecodeWithSuffix(text, kHandshakeSuffix,
-                           ReadOnlyRequestKind::kHandshake)) {
-    return handshake;
-  }
-  return DecodeWithSuffix(text, kStatusSuffix,
-                          ReadOnlyRequestKind::kStatusRequest);
 }
 
 RequestReplayGuard::RequestReplayGuard(std::size_t capacity)
