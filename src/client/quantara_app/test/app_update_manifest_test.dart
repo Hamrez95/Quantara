@@ -88,13 +88,15 @@ void main() {
   });
 
   test('rejects missing required manifest fields instead of defaulting', () {
-    final json = manifestJson()..remove('mandatory');
+    final json = manifestJson();
+    json.remove('mandatory');
 
     expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
   });
 
   test('rejects malformed revoked builds instead of silently dropping them', () {
-    final json = manifestJson()..['revokedBuilds'] = <Object?>[16, '17'];
+    final json = manifestJson();
+    json['revokedBuilds'] = <Object?>[16, '17'];
 
     expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
   });
