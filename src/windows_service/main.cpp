@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "credential_vault.h"
+#include "local_pipe_security.h"
 
 namespace {
 constexpr wchar_t kServiceName[] = L"QuantaraExecutionService";
@@ -137,6 +138,20 @@ bool RunCredentialVaultSelfTest() noexcept {
   }
 }
 
+bool RunLocalPipeSecuritySelfTest() noexcept {
+  const std::wstring pipe_name =
+      L"\\\\.\\pipe\\QuantaraExecutionService.self-test." +
+      std::to_wstring(GetCurrentProcessId());
+  HANDLE pipe = quantara::CreateLocalPipeServer(pipe_name);
+  if (pipe == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+  const bool unauthenticated_rejected =
+      !quantara::AuthenticateConnectedLocalPeer(pipe);
+  CloseHandle(pipe);
+  return unauthenticated_rejected;
+}
+
 bool RunSelfTest() noexcept {
   g_safety_state.store(RuntimeSafetyState::kDisarmed,
                        std::memory_order_relaxed);
@@ -158,7 +173,7 @@ bool RunSelfTest() noexcept {
     return false;
   }
 
-  return RunCredentialVaultSelfTest();
+  return RunCredentialVaultSelfTest() && RunLocalPipeSecuritySelfTest();
 }
 }  // namespace
 
