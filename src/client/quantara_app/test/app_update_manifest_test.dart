@@ -104,9 +104,7 @@ void main() {
   });
 
   test('controller reports an available Android update', () async {
-    final client = MockClient(
-      (_) async => manifestResponse(manifestJson()),
-    );
+    final client = MockClient((_) async => manifestResponse(manifestJson()));
     final controller = AppUpdateController(
       manifestClient: AppUpdateManifestClient(
         client: client,
