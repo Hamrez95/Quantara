@@ -9,6 +9,9 @@
 
 namespace quantara {
 
+ServiceSafetyState SafetyStateAfterNetworkChange(
+    ServiceSafetyState current) noexcept;
+
 class NetworkChangeMonitor final {
  public:
   explicit NetworkChangeMonitor(
