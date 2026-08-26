@@ -1,3 +1,6 @@
+// Keep stable public named constructor parameters while storing dependencies privately.
+// ignore_for_file: prefer_initializing_formals
+
 import '../data/app_update_download_verifier.dart';
 import '../domain/app_update_models.dart';
 
