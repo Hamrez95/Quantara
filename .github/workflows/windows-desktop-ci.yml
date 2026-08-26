@@ -49,37 +49,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - name: Display tool versions
-        shell: pwsh
-        run: |
-          flutter --version
-          dart --version
-          cmake --version
-
-      - name: Restore Flutter packages for profiling
-        shell: pwsh
-        working-directory: src/client/quantara_app
-        run: flutter pub get
-
-      - name: Run Windows hot-path software profiling
-        shell: pwsh
-        working-directory: src/client/quantara_app
-        run: >-
-          dart run tool/hot_path_benchmark.dart
-          --output hot-path-performance-windows.json
-          --build-commit "$env:QUANTARA_BUILD_COMMIT"
-
-      - name: Build native Windows release candidate
-        shell: pwsh
-        run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner -PackageZip
-
       - name: Build fail-closed Windows service host
         shell: pwsh
         run: ./scripts/build-windows-service.ps1 -Configuration Release
@@ -128,6 +97,37 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             throw 'Service remained registered after uninstall smoke.'
           }
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Display tool versions
+        shell: pwsh
+        run: |
+          flutter --version
+          dart --version
+          cmake --version
+
+      - name: Restore Flutter packages for profiling
+        shell: pwsh
+        working-directory: src/client/quantara_app
+        run: flutter pub get
+
+      - name: Run Windows hot-path software profiling
+        shell: pwsh
+        working-directory: src/client/quantara_app
+        run: >-
+          dart run tool/hot_path_benchmark.dart
+          --output hot-path-performance-windows.json
+          --build-commit "$env:QUANTARA_BUILD_COMMIT"
+
+      - name: Build native Windows release candidate
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner -PackageZip
 
       - name: Ensure Inno Setup compiler
         shell: pwsh
