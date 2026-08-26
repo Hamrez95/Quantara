@@ -26,7 +26,7 @@ class NetworkChangeMonitor final {
   bool running() const noexcept;
 
  private:
-  static VOID NETIOAPI_API_ OnInterfaceChange(
+  static VOID CALLBACK OnInterfaceChange(
       PVOID caller_context, PMIB_IPINTERFACE_ROW row,
       MIB_NOTIFICATION_TYPE notification_type);
 
