@@ -188,34 +188,37 @@ void main() {
     expect(controller.result?.updateAvailable, isTrue);
   });
 
-  test('below-minimum current version requires a mandatory recovery', () async {
-    final client = MockClient(
-      (_) async => manifestResponse(
-        manifestJson(minimumSupportedVersion: '0.14.0'),
-      ),
-    );
-    final controller = AppUpdateController(
-      manifestClient: AppUpdateManifestClient(
-        client: client,
-        stableManifestUri: Uri.parse(
-          'https://updates.quantara.app/stable.json',
+  test(
+    'below-minimum current version requires a mandatory recovery',
+    () async {
+      final client = MockClient(
+        (_) async => manifestResponse(
+          manifestJson(minimumSupportedVersion: '0.14.0'),
         ),
-        canaryManifestUri: Uri.parse(
-          'https://updates.quantara.app/canary.json',
+      );
+      final controller = AppUpdateController(
+        manifestClient: AppUpdateManifestClient(
+          client: client,
+          stableManifestUri: Uri.parse(
+            'https://updates.quantara.app/stable.json',
+          ),
+          canaryManifestUri: Uri.parse(
+            'https://updates.quantara.app/canary.json',
+          ),
         ),
-      ),
-      currentVersion: '0.13.9',
-      currentBuildNumber: 16,
-      platform: AppReleasePlatform.android,
-      initialChannel: AppReleaseChannel.canary,
-      languageCode: 'en',
-    );
+        currentVersion: '0.13.9',
+        currentBuildNumber: 16,
+        platform: AppReleasePlatform.android,
+        initialChannel: AppReleaseChannel.canary,
+        languageCode: 'en',
+      );
 
-    expect(await controller.check(), isTrue);
-    expect(controller.result?.updateAvailable, isTrue);
-    expect(controller.result?.mandatory, isTrue);
-    expect(controller.result?.revoked, isFalse);
-  });
+      expect(await controller.check(), isTrue);
+      expect(controller.result?.updateAvailable, isTrue);
+      expect(controller.result?.mandatory, isTrue);
+      expect(controller.result?.revoked, isFalse);
+    },
+  );
 
   test('fails closed when published recovery is below the minimum', () async {
     final client = MockClient(
