@@ -5,6 +5,7 @@
 
 #include <fstream>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace quantara {
@@ -69,12 +70,18 @@ void CredentialVault::Store(const std::wstring& name, const std::string& secret)
     if (!stream) {
       throw std::runtime_error("Credential vault write failed.");
     }
-    std::filesystem::rename(temporary, path);
+
+    if (!MoveFileExW(temporary.c_str(), path.c_str(),
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+      throw Win32Error("MoveFileExW credential replacement");
+    }
   } catch (...) {
     DeleteFileW(temporary.c_str());
+    SecureZeroMemory(output.pbData, output.cbData);
     LocalFree(output.pbData);
     throw;
   }
+  SecureZeroMemory(output.pbData, output.cbData);
   LocalFree(output.pbData);
 }
 
