@@ -138,34 +138,46 @@ bool AuthenticateConnectedLocalPeer(HANDLE pipe) noexcept {
     return false;
   }
 
+  // Resolve the connected client's PID from the named-pipe kernel object, then
+  // inspect that process token directly. ImpersonateNamedPipeClient is tied to
+  // the last message read and therefore cannot safely be the pre-read identity
+  // gate for this transport.
   ULONG client_process_id = 0;
   if (!GetNamedPipeClientProcessId(pipe, &client_process_id) ||
       client_process_id == 0) {
     return false;
   }
 
-  if (!ImpersonateNamedPipeClient(pipe)) {
+  HANDLE client_process =
+      OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, client_process_id);
+  if (client_process == nullptr) {
     return false;
   }
 
   HANDLE token = nullptr;
-  bool authenticated = false;
-  if (OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, TRUE, &token)) {
-    // A real desktop client normally carries the Interactive SID. Hosted CI
-    // runners may use a batch/service logon token instead, so also accept a
-    // peer whose kernel-reported token user exactly matches this process user.
-    // This remains local-only and authenticated; the pipe ACL still denies
-    // anonymous/network clients and no application authority is granted here.
-    authenticated = IsSameUserAsServiceProcess(token) ||
-                    HasWellKnownMembership(token, WinInteractiveSid) ||
-                    HasWellKnownMembership(token,
-                                           WinBuiltinAdministratorsSid);
-    CloseHandle(token);
-  }
-
-  if (!RevertToSelf()) {
+  const bool token_opened =
+      OpenProcessToken(client_process, TOKEN_QUERY, &token) == TRUE;
+  CloseHandle(client_process);
+  if (!token_opened) {
     return false;
   }
+
+  ULONG verified_process_id = 0;
+  const bool connection_unchanged =
+      GetNamedPipeClientProcessId(pipe, &verified_process_id) == TRUE &&
+      verified_process_id == client_process_id;
+
+  // A real desktop client normally carries the Interactive SID. Hosted CI
+  // runners may use a batch/service logon token instead, so also accept a peer
+  // whose kernel-reported token user exactly matches this process user. The
+  // pipe ACL remains local-only and no application/execution authority is
+  // granted by successful transport authentication.
+  const bool authenticated =
+      connection_unchanged &&
+      (IsSameUserAsServiceProcess(token) ||
+       HasWellKnownMembership(token, WinInteractiveSid) ||
+       HasWellKnownMembership(token, WinBuiltinAdministratorsSid));
+  CloseHandle(token);
   return authenticated;
 }
 
