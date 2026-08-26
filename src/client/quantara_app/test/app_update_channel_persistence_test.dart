@@ -9,7 +9,11 @@ import 'package:quantara_app/features/app_update/data/app_update_manifest_client
 import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 final class _MemoryChannelStore implements AppUpdateChannelStore {
-  _MemoryChannelStore({this.value, this.failLoad = false, this.failSave = false});
+  _MemoryChannelStore({
+    this.value,
+    this.failLoad = false,
+    this.failSave = false,
+  });
 
   AppReleaseChannel? value;
   final bool failLoad;
@@ -91,23 +95,29 @@ void main() {
     expect(controller.error, isNull);
   });
 
-  test('failed channel persistence rolls back instead of lying to UI', () async {
-    final store = _MemoryChannelStore(failSave: true);
-    final controller = _controller(store);
+  test(
+    'failed channel persistence rolls back instead of lying to UI',
+    () async {
+      final store = _MemoryChannelStore(failSave: true);
+      final controller = _controller(store);
 
-    await controller.setChannel(AppReleaseChannel.canary);
+      await controller.setChannel(AppReleaseChannel.canary);
 
-    expect(controller.channel, AppReleaseChannel.stable);
-    expect(controller.error, contains('could not be saved safely'));
-  });
+      expect(controller.channel, AppReleaseChannel.stable);
+      expect(controller.error, contains('could not be saved safely'));
+    },
+  );
 
-  test('corrupt persistence failure keeps configured default fail-closed', () async {
-    final store = _MemoryChannelStore(failLoad: true);
-    final controller = _controller(store);
+  test(
+    'corrupt persistence failure keeps configured default fail-closed',
+    () async {
+      final store = _MemoryChannelStore(failLoad: true);
+      final controller = _controller(store);
 
-    await controller.restoreChannel();
+      await controller.restoreChannel();
 
-    expect(controller.channel, AppReleaseChannel.stable);
-    expect(controller.error, contains('could not be restored safely'));
-  });
+      expect(controller.channel, AppReleaseChannel.stable);
+      expect(controller.error, contains('could not be restored safely'));
+    },
+  );
 }
