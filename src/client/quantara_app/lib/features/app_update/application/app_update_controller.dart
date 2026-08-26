@@ -63,7 +63,8 @@ final class AppUpdateController extends ChangeNotifier {
     } on Object catch (error) {
       if (_disposed) return;
       _result = null;
-      _error = 'Update channel could not be saved safely (${error.runtimeType}).';
+      _error =
+          'Update channel could not be saved safely (${error.runtimeType}).';
       notifyListeners();
       return;
     }
