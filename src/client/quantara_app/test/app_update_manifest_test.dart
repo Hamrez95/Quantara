@@ -307,35 +307,38 @@ void main() {
     expect(controller.error, contains('valid SemVer'));
   });
 
-  test('malformed SemVer build metadata fails update checking closed', () async {
-    final client = MockClient(
-      (_) async => manifestResponse(
-        manifestJson(
-          version: '1.2.0',
-          buildNumber: 127,
-          minimumSupportedVersion: '1.1.0',
+  test(
+    'malformed SemVer build metadata fails update checking closed',
+    () async {
+      final client = MockClient(
+        (_) async => manifestResponse(
+          manifestJson(
+            version: '1.2.0',
+            buildNumber: 127,
+            minimumSupportedVersion: '1.1.0',
+          ),
         ),
-      ),
-    );
-    final controller = AppUpdateController(
-      manifestClient: AppUpdateManifestClient(
-        client: client,
-        stableManifestUri: Uri.parse(
-          'https://updates.quantara.app/stable.json',
+      );
+      final controller = AppUpdateController(
+        manifestClient: AppUpdateManifestClient(
+          client: client,
+          stableManifestUri: Uri.parse(
+            'https://updates.quantara.app/stable.json',
+          ),
+          canaryManifestUri: Uri.parse(
+            'https://updates.quantara.app/canary.json',
+          ),
         ),
-        canaryManifestUri: Uri.parse(
-          'https://updates.quantara.app/canary.json',
-        ),
-      ),
-      currentVersion: '1.2.0+build..1',
-      currentBuildNumber: 126,
-      platform: AppReleasePlatform.android,
-      initialChannel: AppReleaseChannel.canary,
-      languageCode: 'en',
-    );
+        currentVersion: '1.2.0+build..1',
+        currentBuildNumber: 126,
+        platform: AppReleasePlatform.android,
+        initialChannel: AppReleaseChannel.canary,
+        languageCode: 'en',
+      );
 
-    expect(await controller.check(), isFalse);
-    expect(controller.result, isNull);
-    expect(controller.error, contains('valid SemVer'));
-  });
+      expect(await controller.check(), isFalse);
+      expect(controller.result, isNull);
+      expect(controller.error, contains('valid SemVer'));
+    },
+  );
 }
