@@ -82,6 +82,21 @@ jobs:
           node --check build/web/flutter_service_worker.js
           grep -F "const CACHE_PREFIX = 'quantara-pwa-'" build/web/flutter_service_worker.js
           grep -F "self.addEventListener('fetch'" build/web/flutter_service_worker.js
+          grep -F "self.addEventListener('message'" build/web/flutter_service_worker.js
+          grep -F "event.data?.type === 'SKIP_WAITING'" build/web/flutter_service_worker.js
+          grep -F 'id="quantara-update-ready"' build/web/index.html
+          grep -F "waitingWorker.postMessage({ type: 'SKIP_WAITING' })" build/web/index.html
+          python3 - <<'PY'
+          from pathlib import Path
+
+          worker = Path("build/web/flutter_service_worker.js").read_text()
+          install_block = worker.split("self.addEventListener('install'", 1)[1].split(
+              "self.addEventListener('message'", 1
+          )[0]
+          assert 'self.skipWaiting()' not in install_block, (
+              'PWA worker must wait for explicit user activation.'
+          )
+          PY
           if grep -Fq '.unregister()' build/web/flutter_service_worker.js; then
             echo 'Refusing to publish a service worker that unregisters itself.' >&2
             exit 1
