@@ -18,21 +18,24 @@ void main() {
     signingIdentity: 'AA:BB',
   );
 
-  test('returns verified bytes only when SHA-256 matches the manifest', () async {
-    final payload = utf8.encode('signed-release-artifact');
-    final verifier = AppUpdateDownloadVerifier(
-      client: MockClient((request) async {
-        expect(request.url.scheme, 'https');
-        return http.Response.bytes(payload, 200);
-      }),
-    );
-    addTearDown(verifier.close);
+  test(
+    'returns verified bytes only when SHA-256 matches the manifest',
+    () async {
+      final payload = utf8.encode('signed-release-artifact');
+      final verifier = AppUpdateDownloadVerifier(
+        client: MockClient((request) async {
+          expect(request.url.scheme, 'https');
+          return http.Response.bytes(payload, 200);
+        }),
+      );
+      addTearDown(verifier.close);
 
-    final verified = await verifier.downloadAndVerify(artifactFor(payload));
+      final verified = await verifier.downloadAndVerify(artifactFor(payload));
 
-    expect(verified.bytes, payload);
-    expect(verified.artifact.buildNumber, 127);
-  });
+      expect(verified.bytes, payload);
+      expect(verified.artifact.buildNumber, 127);
+    },
+  );
 
   test('blocks a tampered artifact before installer handoff', () async {
     final expected = utf8.encode('expected-release-artifact');
