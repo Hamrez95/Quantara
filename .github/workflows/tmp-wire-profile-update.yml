@@ -1,0 +1,89 @@
+name: Temporary profile update wiring
+
+on:
+  push:
+    branches:
+      - feat/81-profile-app-update
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/81-profile-app-update
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Wire card into Profile
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          page = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart')
+          text = page.read_text()
+          anchor = "import '../../../core/widgets/quantara_ui.dart';\n"
+          addition = anchor + "import '../../app_update/presentation/profile_app_update_card.dart';\n"
+          if "profile_app_update_card.dart" not in text:
+              if anchor not in text:
+                  raise SystemExit('owner_alpha_page import anchor missing')
+              text = text.replace(anchor, addition, 1)
+              page.write_text(text)
+
+          exchange = Path('src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_exchange.dart')
+          text = exchange.read_text()
+          anchor = """        _ProfilePreferencesCard(
+          themeMode: widget.themeMode,
+          locale: widget.locale,
+          onToggleTheme: widget.onToggleTheme,
+          onLocaleChanged: widget.onLocaleChanged,
+        ),
+        const SizedBox(height: 16),
+        _ProfileConnectionsCard(
+"""
+          replacement = """        _ProfilePreferencesCard(
+          themeMode: widget.themeMode,
+          locale: widget.locale,
+          onToggleTheme: widget.onToggleTheme,
+          onLocaleChanged: widget.onLocaleChanged,
+        ),
+        const SizedBox(height: 16),
+        const ProfileAppUpdateCard(),
+        const SizedBox(height: 16),
+        _ProfileConnectionsCard(
+"""
+          if 'const ProfileAppUpdateCard()' not in text:
+              if anchor not in text:
+                  raise SystemExit('profile card anchor missing')
+              text = text.replace(anchor, replacement, 1)
+              exchange.write_text(text)
+          PY
+      - name: Restore dependencies and canonical formatting
+        working-directory: src/client/quantara_app
+        run: |
+          flutter pub get
+          dart format lib/features/app_update/presentation/profile_app_update_card.dart \
+            lib/features/owner_alpha/presentation/owner_alpha_page.dart \
+            lib/features/owner_alpha/presentation/owner_alpha_exchange.dart \
+            test/app_update_profile_configuration_test.dart
+      - name: Remove temporary workflow and commit generated wiring
+        shell: bash
+        run: |
+          rm .github/workflows/tmp-wire-profile-update.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No wiring changes to commit.'
+            exit 0
+          fi
+          git commit -m 'feat(updates): wire app update status into profile'
+          git push origin HEAD:feat/81-profile-app-update
