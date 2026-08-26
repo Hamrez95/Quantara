@@ -6,6 +6,8 @@ add_executable(quantara_windows_service
   main.cpp
   credential_vault.cpp
   credential_vault.h
+  ipc_request_protocol.cpp
+  ipc_request_protocol.h
   local_pipe_security.cpp
   local_pipe_security.h
   local_pipe_transport.cpp
