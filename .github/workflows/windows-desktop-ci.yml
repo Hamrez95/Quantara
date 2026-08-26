@@ -38,6 +38,7 @@ env:
   FLUTTER_VERSION: '3.44.8'
   RC_VERSION: 1.2.0-rc.3
   QUANTARA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  QUANTARA_SERVICE_NAME: QuantaraExecutionService
 
 jobs:
   windows:
@@ -53,47 +54,53 @@ jobs:
         shell: pwsh
         run: ./scripts/build-windows-service.ps1 -Configuration Release
 
-      - name: Smoke service SCM lifecycle
-        shell: pwsh
+      - name: Prepare existing service for upgrade
+        shell: powershell
+        run: ./scripts/manage-windows-service.ps1 -Action PrepareUpgrade
+
+      - name: Install service in stopped state
+        shell: powershell
         run: |
-          # Current PowerShell can promote a native non-zero exit code to a
-          # terminating error. The final query intentionally expects 1060 after
-          # uninstall, so keep native exit-code handling explicit in this smoke.
-          if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
-            $PSNativeCommandUseErrorActionPreference = $false
-          }
-
-          $serviceName = 'QuantaraExecutionService'
           $serviceExe = (Resolve-Path 'build/windows-service/Release/quantara_windows_service.exe').Path
-          try {
-            ./scripts/manage-windows-service.ps1 -Action PrepareUpgrade
-            ./scripts/manage-windows-service.ps1 -Action Install -ServiceExe $serviceExe
+          ./scripts/manage-windows-service.ps1 -Action Install -ServiceExe $serviceExe
 
-            $query = & sc.exe query $serviceName 2>&1
-            if ($LASTEXITCODE -ne 0) {
-              throw "Installed service cannot be queried: $($query -join ' ')"
-            }
-            if (($query -join "`n") -notmatch 'STATE\s*:\s*1\s+STOPPED') {
-              throw 'Installer lifecycle must leave the service stopped/disarmed.'
-            }
-
-            $config = & sc.exe qc $serviceName 2>&1
-            if ($LASTEXITCODE -ne 0) {
-              throw "Installed service configuration cannot be queried: $($config -join ' ')"
-            }
-            $configText = $config -join "`n"
-            if ($configText -notmatch 'START_TYPE\s*:\s*2\s+AUTO_START') {
-              throw 'Service is not configured for automatic boot startup.'
-            }
-            if ($configText -notmatch [regex]::Escape($serviceExe)) {
-              throw 'Service executable path does not match the packaged host.'
-            }
+      - name: Verify service is stopped
+        shell: powershell
+        run: |
+          $query = & sc.exe query $env:QUANTARA_SERVICE_NAME 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Installed service cannot be queried: $($query -join ' ')"
           }
-          finally {
-            ./scripts/manage-windows-service.ps1 -Action Uninstall
+          if (($query -join "`n") -notmatch 'STATE\s*:\s*1\s+STOPPED') {
+            throw "Installer lifecycle must leave the service stopped/disarmed. Actual: $($query -join ' ')"
           }
 
-          & sc.exe query $serviceName *> $null
+      - name: Verify service configuration
+        shell: powershell
+        run: |
+          $serviceExe = (Resolve-Path 'build/windows-service/Release/quantara_windows_service.exe').Path
+          $config = & sc.exe qc $env:QUANTARA_SERVICE_NAME 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Installed service configuration cannot be queried: $($config -join ' ')"
+          }
+          $configText = $config -join "`n"
+          if ($configText -notmatch 'START_TYPE\s*:\s*2\s+AUTO_START') {
+            throw "Service is not configured for automatic boot startup. Actual: $configText"
+          }
+          if ($configText -notmatch [regex]::Escape($serviceExe)) {
+            throw "Service executable path does not match the packaged host. Expected: $serviceExe Actual: $configText"
+          }
+
+      - name: Remove service after lifecycle smoke
+        if: always()
+        shell: powershell
+        run: ./scripts/manage-windows-service.ps1 -Action Uninstall
+
+      - name: Verify service removal
+        if: always()
+        shell: powershell
+        run: |
+          & sc.exe query $env:QUANTARA_SERVICE_NAME *> $null
           if ($LASTEXITCODE -eq 0) {
             throw 'Service remained registered after uninstall smoke.'
           }
