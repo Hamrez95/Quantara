@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace quantara {
@@ -17,5 +18,11 @@ constexpr DWORD kMaxAuthenticatedPipeMessageBytes = 64 * 1024;
 // returned bytes.
 bool ReadAuthenticatedLocalMessage(HANDLE pipe,
                                    std::vector<std::uint8_t>& message) noexcept;
+
+// Writes exactly one already-validated response frame to a connected local
+// pipe. Empty, oversized, partial or failed writes are rejected. This function
+// performs no request parsing and grants no execution authority.
+bool WriteLocalMessage(HANDLE pipe,
+                       std::span<const std::uint8_t> message) noexcept;
 
 }  // namespace quantara
