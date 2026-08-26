@@ -14,6 +14,7 @@ final class AppUpdateController extends ChangeNotifier {
     required this.platform,
     required AppReleaseChannel initialChannel,
     required this.languageCode,
+    this.rolloutBucket,
   }) : _manifestClient = manifestClient,
        _channel = initialChannel;
 
@@ -22,6 +23,12 @@ final class AppUpdateController extends ChangeNotifier {
   final int currentBuildNumber;
   final AppReleasePlatform platform;
   final String languageCode;
+
+  /// Stable per-install bucket in the inclusive range 0..99.
+  ///
+  /// A missing bucket fails closed for partial optional rollouts. Mandatory,
+  /// revoked, and below-minimum recovery updates bypass staged rollout.
+  final int? rolloutBucket;
 
   AppReleaseChannel _channel;
   AppUpdateCheckResult? _result;
@@ -68,13 +75,15 @@ final class AppUpdateController extends ChangeNotifier {
       final belowMinimumSupported =
           _compareVersions(currentVersion, manifest.minimumSupportedVersion) <
           0;
+      final mandatory = manifest.mandatory || revoked || belowMinimumSupported;
+      final rolloutEligible = _isRolloutEligible(manifest.rolloutPercent);
       _result = AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuildNumber: currentBuildNumber,
         channel: _channel,
         updateAvailable:
-            revoked || belowMinimumSupported || newerBuild || newerVersion,
-        mandatory: manifest.mandatory || revoked || belowMinimumSupported,
+            mandatory || ((newerBuild || newerVersion) && rolloutEligible),
+        mandatory: mandatory,
         revoked: revoked,
         artifact: artifact,
         releaseNotes:
@@ -95,6 +104,17 @@ final class AppUpdateController extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  bool _isRolloutEligible(int rolloutPercent) {
+    if (rolloutPercent >= 100) return true;
+    if (rolloutPercent <= 0) return false;
+    final bucket = rolloutBucket;
+    if (bucket == null) return false;
+    if (bucket < 0 || bucket > 99) {
+      throw const FormatException('Update rollout bucket is invalid.');
+    }
+    return bucket < rolloutPercent;
   }
 
   static int _compareVersions(String left, String right) =>
