@@ -4,6 +4,7 @@
 
 #include "ipc_readonly_session.h"
 #include "local_pipe_security.h"
+#include "network_change_monitor.h"
 
 namespace quantara {
 namespace {
@@ -38,13 +39,18 @@ bool WaitForClientOrStop(HANDLE pipe, HANDLE stop_event) noexcept {
 
 bool RunReadOnlyStatusListener(
     HANDLE stop_event, const std::wstring& pipe_name,
-    const std::atomic<ServiceSafetyState>& safety_state) noexcept {
+    std::atomic<ServiceSafetyState>& safety_state) noexcept {
   if (stop_event == nullptr || stop_event == INVALID_HANDLE_VALUE ||
       pipe_name.empty()) {
     return false;
   }
 
   try {
+    NetworkChangeMonitor network_monitor(safety_state);
+    if (!network_monitor.Start()) {
+      return false;
+    }
+
     RequestReplayGuard replay_guard;
     while (WaitForSingleObject(stop_event, 0) == WAIT_TIMEOUT) {
       HANDLE pipe = CreateLocalPipeServer(pipe_name);
