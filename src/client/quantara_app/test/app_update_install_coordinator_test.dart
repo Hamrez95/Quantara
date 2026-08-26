@@ -10,8 +10,7 @@ import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 void main() {
   const packageId = 'com.quantara.quantara_app';
-  const signingIdentity =
-      'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99';
+  const signingIdentity = 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99';
 
   AppReleaseArtifact androidArtifact(List<int> bytes) => AppReleaseArtifact(
     platform: AppReleasePlatform.android,
