@@ -2,19 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/windows_desktop/domain/windows_service_update_policy.dart';
 
 void main() {
-  test('every update transition blocks entries and requires explicit restart', () {
-    for (final event in WindowsServiceUpdateEvent.values) {
-      final snapshot = WindowsServiceUpdatePolicy.resolve(
-        event: event,
-        hasExchangeReportedOpenPositions: false,
-      );
+  test(
+    'every update transition blocks entries and requires explicit restart',
+    () {
+      for (final event in WindowsServiceUpdateEvent.values) {
+        final snapshot = WindowsServiceUpdatePolicy.resolve(
+          event: event,
+          hasExchangeReportedOpenPositions: false,
+        );
 
-      expect(snapshot.blocksNewEntries, isTrue, reason: event.name);
-      expect(snapshot.requiresExplicitStart, isTrue, reason: event.name);
-      expect(snapshot.localManagementAvailable, isFalse, reason: event.name);
-      expect(snapshot.exchangeProtectionAuthoritative, isTrue, reason: event.name);
-    }
-  });
+        expect(snapshot.blocksNewEntries, isTrue, reason: event.name);
+        expect(snapshot.requiresExplicitStart, isTrue, reason: event.name);
+        expect(snapshot.localManagementAvailable, isFalse, reason: event.name);
+        expect(
+          snapshot.exchangeProtectionAuthoritative,
+          isTrue,
+          reason: event.name,
+        );
+      }
+    },
+  );
 
   test('successful install requires reconciliation before any recovery', () {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
@@ -39,16 +46,19 @@ void main() {
     expect(snapshot.blocksNewEntries, isTrue);
   });
 
-  test('successful reconciliation with open positions remains reconciliation-only', () {
-    final snapshot = WindowsServiceUpdatePolicy.resolve(
-      event: WindowsServiceUpdateEvent.reconciliationSucceeded,
-      hasExchangeReportedOpenPositions: true,
-    );
+  test(
+    'successful reconciliation with open positions remains reconciliation-only',
+    () {
+      final snapshot = WindowsServiceUpdatePolicy.resolve(
+        event: WindowsServiceUpdateEvent.reconciliationSucceeded,
+        hasExchangeReportedOpenPositions: true,
+      );
 
-    expect(snapshot.mode, WindowsServiceUpdateMode.reconciliationOnly);
-    expect(snapshot.reconciliationRequired, isTrue);
-    expect(snapshot.requiresExplicitStart, isTrue);
-  });
+      expect(snapshot.mode, WindowsServiceUpdateMode.reconciliationOnly);
+      expect(snapshot.reconciliationRequired, isTrue);
+      expect(snapshot.requiresExplicitStart, isTrue);
+    },
+  );
 
   test('successful reconciliation without positions ends disarmed', () {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
