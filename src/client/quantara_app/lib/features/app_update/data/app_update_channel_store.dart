@@ -18,9 +18,10 @@ final class PlatformAppUpdateChannelStore implements AppUpdateChannelStore {
     final preferences = SharedPreferencesAsync();
     final raw = await preferences.getString(_key);
     if (raw == null) return null;
-    return AppReleaseChannel.values
-        .where((channel) => channel.name == raw)
-        .firstOrNull;
+    for (final channel in AppReleaseChannel.values) {
+      if (channel.name == raw) return channel;
+    }
+    throw const FormatException('Saved update channel is invalid.');
   }
 
   @override
