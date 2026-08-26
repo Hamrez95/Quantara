@@ -8,6 +8,8 @@ namespace quantara {
 namespace {
 
 constexpr wchar_t kPipePrefix[] = L"\\\\.\\pipe\\QuantaraExecutionService.";
+constexpr size_t kPipePrefixLength =
+    (sizeof(kPipePrefix) / sizeof(kPipePrefix[0])) - 1;
 constexpr DWORD kPipeBufferBytes = 64 * 1024;
 
 class LocalSecurityDescriptor final {
@@ -59,7 +61,7 @@ bool HasWellKnownMembership(HANDLE token, WELL_KNOWN_SID_TYPE sid_type) noexcept
 }
 
 bool IsAllowedPipeName(const std::wstring& pipe_name) noexcept {
-  if (pipe_name.size() <= std::size(kPipePrefix) - 1) {
+  if (pipe_name.size() <= kPipePrefixLength) {
     return false;
   }
   return pipe_name.rfind(kPipePrefix, 0) == 0;
