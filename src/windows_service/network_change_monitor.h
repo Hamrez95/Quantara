@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <netioapi.h>
 
 #include <atomic>
 
