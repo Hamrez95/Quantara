@@ -46,6 +46,11 @@ if (-not (Test-Path $sessionTestExe)) {
     throw "Windows service session test executable was not produced at $sessionTestExe"
 }
 
+$listenerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_listener_test.exe"
+if (-not (Test-Path $listenerTestExe)) {
+    throw "Windows service listener test executable was not produced at $listenerTestExe"
+}
+
 & $serviceExe --self-test
 Assert-LastExitCode 'quantara_windows_service --self-test'
 
@@ -54,5 +59,8 @@ Assert-LastExitCode 'quantara_windows_service_response_test'
 
 & $sessionTestExe
 Assert-LastExitCode 'quantara_windows_service_session_test'
+
+& $listenerTestExe
+Assert-LastExitCode 'quantara_windows_service_listener_test'
 
 Write-Host "Windows service host: $serviceExe"
