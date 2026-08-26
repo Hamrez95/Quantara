@@ -34,4 +34,18 @@ bool ReadAuthenticatedLocalMessage(HANDLE pipe,
   return true;
 }
 
+bool WriteLocalMessage(HANDLE pipe,
+                       std::span<const std::uint8_t> message) noexcept {
+  if (pipe == nullptr || pipe == INVALID_HANDLE_VALUE || message.empty() ||
+      message.size() > kMaxAuthenticatedPipeMessageBytes) {
+    return false;
+  }
+
+  DWORD bytes_written = 0;
+  const BOOL write_ok =
+      WriteFile(pipe, message.data(), static_cast<DWORD>(message.size()),
+                &bytes_written, nullptr);
+  return write_ok == TRUE && bytes_written == message.size();
+}
+
 }  // namespace quantara
