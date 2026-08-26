@@ -87,6 +87,13 @@ jobs:
       - name: Smoke service SCM lifecycle
         shell: pwsh
         run: |
+          # Current PowerShell can promote a native non-zero exit code to a
+          # terminating error. The final query intentionally expects 1060 after
+          # uninstall, so keep native exit-code handling explicit in this smoke.
+          if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+            $PSNativeCommandUseErrorActionPreference = $false
+          }
+
           $serviceName = 'QuantaraExecutionService'
           $serviceExe = (Resolve-Path 'build/windows-service/Release/quantara_windows_service.exe').Path
           try {
