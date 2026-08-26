@@ -10,32 +10,31 @@
 #include <vector>
 
 #include "credential_vault.h"
+#include "ipc_readonly_listener.h"
 #include "ipc_request_protocol.h"
 #include "local_pipe_security.h"
 #include "local_pipe_transport.h"
 
 namespace {
 constexpr wchar_t kServiceName[] = L"QuantaraExecutionService";
+constexpr wchar_t kStatusPipeName[] =
+    L"\\\\.\\pipe\\QuantaraExecutionService.status";
 
-enum class RuntimeSafetyState {
-  kDisarmed,
-  kInterrupted,
-  kReconciliationRequired,
-};
-
-std::atomic<RuntimeSafetyState> g_safety_state{RuntimeSafetyState::kDisarmed};
+std::atomic<quantara::ServiceSafetyState> g_safety_state{
+    quantara::ServiceSafetyState::kDisarmed};
 SERVICE_STATUS_HANDLE g_status_handle = nullptr;
 SERVICE_STATUS g_status{};
 HANDLE g_stop_event = nullptr;
 
-RuntimeSafetyState SafetyStateAfterPowerEvent(DWORD event_type) noexcept {
+quantara::ServiceSafetyState SafetyStateAfterPowerEvent(
+    DWORD event_type) noexcept {
   switch (event_type) {
     case PBT_APMSUSPEND:
-      return RuntimeSafetyState::kInterrupted;
+      return quantara::ServiceSafetyState::kInterrupted;
     case PBT_APMRESUMEAUTOMATIC:
     case PBT_APMRESUMECRITICAL:
     case PBT_APMRESUMESUSPEND:
-      return RuntimeSafetyState::kReconciliationRequired;
+      return quantara::ServiceSafetyState::kReconciliationRequired;
     default:
       return g_safety_state.load(std::memory_order_relaxed);
   }
@@ -96,16 +95,37 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     return;
   }
 
-  // A service start never grants execution authority. The future authenticated
-  // IPC/reconciliation layer must explicitly transition out of this state.
-  g_safety_state.store(RuntimeSafetyState::kDisarmed,
+  // A service start never grants execution authority. IPC is read-only and the
+  // future reconciliation/execution layer must explicitly transition authority
+  // through its own deterministic safety gates.
+  g_safety_state.store(quantara::ServiceSafetyState::kDisarmed,
                        std::memory_order_relaxed);
-  ReportServiceStatus(SERVICE_RUNNING);
 
+  std::atomic<bool> listener_ok{false};
+  std::thread listener([&]() {
+    const bool result = quantara::RunReadOnlyStatusListener(
+        g_stop_event, kStatusPipeName, g_safety_state);
+    listener_ok.store(result, std::memory_order_relaxed);
+    if (!result && g_stop_event != nullptr) {
+      SetEvent(g_stop_event);
+    }
+  });
+
+  ReportServiceStatus(SERVICE_RUNNING);
   WaitForSingleObject(g_stop_event, INFINITE);
+
+  // The listener may be blocked in ConnectNamedPipe or ReadFile. Cancelling
+  // synchronous I/O on its owning thread makes SCM stop/shutdown bounded while
+  // preserving fail-closed behavior for any partial request.
+  CancelSynchronousIo(listener.native_handle());
+  listener.join();
+
   CloseHandle(g_stop_event);
   g_stop_event = nullptr;
-  ReportServiceStatus(SERVICE_STOPPED);
+  ReportServiceStatus(
+      SERVICE_STOPPED,
+      listener_ok.load(std::memory_order_relaxed) ? NO_ERROR
+                                                  : ERROR_SERVICE_SPECIFIC_ERROR);
 }
 
 bool RunCredentialVaultSelfTest() noexcept {
@@ -268,23 +288,24 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
 }
 
 bool RunSelfTest() noexcept {
-  g_safety_state.store(RuntimeSafetyState::kDisarmed,
+  g_safety_state.store(quantara::ServiceSafetyState::kDisarmed,
                        std::memory_order_relaxed);
   if (SafetyStateAfterPowerEvent(PBT_APMSUSPEND) !=
-      RuntimeSafetyState::kInterrupted) {
+      quantara::ServiceSafetyState::kInterrupted) {
     return false;
   }
 
-  g_safety_state.store(RuntimeSafetyState::kInterrupted,
+  g_safety_state.store(quantara::ServiceSafetyState::kInterrupted,
                        std::memory_order_relaxed);
   if (SafetyStateAfterPowerEvent(PBT_APMRESUMEAUTOMATIC) !=
-      RuntimeSafetyState::kReconciliationRequired) {
+      quantara::ServiceSafetyState::kReconciliationRequired) {
     return false;
   }
 
-  g_safety_state.store(RuntimeSafetyState::kDisarmed,
+  g_safety_state.store(quantara::ServiceSafetyState::kDisarmed,
                        std::memory_order_relaxed);
-  if (SafetyStateAfterPowerEvent(0) != RuntimeSafetyState::kDisarmed) {
+  if (SafetyStateAfterPowerEvent(0) !=
+      quantara::ServiceSafetyState::kDisarmed) {
     return false;
   }
 
