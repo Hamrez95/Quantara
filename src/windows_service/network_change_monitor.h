@@ -1,5 +1,6 @@
 #pragma once
 
+#include <winsock2.h>
 #include <windows.h>
 #include <netioapi.h>
 
@@ -25,9 +26,9 @@ class NetworkChangeMonitor final {
   bool running() const noexcept;
 
  private:
-  static VOID CALLBACK OnInterfaceChange(
+  static VOID NETIOAPI_API_ OnInterfaceChange(
       PVOID caller_context, PMIB_IPINTERFACE_ROW row,
-      MIB_NOTIFICATION_TYPE notification_type) noexcept;
+      MIB_NOTIFICATION_TYPE notification_type);
 
   std::atomic<ServiceSafetyState>& safety_state_;
   HANDLE notification_handle_ = nullptr;
