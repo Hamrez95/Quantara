@@ -46,7 +46,11 @@ final class AppUpdateArtifactIdentityPolicy {
         }
       case AppReleasePlatform.windows:
         final expected = _normalizeSigningIdentity(windowsSigningIdentity);
-        if (expected == null) return;
+        if (expected == null) {
+          throw const AppUpdateDownloadException(
+            'Windows update signing identity policy is unavailable. Download is blocked.',
+          );
+        }
         final actual = _normalizeSigningIdentity(artifact.signingIdentity);
         if (actual != expected) {
           throw const AppUpdateDownloadException(
@@ -81,10 +85,10 @@ final class VerifiedAppUpdateDownload {
 /// Downloads an immutable release artifact and verifies its manifest SHA-256
 /// before any installer handoff can occur.
 ///
-/// When an [identityPolicy] is supplied, package/signing metadata is checked
-/// before any network request. This component deliberately does not install,
-/// launch, or execute the artifact. Platform-specific install flows must
-/// consume only a [VerifiedAppUpdateDownload].
+/// Native artifacts require an [identityPolicy], and package/signing metadata
+/// is checked before any network request. This component deliberately does not
+/// install, launch, or execute the artifact. Platform-specific install flows
+/// must consume only a [VerifiedAppUpdateDownload].
 final class AppUpdateDownloadVerifier {
   AppUpdateDownloadVerifier({
     http.Client? client,
@@ -103,6 +107,12 @@ final class AppUpdateDownloadVerifier {
     if (maxBytes < 1) {
       throw const AppUpdateDownloadException(
         'Update download size policy is invalid.',
+      );
+    }
+    if (artifact.platform != AppReleasePlatform.pwa &&
+        _identityPolicy == null) {
+      throw const AppUpdateDownloadException(
+        'Native update identity policy is unavailable. Download is blocked.',
       );
     }
     _identityPolicy?.validate(artifact);
