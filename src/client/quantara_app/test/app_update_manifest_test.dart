@@ -87,6 +87,27 @@ void main() {
     expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
   });
 
+  test('rejects missing required manifest fields instead of defaulting', () {
+    final json = manifestJson()..remove('mandatory');
+
+    expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
+  });
+
+  test('rejects malformed revoked builds instead of silently dropping them', () {
+    final json = manifestJson()..['revokedBuilds'] = <Object?>[16, '17'];
+
+    expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
+  });
+
+  test('rejects credential-bearing HTTPS artifact URLs', () {
+    final json = manifestJson();
+    final artifacts = json['artifacts']! as Map<String, Object?>;
+    final android = artifacts['android']! as Map<String, Object?>;
+    android['url'] = 'https://token@updates.quantara.app/quantara.apk';
+
+    expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
+  });
+
   test('client rejects a channel mismatch', () async {
     final client = MockClient(
       (_) async => manifestResponse(manifestJson(channel: 'stable')),
