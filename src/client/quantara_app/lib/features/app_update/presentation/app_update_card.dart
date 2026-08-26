@@ -34,9 +34,7 @@ final class AppUpdateCard extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         key: const ValueKey('app-update-confirm-dialog'),
-        title: Text(
-          _persian ? 'دریافت به‌روزرسانی؟' : 'Download update?',
-        ),
+        title: Text(_persian ? 'دریافت به‌روزرسانی؟' : 'Download update?'),
         content: Text(
           _persian
               ? 'Quantara فایل نصب را دانلود و صحت آن را بررسی می‌کند. نصب یا راه‌اندازی مجدد فقط با اقدام صریح بعدی شما انجام می‌شود.'
