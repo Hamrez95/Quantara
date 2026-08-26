@@ -128,6 +128,7 @@ final class WindowsAppUpdateInstallerGateway
         installer.path,
       ], mode: ProcessStartMode.detached);
     } on Object catch (error) {
+      await _deleteQuietly(installer);
       throw AppUpdateInstallException(
         'Windows installer handoff failed safely (${error.runtimeType}).',
       );
