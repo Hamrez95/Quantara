@@ -99,7 +99,7 @@ final class AppUpdateManifest {
 
   factory AppUpdateManifest.fromJson(Map<String, Object?> json) {
     final schemaVersion = json['schemaVersion'];
-    if (schemaVersion != 1) {
+    if (schemaVersion is! int || schemaVersion != 1) {
       throw const FormatException('Unsupported update manifest schema.');
     }
 
