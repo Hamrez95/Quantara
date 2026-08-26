@@ -113,9 +113,10 @@ final class AppUpdateManifest {
     );
 
     final rawPublishedAt = json['publishedAt'];
-    final publishedAt = rawPublishedAt is String
-        ? DateTime.tryParse(rawPublishedAt)?.toUtc()
-        : null;
+    DateTime? publishedAt;
+    if (rawPublishedAt is String) {
+      publishedAt = DateTime.tryParse(rawPublishedAt)?.toUtc();
+    }
     if (publishedAt == null) {
       throw const FormatException('Manifest publication time is invalid.');
     }
@@ -136,14 +137,18 @@ final class AppUpdateManifest {
     if (artifactJson is! Map<Object?, Object?>) {
       throw const FormatException('Release artifacts are missing.');
     }
-    final supportedArtifactKeys = AppReleasePlatform.values
-        .map((platform) => platform.name)
-        .toSet();
-    if (artifactJson.keys.any(
-      (key) => key is! String || !supportedArtifactKeys.contains(key),
-    )) {
-      throw const FormatException('Release artifacts contain an unknown platform.');
+    final supportedArtifactKeys = <String>{};
+    for (final platform in AppReleasePlatform.values) {
+      supportedArtifactKeys.add(platform.name);
     }
+    for (final key in artifactJson.keys) {
+      if (key is! String || !supportedArtifactKeys.contains(key)) {
+        throw const FormatException(
+          'Release artifacts contain an unknown platform.',
+        );
+      }
+    }
+
     final artifacts = <AppReleasePlatform, AppReleaseArtifact>{};
     for (final platform in AppReleasePlatform.values) {
       final raw = artifactJson[platform.name];
@@ -166,20 +171,23 @@ final class AppUpdateManifest {
     }
     final notes = <String, String>{};
     for (final entry in rawNotes.entries) {
-      if (entry.key is! String || entry.value is! String) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key is! String || value is! String) {
         throw const FormatException('Release notes are invalid.');
       }
-      notes[(entry.key! as String)] = entry.value! as String;
+      notes[key] = value;
     }
 
     final rawRevokedBuilds = json['revokedBuilds'];
-    if (rawRevokedBuilds is! List<Object?> ||
-        rawRevokedBuilds.any((value) => value is! int || value < 1)) {
+    if (rawRevokedBuilds is! List<Object?>) {
       throw const FormatException('Revoked build metadata is invalid.');
     }
-    final revokedBuilds = rawRevokedBuilds.cast<int>().toSet();
-    if (revokedBuilds.length != rawRevokedBuilds.length) {
-      throw const FormatException('Revoked build metadata contains duplicates.');
+    final revokedBuilds = <int>{};
+    for (final value in rawRevokedBuilds) {
+      if (value is! int || value < 1 || !revokedBuilds.add(value)) {
+        throw const FormatException('Revoked build metadata is invalid.');
+      }
     }
 
     return AppUpdateManifest(
