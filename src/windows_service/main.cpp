@@ -165,6 +165,12 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
     return false;
   }
 
+  HANDLE client_release = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (client_release == nullptr) {
+    CloseHandle(pipe);
+    return false;
+  }
+
   constexpr std::uint8_t kPayload[] = {0x51, 0x54, 0x52, 0x41};
   std::atomic<bool> client_ok{false};
   std::thread client([&]() {
@@ -182,10 +188,15 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
       return;
     }
     DWORD written = 0;
-    client_ok.store(WriteFile(handle, kPayload, sizeof(kPayload), &written,
-                              nullptr) == TRUE &&
-                        written == sizeof(kPayload),
-                    std::memory_order_relaxed);
+    const bool write_ok =
+        WriteFile(handle, kPayload, sizeof(kPayload), &written, nullptr) == TRUE &&
+        written == sizeof(kPayload);
+    client_ok.store(write_ok, std::memory_order_relaxed);
+    if (write_ok) {
+      // Keep the authenticated peer connected until the server has consumed
+      // the frame. Closing immediately after WriteFile can race token lookup.
+      WaitForSingleObject(client_release, 5000);
+    }
     CloseHandle(handle);
   });
 
@@ -201,9 +212,11 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
     }
   }
 
+  SetEvent(client_release);
   DisconnectNamedPipe(pipe);
   CloseHandle(pipe);
   client.join();
+  CloseHandle(client_release);
   return server_ok && client_ok.load(std::memory_order_relaxed);
 }
 
