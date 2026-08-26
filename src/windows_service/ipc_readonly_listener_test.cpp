@@ -8,6 +8,29 @@
 
 #include "ipc_readonly_listener.h"
 
+namespace {
+
+HANDLE ConnectLocalClient(const std::wstring& pipe_name) noexcept {
+  const ULONGLONG deadline = GetTickCount64() + 5000;
+  while (GetTickCount64() < deadline) {
+    HANDLE client = CreateFileW(pipe_name.c_str(), GENERIC_READ | GENERIC_WRITE,
+                                0, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (client != INVALID_HANDLE_VALUE) {
+      return client;
+    }
+
+    const DWORD error = GetLastError();
+    if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PIPE_BUSY) {
+      return INVALID_HANDLE_VALUE;
+    }
+    Sleep(10);
+  }
+  SetLastError(ERROR_TIMEOUT);
+  return INVALID_HANDLE_VALUE;
+}
+
+}  // namespace
+
 int wmain() {
   const std::wstring pipe_name =
       L"\\\\.\\pipe\\QuantaraExecutionService.listener-self-test." +
@@ -27,17 +50,12 @@ int wmain() {
         std::memory_order_relaxed);
   });
 
-  bool client_ok = WaitNamedPipeW(pipe_name.c_str(), 5000) == TRUE;
-  HANDLE client = INVALID_HANDLE_VALUE;
-  if (client_ok) {
-    client = CreateFileW(pipe_name.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
-                         nullptr, OPEN_EXISTING, 0, nullptr);
-    client_ok = client != INVALID_HANDLE_VALUE;
-  }
-
+  HANDLE client = ConnectLocalClient(pipe_name);
+  bool client_ok = client != INVALID_HANDLE_VALUE;
   if (client_ok) {
     DWORD message_mode = PIPE_READMODE_MESSAGE;
-    client_ok = SetNamedPipeHandleState(client, &message_mode, nullptr, nullptr) == TRUE;
+    client_ok =
+        SetNamedPipeHandleState(client, &message_mode, nullptr, nullptr) == TRUE;
   }
 
   const std::string request =
@@ -46,17 +64,19 @@ int wmain() {
       "{\"protocolVersion\":1,\"requestId\":\"listener-status-1\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"disarmed\",\"entryAuthority\":false}}";
   if (client_ok) {
     DWORD written = 0;
-    client_ok = WriteFile(client, request.data(), static_cast<DWORD>(request.size()),
-                          &written, nullptr) == TRUE &&
-                written == request.size();
+    client_ok =
+        WriteFile(client, request.data(), static_cast<DWORD>(request.size()),
+                  &written, nullptr) == TRUE &&
+        written == request.size();
   }
 
   if (client_ok) {
     std::vector<char> response(64 * 1024);
     DWORD read = 0;
-    client_ok = ReadFile(client, response.data(), static_cast<DWORD>(response.size()),
-                         &read, nullptr) == TRUE &&
-                read > 0;
+    client_ok =
+        ReadFile(client, response.data(), static_cast<DWORD>(response.size()),
+                 &read, nullptr) == TRUE &&
+        read > 0;
     if (client_ok) {
       response.resize(read);
       client_ok = std::string(response.begin(), response.end()) == expected;
