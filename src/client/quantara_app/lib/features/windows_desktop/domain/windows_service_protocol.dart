@@ -132,7 +132,11 @@ final class WindowsServiceFrame {
 final class WindowsServiceRequestReplayGuard {
   WindowsServiceRequestReplayGuard({this.capacity = 256}) {
     if (capacity < 1 || capacity > 4096) {
-      throw ArgumentError.value(capacity, 'capacity', 'must be between 1 and 4096');
+      throw ArgumentError.value(
+        capacity,
+        'capacity',
+        'must be between 1 and 4096',
+      );
     }
   }
 
