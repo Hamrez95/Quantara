@@ -48,6 +48,21 @@ function Wait-ServiceStopped {
     throw "Windows service '$serviceName' did not stop within $TimeoutSeconds seconds."
 }
 
+function Wait-ServiceRemoved {
+    param([int]$TimeoutSeconds = 20)
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        & sc.exe query $serviceName *> $null
+        if ($LASTEXITCODE -ne 0) {
+            return
+        }
+        Start-Sleep -Milliseconds 250
+    }
+
+    throw "Windows service '$serviceName' was not removed within $TimeoutSeconds seconds."
+}
+
 function Stop-ServiceIfPresent {
     if (-not (Test-ServiceExists)) {
         return
@@ -105,5 +120,9 @@ switch ($Action) {
 
         Stop-ServiceIfPresent
         Invoke-Sc delete $serviceName
+        # Service deletion is asynchronous in SCM. Wait until the registration
+        # is actually gone so installer/CI callers do not race a marked-for-
+        # deletion service into the next install or verification step.
+        Wait-ServiceRemoved
     }
 }
