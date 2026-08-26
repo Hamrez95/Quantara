@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 
 /// Versioned, read-only IPC framing contract for the future Windows service.
@@ -120,6 +121,38 @@ final class WindowsServiceFrame {
       );
     }
   }
+}
+
+/// Bounded duplicate-request guard for one authenticated local IPC session.
+///
+/// A future named-pipe transport should create a fresh guard only after peer
+/// authentication succeeds. Duplicate request IDs within that session are
+/// rejected so retries/replays cannot be mistaken for fresh work, while the
+/// bounded window prevents an untrusted client from growing memory forever.
+final class WindowsServiceRequestReplayGuard {
+  WindowsServiceRequestReplayGuard({this.capacity = 256}) {
+    if (capacity < 1 || capacity > 4096) {
+      throw ArgumentError.value(capacity, 'capacity', 'must be between 1 and 4096');
+    }
+  }
+
+  final int capacity;
+  final LinkedHashSet<String> _seenRequestIds = LinkedHashSet<String>();
+
+  bool accept(WindowsServiceFrame frame) {
+    final requestId = frame.requestId;
+    if (_seenRequestIds.contains(requestId)) {
+      return false;
+    }
+
+    _seenRequestIds.add(requestId);
+    while (_seenRequestIds.length > capacity) {
+      _seenRequestIds.remove(_seenRequestIds.first);
+    }
+    return true;
+  }
+
+  int get trackedRequestCount => _seenRequestIds.length;
 }
 
 final class WindowsServiceProtocolException implements Exception {
