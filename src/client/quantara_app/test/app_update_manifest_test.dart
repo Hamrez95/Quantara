@@ -94,12 +94,15 @@ void main() {
     expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
   });
 
-  test('rejects malformed revoked builds instead of silently dropping them', () {
-    final json = manifestJson();
-    json['revokedBuilds'] = <Object?>[16, '17'];
+  test(
+    'rejects malformed revoked builds instead of silently dropping them',
+    () {
+      final json = manifestJson();
+      json['revokedBuilds'] = <Object?>[16, '17'];
 
-    expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
-  });
+      expect(() => AppUpdateManifest.fromJson(json), throwsFormatException);
+    },
+  );
 
   test('rejects credential-bearing HTTPS artifact URLs', () {
     final json = manifestJson();
