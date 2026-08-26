@@ -11,15 +11,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $serviceRoot = Join-Path $repoRoot 'src/windows_service'
 $buildRoot = Join-Path $repoRoot 'build/windows-service'
 
-function Invoke-Checked {
-    param(
-        [Parameter(Mandatory = $true)][string]$Command,
-        [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
-    )
+function Assert-LastExitCode {
+    param([Parameter(Mandatory = $true)][string]$CommandName)
 
-    & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "$Command failed with exit code $LASTEXITCODE"
+        throw "$CommandName failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -28,13 +24,18 @@ if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
 }
 
 New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
-Invoke-Checked cmake -S $serviceRoot -B $buildRoot -A x64
-Invoke-Checked cmake --build $buildRoot --config $Configuration --parallel
+
+& cmake -S $serviceRoot -B $buildRoot -A x64
+Assert-LastExitCode 'cmake configure'
+
+& cmake --build $buildRoot --config $Configuration --parallel
+Assert-LastExitCode 'cmake build'
 
 $serviceExe = Join-Path $buildRoot "$Configuration/quantara_windows_service.exe"
 if (-not (Test-Path $serviceExe)) {
     throw "Windows service executable was not produced at $serviceExe"
 }
 
-Invoke-Checked $serviceExe --self-test
+& $serviceExe --self-test
+Assert-LastExitCode 'quantara_windows_service --self-test'
 Write-Host "Windows service host: $serviceExe"
