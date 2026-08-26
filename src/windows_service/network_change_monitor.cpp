@@ -1,7 +1,5 @@
 #include "network_change_monitor.h"
 
-#include <ws2ipdef.h>
-
 namespace quantara {
 
 ServiceSafetyState SafetyStateAfterNetworkChange(
@@ -44,9 +42,9 @@ bool NetworkChangeMonitor::running() const noexcept {
   return notification_handle_ != nullptr;
 }
 
-VOID CALLBACK NetworkChangeMonitor::OnInterfaceChange(
+VOID NETIOAPI_API_ NetworkChangeMonitor::OnInterfaceChange(
     PVOID caller_context, PMIB_IPINTERFACE_ROW /*row*/,
-    MIB_NOTIFICATION_TYPE /*notification_type*/) noexcept {
+    MIB_NOTIFICATION_TYPE /*notification_type*/) {
   if (caller_context == nullptr) {
     return;
   }
