@@ -102,13 +102,14 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
 }
 
 bool RunCredentialVaultSelfTest() noexcept {
-  const auto root = std::filesystem::temp_directory_path() /
-                    (L"quantara-service-self-test-" +
-                     std::to_wstring(GetCurrentProcessId()));
+  std::filesystem::path root;
   std::error_code cleanup_error;
-  std::filesystem::remove_all(root, cleanup_error);
-
   try {
+    root = std::filesystem::temp_directory_path() /
+           (L"quantara-service-self-test-" +
+            std::to_wstring(GetCurrentProcessId()));
+    std::filesystem::remove_all(root, cleanup_error);
+
     quantara::CredentialVault vault(root);
     vault.Store(L"self-test", "first-secret");
     const auto first = vault.Load(L"self-test");
@@ -129,7 +130,9 @@ bool RunCredentialVaultSelfTest() noexcept {
     std::filesystem::remove_all(root, cleanup_error);
     return removed;
   } catch (...) {
-    std::filesystem::remove_all(root, cleanup_error);
+    if (!root.empty()) {
+      std::filesystem::remove_all(root, cleanup_error);
+    }
     return false;
   }
 }
