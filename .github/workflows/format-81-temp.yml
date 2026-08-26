@@ -1,0 +1,38 @@
+name: Format update gateway temporary
+
+on:
+  push:
+    branches:
+      - feat/81-windows-installer-gateway
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/81-windows-installer-gateway
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.7'
+          cache: true
+      - name: Format changed Dart files
+        working-directory: src/client/quantara_app
+        run: >-
+          dart format
+          lib/features/app_update/application/windows_app_update_installer_gateway.dart
+          test/windows_app_update_installer_gateway_test.dart
+      - name: Commit canonical formatting
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/app_update/application/windows_app_update_installer_gateway.dart src/client/quantara_app/test/windows_app_update_installer_gateway_test.dart
+          git commit -m "style(updates): apply canonical dart formatting"
+          git push origin HEAD:feat/81-windows-installer-gateway
