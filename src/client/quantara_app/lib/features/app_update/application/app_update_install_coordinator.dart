@@ -23,8 +23,8 @@ final class AppUpdateInstallException implements Exception {
 /// installer adapter. PWA activation remains a separate service-worker flow.
 final class AppUpdateInstallCoordinator {
   const AppUpdateInstallCoordinator({
-    required AppUpdateVerifiedDownloader this._downloadAndVerify,
-    required AppUpdateInstallerHandoff this._installerHandoff,
+    required this._downloadAndVerify,
+    required this._installerHandoff,
   });
 
   final AppUpdateVerifiedDownloader _downloadAndVerify;
