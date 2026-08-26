@@ -6,11 +6,7 @@ enum WindowsServiceStartupReason {
   crashRecovery,
 }
 
-enum WindowsServiceAuthorityState {
-  disarmed,
-  monitoring,
-  reconciliationOnly,
-}
+enum WindowsServiceAuthorityState { disarmed, monitoring, reconciliationOnly }
 
 final class WindowsServiceStartupSnapshot {
   const WindowsServiceStartupSnapshot({
