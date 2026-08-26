@@ -36,6 +36,15 @@ if (-not (Test-Path $serviceExe)) {
     throw "Windows service executable was not produced at $serviceExe"
 }
 
+$responseTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_response_test.exe"
+if (-not (Test-Path $responseTestExe)) {
+    throw "Windows service response test executable was not produced at $responseTestExe"
+}
+
 & $serviceExe --self-test
 Assert-LastExitCode 'quantara_windows_service --self-test'
+
+& $responseTestExe
+Assert-LastExitCode 'quantara_windows_service_response_test'
+
 Write-Host "Windows service host: $serviceExe"
