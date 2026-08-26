@@ -10,6 +10,14 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# sc.exe uses non-zero exit codes for expected states such as "service does not
+# exist". PowerShell 7 can promote those native exit codes to terminating
+# errors before this script can inspect $LASTEXITCODE. Keep native handling
+# explicit and fail closed only where Invoke-Sc requires success.
+if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+
 $serviceName = 'QuantaraExecutionService'
 $displayName = 'Quantara Execution Service'
 
