@@ -97,28 +97,103 @@ final class AppUpdateController extends ChangeNotifier {
     }
   }
 
-  static int _compareVersions(String left, String right) {
-    List<int> parse(String value) {
-      final core = value.trim().split('-').first;
-      final parts = core.split('.');
-      return List<int>.generate(
-        3,
-        (index) => index < parts.length ? int.tryParse(parts[index]) ?? 0 : 0,
-      );
-    }
-
-    final leftParts = parse(left);
-    final rightParts = parse(right);
-    for (var index = 0; index < 3; index++) {
-      final compared = leftParts[index].compareTo(rightParts[index]);
-      if (compared != 0) return compared;
-    }
-    return 0;
-  }
+  static int _compareVersions(String left, String right) =>
+      _SemanticVersion.parse(left).compareTo(_SemanticVersion.parse(right));
 
   @override
   void dispose() {
     _disposed = true;
     super.dispose();
+  }
+}
+
+final class _SemanticVersion implements Comparable<_SemanticVersion> {
+  const _SemanticVersion(this.major, this.minor, this.patch, this.preRelease);
+
+  final int major;
+  final int minor;
+  final int patch;
+  final List<String> preRelease;
+
+  static final RegExp _pattern = RegExp(
+    r'^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$',
+  );
+
+  factory _SemanticVersion.parse(String raw) {
+    final value = raw.trim();
+    final match = _pattern.firstMatch(value);
+    if (match == null) {
+      throw const FormatException('Release version is not valid SemVer.');
+    }
+
+    int parseCore(int group) {
+      final segment = match.group(group)!;
+      if (segment.length > 1 && segment.startsWith('0')) {
+        throw const FormatException('Release version is not valid SemVer.');
+      }
+      return int.parse(segment);
+    }
+
+    final rawPreRelease = match.group(4);
+    final preRelease = rawPreRelease == null
+        ? const <String>[]
+        : rawPreRelease.split('.');
+    for (final identifier in preRelease) {
+      if (identifier.isEmpty ||
+          (_isNumeric(identifier) &&
+              identifier.length > 1 &&
+              identifier.startsWith('0'))) {
+        throw const FormatException('Release version is not valid SemVer.');
+      }
+    }
+
+    final rawBuildMetadata = match.group(5);
+    if (rawBuildMetadata != null &&
+        rawBuildMetadata.split('.').any((identifier) => identifier.isEmpty)) {
+      throw const FormatException('Release version is not valid SemVer.');
+    }
+
+    return _SemanticVersion(
+      parseCore(1),
+      parseCore(2),
+      parseCore(3),
+      List.unmodifiable(preRelease),
+    );
+  }
+
+  static bool _isNumeric(String value) => RegExp(r'^\d+$').hasMatch(value);
+
+  @override
+  int compareTo(_SemanticVersion other) {
+    final core = <int>[
+      major.compareTo(other.major),
+      minor.compareTo(other.minor),
+      patch.compareTo(other.patch),
+    ];
+    for (final compared in core) {
+      if (compared != 0) return compared;
+    }
+
+    if (preRelease.isEmpty && other.preRelease.isEmpty) return 0;
+    if (preRelease.isEmpty) return 1;
+    if (other.preRelease.isEmpty) return -1;
+
+    final commonLength = preRelease.length < other.preRelease.length
+        ? preRelease.length
+        : other.preRelease.length;
+    for (var index = 0; index < commonLength; index++) {
+      final left = preRelease[index];
+      final right = other.preRelease[index];
+      if (left == right) continue;
+      final leftNumeric = _isNumeric(left);
+      final rightNumeric = _isNumeric(right);
+      if (leftNumeric && rightNumeric) {
+        return int.parse(left).compareTo(int.parse(right));
+      }
+      if (leftNumeric) return -1;
+      if (rightNumeric) return 1;
+      return left.compareTo(right);
+    }
+    return preRelease.length.compareTo(other.preRelease.length);
   }
 }

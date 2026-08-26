@@ -243,4 +243,102 @@ void main() {
     expect(controller.result, isNull);
     expect(controller.error, contains('minimum supported version'));
   });
+
+  test('stable SemVer release supersedes same-core prerelease', () async {
+    final client = MockClient(
+      (_) async => manifestResponse(
+        manifestJson(
+          version: '1.2.0',
+          buildNumber: 126,
+          minimumSupportedVersion: '1.1.0',
+        ),
+      ),
+    );
+    final controller = AppUpdateController(
+      manifestClient: AppUpdateManifestClient(
+        client: client,
+        stableManifestUri: Uri.parse(
+          'https://updates.quantara.app/stable.json',
+        ),
+        canaryManifestUri: Uri.parse(
+          'https://updates.quantara.app/canary.json',
+        ),
+      ),
+      currentVersion: '1.2.0-rc.3',
+      currentBuildNumber: 126,
+      platform: AppReleasePlatform.android,
+      initialChannel: AppReleaseChannel.canary,
+      languageCode: 'en',
+    );
+
+    expect(await controller.check(), isTrue);
+    expect(controller.result?.updateAvailable, isTrue);
+  });
+
+  test('malformed current version fails update checking closed', () async {
+    final client = MockClient(
+      (_) async => manifestResponse(
+        manifestJson(
+          version: '1.2.0',
+          buildNumber: 127,
+          minimumSupportedVersion: '1.1.0',
+        ),
+      ),
+    );
+    final controller = AppUpdateController(
+      manifestClient: AppUpdateManifestClient(
+        client: client,
+        stableManifestUri: Uri.parse(
+          'https://updates.quantara.app/stable.json',
+        ),
+        canaryManifestUri: Uri.parse(
+          'https://updates.quantara.app/canary.json',
+        ),
+      ),
+      currentVersion: '1.2',
+      currentBuildNumber: 126,
+      platform: AppReleasePlatform.android,
+      initialChannel: AppReleaseChannel.canary,
+      languageCode: 'en',
+    );
+
+    expect(await controller.check(), isFalse);
+    expect(controller.result, isNull);
+    expect(controller.error, contains('valid SemVer'));
+  });
+
+  test(
+    'malformed SemVer build metadata fails update checking closed',
+    () async {
+      final client = MockClient(
+        (_) async => manifestResponse(
+          manifestJson(
+            version: '1.2.0',
+            buildNumber: 127,
+            minimumSupportedVersion: '1.1.0',
+          ),
+        ),
+      );
+      final controller = AppUpdateController(
+        manifestClient: AppUpdateManifestClient(
+          client: client,
+          stableManifestUri: Uri.parse(
+            'https://updates.quantara.app/stable.json',
+          ),
+          canaryManifestUri: Uri.parse(
+            'https://updates.quantara.app/canary.json',
+          ),
+        ),
+        currentVersion: '1.2.0+build..1',
+        currentBuildNumber: 126,
+        platform: AppReleasePlatform.android,
+        initialChannel: AppReleaseChannel.canary,
+        languageCode: 'en',
+      );
+
+      expect(await controller.check(), isFalse);
+      expect(controller.result, isNull);
+      expect(controller.error, contains('valid SemVer'));
+    },
+  );
 }
