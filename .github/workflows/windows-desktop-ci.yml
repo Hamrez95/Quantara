@@ -84,7 +84,7 @@ jobs:
           if (-not (Test-Path $iscc)) {
             throw 'Inno Setup compiler is unavailable after installation.'
           }
-          & $iscc /?
+          Write-Host "Inno Setup compiler: $iscc"
 
       - name: Build unsigned internal installer
         shell: pwsh
