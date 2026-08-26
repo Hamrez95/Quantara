@@ -19,7 +19,7 @@ final class AppUpdateCard extends StatelessWidget {
   final AppUpdateController? controller;
   final Locale locale;
   final Future<void> Function(AppReleaseArtifact artifact)?
-      onDownloadVerifiedArtifact;
+  onDownloadVerifiedArtifact;
 
   bool get _persian => locale.languageCode == 'fa';
 
@@ -66,7 +66,7 @@ final class AppUpdateCard extends StatelessWidget {
                     context,
                     _persian ? 'نسخه فعلی' : 'Current version',
                     '${updateController.currentVersion} '
-                        '(${updateController.currentBuildNumber})',
+                    '(${updateController.currentBuildNumber})',
                   ),
                   DropdownButton<AppReleaseChannel>(
                     key: const ValueKey('app-update-channel'),
@@ -126,7 +126,8 @@ final class AppUpdateCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     key: const ValueKey('app-update-download'),
-                    onPressed: onDownloadVerifiedArtifact == null ||
+                    onPressed:
+                        onDownloadVerifiedArtifact == null ||
                             updateController.isBusy
                         ? null
                         : () => onDownloadVerifiedArtifact!(artifact),
@@ -172,9 +173,8 @@ final class AppUpdateCard extends StatelessWidget {
             children: [
               Text(
                 _persian ? 'به‌روزرسانی برنامه' : 'App update',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 2),
               Text(
@@ -219,9 +219,8 @@ final class AppUpdateCard extends StatelessWidget {
     return Text(
       message,
       key: const ValueKey('app-update-status'),
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(fontWeight: FontWeight.w700),
     );
   }
 }

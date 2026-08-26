@@ -10,7 +10,9 @@ import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 import 'package:quantara_app/features/app_update/presentation/app_update_card.dart';
 
 void main() {
-  testWidgets('fails closed when update runtime is not configured', (tester) async {
+  testWidgets('fails closed when update runtime is not configured', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -19,7 +21,10 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('app-update-unconfigured')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('app-update-unconfigured')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('app-update-check')), findsNothing);
     expect(find.byKey(const ValueKey('app-update-download')), findsNothing);
   });
