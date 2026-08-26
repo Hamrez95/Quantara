@@ -34,7 +34,7 @@ void main() {
   });
 
   for (final reason in WindowsServiceStartupReason.values) {
-    test('$reason with exchange positions is manage-only and reconciles', () {
+    test('$reason with exchange positions is reconciliation-only', () {
       final snapshot = WindowsServiceStartupPolicy.resolve(
         reason: reason,
         hasExchangeReportedOpenPositions: true,
@@ -42,7 +42,7 @@ void main() {
 
       expect(
         snapshot.authority,
-        WindowsServiceAuthorityState.managingProtectedPositions,
+        WindowsServiceAuthorityState.reconciliationOnly,
       );
       expect(snapshot.requiresExplicitStart, isTrue);
       expect(snapshot.reconciliationRequired, isTrue);
