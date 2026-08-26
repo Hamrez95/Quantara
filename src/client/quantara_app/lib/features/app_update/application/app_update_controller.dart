@@ -3,6 +3,7 @@
 
 import 'package:flutter/foundation.dart';
 
+import '../data/app_update_channel_store.dart';
 import '../data/app_update_manifest_client.dart';
 import '../domain/app_update_models.dart';
 
@@ -14,10 +15,13 @@ final class AppUpdateController extends ChangeNotifier {
     required this.platform,
     required AppReleaseChannel initialChannel,
     required this.languageCode,
+    AppUpdateChannelStore? channelStore,
   }) : _manifestClient = manifestClient,
+       _channelStore = channelStore,
        _channel = initialChannel;
 
   final AppUpdateManifestClient _manifestClient;
+  final AppUpdateChannelStore? _channelStore;
   final String currentVersion;
   final int currentBuildNumber;
   final AppReleasePlatform platform;
@@ -34,12 +38,39 @@ final class AppUpdateController extends ChangeNotifier {
   String? get error => _error;
   bool get isBusy => _busy;
 
+  Future<void> restoreChannel() async {
+    if (_busy || _disposed || _channelStore == null) return;
+    try {
+      final restored = await _channelStore.load();
+      if (_disposed || restored == null || restored == _channel) return;
+      _channel = restored;
+      _result = null;
+      _error = null;
+      notifyListeners();
+    } on Object catch (error) {
+      if (_disposed) return;
+      _error = 'Saved update channel could not be restored safely (${error.runtimeType}).';
+      _result = null;
+      notifyListeners();
+    }
+  }
+
   Future<void> setChannel(AppReleaseChannel channel) async {
     if (_busy || channel == _channel || _disposed) return;
+    final previous = _channel;
     _channel = channel;
     _result = null;
     _error = null;
     notifyListeners();
+    try {
+      await _channelStore?.save(channel);
+    } on Object catch (error) {
+      if (_disposed) return;
+      _channel = previous;
+      _result = null;
+      _error = 'Update channel could not be saved safely (${error.runtimeType}).';
+      notifyListeners();
+    }
   }
 
   Future<bool> check() async {
