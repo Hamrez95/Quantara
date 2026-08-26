@@ -13,6 +13,12 @@ namespace quantara {
 ServiceSafetyState SafetyStateAfterNetworkChange(
     ServiceSafetyState current) noexcept;
 
+class NetworkChangeMonitor;
+
+VOID CALLBACK NetworkChangeCallback(
+    PVOID caller_context, PMIB_IPINTERFACE_ROW row,
+    MIB_NOTIFICATION_TYPE notification_type);
+
 class NetworkChangeMonitor final {
  public:
   explicit NetworkChangeMonitor(
@@ -26,9 +32,11 @@ class NetworkChangeMonitor final {
   bool running() const noexcept;
 
  private:
-  static VOID CALLBACK OnInterfaceChange(
+  friend VOID CALLBACK NetworkChangeCallback(
       PVOID caller_context, PMIB_IPINTERFACE_ROW row,
       MIB_NOTIFICATION_TYPE notification_type);
+
+  void HandleInterfaceChange() noexcept;
 
   std::atomic<ServiceSafetyState>& safety_state_;
   HANDLE notification_handle_ = nullptr;
