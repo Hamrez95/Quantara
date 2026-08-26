@@ -29,7 +29,7 @@ void main() {
     expect(find.byKey(const ValueKey('app-update-download')), findsNothing);
   });
 
-  testWidgets('shows release status and requires explicit download action', (
+  testWidgets('shows release status and confirms before explicit download', (
     tester,
   ) async {
     var requests = 0;
@@ -106,6 +106,21 @@ void main() {
     expect(explicitDownloads, 0);
 
     await tester.tap(find.byKey(const ValueKey('app-update-download')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('app-update-confirm-dialog')),
+      findsOneWidget,
+    );
+    expect(explicitDownloads, 0);
+
+    await tester.tap(find.byKey(const ValueKey('app-update-confirm-cancel')));
+    await tester.pumpAndSettle();
+    expect(explicitDownloads, 0);
+
+    await tester.tap(find.byKey(const ValueKey('app-update-download')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('app-update-confirm-download')));
     await tester.pumpAndSettle();
 
     expect(explicitDownloads, 1);
