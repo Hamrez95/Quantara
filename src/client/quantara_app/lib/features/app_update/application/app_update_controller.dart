@@ -116,7 +116,7 @@ final class _SemanticVersion implements Comparable<_SemanticVersion> {
   final List<String> preRelease;
 
   static final RegExp _pattern = RegExp(
-    r'^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$',
+    r'^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$',
   );
 
   factory _SemanticVersion.parse(String raw) {
@@ -145,6 +145,12 @@ final class _SemanticVersion implements Comparable<_SemanticVersion> {
               identifier.startsWith('0'))) {
         throw const FormatException('Release version is not valid SemVer.');
       }
+    }
+
+    final rawBuildMetadata = match.group(5);
+    if (rawBuildMetadata != null &&
+        rawBuildMetadata.split('.').any((identifier) => identifier.isEmpty)) {
+      throw const FormatException('Release version is not valid SemVer.');
     }
 
     return _SemanticVersion(
