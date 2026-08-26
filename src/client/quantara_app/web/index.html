@@ -85,7 +85,7 @@
   </noscript>
 
   <div id="quantara-update-ready" class="update-ready" role="status" aria-live="polite" data-visible="false">
-    <span>نسخه جدید Quantara آماده است. برای اعمال به‌روزرسانی صفحه را تازه‌سازی کنید.</span>
+    <span id="quantara-update-message">نسخه جدید Quantara آماده است. برای اعمال به‌روزرسانی صفحه را تازه‌سازی کنید.</span>
     <button id="quantara-update-apply" type="button">به‌روزرسانی</button>
   </div>
 
@@ -96,7 +96,17 @@
       let waitingWorker = null;
       let reloadForUpdate = false;
       const prompt = document.getElementById('quantara-update-ready');
+      const message = document.getElementById('quantara-update-message');
       const applyButton = document.getElementById('quantara-update-apply');
+      const prefersPersian = (navigator.languages || [navigator.language])
+        .filter(Boolean)
+        .some((language) => language.toLowerCase().startsWith('fa'));
+
+      if (!prefersPersian) {
+        prompt.dir = 'ltr';
+        message.textContent = 'A new Quantara version is ready. Refresh to apply the update.';
+        applyButton.textContent = 'Update';
+      }
 
       const showUpdatePrompt = (worker) => {
         if (!worker) return;
@@ -104,21 +114,27 @@
         prompt.dataset.visible = 'true';
       };
 
+      const observeInstallingWorker = (registration, worker) => {
+        if (!worker) return;
+        const onStateChange = () => {
+          if (
+            worker.state === 'installed' &&
+            navigator.serviceWorker.controller
+          ) {
+            showUpdatePrompt(registration.waiting || worker);
+          }
+        };
+        worker.addEventListener('statechange', onStateChange);
+        onStateChange();
+      };
+
       const watchRegistration = (registration) => {
         if (!registration) return;
         if (registration.waiting) showUpdatePrompt(registration.waiting);
+        observeInstallingWorker(registration, registration.installing);
 
         registration.addEventListener('updatefound', () => {
-          const installing = registration.installing;
-          if (!installing) return;
-          installing.addEventListener('statechange', () => {
-            if (
-              installing.state === 'installed' &&
-              navigator.serviceWorker.controller
-            ) {
-              showUpdatePrompt(registration.waiting || installing);
-            }
-          });
+          observeInstallingWorker(registration, registration.installing);
         });
       };
 
