@@ -6,18 +6,19 @@ import 'package:quantara_app/features/app_update/data/app_update_download_verifi
 import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 void main() {
-  AppReleaseArtifact artifact(AppReleasePlatform platform) => AppReleaseArtifact(
-    platform: platform,
-    version: '1.2.0',
-    buildNumber: 120,
-    downloadUri: Uri.parse('https://releases.example.com/quantara.bin'),
-    sha256: List.filled(64, 'a').join(),
-    packageId: platform == AppReleasePlatform.android
-        ? 'com.quantara.quantara_app'
-        : null,
-    signingIdentity: platform == AppReleasePlatform.pwa ? null : 'AA:BB',
-    architecture: platform == AppReleasePlatform.windows ? 'x64' : null,
-  );
+  AppReleaseArtifact artifact(AppReleasePlatform platform) =>
+      AppReleaseArtifact(
+        platform: platform,
+        version: '1.2.0',
+        buildNumber: 120,
+        downloadUri: Uri.parse('https://releases.example.com/quantara.bin'),
+        sha256: List.filled(64, 'a').join(),
+        packageId: platform == AppReleasePlatform.android
+            ? 'com.quantara.quantara_app'
+            : null,
+        signingIdentity: platform == AppReleasePlatform.pwa ? null : 'AA:BB',
+        architecture: platform == AppReleasePlatform.windows ? 'x64' : null,
+      );
 
   test('blocks download and handoff without explicit user confirmation', () async {
     var downloads = 0;
@@ -44,25 +45,28 @@ void main() {
     expect(handoffs, 0);
   });
 
-  test('hands only verified native artifact to installer after confirmation', () async {
-    final requested = artifact(AppReleasePlatform.android);
-    VerifiedAppUpdateDownload? handedOff;
-    final coordinator = AppUpdateInstallCoordinator(
-      downloadAndVerify: (value) async => VerifiedAppUpdateDownload(
-        artifact: value,
-        bytes: Uint8List.fromList([1, 2, 3]),
-      ),
-      installerHandoff: (download) async => handedOff = download,
-    );
+  test(
+    'hands only verified native artifact to installer after confirmation',
+    () async {
+      final requested = artifact(AppReleasePlatform.android);
+      VerifiedAppUpdateDownload? handedOff;
+      final coordinator = AppUpdateInstallCoordinator(
+        downloadAndVerify: (value) async => VerifiedAppUpdateDownload(
+          artifact: value,
+          bytes: Uint8List.fromList([1, 2, 3]),
+        ),
+        installerHandoff: (download) async => handedOff = download,
+      );
 
-    final result = await coordinator.downloadVerifyAndRequestInstall(
-      artifact: requested,
-      userConfirmedInstall: true,
-    );
+      final result = await coordinator.downloadVerifyAndRequestInstall(
+        artifact: requested,
+        userConfirmedInstall: true,
+      );
 
-    expect(result, same(handedOff));
-    expect(result.artifact, same(requested));
-  });
+      expect(result, same(handedOff));
+      expect(result.artifact, same(requested));
+    },
+  );
 
   test('rejects verified payload when artifact identity changes', () async {
     var handoffs = 0;
