@@ -108,4 +108,49 @@ void main() {
     expect(decoded.payload['state'], 'connected');
     expect(() => decoded.payload['state'] = 'tampered', throwsUnsupportedError);
   });
+
+  test('replay guard rejects duplicate request ids within one session', () {
+    final guard = WindowsServiceRequestReplayGuard();
+    final first = WindowsServiceFrame(
+      requestId: 'status-3',
+      kind: WindowsServiceMessageKind.statusRequest,
+      payload: const {},
+    );
+    final replay = WindowsServiceFrame(
+      requestId: 'status-3',
+      kind: WindowsServiceMessageKind.statusRequest,
+      payload: const {'retry': true},
+    );
+
+    expect(guard.accept(first), isTrue);
+    expect(guard.accept(replay), isFalse);
+  });
+
+  test('replay guard remains bounded and expires oldest request ids', () {
+    final guard = WindowsServiceRequestReplayGuard(capacity: 2);
+
+    WindowsServiceFrame request(String requestId) => WindowsServiceFrame(
+      requestId: requestId,
+      kind: WindowsServiceMessageKind.statusRequest,
+      payload: const {},
+    );
+
+    expect(guard.accept(request('request-1')), isTrue);
+    expect(guard.accept(request('request-2')), isTrue);
+    expect(guard.accept(request('request-3')), isTrue);
+    expect(guard.trackedRequestCount, 2);
+    expect(guard.accept(request('request-1')), isTrue);
+    expect(guard.trackedRequestCount, 2);
+  });
+
+  test('replay guard rejects unsafe capacities', () {
+    expect(
+      () => WindowsServiceRequestReplayGuard(capacity: 0),
+      throwsArgumentError,
+    );
+    expect(
+      () => WindowsServiceRequestReplayGuard(capacity: 4097),
+      throwsArgumentError,
+    );
+  });
 }
