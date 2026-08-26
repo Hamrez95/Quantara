@@ -173,8 +173,9 @@ final class AppUpdateCard extends StatelessWidget {
             children: [
               Text(
                 _persian ? 'به‌روزرسانی برنامه' : 'App update',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 2),
               Text(
@@ -219,8 +220,9 @@ final class AppUpdateCard extends StatelessWidget {
     return Text(
       message,
       key: const ValueKey('app-update-status'),
-      style: Theme.of(context).textTheme.bodyMedium
-          ?.copyWith(fontWeight: FontWeight.w700),
+      style: Theme.of(
+        context,
+      ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
     );
   }
 }

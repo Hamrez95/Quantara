@@ -52,7 +52,8 @@ void main() {
               'version': '1.3.0',
               'buildNumber': 130,
               'url': 'https://downloads.example/quantara.apk',
-              'sha256': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              'sha256':
+                  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
               'packageId': 'com.quantara.quantara_app',
               'signingIdentity': 'release-cert',
             },
