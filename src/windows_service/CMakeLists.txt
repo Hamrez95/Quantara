@@ -28,8 +28,6 @@ target_compile_definitions(quantara_windows_service PRIVATE
   _UNICODE
   WIN32_LEAN_AND_MEAN
   NOMINMAX
-  _WIN32_WINNT=0x0A00
-  WINVER=0x0A00
 )
 target_compile_options(quantara_windows_service PRIVATE
   /W4
@@ -127,8 +125,6 @@ target_compile_definitions(quantara_windows_service_listener_test PRIVATE
   _UNICODE
   WIN32_LEAN_AND_MEAN
   NOMINMAX
-  _WIN32_WINNT=0x0A00
-  WINVER=0x0A00
 )
 target_compile_options(quantara_windows_service_listener_test PRIVATE
   /W4
@@ -152,8 +148,6 @@ target_compile_definitions(quantara_windows_service_network_change_test PRIVATE
   _UNICODE
   WIN32_LEAN_AND_MEAN
   NOMINMAX
-  _WIN32_WINNT=0x0A00
-  WINVER=0x0A00
 )
 target_compile_options(quantara_windows_service_network_change_test PRIVATE
   /W4
