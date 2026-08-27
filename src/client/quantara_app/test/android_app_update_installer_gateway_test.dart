@@ -144,7 +144,7 @@ void main() {
       temporaryDirectoryProvider: () async => tempDirectory,
       handoffInvoker: (path) async {
         persistedPath = path;
-        throw const PlatformException(
+        throw PlatformException(
           code: 'install_permission_required',
           message: 'native detail that must not leak',
           details: 'private native detail',
@@ -183,7 +183,7 @@ void main() {
       isAndroid: true,
       temporaryDirectoryProvider: () async => tempDirectory,
       handoffInvoker: (path) async {
-        throw const PlatformException(code: 'installer_blocked');
+        throw PlatformException(code: 'installer_blocked');
       },
     );
 
@@ -204,7 +204,7 @@ void main() {
       isAndroid: true,
       temporaryDirectoryProvider: () async => tempDirectory,
       handoffInvoker: (path) async {
-        throw const PlatformException(
+        throw PlatformException(
           code: 'vendor_sensitive_code',
           message: 'secret native message',
           details: {'token': 'do-not-log'},
