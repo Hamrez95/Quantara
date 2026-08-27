@@ -34,25 +34,57 @@ std::string_view ServiceSafetyStateName(ServiceSafetyState state) noexcept {
   return "unknown";
 }
 
+std::string_view CredentialReadinessName(CredentialReadiness readiness) noexcept {
+  switch (readiness) {
+    case CredentialReadiness::kMissing:
+      return "missing";
+    case CredentialReadiness::kReady:
+      return "ready";
+    case CredentialReadiness::kIncomplete:
+      return "incomplete";
+    case CredentialReadiness::kInvalid:
+      return "invalid";
+  }
+  return "unknown";
+}
+
 std::optional<std::string> EncodeCanonicalReadOnlyResponse(
-    const ReadOnlyRequest& request, ServiceSafetyState state) noexcept {
+    const ReadOnlyRequest& request, ServiceSafetyState state,
+    CredentialReadiness credential_readiness) noexcept {
   try {
-    const auto state_name = ServiceSafetyStateName(state);
-    if (state_name == "unknown" || !IsSafeResponseRequestId(request.request_id)) {
+    if (!IsSafeResponseRequestId(request.request_id)) {
       return std::nullopt;
     }
 
+    std::string response;
     switch (request.kind) {
       case ReadOnlyRequestKind::kHandshake:
-      case ReadOnlyRequestKind::kStatusRequest:
+      case ReadOnlyRequestKind::kStatusRequest: {
+        const auto state_name = ServiceSafetyStateName(state);
+        if (state_name == "unknown") {
+          return std::nullopt;
+        }
+        response =
+            "{\"protocolVersion\":1,\"requestId\":\"" + request.request_id +
+            "\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"" +
+            std::string(state_name) +
+            "\",\"entryAuthority\":false}}";
         break;
+      }
+      case ReadOnlyRequestKind::kCredentialReadinessRequest: {
+        const auto readiness_name = CredentialReadinessName(credential_readiness);
+        if (readiness_name == "unknown") {
+          return std::nullopt;
+        }
+        response =
+            "{\"protocolVersion\":1,\"requestId\":\"" + request.request_id +
+            "\",\"kind\":\"credentialReadinessSnapshot\",\"payload\":{\"credentialReadiness\":\"" +
+            std::string(readiness_name) +
+            "\",\"entryAuthority\":false}}";
+        break;
+      }
     }
 
-    std::string response =
-        "{\"protocolVersion\":1,\"requestId\":\"" + request.request_id +
-        "\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"" +
-        std::string(state_name) +
-        "\",\"entryAuthority\":false}}";
     if (response.size() > kWindowsServiceMaxFrameBytes) {
       return std::nullopt;
     }
