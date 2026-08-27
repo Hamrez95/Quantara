@@ -4,7 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$SkipBuild,
     [switch]$SkipTests,
-    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'bitunix-signing')]
+    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'bitunix-signing', 'bitunix-authorization')]
     [string]$TestFilter = 'all'
 )
 
@@ -73,6 +73,7 @@ $networkChangeTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_se
 $existingPositionManagementPolicyTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_existing_position_management_policy_test.exe"
 $managementOnlyRecoveryCoordinatorTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_management_only_recovery_coordinator_test.exe"
 $bitunixRequestSignerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_request_signer_test.exe"
+$bitunixRequestAuthorizerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_request_authorizer_test.exe"
 
 $requiredExecutables = @(
     @{ Path = $serviceExe; Name = 'Windows service executable' },
@@ -87,7 +88,8 @@ $requiredExecutables = @(
     @{ Path = $networkChangeTestExe; Name = 'network-change test executable' },
     @{ Path = $existingPositionManagementPolicyTestExe; Name = 'existing-position management policy test executable' },
     @{ Path = $managementOnlyRecoveryCoordinatorTestExe; Name = 'management-only recovery coordinator test executable' },
-    @{ Path = $bitunixRequestSignerTestExe; Name = 'Bitunix request signer parity test executable' }
+    @{ Path = $bitunixRequestSignerTestExe; Name = 'Bitunix request signer parity test executable' },
+    @{ Path = $bitunixRequestAuthorizerTestExe; Name = 'Bitunix protected request authorizer test executable' }
 )
 foreach ($required in $requiredExecutables) {
     if (-not (Test-Path $required.Path)) {
@@ -107,6 +109,9 @@ if (-not $SkipTests) {
     }
     if ($TestFilter -in @('all', 'service', 'bitunix-signing')) {
         Invoke-BoundedNativeTest -Path $bitunixRequestSignerTestExe -Name 'quantara_windows_service_bitunix_request_signer_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-authorization')) {
+        Invoke-BoundedNativeTest -Path $bitunixRequestAuthorizerTestExe -Name 'quantara_windows_service_bitunix_request_authorizer_test'
     }
     if ($TestFilter -in @('all', 'client')) {
         Invoke-BoundedNativeTest -Path $clientExe -Name 'quantara_windows_service_client --self-test' -Arguments @('--self-test')
