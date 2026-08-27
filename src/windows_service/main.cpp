@@ -96,6 +96,15 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     return;
   }
 
+  HANDLE listener_ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (listener_ready == nullptr) {
+    const DWORD error = GetLastError();
+    CloseHandle(g_stop_event);
+    g_stop_event = nullptr;
+    ReportServiceStatus(SERVICE_STOPPED, error);
+    return;
+  }
+
   // A service start never grants execution authority. IPC is read-only and the
   // future reconciliation/execution layer must explicitly transition authority
   // through its own deterministic safety gates.
@@ -108,6 +117,7 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   // registered with Windows.
   quantara::NetworkChangeMonitor network_monitor(g_safety_state);
   if (!network_monitor.Start()) {
+    CloseHandle(listener_ready);
     CloseHandle(g_stop_event);
     g_stop_event = nullptr;
     ReportServiceStatus(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR);
@@ -117,13 +127,30 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   std::atomic<bool> listener_ok{false};
   std::thread listener([&]() {
     const bool result = quantara::RunReadOnlyStatusListener(
-        g_stop_event, kStatusPipeName, g_safety_state);
+        g_stop_event, kStatusPipeName, g_safety_state, listener_ready);
     listener_ok.store(result, std::memory_order_relaxed);
     if (!result && g_stop_event != nullptr) {
       SetEvent(g_stop_event);
     }
   });
 
+  const DWORD readiness = WaitForSingleObject(listener_ready, 5000);
+  if (readiness != WAIT_OBJECT_0) {
+    SetEvent(g_stop_event);
+    CancelSynchronousIo(listener.native_handle());
+    listener.join();
+    network_monitor.Stop();
+    CloseHandle(listener_ready);
+    CloseHandle(g_stop_event);
+    g_stop_event = nullptr;
+    ReportServiceStatus(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR);
+    return;
+  }
+  CloseHandle(listener_ready);
+
+  // Report Running only after both lifecycle monitoring and the authenticated
+  // local read-only IPC endpoint are ready. This prevents SCM from advertising
+  // a healthy service that cannot expose its fail-closed status boundary.
   ReportServiceStatus(SERVICE_RUNNING);
   WaitForSingleObject(g_stop_event, INFINITE);
 
