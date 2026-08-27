@@ -38,18 +38,28 @@ bool WaitForClientOrStop(HANDLE pipe, HANDLE stop_event) noexcept {
 
 bool RunReadOnlyStatusListener(
     HANDLE stop_event, const std::wstring& pipe_name,
-    const std::atomic<ServiceSafetyState>& safety_state) noexcept {
+    const std::atomic<ServiceSafetyState>& safety_state,
+    HANDLE ready_event) noexcept {
   if (stop_event == nullptr || stop_event == INVALID_HANDLE_VALUE ||
-      pipe_name.empty()) {
+      pipe_name.empty() || ready_event == INVALID_HANDLE_VALUE) {
     return false;
   }
 
   try {
     RequestReplayGuard replay_guard;
+    bool readiness_signaled = false;
     while (WaitForSingleObject(stop_event, 0) == WAIT_TIMEOUT) {
       HANDLE pipe = CreateLocalPipeServer(pipe_name);
       if (pipe == INVALID_HANDLE_VALUE) {
         return false;
+      }
+
+      if (!readiness_signaled && ready_event != nullptr) {
+        if (!SetEvent(ready_event)) {
+          CloseHandle(pipe);
+          return false;
+        }
+        readiness_signaled = true;
       }
 
       const bool connection_ok = WaitForClientOrStop(pipe, stop_event);

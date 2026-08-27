@@ -13,9 +13,12 @@ namespace quantara {
 // until stop_event is signaled. The caller owns the listener thread and may use
 // CancelSynchronousIo on that thread during SCM stop/shutdown to interrupt a
 // pending ConnectNamedPipe/ReadFile. Invalid client frames are dropped and do
-// not grant mutation or execution authority.
+// not grant mutation or execution authority. When ready_event is supplied it is
+// signaled only after the first local pipe instance has been created
+// successfully, allowing the SCM host to avoid reporting Running prematurely.
 bool RunReadOnlyStatusListener(
     HANDLE stop_event, const std::wstring& pipe_name,
-    const std::atomic<ServiceSafetyState>& safety_state) noexcept;
+    const std::atomic<ServiceSafetyState>& safety_state,
+    HANDLE ready_event = nullptr) noexcept;
 
 }  // namespace quantara
