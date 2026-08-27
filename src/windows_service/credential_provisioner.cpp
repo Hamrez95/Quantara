@@ -77,16 +77,12 @@ std::filesystem::path ProgramDataCredentialRoot() {
 }
 
 void RejectReparsePointIfPresent(const std::filesystem::path& path) {
-  std::error_code error;
-  if (!std::filesystem::exists(path, error)) {
-    if (error) {
-      throw std::runtime_error("Credential path existence check failed.");
-    }
-    return;
-  }
-
   const DWORD attributes = GetFileAttributesW(path.c_str());
   if (attributes == INVALID_FILE_ATTRIBUTES) {
+    const DWORD error = GetLastError();
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+      return;
+    }
     throw std::runtime_error("Credential path attributes could not be read.");
   }
   if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
@@ -159,13 +155,21 @@ std::filesystem::path CredentialPath(const std::filesystem::path& root,
 bool CredentialPresent(const std::filesystem::path& root,
                        const wchar_t* name) {
   const auto path = CredentialPath(root, name);
-  RejectReparsePointIfPresent(path);
-  std::error_code error;
-  const bool present = std::filesystem::is_regular_file(path, error);
-  if (error) {
+  const DWORD attributes = GetFileAttributesW(path.c_str());
+  if (attributes == INVALID_FILE_ATTRIBUTES) {
+    const DWORD error = GetLastError();
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+      return false;
+    }
     throw std::runtime_error("Credential presence check failed.");
   }
-  return present;
+  if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+    throw std::runtime_error("Credential file cannot be a reparse point.");
+  }
+  if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+    throw std::runtime_error("Credential path unexpectedly resolves to a directory.");
+  }
+  return true;
 }
 
 void StoreSecret(const std::filesystem::path& root, const wchar_t* name) {
@@ -208,6 +212,7 @@ bool RunSelfTest() noexcept {
         ParseCommand(L"--remove-all") != Command::kRemoveAll ||
         ParseCommand(L"--status") != Command::kStatus ||
         ParseCommand(L"--unknown").has_value()) {
+      std::cerr << "Credential provisioner command parser self-test failed.\n";
       return false;
     }
 
@@ -221,6 +226,7 @@ bool RunSelfTest() noexcept {
     vault.Store(kApiSecretName, "self-test-secret");
     if (!CredentialPresent(root, kApiKeyName) ||
         !CredentialPresent(root, kApiSecretName)) {
+      std::cerr << "Credential provisioner presence self-test failed.\n";
       std::filesystem::remove_all(root, cleanup_error);
       return false;
     }
@@ -229,6 +235,7 @@ bool RunSelfTest() noexcept {
     const auto secret = vault.Load(kApiSecretName);
     if (!key.has_value() || *key != "self-test-key" || !secret.has_value() ||
         *secret != "self-test-secret") {
+      std::cerr << "Credential provisioner DPAPI round-trip self-test failed.\n";
       std::filesystem::remove_all(root, cleanup_error);
       return false;
     }
@@ -238,8 +245,19 @@ bool RunSelfTest() noexcept {
     const bool removed = !CredentialPresent(root, kApiKeyName) &&
                          !CredentialPresent(root, kApiSecretName);
     std::filesystem::remove_all(root, cleanup_error);
+    if (!removed) {
+      std::cerr << "Credential provisioner removal self-test failed.\n";
+    }
     return removed;
+  } catch (const std::exception& error) {
+    std::cerr << "Credential provisioner self-test exception: " << error.what()
+              << "\n";
+    if (!root.empty()) {
+      std::filesystem::remove_all(root, cleanup_error);
+    }
+    return false;
   } catch (...) {
+    std::cerr << "Credential provisioner self-test failed with an unknown exception.\n";
     if (!root.empty()) {
       std::filesystem::remove_all(root, cleanup_error);
     }
