@@ -33,12 +33,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create isolated CI-only signing identity
+      - name: Create isolated untrusted CI signing identity
         id: certificate
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $subject = 'CN=Quantara CI Test Publisher'
+          $subject = 'CN=Quantara CI Untrusted Publisher'
           $passwordText = [Guid]::NewGuid().ToString('N')
           $certificate = $null
           $rsa = [Security.Cryptography.RSA]::Create(2048)
@@ -67,16 +67,6 @@ jobs:
                 $passwordText
               )
             )
-            $cer = Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.cer'
-            [IO.File]::WriteAllBytes(
-              $cer,
-              $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
-            )
-
-            & certutil.exe -user -addstore -f Root $cer | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw "certutil trust bootstrap failed: $LASTEXITCODE" }
-
-            "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
             "pfx=$pfx" >> $env:GITHUB_OUTPUT
             "password=$passwordText" >> $env:GITHUB_OUTPUT
             "subject=$subject" >> $env:GITHUB_OUTPUT
@@ -84,34 +74,6 @@ jobs:
           finally {
             if ($null -ne $certificate) { $certificate.Dispose() }
             $rsa.Dispose()
-          }
-
-      - name: Sign and verify an isolated PE copy
-        shell: pwsh
-        env:
-          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
-          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
-          EXPECTED_SUBJECT: ${{ steps.certificate.outputs.subject }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningSmoke.exe'
-          Copy-Item "$env:WINDIR\System32\where.exe" $candidate
-          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
-          $output = ./scripts/sign-windows-release.ps1 `
-            -InstallerPath $candidate `
-            -CertificatePath $env:PFX_PATH `
-            -CertificatePassword $password `
-            -ExpectedPublisher $env:EXPECTED_SUBJECT
-          $text = $output -join "`n"
-          if ($text -notmatch '(?m)^sha256=[a-f0-9]{64}$') {
-            throw "Signing helper did not emit a canonical SHA-256: $text"
-          }
-          if ($text -notmatch '(?m)^signing_identity=CN=Quantara CI Test Publisher$') {
-            throw "Signing helper did not emit the verified publisher: $text"
-          }
-          $signature = Get-AuthenticodeSignature -FilePath $candidate
-          if ($signature.Status -ne 'Valid') {
-            throw "Signed smoke artifact did not verify: $($signature.Status)"
           }
 
       - name: Reject a mismatched publisher before signing
@@ -139,16 +101,63 @@ jobs:
             throw 'Publisher mismatch mutated the candidate before rejection.'
           }
 
-      - name: Remove CI-only signing identity
-        if: always()
+      - name: Reject an untrusted signing chain
         shell: pwsh
         env:
-          THUMBPRINT: ${{ steps.certificate.outputs.thumbprint }}
+          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
+          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+          EXPECTED_SUBJECT: ${{ steps.certificate.outputs.subject }}
         run: |
-          if (-not [string]::IsNullOrWhiteSpace($env:THUMBPRINT)) {
-            & certutil.exe -user -delstore Root $env:THUMBPRINT | Out-Host
+          $ErrorActionPreference = 'Stop'
+          $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningUntrusted.exe'
+          Copy-Item "$env:WINDIR\System32\where.exe" $candidate
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $rejected = $false
+          try {
+            ./scripts/sign-windows-release.ps1 `
+              -InstallerPath $candidate `
+              -CertificatePath $env:PFX_PATH `
+              -CertificatePassword $password `
+              -ExpectedPublisher $env:EXPECTED_SUBJECT
           }
+          catch {
+            $rejected = $true
+          }
+          if (-not $rejected) {
+            throw 'An untrusted CI signing chain was accepted as a valid release signature.'
+          }
+          $signature = Get-AuthenticodeSignature -FilePath $candidate
+          if ($signature.Status -eq 'Valid') {
+            throw 'The CI-only signer unexpectedly became trusted.'
+          }
+
+      - name: Reject non-installer input
+        shell: pwsh
+        env:
+          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
+          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidate = Join-Path $env:RUNNER_TEMP 'not-an-installer.txt'
+          Set-Content -LiteralPath $candidate -Value 'not a PE installer' -NoNewline
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          try {
+            ./scripts/sign-windows-release.ps1 `
+              -InstallerPath $candidate `
+              -CertificatePath $env:PFX_PATH `
+              -CertificatePassword $password `
+              -ExpectedPublisher 'CN=Quantara CI Untrusted Publisher'
+            throw 'Non-installer input was accepted.'
+          }
+          catch {
+            if ($_.Exception.Message -eq 'Non-installer input was accepted.') { throw }
+          }
+
+      - name: Remove CI-only artifacts
+        if: always()
+        shell: pwsh
+        run: |
           Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.pfx') -Force -ErrorAction SilentlyContinue
-          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.cer') -Force -ErrorAction SilentlyContinue
-          Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningSmoke.exe') -Force -ErrorAction SilentlyContinue
           Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningUntrusted.exe') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'not-an-installer.txt') -Force -ErrorAction SilentlyContinue
