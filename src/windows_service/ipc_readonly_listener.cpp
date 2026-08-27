@@ -39,6 +39,7 @@ bool WaitForClientOrStop(HANDLE pipe, HANDLE stop_event) noexcept {
 bool RunReadOnlyStatusListener(
     HANDLE stop_event, const std::wstring& pipe_name,
     const std::atomic<ServiceSafetyState>& safety_state,
+    const std::atomic<CredentialReadiness>& credential_readiness,
     HANDLE ready_event) noexcept {
   if (stop_event == nullptr || stop_event == INVALID_HANDLE_VALUE ||
       pipe_name.empty() || ready_event == INVALID_HANDLE_VALUE) {
@@ -75,7 +76,8 @@ bool RunReadOnlyStatusListener(
       }
 
       const bool responded = ProcessAuthenticatedReadOnlyFrame(
-          pipe, safety_state.load(std::memory_order_relaxed), replay_guard);
+          pipe, safety_state.load(std::memory_order_relaxed),
+          credential_readiness.load(std::memory_order_relaxed), replay_guard);
       if (responded) {
         FlushFileBuffers(pipe);
       }
