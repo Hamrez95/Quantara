@@ -36,7 +36,7 @@ target_compile_options(quantara_windows_service PRIVATE
   /WX
   /permissive-
 )
-target_link_libraries(quantara_windows_service PRIVATE advapi32 crypt32 iphlpapi)
+target_link_libraries(quantara_windows_service PRIVATE advapi32 crypt32 iphlpapi ole32 shell32)
 
 add_executable(quantara_windows_service_client
   status_client.cpp
