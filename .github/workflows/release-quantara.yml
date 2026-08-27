@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: quantara-release
@@ -51,6 +52,25 @@ jobs:
 
       - name: Guard canonical source branch
         run: test "${{ github.ref_name }}" = dev
+
+      - name: Require current dev Android upgrade certification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          certification_run="$(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/flutter-ci.yml/runs?branch=dev&event=push&status=success&per_page=100" \
+              --jq ".workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\" and .conclusion == \"success\") | .id" \
+              | sed -n '1p'
+          )"
+          if [ -z "$certification_run" ]; then
+            echo "No successful Flutter client CI run certifies current dev commit $GITHUB_SHA." >&2
+            echo "Release is blocked until the exact dev commit passes format/analyze/full tests, builds and the API 34/35/36 Android cold-start + in-place-upgrade matrix." >&2
+            exit 1
+          fi
+          echo "Certified by Flutter client CI run $certification_run for $GITHUB_SHA."
 
       - uses: actions/setup-python@v5
         with:
@@ -201,6 +221,7 @@ jobs:
           - Tag: `${{ steps.version.outputs.tag }}`
           - Platforms: Android (signed APK/AAB), PWA archive
           - Android upgrade compatibility: same canonical package/signer required; minimum supported version `${{ steps.version.outputs.previous_version }}`
+          - Current-dev certification: exact commit must have passed Flutter client CI including API 34/35/36 upgrade matrix
           - Update manifest: `release-manifest.json` published atomically with release artifacts
           - Staged rollout eligibility: `${{ inputs.rollout_percent }}%`
           - Windows/iOS: not built or verified
