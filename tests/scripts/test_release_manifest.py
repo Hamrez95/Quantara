@@ -35,7 +35,6 @@ class ReleaseManifestTests(unittest.TestCase):
                 }
             }
         }
-
         release_manifest.require_android_identity_compatible(
             previous,
             candidate_package_id="com.quantara.quantara_app",
@@ -115,6 +114,10 @@ class ReleaseManifestTests(unittest.TestCase):
             android_sha256="A" * 64,
             android_package_id="com.quantara.quantara_app",
             android_signing_identity="AA:BB:CC",
+            windows_url="",
+            windows_sha256="",
+            windows_signing_identity="",
+            windows_architecture="",
             pwa_url="https://github.com/Hamrez95/Quantara/releases/download/quantara-v1.3.0/Quantara-1.3.0-pwa.zip",
             pwa_sha256="B" * 64,
         )
@@ -129,11 +132,54 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertEqual(payload["publishedAt"], "2026-08-27T06:00:00Z")
         self.assertEqual(payload["rolloutPercent"], 25)
         self.assertEqual(payload["revokedBuilds"], [127, 129])
+        self.assertNotIn("windows", payload["artifacts"])
         android = payload["artifacts"]["android"]
         self.assertEqual(android["buildNumber"], 131)
         self.assertEqual(android["sha256"], "a" * 64)
         self.assertEqual(android["packageId"], "com.quantara.quantara_app")
         self.assertEqual(android["signingIdentity"], "AA:BB:CC")
+
+    def test_manifest_emits_complete_verified_windows_artifact(self) -> None:
+        args = self._manifest_args()
+        args.windows_url = (
+            "https://github.com/Hamrez95/Quantara/releases/download/"
+            "quantara-v1.3.0/QuantaraSetup-1.3.0+131-x64.exe"
+        )
+        args.windows_sha256 = "C" * 64
+        args.windows_signing_identity = "Quantara Software Publisher"
+        args.windows_architecture = "X64"
+
+        payload = release_manifest.build_manifest(args)
+        windows = payload["artifacts"]["windows"]
+        self.assertEqual(windows["version"], "1.3.0")
+        self.assertEqual(windows["buildNumber"], 131)
+        self.assertEqual(windows["sha256"], "c" * 64)
+        self.assertEqual(windows["signingIdentity"], "Quantara Software Publisher")
+        self.assertEqual(windows["architecture"], "x64")
+
+    def test_manifest_rejects_partial_windows_metadata(self) -> None:
+        args = self._manifest_args()
+        args.windows_url = "https://downloads.example/QuantaraSetup.exe"
+        with self.assertRaisesRegex(ValueError, "must include URL"):
+            release_manifest.build_manifest(args)
+
+    def test_manifest_rejects_untrusted_windows_metadata(self) -> None:
+        invalid_cases = (
+            {"windows_url": "http://downloads.example/QuantaraSetup.exe"},
+            {"windows_sha256": "not-a-hash"},
+            {"windows_architecture": "arm64"},
+        )
+        for overrides in invalid_cases:
+            with self.subTest(overrides=overrides):
+                args = self._manifest_args()
+                args.windows_url = "https://downloads.example/QuantaraSetup.exe"
+                args.windows_sha256 = "C" * 64
+                args.windows_signing_identity = "Quantara Software Publisher"
+                args.windows_architecture = "x64"
+                for key, value in overrides.items():
+                    setattr(args, key, value)
+                with self.assertRaises(ValueError):
+                    release_manifest.build_manifest(args)
 
     def test_manifest_rejects_rollout_outside_percentage_bounds(self) -> None:
         for invalid in (-1, 101):

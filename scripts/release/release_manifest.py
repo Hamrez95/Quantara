@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Release integrity helpers for Quantara Android/PWA publication."""
+"""Release integrity helpers for Quantara update-manifest publication."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ _ANDROID_ASSET_PATTERNS = (
     re.compile(r"^Quantara-.+\+(\d+)-android\.apk$"),
     re.compile(r"^Quantara-.+-build(\d+)-[^/]*\.apk$"),
 )
+_WINDOWS_ARCHITECTURES = {"x64"}
 
 
 def published_android_builds(asset_names: list[str]) -> list[int]:
@@ -43,12 +44,7 @@ def require_monotonic_build(candidate: int, asset_names: list[str]) -> int:
 
 
 def parse_revoked_builds(value: str, *, candidate_build: int) -> list[int]:
-    """Parse an explicit emergency revocation list for forward recovery.
-
-    Revocation never authorizes a downgrade. The newly published candidate must
-    remain newer than every revoked build so affected installations recover by
-    moving forward through the normal signed/checksummed update path.
-    """
+    """Parse an explicit emergency revocation list for forward recovery."""
 
     raw = value.strip()
     if not raw:
@@ -138,6 +134,33 @@ def _published_at(value: str) -> str:
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _optional_windows_artifact(args: argparse.Namespace) -> dict[str, object] | None:
+    values = {
+        "url": getattr(args, "windows_url", "").strip(),
+        "sha256": getattr(args, "windows_sha256", "").strip(),
+        "signingIdentity": getattr(args, "windows_signing_identity", "").strip(),
+        "architecture": getattr(args, "windows_architecture", "").strip().lower(),
+    }
+    populated = [bool(value) for value in values.values()]
+    if not any(populated):
+        return None
+    if not all(populated):
+        raise ValueError(
+            "Windows release metadata must include URL, SHA-256, signing identity, and architecture."
+        )
+    if values["architecture"] not in _WINDOWS_ARCHITECTURES:
+        raise ValueError("Windows release architecture is unsupported.")
+
+    return {
+        "version": args.version.strip(),
+        "buildNumber": args.build_number,
+        "url": _https_url(values["url"]),
+        "sha256": _sha256(values["sha256"]),
+        "signingIdentity": values["signingIdentity"],
+        "architecture": values["architecture"],
+    }
+
+
 def build_manifest(args: argparse.Namespace) -> dict[str, object]:
     if args.build_number < 1:
         raise ValueError("Release build number must be positive.")
@@ -151,6 +174,25 @@ def build_manifest(args: argparse.Namespace) -> dict[str, object]:
     revoked_builds = parse_revoked_builds(
         getattr(args, "revoked_builds", ""), candidate_build=args.build_number
     )
+    artifacts: dict[str, object] = {
+        "android": {
+            "version": args.version.strip(),
+            "buildNumber": args.build_number,
+            "url": _https_url(args.android_url),
+            "sha256": _sha256(args.android_sha256),
+            "packageId": args.android_package_id.strip(),
+            "signingIdentity": args.android_signing_identity.strip(),
+        },
+        "pwa": {
+            "version": args.version.strip(),
+            "buildNumber": args.build_number,
+            "url": _https_url(args.pwa_url),
+            "sha256": _sha256(args.pwa_sha256),
+        },
+    }
+    windows = _optional_windows_artifact(args)
+    if windows is not None:
+        artifacts["windows"] = windows
 
     return {
         "schemaVersion": 1,
@@ -161,22 +203,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, object]:
         "releaseNotes": {"en": args.release_notes.strip()},
         "rolloutPercent": args.rollout_percent,
         "revokedBuilds": revoked_builds,
-        "artifacts": {
-            "android": {
-                "version": args.version.strip(),
-                "buildNumber": args.build_number,
-                "url": _https_url(args.android_url),
-                "sha256": _sha256(args.android_sha256),
-                "packageId": args.android_package_id.strip(),
-                "signingIdentity": args.android_signing_identity.strip(),
-            },
-            "pwa": {
-                "version": args.version.strip(),
-                "buildNumber": args.build_number,
-                "url": _https_url(args.pwa_url),
-                "sha256": _sha256(args.pwa_sha256),
-            },
-        },
+        "artifacts": artifacts,
     }
 
 
@@ -205,6 +232,10 @@ def _parser() -> argparse.ArgumentParser:
     manifest.add_argument("--android-sha256", required=True)
     manifest.add_argument("--android-package-id", required=True)
     manifest.add_argument("--android-signing-identity", required=True)
+    manifest.add_argument("--windows-url", default="")
+    manifest.add_argument("--windows-sha256", default="")
+    manifest.add_argument("--windows-signing-identity", default="")
+    manifest.add_argument("--windows-architecture", default="")
     manifest.add_argument("--pwa-url", required=True)
     manifest.add_argument("--pwa-sha256", required=True)
     manifest.add_argument("--output", required=True)
