@@ -18,8 +18,9 @@ final class WindowsServiceUpdatePreflightException implements Exception {
 /// interrupted, reconciliation-required, malformed, unavailable, or
 /// unauthenticated status blocks the handoff without mutating service state.
 final class WindowsServiceUpdatePreflight {
-  const WindowsServiceUpdatePreflight({required WindowsServiceStatusReader reader})
-    : _reader = reader;
+  const WindowsServiceUpdatePreflight({
+    required WindowsServiceStatusReader reader,
+  }) : _reader = reader;
 
   final WindowsServiceStatusReader _reader;
 
