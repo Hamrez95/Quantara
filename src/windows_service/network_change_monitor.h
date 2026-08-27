@@ -2,7 +2,7 @@
 
 #include <winsock2.h>
 #include <windows.h>
-#include <netioapi.h>
+#include <iphlpapi.h>
 
 #include <atomic>
 
