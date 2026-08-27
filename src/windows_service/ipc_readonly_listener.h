@@ -12,11 +12,10 @@ namespace quantara {
 // Serves authenticated read-only status sessions on one local named-pipe name
 // until stop_event is signaled. The caller owns the listener thread and may use
 // CancelSynchronousIo on that thread during SCM stop/shutdown to interrupt a
-// pending ConnectNamedPipe/ReadFile. Network-interface changes downgrade the
-// shared safety state to reconciliation-required. Invalid client frames are
-// dropped and do not grant mutation or execution authority.
+// pending ConnectNamedPipe/ReadFile. Invalid client frames are dropped and do
+// not grant mutation or execution authority.
 bool RunReadOnlyStatusListener(
     HANDLE stop_event, const std::wstring& pipe_name,
-    std::atomic<ServiceSafetyState>& safety_state) noexcept;
+    const std::atomic<ServiceSafetyState>& safety_state) noexcept;
 
 }  // namespace quantara
