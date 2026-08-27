@@ -36,7 +36,7 @@ target_compile_options(quantara_windows_service PRIVATE
   /WX
   /permissive-
 )
-target_link_libraries(quantara_windows_service PRIVATE advapi32 crypt32 iphlpapi)
+target_link_libraries(quantara_windows_service PRIVATE advapi32 crypt32 iphlpapi ole32 shell32)
 
 add_executable(quantara_windows_service_client
   status_client.cpp
@@ -130,104 +130,3 @@ target_compile_options(quantara_windows_service_credential_readiness_test PRIVAT
   /permissive-
 )
 target_link_libraries(quantara_windows_service_credential_readiness_test PRIVATE advapi32 crypt32)
-
-add_executable(quantara_windows_service_response_test
-  ipc_request_protocol.cpp
-  ipc_request_protocol.h
-  ipc_response_protocol.cpp
-  ipc_response_protocol.h
-  ipc_response_protocol_test.cpp
-)
-target_compile_features(quantara_windows_service_response_test PRIVATE cxx_std_20)
-target_compile_definitions(quantara_windows_service_response_test PRIVATE
-  UNICODE
-  _UNICODE
-  WIN32_LEAN_AND_MEAN
-  NOMINMAX
-)
-target_compile_options(quantara_windows_service_response_test PRIVATE
-  /W4
-  /WX
-  /permissive-
-)
-
-add_executable(quantara_windows_service_session_test
-  ipc_request_protocol.cpp
-  ipc_request_protocol.h
-  ipc_response_protocol.cpp
-  ipc_response_protocol.h
-  ipc_readonly_session.cpp
-  ipc_readonly_session.h
-  ipc_readonly_session_test.cpp
-  local_pipe_security.cpp
-  local_pipe_security.h
-  local_pipe_transport.cpp
-  local_pipe_transport.h
-)
-target_compile_features(quantara_windows_service_session_test PRIVATE cxx_std_20)
-target_compile_definitions(quantara_windows_service_session_test PRIVATE
-  UNICODE
-  _UNICODE
-  WIN32_LEAN_AND_MEAN
-  NOMINMAX
-)
-target_compile_options(quantara_windows_service_session_test PRIVATE
-  /W4
-  /WX
-  /permissive-
-)
-target_link_libraries(quantara_windows_service_session_test PRIVATE advapi32)
-
-add_executable(quantara_windows_service_listener_test
-  ipc_request_protocol.cpp
-  ipc_request_protocol.h
-  ipc_response_protocol.cpp
-  ipc_response_protocol.h
-  ipc_readonly_listener.cpp
-  ipc_readonly_listener.h
-  ipc_readonly_listener_test.cpp
-  ipc_readonly_session.cpp
-  ipc_readonly_session.h
-  local_pipe_security.cpp
-  local_pipe_security.h
-  local_pipe_transport.cpp
-  local_pipe_transport.h
-  network_change_monitor.cpp
-  network_change_monitor.h
-)
-target_compile_features(quantara_windows_service_listener_test PRIVATE cxx_std_20)
-target_compile_definitions(quantara_windows_service_listener_test PRIVATE
-  UNICODE
-  _UNICODE
-  WIN32_LEAN_AND_MEAN
-  NOMINMAX
-)
-target_compile_options(quantara_windows_service_listener_test PRIVATE
-  /W4
-  /WX
-  /permissive-
-)
-target_link_libraries(quantara_windows_service_listener_test PRIVATE advapi32 iphlpapi)
-
-add_executable(quantara_windows_service_network_change_test
-  ipc_request_protocol.cpp
-  ipc_request_protocol.h
-  ipc_response_protocol.cpp
-  ipc_response_protocol.h
-  network_change_monitor.cpp
-  network_change_monitor.h
-  network_change_monitor_test.cpp
-)
-target_compile_features(quantara_windows_service_network_change_test PRIVATE cxx_std_20)
-target_compile_definitions(quantara_windows_service_network_change_test PRIVATE
-  UNICODE
-  _UNICODE
-  WIN32_LEAN_AND_MEAN
-  NOMINMAX
-)
-target_compile_options(quantara_windows_service_network_change_test PRIVATE
-  /W4
-  /WX
-  /permissive-
-)
-target_link_libraries(quantara_windows_service_network_change_test PRIVATE iphlpapi)
