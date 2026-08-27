@@ -49,10 +49,10 @@ int main() {
 
   ManagementOnlyRecoveryCoordinator coordinator;
   ok &= ExpectSnapshot(coordinator.snapshot(), ManagementOnlyRecoveryMode::kDisarmed,
-                       ExistingPositionClassification::kManaged,
+                       ExistingPositionClassification::kAmbiguous,
                        ExistingPositionManagementAuthority::kNone,
                        "startupDisarmed",
-                       "Startup must be disarmed without entry authority.");
+                       "Startup must be disarmed without exchange-truth classification.");
   ok &= Expect(!coordinator.CanManageExistingPositions(),
                "Startup must not manage positions before reconciliation.");
   ok &= Expect(!coordinator.CanOpenNewEntry(),
