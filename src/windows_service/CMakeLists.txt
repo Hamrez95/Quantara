@@ -249,3 +249,23 @@ target_compile_options(quantara_windows_service_existing_position_management_pol
   /WX
   /permissive-
 )
+
+add_executable(quantara_windows_service_management_only_recovery_coordinator_test
+  ../native/execution/existing_position_management_policy.cpp
+  ../native/execution/existing_position_management_policy.h
+  ../native/execution/management_only_recovery_coordinator.cpp
+  ../native/execution/management_only_recovery_coordinator.h
+  ../native/execution/management_only_recovery_coordinator_test.cpp
+)
+target_compile_features(quantara_windows_service_management_only_recovery_coordinator_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_management_only_recovery_coordinator_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_management_only_recovery_coordinator_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
