@@ -239,10 +239,7 @@ final class AppUpdateCard extends StatelessWidget {
     );
   }
 
-  Widget _artifactMetadata(
-    BuildContext context,
-    AppReleaseArtifact artifact,
-  ) {
+  Widget _artifactMetadata(BuildContext context, AppReleaseArtifact artifact) {
     final packageId = artifact.packageId?.trim();
     final signingIdentity = artifact.signingIdentity?.trim();
     final architecture = artifact.architecture?.trim();
