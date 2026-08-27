@@ -233,9 +233,9 @@ target_compile_options(quantara_windows_service_network_change_test PRIVATE
 target_link_libraries(quantara_windows_service_network_change_test PRIVATE iphlpapi)
 
 add_executable(quantara_windows_service_existing_position_management_policy_test
-  existing_position_management_policy.cpp
-  existing_position_management_policy.h
-  existing_position_management_policy_test.cpp
+  ../native/execution/existing_position_management_policy.cpp
+  ../native/execution/existing_position_management_policy.h
+  ../native/execution/existing_position_management_policy_test.cpp
 )
 target_compile_features(quantara_windows_service_existing_position_management_policy_test PRIVATE cxx_std_20)
 target_compile_definitions(quantara_windows_service_existing_position_management_policy_test PRIVATE
