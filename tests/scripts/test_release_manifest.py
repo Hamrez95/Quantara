@@ -26,6 +26,62 @@ class ReleaseManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "greater than published build 130"):
             release_manifest.require_monotonic_build(130, names)
 
+    def test_android_identity_guard_accepts_same_package_and_signer(self) -> None:
+        previous = {
+            "artifacts": {
+                "android": {
+                    "packageId": "com.quantara.quantara_app",
+                    "signingIdentity": "AA:BB:CC",
+                }
+            }
+        }
+
+        release_manifest.require_android_identity_compatible(
+            previous,
+            candidate_package_id="com.quantara.quantara_app",
+            candidate_signing_identity="aabbcc",
+        )
+
+    def test_android_identity_guard_rejects_package_change(self) -> None:
+        previous = {
+            "artifacts": {
+                "android": {
+                    "packageId": "com.quantara.quantara_app",
+                    "signingIdentity": "AA:BB:CC",
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "package identity"):
+            release_manifest.require_android_identity_compatible(
+                previous,
+                candidate_package_id="com.quantara.other",
+                candidate_signing_identity="AA:BB:CC",
+            )
+
+    def test_android_identity_guard_rejects_signer_change(self) -> None:
+        previous = {
+            "artifacts": {
+                "android": {
+                    "packageId": "com.quantara.quantara_app",
+                    "signingIdentity": "AA:BB:CC",
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "signing identity"):
+            release_manifest.require_android_identity_compatible(
+                previous,
+                candidate_package_id="com.quantara.quantara_app",
+                candidate_signing_identity="DD:EE:FF",
+            )
+
+    def test_android_identity_guard_rejects_incomplete_previous_manifest(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Android metadata"):
+            release_manifest.require_android_identity_compatible(
+                {"artifacts": {}},
+                candidate_package_id="com.quantara.quantara_app",
+                candidate_signing_identity="AA:BB:CC",
+            )
+
     def test_manifest_matches_runtime_schema_and_normalizes_integrity(self) -> None:
         args = argparse.Namespace(
             channel="stable",
