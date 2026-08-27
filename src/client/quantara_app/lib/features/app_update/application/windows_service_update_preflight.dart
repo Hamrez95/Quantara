@@ -1,3 +1,6 @@
+// Keep the public named dependency explicit while storing it privately.
+// ignore_for_file: prefer_initializing_formals
+
 import '../../windows_desktop/application/windows_service_status_reader.dart';
 import '../../windows_desktop/domain/windows_service_protocol.dart';
 
