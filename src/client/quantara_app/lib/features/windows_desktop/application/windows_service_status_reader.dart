@@ -33,9 +33,11 @@ final class WindowsServiceStatusReadException implements Exception {
 /// This reader intentionally accepts only that helper boundary, validates the
 /// bounded protocol again in Dart, and never exposes mutation authority.
 final class WindowsServiceStatusReader {
-  const WindowsServiceStatusReader({
+  factory WindowsServiceStatusReader({
     required WindowsServiceStatusCommand command,
-  }) : _command = command;
+  }) => WindowsServiceStatusReader._(command);
+
+  const WindowsServiceStatusReader._(this._command);
 
   final WindowsServiceStatusCommand _command;
 
