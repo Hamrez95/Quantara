@@ -152,6 +152,10 @@ final class AppUpdateCard extends StatelessWidget {
               if (result != null) ...[
                 const SizedBox(height: 12),
                 _status(context, result),
+                if (artifact != null) ...[
+                  const SizedBox(height: 10),
+                  _artifactMetadata(context, artifact),
+                ],
                 if (result.releaseNotes.trim().isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
@@ -233,6 +237,75 @@ final class AppUpdateCard extends StatelessWidget {
       label: '$label: $value',
       child: Chip(label: Text('$label: $value')),
     );
+  }
+
+  Widget _artifactMetadata(
+    BuildContext context,
+    AppReleaseArtifact artifact,
+  ) {
+    final packageId = artifact.packageId?.trim();
+    final signingIdentity = artifact.signingIdentity?.trim();
+    final architecture = artifact.architecture?.trim();
+    return Container(
+      key: const ValueKey('app-update-artifact-metadata'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _metadataLine(
+            key: const ValueKey('app-update-latest-version'),
+            label: _persian ? 'نسخه جدید' : 'Latest version',
+            value: '${artifact.version} (${artifact.buildNumber})',
+          ),
+          if (packageId != null && packageId.isNotEmpty)
+            _metadataLine(
+              key: const ValueKey('app-update-package-id'),
+              label: _persian ? 'شناسه بسته' : 'Package',
+              value: packageId,
+            ),
+          if (signingIdentity != null && signingIdentity.isNotEmpty)
+            _metadataLine(
+              key: const ValueKey('app-update-signing-suffix'),
+              label: _persian ? 'امضاکننده' : 'Signer',
+              value: _safeSuffix(signingIdentity),
+            ),
+          _metadataLine(
+            key: const ValueKey('app-update-integrity'),
+            label: 'SHA-256',
+            value: _safeSuffix(artifact.sha256),
+          ),
+          if (architecture != null && architecture.isNotEmpty)
+            _metadataLine(
+              key: const ValueKey('app-update-architecture'),
+              label: _persian ? 'معماری' : 'Architecture',
+              value: architecture,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metadataLine({
+    required Key key,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Text(key: key, '$label: $value'),
+    );
+  }
+
+  String _safeSuffix(String value) {
+    final trimmed = value.trim();
+    const visibleCharacters = 12;
+    if (trimmed.length <= visibleCharacters) return trimmed;
+    return '…${trimmed.substring(trimmed.length - visibleCharacters)}';
   }
 
   Widget _status(BuildContext context, AppUpdateCheckResult result) {
