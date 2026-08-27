@@ -27,7 +27,8 @@ void main() {
             'version': publishedVersion,
             'buildNumber': publishedBuild,
             'url': 'https://releases.example.test/Quantara.apk',
-            'sha256': 'a' * 64,
+            'sha256':
+                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
             'packageId': 'com.quantara.quantara_app',
             'signingIdentity': 'AA11',
           },
