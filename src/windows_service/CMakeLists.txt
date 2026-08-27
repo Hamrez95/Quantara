@@ -4,6 +4,8 @@ project(quantara_windows_service LANGUAGES CXX)
 
 add_executable(quantara_windows_service
   main.cpp
+  bitunix_request_signer.cpp
+  bitunix_request_signer.h
   credential_readiness.cpp
   credential_readiness.h
   credential_vault.cpp
@@ -36,7 +38,7 @@ target_compile_options(quantara_windows_service PRIVATE
   /WX
   /permissive-
 )
-target_link_libraries(quantara_windows_service PRIVATE advapi32 crypt32 iphlpapi ole32 shell32)
+target_link_libraries(quantara_windows_service PRIVATE advapi32 bcrypt crypt32 iphlpapi ole32 shell32)
 
 add_executable(quantara_windows_service_client
   status_client.cpp
@@ -269,3 +271,22 @@ target_compile_options(quantara_windows_service_management_only_recovery_coordin
   /WX
   /permissive-
 )
+
+add_executable(quantara_windows_service_bitunix_request_signer_test
+  bitunix_request_signer.cpp
+  bitunix_request_signer.h
+  bitunix_request_signer_test.cpp
+)
+target_compile_features(quantara_windows_service_bitunix_request_signer_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_bitunix_request_signer_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_bitunix_request_signer_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
+target_link_libraries(quantara_windows_service_bitunix_request_signer_test PRIVATE bcrypt)
