@@ -132,6 +132,29 @@ jobs:
           echo "android_signing_identity=$signer" >> "$GITHUB_OUTPUT"
           (cd release && sha256sum * > SHA256SUMS.txt)
 
+      - name: Guard Android identity against previous published release
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ inputs.channel }}' = beta ]; then
+            manifest_url="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq 'map(select(.draft == false and .prerelease == true and any(.assets[]?; .name == "release-manifest.json")))[0].assets | map(select(.name == "release-manifest.json"))[0].browser_download_url // ""')"
+          else
+            manifest_url="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq 'map(select(.draft == false and .prerelease == false and any(.assets[]?; .name == "release-manifest.json")))[0].assets | map(select(.name == "release-manifest.json"))[0].browser_download_url // ""')"
+          fi
+          if [ -n "$manifest_url" ]; then
+            curl --fail --location --proto '=https' --tlsv1.2 "$manifest_url" \
+              --output "$RUNNER_TEMP/previous-release-manifest.json"
+            python ../../../scripts/release/release_manifest.py guard-identity \
+              --previous-manifest "$RUNNER_TEMP/previous-release-manifest.json" \
+              --android-package-id com.quantara.quantara_app \
+              --android-signing-identity '${{ steps.integrity.outputs.android_signing_identity }}'
+          else
+            echo 'No prior channel release-manifest.json exists; signer continuity starts with this managed release.'
+          fi
+
       - name: Generate machine-readable update manifest
         working-directory: ${{ env.APP_DIR }}
         env:
@@ -170,6 +193,7 @@ jobs:
           - Version: `${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}`
           - Tag: `${{ steps.version.outputs.tag }}`
           - Platforms: Android (signed APK/AAB), PWA archive
+          - Android upgrade compatibility: same canonical package/signer required; minimum supported version `${{ steps.version.outputs.previous_version }}`
           - Update manifest: `release-manifest.json` published atomically with release artifacts
           - Windows/iOS: not built or verified
           EOF
@@ -183,7 +207,7 @@ jobs:
           if [ '${{ inputs.channel }}' = beta ]; then prerelease='--prerelease'; fi
           gh release create '${{ steps.version.outputs.tag }}' release/* \
             --target '${{ github.sha }}' --title "Quantara ${{ steps.version.outputs.version }}" $prerelease \
-            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nPlatforms: signed Android APK/AAB, PWA archive."
+            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ steps.version.outputs.previous_version }}.\nPlatforms: signed Android APK/AAB, PWA archive."
       - name: Remove temporary key
         if: always()
         run: rm -f "$RUNNER_TEMP/quantara.jks"
