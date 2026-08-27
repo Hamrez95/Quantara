@@ -61,7 +61,18 @@ jobs:
           version="$(printf '%s\n' "$output" | sed -n 's/^version=//p')"
           tag="$(printf '%s\n' "$output" | sed -n 's/^tag=//p')"
           ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null
+          echo "previous_version=$previous" >> "$GITHUB_OUTPUT"
           echo "build_number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Guard Android build number against published APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].assets[].name' \
+            | python scripts/release/release_manifest.py guard-build \
+                --candidate '${{ steps.version.outputs.build_number }}'
 
       - uses: subosito/flutter-action@v2
         with:
@@ -102,16 +113,54 @@ jobs:
           (cd build/web && zip -qr "../../release/Quantara-${{ steps.version.outputs.version }}-pwa.zip" .)
 
       - name: Verify Android identity, signature and artifacts
+        id: integrity
         working-directory: ${{ env.APP_DIR }}
+        shell: bash
         run: |
           set -euo pipefail
           apk="release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.apk"
+          pwa="release/Quantara-${{ steps.version.outputs.version }}-pwa.zip"
           apkanalyzer="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
           apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           "$apkanalyzer" manifest application-id "$apk" | grep -Fxq com.quantara.quantara_app
           "$apksigner" verify --verbose "$apk"
-          test -s "release/Quantara-${{ steps.version.outputs.version }}-pwa.zip"
+          signer="$($apksigner verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          test -n "$signer"
+          test -s "$pwa"
+          echo "android_sha256=$(sha256sum "$apk" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "pwa_sha256=$(sha256sum "$pwa" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "android_signing_identity=$signer" >> "$GITHUB_OUTPUT"
           (cd release && sha256sum * > SHA256SUMS.txt)
+
+      - name: Generate machine-readable update manifest
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_channel=stable
+          if [ '${{ inputs.channel }}' = beta ]; then manifest_channel=canary; fi
+          tag='${{ steps.version.outputs.tag }}'
+          version='${{ steps.version.outputs.version }}'
+          build='${{ steps.version.outputs.build_number }}'
+          base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/$tag"
+          published_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          python ../../../scripts/release/release_manifest.py manifest \
+            --channel "$manifest_channel" \
+            --version "$version" \
+            --build-number "$build" \
+            --published-at "$published_at" \
+            --minimum-supported-version '${{ steps.version.outputs.previous_version }}' \
+            --release-notes "$RELEASE_NOTES" \
+            --android-url "$base_url/Quantara-$version+$build-android.apk" \
+            --android-sha256 '${{ steps.integrity.outputs.android_sha256 }}' \
+            --android-package-id com.quantara.quantara_app \
+            --android-signing-identity '${{ steps.integrity.outputs.android_signing_identity }}' \
+            --pwa-url "$base_url/Quantara-$version-pwa.zip" \
+            --pwa-sha256 '${{ steps.integrity.outputs.pwa_sha256 }}' \
+            --output release/release-manifest.json
+          python -m json.tool release/release-manifest.json >/dev/null
 
       - name: Release summary
         run: |
@@ -121,6 +170,7 @@ jobs:
           - Version: `${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}`
           - Tag: `${{ steps.version.outputs.tag }}`
           - Platforms: Android (signed APK/AAB), PWA archive
+          - Update manifest: `release-manifest.json` published atomically with release artifacts
           - Windows/iOS: not built or verified
           EOF
       - name: Publish immutable GitHub release
