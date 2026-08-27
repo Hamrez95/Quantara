@@ -54,10 +54,7 @@ void main() {
   test('rejects missing, extra, or non-boolean authority fields', () {
     final payloads = <Map<String, Object?>>[
       <String, Object?>{'serviceState': 'disarmed'},
-      <String, Object?>{
-        'serviceState': 'disarmed',
-        'entryAuthority': 'false',
-      },
+      <String, Object?>{'serviceState': 'disarmed', 'entryAuthority': 'false'},
       <String, Object?>{
         'serviceState': 'disarmed',
         'entryAuthority': false,
