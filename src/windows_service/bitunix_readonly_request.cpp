@@ -1,7 +1,6 @@
 #include "bitunix_readonly_request.h"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <string>
 #include <unordered_set>
@@ -16,12 +15,34 @@ constexpr std::string_view kPendingOrdersPath =
     "/api/v1/futures/trade/get_pending_orders";
 constexpr std::size_t kMaxQueryPairs = 8;
 constexpr std::size_t kMaxQueryValueLength = 128;
+constexpr std::size_t kMaxHeaderValueLength = 256;
 
 bool IsSafeValue(std::string_view value) noexcept {
   if (value.empty() || value.size() > kMaxQueryValueLength) return false;
   return std::all_of(value.begin(), value.end(), [](unsigned char c) {
     return c >= 0x21 && c <= 0x7e && c != '&' && c != '=' && c != '#';
   });
+}
+
+bool IsSafeHeaderValue(std::string_view value) noexcept {
+  if (value.empty() || value.size() > kMaxHeaderValueLength) return false;
+  return std::all_of(value.begin(), value.end(), [](unsigned char c) {
+    return c >= 0x21 && c <= 0x7e;
+  });
+}
+
+bool IsDecimalTimestamp(std::string_view value) noexcept {
+  return !value.empty() && value.size() <= 20 &&
+         std::all_of(value.begin(), value.end(), [](unsigned char c) {
+           return std::isdigit(c) != 0;
+         });
+}
+
+bool IsSha256Hex(std::string_view value) noexcept {
+  return value.size() == 64 &&
+         std::all_of(value.begin(), value.end(), [](unsigned char c) {
+           return std::isxdigit(c) != 0;
+         });
 }
 
 bool IsAllowedKey(BitunixReadOnlyEndpoint endpoint, std::string_view key) noexcept {
@@ -46,6 +67,17 @@ std::optional<std::string_view> PathFor(BitunixReadOnlyEndpoint endpoint) noexce
   return std::nullopt;
 }
 
+std::optional<BitunixReadOnlyEndpoint> EndpointForPath(
+    std::string_view path) noexcept {
+  if (path == kPendingPositionsPath) {
+    return BitunixReadOnlyEndpoint::kPendingPositions;
+  }
+  if (path == kPendingOrdersPath) {
+    return BitunixReadOnlyEndpoint::kPendingOrders;
+  }
+  return std::nullopt;
+}
+
 bool ValidateQuery(
     BitunixReadOnlyEndpoint endpoint,
     const std::vector<std::pair<std::string, std::string>>& query) noexcept {
@@ -60,6 +92,42 @@ bool ValidateQuery(
     }
   }
   return true;
+}
+
+bool IsUnreserved(unsigned char c) noexcept {
+  return std::isalnum(c) != 0 || c == '-' || c == '.' || c == '_' || c == '~';
+}
+
+std::string PercentEncode(std::string_view value) {
+  constexpr char kHex[] = "0123456789ABCDEF";
+  std::string encoded;
+  encoded.reserve(value.size());
+  for (const unsigned char c : value) {
+    if (IsUnreserved(c)) {
+      encoded.push_back(static_cast<char>(c));
+    } else {
+      encoded.push_back('%');
+      encoded.push_back(kHex[(c >> 4) & 0x0f]);
+      encoded.push_back(kHex[c & 0x0f]);
+    }
+  }
+  return encoded;
+}
+
+std::optional<std::string> BuildResource(
+    std::string_view path,
+    const std::vector<std::pair<std::string, std::string>>& query) {
+  std::string resource(path);
+  if (query.empty()) return resource;
+
+  resource.push_back('?');
+  for (std::size_t index = 0; index < query.size(); ++index) {
+    if (index != 0) resource.push_back('&');
+    resource.append(PercentEncode(query[index].first));
+    resource.push_back('=');
+    resource.append(PercentEncode(query[index].second));
+  }
+  return resource;
 }
 
 }  // namespace
@@ -78,6 +146,42 @@ std::optional<BitunixReadOnlyRequest> BuildBitunixReadOnlyRequest(
 
     return BitunixReadOnlyRequest{std::string(kHost), "GET", std::string(*path),
                                   query, *authorization};
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+std::optional<BitunixReadOnlyHttpEnvelope> BuildBitunixReadOnlyHttpEnvelope(
+    const BitunixReadOnlyRequest& request) noexcept {
+  try {
+    if (request.host != kHost || request.method != "GET") return std::nullopt;
+
+    const auto endpoint = EndpointForPath(request.path);
+    if (!endpoint.has_value() || !ValidateQuery(*endpoint, request.query)) {
+      return std::nullopt;
+    }
+
+    const auto& authorization = request.authorization;
+    if (!IsSafeHeaderValue(authorization.api_key) ||
+        !IsSafeHeaderValue(authorization.nonce) ||
+        !IsDecimalTimestamp(authorization.timestamp) ||
+        !IsSha256Hex(authorization.sign)) {
+      return std::nullopt;
+    }
+
+    const auto resource = BuildResource(request.path, request.query);
+    if (!resource.has_value()) return std::nullopt;
+
+    std::vector<std::pair<std::string, std::string>> headers{
+        {"api-key", authorization.api_key},
+        {"nonce", authorization.nonce},
+        {"timestamp", authorization.timestamp},
+        {"sign", authorization.sign},
+        {"Content-Type", "application/json"},
+    };
+
+    return BitunixReadOnlyHttpEnvelope{request.host, request.method, *resource,
+                                       std::move(headers)};
   } catch (...) {
     return std::nullopt;
   }
