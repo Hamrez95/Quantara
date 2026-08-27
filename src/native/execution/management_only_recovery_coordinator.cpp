@@ -5,7 +5,7 @@ namespace {
 
 constexpr ManagementOnlyRecoverySnapshot Disarmed(std::string_view reason) {
   return {ManagementOnlyRecoveryMode::kDisarmed,
-          ExistingPositionClassification::kManaged,
+          ExistingPositionClassification::kAmbiguous,
           ExistingPositionManagementAuthority::kNone, true, reason};
 }
 
