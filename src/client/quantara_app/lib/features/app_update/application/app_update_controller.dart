@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/app_update_channel_store.dart';
 import '../data/app_update_manifest_client.dart';
+import '../data/app_update_rollout_store.dart';
 import '../domain/app_update_models.dart';
 
 final class AppUpdateController extends ChangeNotifier {
@@ -16,12 +17,15 @@ final class AppUpdateController extends ChangeNotifier {
     required AppReleaseChannel initialChannel,
     required this.languageCode,
     AppUpdateChannelStore? channelStore,
+    AppUpdateRolloutStore rolloutStore = const PlatformAppUpdateRolloutStore(),
   }) : _manifestClient = manifestClient,
        _channelStore = channelStore,
+       _rolloutStore = rolloutStore,
        _channel = initialChannel;
 
   final AppUpdateManifestClient _manifestClient;
   final AppUpdateChannelStore? _channelStore;
+  final AppUpdateRolloutStore _rolloutStore;
   final String currentVersion;
   final int currentBuildNumber;
   final AppReleasePlatform platform;
@@ -113,17 +117,35 @@ final class AppUpdateController extends ChangeNotifier {
       final revoked = manifest.revokedBuilds.contains(currentBuildNumber);
       final newerBuild = artifact.buildNumber > currentBuildNumber;
       final newerVersion = versionComparison > 0;
+      final newerCandidate = newerBuild || newerVersion;
       final belowMinimumSupported =
           _compareVersions(currentVersion, manifest.minimumSupportedVersion) <
           0;
+      final mandatory = manifest.mandatory || revoked || belowMinimumSupported;
+
+      var stagedRolloutDeferred = false;
+      if (newerCandidate && !mandatory && manifest.rolloutPercent < 100) {
+        if (manifest.rolloutPercent == 0) {
+          stagedRolloutDeferred = true;
+        } else {
+          final bucket = await _rolloutStore.loadOrCreateBucket();
+          if (bucket < 0 || bucket > 99) {
+            throw const FormatException('Update rollout bucket is invalid.');
+          }
+          stagedRolloutDeferred = bucket >= manifest.rolloutPercent;
+        }
+      }
+
       _result = AppUpdateCheckResult(
         currentVersion: currentVersion,
         currentBuildNumber: currentBuildNumber,
         channel: _channel,
         updateAvailable:
-            revoked || belowMinimumSupported || newerBuild || newerVersion,
-        mandatory: manifest.mandatory || revoked || belowMinimumSupported,
+            !stagedRolloutDeferred &&
+            (revoked || belowMinimumSupported || newerCandidate),
+        mandatory: mandatory,
         revoked: revoked,
+        stagedRolloutDeferred: stagedRolloutDeferred,
         artifact: artifact,
         releaseNotes:
             manifest.releaseNotes[languageCode] ??
