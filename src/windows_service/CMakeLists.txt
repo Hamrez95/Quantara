@@ -70,7 +70,7 @@ target_compile_options(quantara_windows_credentials PRIVATE
   /WX
   /permissive-
 )
-target_link_libraries(quantara_windows_credentials PRIVATE advapi32 crypt32 shell32)
+target_link_libraries(quantara_windows_credentials PRIVATE advapi32 crypt32 ole32 shell32)
 
 add_executable(quantara_windows_tray WIN32
   tray_monitor.cpp
