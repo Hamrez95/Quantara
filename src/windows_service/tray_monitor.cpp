@@ -2,8 +2,10 @@
 #include <shellapi.h>
 
 #include <array>
+#include <cwchar>
 #include <filesystem>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,7 +56,7 @@ std::filesystem::path ExecutableDirectory() {
   std::array<wchar_t, 32768> buffer{};
   const DWORD length =
       GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-  if (length == 0 || length >= buffer.size()) {
+  if (length == 0 || length >= static_cast<DWORD>(buffer.size())) {
     return {};
   }
   return std::filesystem::path(std::wstring(buffer.data(), length)).parent_path();
@@ -162,7 +164,10 @@ bool ReadChildOutput(const std::filesystem::path& client_path,
     }
     ScopedHandle process(process_info.hProcess);
     ScopedHandle thread(process_info.hThread);
-    write_pipe = ScopedHandle();
+    const HANDLE inherited_write = write_pipe.release();
+    if (inherited_write != nullptr && inherited_write != INVALID_HANDLE_VALUE) {
+      CloseHandle(inherited_write);
+    }
 
     const DWORD wait = WaitForSingleObject(process.get(), kStatusClientTimeoutMs);
     if (wait != WAIT_OBJECT_0) {
@@ -382,7 +387,7 @@ int RunTrayMonitor(HINSTANCE instance) {
     DispatchMessageW(&message);
   }
   UnregisterClassW(kWindowClassName, instance);
-  return static_cast<int>(message.wParam);
+  return 0;
 }
 
 }  // namespace
