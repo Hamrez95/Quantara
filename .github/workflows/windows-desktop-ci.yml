@@ -8,6 +8,7 @@ on:
       - 'release/**'
     paths:
       - 'src/client/quantara_app/**'
+      - 'src/native/execution/**'
       - 'src/windows_service/**'
       - 'installer/windows/**'
       - 'scripts/build-windows.ps1'
@@ -20,6 +21,7 @@ on:
       - main
     paths:
       - 'src/client/quantara_app/**'
+      - 'src/native/execution/**'
       - 'src/windows_service/**'
       - 'installer/windows/**'
       - 'scripts/build-windows.ps1'

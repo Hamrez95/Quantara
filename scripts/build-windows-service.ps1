@@ -4,7 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$SkipBuild,
     [switch]$SkipTests,
-    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management')]
+    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery')]
     [string]$TestFilter = 'all'
 )
 
@@ -71,6 +71,7 @@ $sessionTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_
 $listenerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_listener_test.exe"
 $networkChangeTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_network_change_test.exe"
 $existingPositionManagementPolicyTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_existing_position_management_policy_test.exe"
+$managementOnlyRecoveryCoordinatorTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_management_only_recovery_coordinator_test.exe"
 
 $requiredExecutables = @(
     @{ Path = $serviceExe; Name = 'Windows service executable' },
@@ -83,7 +84,8 @@ $requiredExecutables = @(
     @{ Path = $sessionTestExe; Name = 'session test executable' },
     @{ Path = $listenerTestExe; Name = 'listener test executable' },
     @{ Path = $networkChangeTestExe; Name = 'network-change test executable' },
-    @{ Path = $existingPositionManagementPolicyTestExe; Name = 'existing-position management policy test executable' }
+    @{ Path = $existingPositionManagementPolicyTestExe; Name = 'existing-position management policy test executable' },
+    @{ Path = $managementOnlyRecoveryCoordinatorTestExe; Name = 'management-only recovery coordinator test executable' }
 )
 foreach ($required in $requiredExecutables) {
     if (-not (Test-Path $required.Path)) {
@@ -97,6 +99,9 @@ if (-not $SkipTests) {
     }
     if ($TestFilter -in @('all', 'service', 'position-management')) {
         Invoke-BoundedNativeTest -Path $existingPositionManagementPolicyTestExe -Name 'quantara_windows_service_existing_position_management_policy_test'
+    }
+    if ($TestFilter -in @('all', 'position-management', 'recovery')) {
+        Invoke-BoundedNativeTest -Path $managementOnlyRecoveryCoordinatorTestExe -Name 'quantara_windows_service_management_only_recovery_coordinator_test'
     }
     if ($TestFilter -in @('all', 'client')) {
         Invoke-BoundedNativeTest -Path $clientExe -Name 'quantara_windows_service_client --self-test' -Arguments @('--self-test')
