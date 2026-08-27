@@ -4,7 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$SkipBuild,
     [switch]$SkipTests,
-    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'response', 'session', 'listener', 'network')]
+    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network')]
     [string]$TestFilter = 'all'
 )
 
@@ -62,6 +62,7 @@ if (-not $SkipBuild) {
 
 $serviceExe = Join-Path $buildRoot "$Configuration/quantara_windows_service.exe"
 $clientExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_client.exe"
+$credentialsExe = Join-Path $buildRoot "$Configuration/quantara_windows_credentials.exe"
 $trayExe = Join-Path $buildRoot "$Configuration/quantara_windows_tray.exe"
 $credentialVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_vault_test.exe"
 $responseTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_response_test.exe"
@@ -72,6 +73,7 @@ $networkChangeTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_se
 $requiredExecutables = @(
     @{ Path = $serviceExe; Name = 'Windows service executable' },
     @{ Path = $clientExe; Name = 'Windows service status client executable' },
+    @{ Path = $credentialsExe; Name = 'Windows credential provisioner executable' },
     @{ Path = $trayExe; Name = 'Windows tray status monitor executable' },
     @{ Path = $credentialVaultTestExe; Name = 'credential vault test executable' },
     @{ Path = $responseTestExe; Name = 'response test executable' },
@@ -91,6 +93,9 @@ if (-not $SkipTests) {
     }
     if ($TestFilter -in @('all', 'client')) {
         Invoke-BoundedNativeTest -Path $clientExe -Name 'quantara_windows_service_client --self-test' -Arguments @('--self-test')
+    }
+    if ($TestFilter -in @('all', 'provisioner')) {
+        Invoke-BoundedNativeTest -Path $credentialsExe -Name 'quantara_windows_credentials --self-test' -Arguments @('--self-test')
     }
     if ($TestFilter -in @('all', 'tray')) {
         Invoke-BoundedNativeTest -Path $trayExe -Name 'quantara_windows_tray --self-test' -Arguments @('--self-test')
@@ -114,4 +119,5 @@ if (-not $SkipTests) {
 
 Write-Host "Windows service host: $serviceExe"
 Write-Host "Windows service status client: $clientExe"
+Write-Host "Windows credential provisioner: $credentialsExe"
 Write-Host "Windows tray status monitor: $trayExe"
