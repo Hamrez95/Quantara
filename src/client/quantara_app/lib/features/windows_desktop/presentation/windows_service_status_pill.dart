@@ -49,8 +49,7 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
       _snapshotFuture = null;
       return;
     }
-    final reader =
-        widget.reader ?? createPlatformWindowsServiceStatusReader();
+    final reader = widget.reader ?? createPlatformWindowsServiceStatusReader();
     _snapshotFuture = reader.read();
   }
 
