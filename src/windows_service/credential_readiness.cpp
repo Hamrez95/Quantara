@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <string>
+#include <utility>
 
 #include "credential_vault.h"
 
@@ -58,6 +59,12 @@ CredentialReadiness EvaluateCredentialReadiness(
     Wipe(api_secret);
     return CredentialReadiness::kInvalid;
   }
+}
+
+bool CredentialReadinessRequiresReconciliation(
+    CredentialReadiness readiness) noexcept {
+  return readiness == CredentialReadiness::kIncomplete ||
+         readiness == CredentialReadiness::kInvalid;
 }
 
 }  // namespace quantara
