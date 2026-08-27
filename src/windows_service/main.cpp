@@ -14,6 +14,7 @@
 #include "ipc_request_protocol.h"
 #include "local_pipe_security.h"
 #include "local_pipe_transport.h"
+#include "network_change_monitor.h"
 
 namespace {
 constexpr wchar_t kServiceName[] = L"QuantaraExecutionService";
@@ -101,6 +102,18 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   g_safety_state.store(quantara::ServiceSafetyState::kDisarmed,
                        std::memory_order_relaxed);
 
+  // Network lifecycle ownership belongs to the service boundary rather than
+  // the IPC listener. This keeps the listener deterministic and ensures the
+  // service fails closed before reporting Running when monitoring cannot be
+  // registered with Windows.
+  quantara::NetworkChangeMonitor network_monitor(g_safety_state);
+  if (!network_monitor.Start()) {
+    CloseHandle(g_stop_event);
+    g_stop_event = nullptr;
+    ReportServiceStatus(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR);
+    return;
+  }
+
   std::atomic<bool> listener_ok{false};
   std::thread listener([&]() {
     const bool result = quantara::RunReadOnlyStatusListener(
@@ -119,6 +132,7 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   // preserving fail-closed behavior for any partial request.
   CancelSynchronousIo(listener.native_handle());
   listener.join();
+  network_monitor.Stop();
 
   CloseHandle(g_stop_event);
   g_stop_event = nullptr;
