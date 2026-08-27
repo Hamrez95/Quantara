@@ -112,7 +112,7 @@ jobs:
           cp build/app/outputs/bundle/release/app-release.aab "release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.aab"
           (cd build/web && zip -qr "../../release/Quantara-${{ steps.version.outputs.version }}-pwa.zip" .)
 
-      - name: Verify Android identity, signature and artifacts
+      - name: Verify Android identity, compatibility, signature and artifacts
         id: integrity
         working-directory: ${{ env.APP_DIR }}
         shell: bash
@@ -123,6 +123,13 @@ jobs:
           apkanalyzer="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
           apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           "$apkanalyzer" manifest application-id "$apk" | grep -Fxq com.quantara.quantara_app
+          min_sdk="$($apkanalyzer manifest min-sdk "$apk")"
+          target_sdk="$($apkanalyzer manifest target-sdk "$apk")"
+          [[ "$min_sdk" =~ ^[0-9]+$ ]]
+          [[ "$target_sdk" =~ ^[0-9]+$ ]]
+          test "$target_sdk" -ge "$min_sdk"
+          abis="$(unzip -Z1 "$apk" | sed -nE 's#^lib/([^/]+)/.*#\1#p' | sort -u | paste -sd, -)"
+          test -n "$abis"
           "$apksigner" verify --verbose "$apk"
           signer="$($apksigner verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
           test -n "$signer"
@@ -130,6 +137,9 @@ jobs:
           echo "android_sha256=$(sha256sum "$apk" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "pwa_sha256=$(sha256sum "$pwa" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "android_signing_identity=$signer" >> "$GITHUB_OUTPUT"
+          echo "android_min_sdk=$min_sdk" >> "$GITHUB_OUTPUT"
+          echo "android_target_sdk=$target_sdk" >> "$GITHUB_OUTPUT"
+          echo "android_abis=$abis" >> "$GITHUB_OUTPUT"
           (cd release && sha256sum * > SHA256SUMS.txt)
 
       - name: Generate machine-readable update manifest
@@ -157,6 +167,13 @@ jobs:
             --android-sha256 '${{ steps.integrity.outputs.android_sha256 }}' \
             --android-package-id com.quantara.quantara_app \
             --android-signing-identity '${{ steps.integrity.outputs.android_signing_identity }}' \
+            --android-min-sdk '${{ steps.integrity.outputs.android_min_sdk }}' \
+            --android-target-sdk '${{ steps.integrity.outputs.android_target_sdk }}' \
+            --android-abis '${{ steps.integrity.outputs.android_abis }}' \
+            --android-artifact-type universal-apk \
+            --android-build-type release \
+            --android-product-flavor production \
+            --android-application-id-suffix '' \
             --pwa-url "$base_url/Quantara-$version-pwa.zip" \
             --pwa-sha256 '${{ steps.integrity.outputs.pwa_sha256 }}' \
             --output release/release-manifest.json
@@ -169,7 +186,7 @@ jobs:
           - Source: `dev` @ `${{ github.sha }}`
           - Version: `${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}`
           - Tag: `${{ steps.version.outputs.tag }}`
-          - Platforms: Android (signed APK/AAB), PWA archive
+          - Platforms: Android (signed universal APK/AAB), PWA archive
           - Update manifest: `release-manifest.json` published atomically with release artifacts
           - Windows/iOS: not built or verified
           EOF
