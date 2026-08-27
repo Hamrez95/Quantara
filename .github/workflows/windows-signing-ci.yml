@@ -1,0 +1,184 @@
+name: Windows signing gate
+
+on:
+  push:
+    branches:
+      - dev
+      - 'feat/**'
+      - 'fix/**'
+    paths:
+      - 'scripts/sign-windows-release.ps1'
+      - '.github/workflows/windows-signing-ci.yml'
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'scripts/sign-windows-release.ps1'
+      - '.github/workflows/windows-signing-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-signing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signing-smoke:
+    name: Verify fail-closed Authenticode signing helper
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create isolated untrusted CI signing identity
+        id: certificate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $subject = 'CN=Quantara CI Untrusted Publisher'
+          $passwordText = [Guid]::NewGuid().ToString('N')
+          $certificate = $null
+          $rsa = [Security.Cryptography.RSA]::Create(2048)
+          try {
+            $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new(
+              $subject,
+              $rsa,
+              [Security.Cryptography.HashAlgorithmName]::SHA256,
+              [Security.Cryptography.RSASignaturePadding]::Pkcs1
+            )
+            $oids = [Security.Cryptography.OidCollection]::new()
+            [void]$oids.Add([Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
+            $request.CertificateExtensions.Add(
+              [Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new($oids, $false)
+            )
+            $certificate = $request.CreateSelfSigned(
+              [DateTimeOffset]::UtcNow.AddMinutes(-5),
+              [DateTimeOffset]::UtcNow.AddDays(1)
+            )
+
+            $pfx = Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.pfx'
+            [IO.File]::WriteAllBytes(
+              $pfx,
+              $certificate.Export(
+                [Security.Cryptography.X509Certificates.X509ContentType]::Pfx,
+                $passwordText
+              )
+            )
+            "pfx=$pfx" >> $env:GITHUB_OUTPUT
+            "password=$passwordText" >> $env:GITHUB_OUTPUT
+            "subject=$subject" >> $env:GITHUB_OUTPUT
+          }
+          finally {
+            if ($null -ne $certificate) { $certificate.Dispose() }
+            $rsa.Dispose()
+          }
+
+      - name: Build unsigned PE fixture
+        id: fixture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP 'quantara-signing-fixture'
+          dotnet new console --force --output $fixtureRoot | Out-Host
+          dotnet build $fixtureRoot --configuration Release --nologo | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "Unsigned PE fixture build failed: $LASTEXITCODE" }
+          $candidate = Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'bin\Release') -Filter '*.exe' -Recurse |
+            Select-Object -First 1
+          if ($null -eq $candidate) { throw 'Unsigned PE fixture executable was not produced.' }
+          $signature = Get-AuthenticodeSignature -FilePath $candidate.FullName
+          if ($signature.Status -ne 'NotSigned') {
+            throw "Unsigned PE fixture unexpectedly has signature status $($signature.Status)."
+          }
+          "path=$($candidate.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Reject a mismatched publisher before signing
+        shell: pwsh
+        env:
+          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
+          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+          UNSIGNED_PE: ${{ steps.fixture.outputs.path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe'
+          Copy-Item $env:UNSIGNED_PE $candidate
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          try {
+            ./scripts/sign-windows-release.ps1 `
+              -InstallerPath $candidate `
+              -CertificatePath $env:PFX_PATH `
+              -CertificatePassword $password `
+              -ExpectedPublisher 'CN=Unexpected Publisher'
+            throw 'Publisher mismatch was accepted.'
+          }
+          catch {
+            if ($_.Exception.Message -eq 'Publisher mismatch was accepted.') { throw }
+          }
+          if ((Get-AuthenticodeSignature -FilePath $candidate).Status -ne 'NotSigned') {
+            throw 'Publisher mismatch mutated the candidate before rejection.'
+          }
+
+      - name: Reject an untrusted signing chain
+        shell: pwsh
+        env:
+          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
+          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+          EXPECTED_SUBJECT: ${{ steps.certificate.outputs.subject }}
+          UNSIGNED_PE: ${{ steps.fixture.outputs.path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningUntrusted.exe'
+          Copy-Item $env:UNSIGNED_PE $candidate
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $rejected = $false
+          try {
+            ./scripts/sign-windows-release.ps1 `
+              -InstallerPath $candidate `
+              -CertificatePath $env:PFX_PATH `
+              -CertificatePassword $password `
+              -ExpectedPublisher $env:EXPECTED_SUBJECT
+          }
+          catch {
+            $rejected = $true
+          }
+          if (-not $rejected) {
+            throw 'An untrusted CI signing chain was accepted as a valid release signature.'
+          }
+          $signature = Get-AuthenticodeSignature -FilePath $candidate
+          if ($signature.Status -eq 'Valid') {
+            throw 'The CI-only signer unexpectedly became trusted.'
+          }
+
+      - name: Reject non-installer input
+        shell: pwsh
+        env:
+          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
+          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidate = Join-Path $env:RUNNER_TEMP 'not-an-installer.txt'
+          Set-Content -LiteralPath $candidate -Value 'not a PE installer' -NoNewline
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          try {
+            ./scripts/sign-windows-release.ps1 `
+              -InstallerPath $candidate `
+              -CertificatePath $env:PFX_PATH `
+              -CertificatePassword $password `
+              -ExpectedPublisher 'CN=Quantara CI Untrusted Publisher'
+            throw 'Non-installer input was accepted.'
+          }
+          catch {
+            if ($_.Exception.Message -eq 'Non-installer input was accepted.') { throw }
+          }
+
+      - name: Remove CI-only artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.pfx') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-signing-fixture') -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningUntrusted.exe') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'not-an-installer.txt') -Force -ErrorAction SilentlyContinue
