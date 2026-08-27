@@ -107,5 +107,12 @@ jobs:
           -p 'test_*.py'
           -v
 
+      - name: Test release integrity helpers
+        run: >-
+          python3 -m unittest discover
+          -s scripts/release
+          -p 'test_*.py'
+          -v
+
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
