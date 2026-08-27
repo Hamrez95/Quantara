@@ -81,6 +81,9 @@ final class AndroidAppUpdateInstallerGateway
 
     try {
       await _handoffInvoker(apk.path);
+    } on PlatformException catch (error) {
+      await _deleteQuietly(apk);
+      throw AppUpdateInstallException(_safePlatformDiagnostic(error.code));
     } on Object catch (error) {
       await _deleteQuietly(apk);
       throw AppUpdateInstallException(
@@ -91,6 +94,21 @@ final class AndroidAppUpdateInstallerGateway
 
   static Future<void> _invokePlatformInstaller(String path) async {
     await _channel.invokeMethod<void>('installVerifiedApk', {'path': path});
+  }
+
+  static String _safePlatformDiagnostic(String code) {
+    switch (code) {
+      case 'install_permission_required':
+        return 'Android installer policy requires permission before package handoff.';
+      case 'installer_unavailable':
+        return 'Android package installer is unavailable.';
+      case 'installer_blocked':
+        return 'Android installer policy blocked the package handoff.';
+      case 'invalid_apk_path':
+        return 'Verified Android update cache integrity check failed. Installer handoff is blocked.';
+      default:
+        return 'Android package installer handoff failed safely with an unknown platform diagnostic.';
+    }
   }
 
   static Future<void> _deleteStaleApks(Directory directory) async {
