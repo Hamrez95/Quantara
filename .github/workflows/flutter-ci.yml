@@ -14,6 +14,7 @@ on:
       - 'scripts/android-cold-start-smoke.sh'
       - 'scripts/android-upgrade-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
+      - '.github/workflows/release-quantara.yml'
   pull_request:
     branches:
       - main
@@ -26,6 +27,7 @@ on:
       - 'scripts/android-cold-start-smoke.sh'
       - 'scripts/android-upgrade-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
+      - '.github/workflows/release-quantara.yml'
 
 permissions:
   contents: read
