@@ -1,11 +1,19 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [switch]$SkipBuild,
+    [switch]$SkipTests,
+    [ValidateSet('all', 'service', 'credential', 'response', 'session', 'listener', 'network')]
+    [string]$TestFilter = 'all'
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+if ($SkipBuild -and $SkipTests) {
+    throw '-SkipBuild and -SkipTests cannot be used together.'
+}
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $serviceRoot = Join-Path $repoRoot 'src/windows_service'
@@ -42,49 +50,56 @@ if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
     throw 'CMake is not available on PATH.'
 }
 
-New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
+if (-not $SkipBuild) {
+    New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 
-& cmake -S $serviceRoot -B $buildRoot -A x64
-Assert-LastExitCode 'cmake configure'
+    & cmake -S $serviceRoot -B $buildRoot -A x64
+    Assert-LastExitCode 'cmake configure'
 
-& cmake --build $buildRoot --config $Configuration --parallel
-Assert-LastExitCode 'cmake build'
+    & cmake --build $buildRoot --config $Configuration --parallel
+    Assert-LastExitCode 'cmake build'
+}
 
 $serviceExe = Join-Path $buildRoot "$Configuration/quantara_windows_service.exe"
-if (-not (Test-Path $serviceExe)) {
-    throw "Windows service executable was not produced at $serviceExe"
-}
-
 $credentialVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_vault_test.exe"
-if (-not (Test-Path $credentialVaultTestExe)) {
-    throw "Windows service credential vault test executable was not produced at $credentialVaultTestExe"
-}
-
 $responseTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_response_test.exe"
-if (-not (Test-Path $responseTestExe)) {
-    throw "Windows service response test executable was not produced at $responseTestExe"
-}
-
 $sessionTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_session_test.exe"
-if (-not (Test-Path $sessionTestExe)) {
-    throw "Windows service session test executable was not produced at $sessionTestExe"
-}
-
 $listenerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_listener_test.exe"
-if (-not (Test-Path $listenerTestExe)) {
-    throw "Windows service listener test executable was not produced at $listenerTestExe"
-}
-
 $networkChangeTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_network_change_test.exe"
-if (-not (Test-Path $networkChangeTestExe)) {
-    throw "Windows service network-change test executable was not produced at $networkChangeTestExe"
+
+$requiredExecutables = @(
+    @{ Path = $serviceExe; Name = 'Windows service executable' },
+    @{ Path = $credentialVaultTestExe; Name = 'credential vault test executable' },
+    @{ Path = $responseTestExe; Name = 'response test executable' },
+    @{ Path = $sessionTestExe; Name = 'session test executable' },
+    @{ Path = $listenerTestExe; Name = 'listener test executable' },
+    @{ Path = $networkChangeTestExe; Name = 'network-change test executable' }
+)
+foreach ($required in $requiredExecutables) {
+    if (-not (Test-Path $required.Path)) {
+        throw "$($required.Name) was not produced at $($required.Path)"
+    }
 }
 
-Invoke-BoundedNativeTest -Path $serviceExe -Name 'quantara_windows_service --self-test' -Arguments @('--self-test')
-Invoke-BoundedNativeTest -Path $credentialVaultTestExe -Name 'quantara_windows_service_credential_vault_test'
-Invoke-BoundedNativeTest -Path $responseTestExe -Name 'quantara_windows_service_response_test'
-Invoke-BoundedNativeTest -Path $sessionTestExe -Name 'quantara_windows_service_session_test'
-Invoke-BoundedNativeTest -Path $listenerTestExe -Name 'quantara_windows_service_listener_test'
-Invoke-BoundedNativeTest -Path $networkChangeTestExe -Name 'quantara_windows_service_network_change_test'
+if (-not $SkipTests) {
+    if ($TestFilter -in @('all', 'service')) {
+        Invoke-BoundedNativeTest -Path $serviceExe -Name 'quantara_windows_service --self-test' -Arguments @('--self-test')
+    }
+    if ($TestFilter -in @('all', 'credential')) {
+        Invoke-BoundedNativeTest -Path $credentialVaultTestExe -Name 'quantara_windows_service_credential_vault_test'
+    }
+    if ($TestFilter -in @('all', 'response')) {
+        Invoke-BoundedNativeTest -Path $responseTestExe -Name 'quantara_windows_service_response_test'
+    }
+    if ($TestFilter -in @('all', 'session')) {
+        Invoke-BoundedNativeTest -Path $sessionTestExe -Name 'quantara_windows_service_session_test'
+    }
+    if ($TestFilter -in @('all', 'listener')) {
+        Invoke-BoundedNativeTest -Path $listenerTestExe -Name 'quantara_windows_service_listener_test'
+    }
+    if ($TestFilter -in @('all', 'network')) {
+        Invoke-BoundedNativeTest -Path $networkChangeTestExe -Name 'quantara_windows_service_network_change_test'
+    }
+}
 
 Write-Host "Windows service host: $serviceExe"
