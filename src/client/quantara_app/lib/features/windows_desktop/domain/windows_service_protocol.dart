@@ -84,9 +84,7 @@ final class WindowsServiceStatusSnapshot {
 
     final serviceState = payload['serviceState'];
     final entryAuthority = payload['entryAuthority'];
-    if (serviceState is! String ||
-        entryAuthority is! bool ||
-        entryAuthority) {
+    if (serviceState is! String || entryAuthority is! bool || entryAuthority) {
       throw const WindowsServiceProtocolException(
         'Windows service status snapshot failed closed validation.',
       );
