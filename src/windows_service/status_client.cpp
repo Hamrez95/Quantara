@@ -59,6 +59,12 @@ std::string BuildStatusRequest(std::string_view request_id) {
          "\",\"kind\":\"statusRequest\",\"payload\":{}}";
 }
 
+std::string BuildCredentialReadinessRequest(std::string_view request_id) {
+  return "{\"protocolVersion\":1,\"requestId\":\"" +
+         std::string(request_id) +
+         "\",\"kind\":\"credentialReadinessRequest\",\"payload\":{}}";
+}
+
 bool IsCanonicalStatusResponse(std::string_view response,
                                std::string_view request_id) noexcept {
   try {
@@ -77,6 +83,30 @@ bool IsCanonicalStatusResponse(std::string_view response,
     const auto state = response.substr(expected_prefix.size(), state_length);
     return state == "disarmed" || state == "interrupted" ||
            state == "reconciliationRequired";
+  } catch (...) {
+    return false;
+  }
+}
+
+bool IsCanonicalCredentialReadinessResponse(
+    std::string_view response, std::string_view request_id) noexcept {
+  try {
+    constexpr std::string_view kPrefix =
+        "{\"protocolVersion\":1,\"requestId\":\"";
+    constexpr std::string_view kMiddle =
+        "\",\"kind\":\"credentialReadinessSnapshot\",\"payload\":{\"credentialReadiness\":\"";
+    constexpr std::string_view kSuffix = "\",\"entryAuthority\":false}}";
+    const std::string expected_prefix =
+        std::string(kPrefix) + std::string(request_id) + std::string(kMiddle);
+    if (!response.starts_with(expected_prefix) || !response.ends_with(kSuffix)) {
+      return false;
+    }
+    const auto readiness_length =
+        response.size() - expected_prefix.size() - kSuffix.size();
+    const auto readiness =
+        response.substr(expected_prefix.size(), readiness_length);
+    return readiness == "missing" || readiness == "ready" ||
+           readiness == "incomplete" || readiness == "invalid";
   } catch (...) {
     return false;
   }
@@ -121,8 +151,6 @@ bool CompletePendingIo(HANDLE handle, OVERLAPPED& overlapped,
         return false;
       }
     }
-    // Cancellation itself is bounded. Never retain an OVERLAPPED/event whose
-    // operation may still reference caller-owned memory after this function.
     if (WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs) != WAIT_OBJECT_0) {
       return false;
     }
@@ -180,7 +208,7 @@ bool ExchangeStatusFrame(HANDLE pipe, std::string_view request,
   return true;
 }
 
-int RunStatusQuery() {
+int RunReadOnlyQuery(bool credential_readiness) {
   if (!WaitNamedPipeW(kStatusPipeName, kIoTimeoutMs)) {
     std::cerr << "Quantara Windows service status pipe is unavailable.\n";
     return 2;
@@ -205,7 +233,9 @@ int RunStatusQuery() {
   }
 
   const std::string request_id = BuildRequestId();
-  const std::string request = BuildStatusRequest(request_id);
+  const std::string request = credential_readiness
+                                  ? BuildCredentialReadinessRequest(request_id)
+                                  : BuildStatusRequest(request_id);
   std::string response;
   DWORD exchange_error = ERROR_SUCCESS;
   if (!ExchangeStatusFrame(pipe.get(), request, response, exchange_error)) {
@@ -213,10 +243,12 @@ int RunStatusQuery() {
               << exchange_error << ".\n";
     return 6;
   }
-  if (!IsCanonicalStatusResponse(response, request_id)) {
-    // Status responses are deliberately credential-free and bounded; reporting
-    // their size is useful operational evidence without leaking secrets.
-    std::cerr << "Quantara Windows service status response failed validation ("
+  const bool valid = credential_readiness
+                         ? IsCanonicalCredentialReadinessResponse(response,
+                                                                  request_id)
+                         : IsCanonicalStatusResponse(response, request_id);
+  if (!valid) {
+    std::cerr << "Quantara Windows service read-only response failed validation ("
               << response.size() << " bytes).\n";
     return 7;
   }
@@ -225,21 +257,41 @@ int RunStatusQuery() {
 }
 
 int RunSelfTest() {
-  const std::string request = BuildStatusRequest("self-test.1");
-  const std::string expected =
+  const std::string status_request = BuildStatusRequest("self-test.1");
+  const std::string expected_status_request =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
       "\"kind\":\"statusRequest\",\"payload\":{}}";
-  const std::string valid_response =
+  const std::string readiness_request =
+      BuildCredentialReadinessRequest("self-test.2");
+  const std::string expected_readiness_request =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.2\","
+      "\"kind\":\"credentialReadinessRequest\",\"payload\":{}}";
+  const std::string valid_status_response =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
       "\"disarmed\",\"entryAuthority\":false}}";
-  const std::string mismatched_response =
+  const std::string valid_readiness_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.2\","
+      "\"kind\":\"credentialReadinessSnapshot\",\"payload\":{"
+      "\"credentialReadiness\":\"ready\",\"entryAuthority\":false}}";
+  const std::string invalid_readiness_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.2\","
+      "\"kind\":\"credentialReadinessSnapshot\",\"payload\":{"
+      "\"credentialReadiness\":\"ready\",\"entryAuthority\":true}}";
+  const std::string mismatched_status_response =
       "{\"protocolVersion\":1,\"requestId\":\"other\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
       "\"disarmed\",\"entryAuthority\":false}}";
-  if (request != expected || request.size() > kMaxFrameBytes ||
-      !IsCanonicalStatusResponse(valid_response, "self-test.1") ||
-      IsCanonicalStatusResponse(mismatched_response, "self-test.1")) {
+  if (status_request != expected_status_request ||
+      readiness_request != expected_readiness_request ||
+      status_request.size() > kMaxFrameBytes ||
+      readiness_request.size() > kMaxFrameBytes ||
+      !IsCanonicalStatusResponse(valid_status_response, "self-test.1") ||
+      IsCanonicalStatusResponse(mismatched_status_response, "self-test.1") ||
+      !IsCanonicalCredentialReadinessResponse(valid_readiness_response,
+                                               "self-test.2") ||
+      IsCanonicalCredentialReadinessResponse(invalid_readiness_response,
+                                              "self-test.2")) {
     std::cerr << "Windows service status client self-test failed.\n";
     return 1;
   }
@@ -253,8 +305,13 @@ int wmain(int argc, wchar_t* argv[]) {
     return RunSelfTest();
   }
   if (argc == 2 && std::wstring_view(argv[1]) == L"--status") {
-    return RunStatusQuery();
+    return RunReadOnlyQuery(false);
   }
-  std::cerr << "Usage: quantara_windows_service_client.exe --status\n";
+  if (argc == 2 &&
+      std::wstring_view(argv[1]) == L"--credential-readiness") {
+    return RunReadOnlyQuery(true);
+  }
+  std::cerr << "Usage: quantara_windows_service_client.exe "
+               "--status|--credential-readiness\n";
   return 64;
 }
