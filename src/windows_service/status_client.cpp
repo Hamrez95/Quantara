@@ -59,6 +59,29 @@ std::string BuildStatusRequest(std::string_view request_id) {
          "\",\"kind\":\"statusRequest\",\"payload\":{}}";
 }
 
+bool IsCanonicalStatusResponse(std::string_view response,
+                               std::string_view request_id) noexcept {
+  try {
+    constexpr std::string_view kPrefix =
+        "{\"protocolVersion\":1,\"requestId\":\"";
+    constexpr std::string_view kMiddle =
+        "\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"";
+    constexpr std::string_view kSuffix = "\",\"entryAuthority\":false}}";
+    const std::string expected_prefix =
+        std::string(kPrefix) + std::string(request_id) + std::string(kMiddle);
+    if (!response.starts_with(expected_prefix) || !response.ends_with(kSuffix)) {
+      return false;
+    }
+    const auto state_length =
+        response.size() - expected_prefix.size() - kSuffix.size();
+    const auto state = response.substr(expected_prefix.size(), state_length);
+    return state == "disarmed" || state == "interrupted" ||
+           state == "reconciliationRequired";
+  } catch (...) {
+    return false;
+  }
+}
+
 bool ServicePidMatchesPipeServer(HANDLE pipe) noexcept {
   ULONG server_pid = 0;
   if (!GetNamedPipeServerProcessId(pipe, &server_pid) || server_pid == 0) {
@@ -169,15 +192,17 @@ int RunStatusQuery() {
     return 5;
   }
 
-  const std::string request = BuildStatusRequest(BuildRequestId());
+  const std::string request_id = BuildRequestId();
+  const std::string request = BuildStatusRequest(request_id);
   if (!WriteBoundedFrame(pipe.get(), request)) {
     std::cerr << "Quantara Windows service status request failed.\n";
     return 6;
   }
 
   std::string response;
-  if (!ReadBoundedFrame(pipe.get(), response)) {
-    std::cerr << "Quantara Windows service status response failed.\n";
+  if (!ReadBoundedFrame(pipe.get(), response) ||
+      !IsCanonicalStatusResponse(response, request_id)) {
+    std::cerr << "Quantara Windows service status response failed validation.\n";
     return 7;
   }
   std::cout << response << '\n';
@@ -189,8 +214,18 @@ int RunSelfTest() {
   const std::string expected =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
       "\"kind\":\"statusRequest\",\"payload\":{}}";
-  if (request != expected || request.size() > kMaxFrameBytes) {
-    std::cerr << "Windows service status client request self-test failed.\n";
+  const std::string valid_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
+      "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
+      "\"disarmed\",\"entryAuthority\":false}}";
+  const std::string mismatched_response =
+      "{\"protocolVersion\":1,\"requestId\":\"other\","
+      "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
+      "\"disarmed\",\"entryAuthority\":false}}";
+  if (request != expected || request.size() > kMaxFrameBytes ||
+      !IsCanonicalStatusResponse(valid_response, "self-test.1") ||
+      IsCanonicalStatusResponse(mismatched_response, "self-test.1")) {
+    std::cerr << "Windows service status client self-test failed.\n";
     return 1;
   }
   return 0;
