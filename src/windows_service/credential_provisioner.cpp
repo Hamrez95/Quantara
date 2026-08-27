@@ -1,9 +1,9 @@
 #include <windows.h>
 #include <ShlObj.h>
 
+#include <array>
 #include <filesystem>
 #include <iostream>
-#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -115,8 +115,27 @@ std::string ReadSecretFromRedirectedStdin() {
         "Interactive credential input is refused; provide the secret through redirected standard input.");
   }
 
-  std::string secret((std::istreambuf_iterator<char>(std::cin)),
-                     std::istreambuf_iterator<char>());
+  std::string secret;
+  secret.reserve(kMaxSecretBytes);
+  std::array<char, 4096> buffer{};
+  while (std::cin.good()) {
+    std::cin.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    const auto count = std::cin.gcount();
+    if (count <= 0) {
+      break;
+    }
+    if (secret.size() + static_cast<std::size_t>(count) >
+        kMaxSecretBytes + 2) {
+      SecureZeroMemory(secret.data(), secret.size());
+      throw std::runtime_error("Credential input exceeds the bounded limit.");
+    }
+    secret.append(buffer.data(), static_cast<std::size_t>(count));
+  }
+  if (std::cin.bad()) {
+    SecureZeroMemory(secret.data(), secret.size());
+    throw std::runtime_error("Credential input could not be read.");
+  }
+
   if (!secret.empty() && secret.back() == '\n') {
     secret.pop_back();
     if (!secret.empty() && secret.back() == '\r') {
@@ -126,9 +145,27 @@ std::string ReadSecretFromRedirectedStdin() {
 
   if (secret.empty() || secret.size() > kMaxSecretBytes ||
       secret.find('\0') != std::string::npos) {
+    SecureZeroMemory(secret.data(), secret.size());
     throw std::runtime_error("Credential input size/content is invalid.");
   }
   return secret;
+}
+
+std::filesystem::path CredentialPath(const std::filesystem::path& root,
+                                     const wchar_t* name) {
+  return root / (std::wstring(name) + L".dpapi");
+}
+
+bool CredentialPresent(const std::filesystem::path& root,
+                       const wchar_t* name) {
+  const auto path = CredentialPath(root, name);
+  RejectReparsePointIfPresent(path);
+  std::error_code error;
+  const bool present = std::filesystem::is_regular_file(path, error);
+  if (error) {
+    throw std::runtime_error("Credential presence check failed.");
+  }
+  return present;
 }
 
 void StoreSecret(const std::filesystem::path& root, const wchar_t* name) {
@@ -142,7 +179,7 @@ void StoreSecret(const std::filesystem::path& root, const wchar_t* name) {
   }
   SecureZeroMemory(secret.data(), secret.size());
   GuardProductionPath(root);
-  RejectReparsePointIfPresent(root / (std::wstring(name) + L".dpapi"));
+  RejectReparsePointIfPresent(CredentialPath(root, name));
 }
 
 void RemoveAll(const std::filesystem::path& root) {
@@ -154,9 +191,8 @@ void RemoveAll(const std::filesystem::path& root) {
 
 void PrintStatus(const std::filesystem::path& root) {
   GuardProductionPath(root);
-  const quantara::CredentialVault vault(root);
-  const bool api_key_present = vault.Load(kApiKeyName).has_value();
-  const bool api_secret_present = vault.Load(kApiSecretName).has_value();
+  const bool api_key_present = CredentialPresent(root, kApiKeyName);
+  const bool api_secret_present = CredentialPresent(root, kApiSecretName);
   std::cout << "{\"apiKeyPresent\":"
             << (api_key_present ? "true" : "false")
             << ",\"apiSecretPresent\":"
@@ -183,6 +219,12 @@ bool RunSelfTest() noexcept {
     quantara::CredentialVault vault(root);
     vault.Store(kApiKeyName, "self-test-key");
     vault.Store(kApiSecretName, "self-test-secret");
+    if (!CredentialPresent(root, kApiKeyName) ||
+        !CredentialPresent(root, kApiSecretName)) {
+      std::filesystem::remove_all(root, cleanup_error);
+      return false;
+    }
+
     const auto key = vault.Load(kApiKeyName);
     const auto secret = vault.Load(kApiSecretName);
     if (!key.has_value() || *key != "self-test-key" || !secret.has_value() ||
@@ -193,8 +235,8 @@ bool RunSelfTest() noexcept {
 
     vault.Remove(kApiKeyName);
     vault.Remove(kApiSecretName);
-    const bool removed = !vault.Load(kApiKeyName).has_value() &&
-                         !vault.Load(kApiSecretName).has_value();
+    const bool removed = !CredentialPresent(root, kApiKeyName) &&
+                         !CredentialPresent(root, kApiSecretName);
     std::filesystem::remove_all(root, cleanup_error);
     return removed;
   } catch (...) {
