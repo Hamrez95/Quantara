@@ -110,11 +110,14 @@ bool ServicePidMatchesPipeServer(HANDLE pipe) noexcept {
 }
 
 bool CompletePendingIo(HANDLE handle, OVERLAPPED& overlapped,
-                       DWORD& bytes_transferred) noexcept {
+                       DWORD& bytes_transferred,
+                       DWORD& win32_error) noexcept {
   if (WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs) != WAIT_OBJECT_0) {
+    win32_error = ERROR_TIMEOUT;
     if (!CancelIoEx(handle, &overlapped)) {
       const DWORD cancel_error = GetLastError();
       if (cancel_error != ERROR_NOT_FOUND) {
+        win32_error = cancel_error;
         return false;
       }
     }
@@ -125,20 +128,28 @@ bool CompletePendingIo(HANDLE handle, OVERLAPPED& overlapped,
     }
     return false;
   }
-  return GetOverlappedResult(handle, &overlapped, &bytes_transferred, FALSE) ==
-         TRUE;
+  if (!GetOverlappedResult(handle, &overlapped, &bytes_transferred, FALSE)) {
+    win32_error = GetLastError();
+    return false;
+  }
+  win32_error = ERROR_SUCCESS;
+  return true;
 }
 
 bool ExchangeStatusFrame(HANDLE pipe, std::string_view request,
-                         std::string& response) noexcept {
+                         std::string& response,
+                         DWORD& win32_error) noexcept {
   response.clear();
+  win32_error = ERROR_SUCCESS;
   if (request.empty() || request.size() > kMaxFrameBytes) {
+    win32_error = ERROR_INVALID_DATA;
     return false;
   }
 
   std::vector<char> buffer(kMaxFrameBytes);
   ScopedHandle event(CreateEventW(nullptr, TRUE, FALSE, nullptr));
   if (event.get() == nullptr) {
+    win32_error = GetLastError();
     return false;
   }
 
@@ -151,15 +162,17 @@ bool ExchangeStatusFrame(HANDLE pipe, std::string_view request,
   if (completed == FALSE) {
     const DWORD error = GetLastError();
     if (error == ERROR_MORE_DATA || error != ERROR_IO_PENDING) {
+      win32_error = error;
       return false;
     }
     bytes_read = 0;
-    if (!CompletePendingIo(pipe, overlapped, bytes_read)) {
+    if (!CompletePendingIo(pipe, overlapped, bytes_read, win32_error)) {
       return false;
     }
   }
 
   if (bytes_read == 0 || bytes_read > kMaxFrameBytes) {
+    win32_error = ERROR_INVALID_DATA;
     return false;
   }
   buffer.resize(bytes_read);
@@ -194,8 +207,10 @@ int RunStatusQuery() {
   const std::string request_id = BuildRequestId();
   const std::string request = BuildStatusRequest(request_id);
   std::string response;
-  if (!ExchangeStatusFrame(pipe.get(), request, response)) {
-    std::cerr << "Quantara Windows service status exchange failed.\n";
+  DWORD exchange_error = ERROR_SUCCESS;
+  if (!ExchangeStatusFrame(pipe.get(), request, response, exchange_error)) {
+    std::cerr << "Quantara Windows service status exchange failed with Win32 error "
+              << exchange_error << ".\n";
     return 6;
   }
   if (!IsCanonicalStatusResponse(response, request_id)) {
