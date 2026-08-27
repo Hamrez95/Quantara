@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 _SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
+_ANDROID_ABI = re.compile(r"^[A-Za-z0-9_-]+$")
 _ANDROID_ASSET_PATTERNS = (
     re.compile(r"^Quantara-.+\+(\d+)-android\.apk$"),
     re.compile(r"^Quantara-.+-build(\d+)-[^/]*\.apk$"),
@@ -62,13 +63,24 @@ def _published_at(value: str) -> str:
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _android_abis(value: str) -> list[str]:
+    abis = sorted({item.strip() for item in value.split(",") if item.strip()})
+    if not abis or any(not _ANDROID_ABI.fullmatch(abi) for abi in abis):
+        raise ValueError("Android ABI coverage metadata is invalid.")
+    return abis
+
+
 def build_manifest(args: argparse.Namespace) -> dict[str, object]:
     if args.build_number < 1:
         raise ValueError("Release build number must be positive.")
+    if args.android_min_sdk < 1 or args.android_target_sdk < args.android_min_sdk:
+        raise ValueError("Android SDK compatibility metadata is invalid.")
     if not args.version.strip() or not args.minimum_supported_version.strip():
         raise ValueError("Release versions must not be empty.")
     if not args.android_package_id.strip() or not args.android_signing_identity.strip():
         raise ValueError("Android identity metadata is required.")
+    if not args.android_product_flavor.strip():
+        raise ValueError("Android product flavor metadata is required.")
 
     return {
         "schemaVersion": 1,
@@ -87,6 +99,13 @@ def build_manifest(args: argparse.Namespace) -> dict[str, object]:
                 "sha256": _sha256(args.android_sha256),
                 "packageId": args.android_package_id.strip(),
                 "signingIdentity": args.android_signing_identity.strip(),
+                "minSdk": args.android_min_sdk,
+                "targetSdk": args.android_target_sdk,
+                "abis": _android_abis(args.android_abis),
+                "artifactType": args.android_artifact_type,
+                "buildType": args.android_build_type,
+                "productFlavor": args.android_product_flavor.strip(),
+                "applicationIdSuffix": args.android_application_id_suffix.strip(),
             },
             "pwa": {
                 "version": args.version.strip(),
@@ -116,6 +135,15 @@ def _parser() -> argparse.ArgumentParser:
     manifest.add_argument("--android-sha256", required=True)
     manifest.add_argument("--android-package-id", required=True)
     manifest.add_argument("--android-signing-identity", required=True)
+    manifest.add_argument("--android-min-sdk", type=int, required=True)
+    manifest.add_argument("--android-target-sdk", type=int, required=True)
+    manifest.add_argument("--android-abis", required=True)
+    manifest.add_argument(
+        "--android-artifact-type", choices=("universal-apk", "split-apk"), required=True
+    )
+    manifest.add_argument("--android-build-type", choices=("release",), required=True)
+    manifest.add_argument("--android-product-flavor", required=True)
+    manifest.add_argument("--android-application-id-suffix", default="")
     manifest.add_argument("--pwa-url", required=True)
     manifest.add_argument("--pwa-sha256", required=True)
     manifest.add_argument("--output", required=True)
