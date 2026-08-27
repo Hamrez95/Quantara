@@ -19,6 +19,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Configure MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - name: Compile fail-closed authorizer test
         shell: cmd
         working-directory: src/windows_service
