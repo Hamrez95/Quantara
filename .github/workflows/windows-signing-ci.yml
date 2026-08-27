@@ -40,6 +40,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $subject = 'CN=Quantara CI Test Publisher'
           $passwordText = [Guid]::NewGuid().ToString('N')
+          $certificate = $null
           $rsa = [Security.Cryptography.RSA]::Create(2048)
           try {
             $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new(
@@ -66,18 +67,14 @@ jobs:
                 $passwordText
               )
             )
-
-            $root = [Security.Cryptography.X509Certificates.X509Store]::new(
-              [Security.Cryptography.X509Certificates.StoreName]::Root,
-              [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+            $cer = Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.cer'
+            [IO.File]::WriteAllBytes(
+              $cer,
+              $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
             )
-            try {
-              $root.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-              $root.Add($certificate)
-            }
-            finally {
-              $root.Dispose()
-            }
+
+            & certutil.exe -user -addstore -f Root $cer | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "certutil trust bootstrap failed: $LASTEXITCODE" }
 
             "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
             "pfx=$pfx" >> $env:GITHUB_OUTPUT
@@ -149,8 +146,9 @@ jobs:
           THUMBPRINT: ${{ steps.certificate.outputs.thumbprint }}
         run: |
           if (-not [string]::IsNullOrWhiteSpace($env:THUMBPRINT)) {
-            Remove-Item "Cert:\CurrentUser\Root\$env:THUMBPRINT" -Force -ErrorAction SilentlyContinue
+            & certutil.exe -user -delstore Root $env:THUMBPRINT | Out-Host
           }
           Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.pfx') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.cer') -Force -ErrorAction SilentlyContinue
           Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningSmoke.exe') -Force -ErrorAction SilentlyContinue
           Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe') -Force -ErrorAction SilentlyContinue
