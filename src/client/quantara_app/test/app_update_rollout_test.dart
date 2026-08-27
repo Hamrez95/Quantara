@@ -45,8 +45,12 @@ void main() {
     return AppUpdateController(
       manifestClient: AppUpdateManifestClient(
         client: client,
-        stableManifestUri: Uri.parse('https://updates.example.test/stable.json'),
-        canaryManifestUri: Uri.parse('https://updates.example.test/canary.json'),
+        stableManifestUri: Uri.parse(
+          'https://updates.example.test/stable.json',
+        ),
+        canaryManifestUri: Uri.parse(
+          'https://updates.example.test/canary.json',
+        ),
       ),
       currentVersion: '1.2.0',
       currentBuildNumber: 126,
