@@ -383,28 +383,35 @@ jobs:
           - Android upgrade compatibility: same canonical package/signer required; minimum supported version `${{ needs.prepare.outputs.previous_version }}`
           - Current-dev certification: exact commit passed Flutter client CI including API 34/35/36 upgrade matrix before release
           - Update manifest: `release-manifest.json` is generated only after all selected artifacts pass integrity/identity gates
+          - Publication visibility: release remains draft until the complete selected payload is uploaded successfully
           - Staged rollout eligibility: `${{ inputs.rollout_percent }}%`
           - Emergency revocation: optional older build list; clients recover only through a newer signed/checksummed artifact
           - Windows: $windows_state
           - iOS: not built or verified
           EOF
 
-      - name: Publish immutable GitHub release
+      - name: Publish complete payload atomically
         working-directory: ${{ env.APP_DIR }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          tag='${{ needs.prepare.outputs.tag }}'
           prerelease=''
           if [ '${{ inputs.channel }}' = beta ]; then prerelease='--prerelease'; fi
           platforms='signed Android APK/AAB, PWA archive'
           if [ '${{ inputs.include_windows }}' = true ]; then
             platforms="$platforms, signed Windows x64 installer"
           fi
-          gh release create '${{ needs.prepare.outputs.tag }}' release/* \
-            --target '${{ needs.prepare.outputs.source_sha }}' --title "Quantara ${{ needs.prepare.outputs.version }}" $prerelease \
+
+          gh release create "$tag" release/* \
+            --draft $prerelease \
+            --target '${{ needs.prepare.outputs.source_sha }}' \
+            --title "Quantara ${{ needs.prepare.outputs.version }}" \
             --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ needs.prepare.outputs.build_number }}\nCommit: ${{ needs.prepare.outputs.source_sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ needs.prepare.outputs.previous_version }}.\nStaged rollout eligibility: ${{ inputs.rollout_percent }}%.\nEmergency revocation recovery is forward-only through this signed/checksummed release.\nPlatforms: $platforms."
+
+          gh release edit "$tag" --draft=false
 
       - name: Remove temporary Android signing key
         if: always()
