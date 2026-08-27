@@ -195,7 +195,7 @@ jobs:
           retention-days: 14
 
   android-launch:
-    name: Android API cold-start and in-place upgrade smoke
+    name: Android API cold-start smoke and in-place upgrade
     needs: flutter
     runs-on: ubuntu-24.04
     timeout-minutes: 35
