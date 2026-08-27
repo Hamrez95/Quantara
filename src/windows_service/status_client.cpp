@@ -113,8 +113,15 @@ bool CompleteOverlappedIo(HANDLE handle, OVERLAPPED& overlapped,
                           DWORD& bytes_transferred) noexcept {
   const DWORD wait_result = WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs);
   if (wait_result != WAIT_OBJECT_0) {
-    CancelIoEx(handle, &overlapped);
-    WaitForSingleObject(overlapped.hEvent, INFINITE);
+    if (!CancelIoEx(handle, &overlapped)) {
+      const DWORD cancel_error = GetLastError();
+      if (cancel_error != ERROR_NOT_FOUND) {
+        return false;
+      }
+    }
+    if (WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs) != WAIT_OBJECT_0) {
+      return false;
+    }
     return false;
   }
   return GetOverlappedResult(handle, &overlapped, &bytes_transferred, FALSE) ==
