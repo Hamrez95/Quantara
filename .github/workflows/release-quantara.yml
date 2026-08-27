@@ -15,6 +15,12 @@ on:
         required: true
         default: beta
         options: [beta, stable]
+      rollout_percent:
+        description: Percentage of installations eligible for this update
+        type: choice
+        required: true
+        default: '100'
+        options: ['10', '25', '50', '100']
       release_notes:
         description: Optional notes
         required: false
@@ -176,6 +182,7 @@ jobs:
             --published-at "$published_at" \
             --minimum-supported-version '${{ steps.version.outputs.previous_version }}' \
             --release-notes "$RELEASE_NOTES" \
+            --rollout-percent '${{ inputs.rollout_percent }}' \
             --android-url "$base_url/Quantara-$version+$build-android.apk" \
             --android-sha256 '${{ steps.integrity.outputs.android_sha256 }}' \
             --android-package-id com.quantara.quantara_app \
@@ -195,6 +202,7 @@ jobs:
           - Platforms: Android (signed APK/AAB), PWA archive
           - Android upgrade compatibility: same canonical package/signer required; minimum supported version `${{ steps.version.outputs.previous_version }}`
           - Update manifest: `release-manifest.json` published atomically with release artifacts
+          - Staged rollout eligibility: `${{ inputs.rollout_percent }}%`
           - Windows/iOS: not built or verified
           EOF
       - name: Publish immutable GitHub release
@@ -207,7 +215,7 @@ jobs:
           if [ '${{ inputs.channel }}' = beta ]; then prerelease='--prerelease'; fi
           gh release create '${{ steps.version.outputs.tag }}' release/* \
             --target '${{ github.sha }}' --title "Quantara ${{ steps.version.outputs.version }}" $prerelease \
-            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ steps.version.outputs.previous_version }}.\nPlatforms: signed Android APK/AAB, PWA archive."
+            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ steps.version.outputs.previous_version }}.\nStaged rollout eligibility: ${{ inputs.rollout_percent }}%.\nPlatforms: signed Android APK/AAB, PWA archive."
       - name: Remove temporary key
         if: always()
         run: rm -f "$RUNNER_TEMP/quantara.jks"

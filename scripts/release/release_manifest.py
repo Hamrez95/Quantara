@@ -108,6 +108,8 @@ def _published_at(value: str) -> str:
 def build_manifest(args: argparse.Namespace) -> dict[str, object]:
     if args.build_number < 1:
         raise ValueError("Release build number must be positive.")
+    if args.rollout_percent < 0 or args.rollout_percent > 100:
+        raise ValueError("Release rollout percentage must be between 0 and 100.")
     if not args.version.strip() or not args.minimum_supported_version.strip():
         raise ValueError("Release versions must not be empty.")
     if not args.android_package_id.strip() or not args.android_signing_identity.strip():
@@ -120,7 +122,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, object]:
         "minimumSupportedVersion": args.minimum_supported_version.strip(),
         "mandatory": False,
         "releaseNotes": {"en": args.release_notes.strip()},
-        "rolloutPercent": 100,
+        "rolloutPercent": args.rollout_percent,
         "revokedBuilds": [],
         "artifacts": {
             "android": {
@@ -160,6 +162,7 @@ def _parser() -> argparse.ArgumentParser:
     manifest.add_argument("--published-at", required=True)
     manifest.add_argument("--minimum-supported-version", required=True)
     manifest.add_argument("--release-notes", default="")
+    manifest.add_argument("--rollout-percent", type=int, default=100)
     manifest.add_argument("--android-url", required=True)
     manifest.add_argument("--android-sha256", required=True)
     manifest.add_argument("--android-package-id", required=True)
