@@ -104,8 +104,7 @@ final class AppUpdateController extends ChangeNotifier {
           'Published update would downgrade the current app; explicit recovery is required.',
         );
       }
-      if (versionComparison == 0 &&
-          artifact.buildNumber < currentBuildNumber) {
+      if (artifact.buildNumber < currentBuildNumber) {
         throw const FormatException(
           'Published update would downgrade the current build; explicit recovery is required.',
         );
