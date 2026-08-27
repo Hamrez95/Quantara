@@ -110,20 +110,29 @@ bool ServicePidMatchesPipeServer(HANDLE pipe) noexcept {
 }
 
 bool CompleteOverlappedIo(HANDLE handle, OVERLAPPED& overlapped,
-                          DWORD& bytes_transferred) noexcept {
-  const DWORD wait_result = WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs);
-  if (wait_result != WAIT_OBJECT_0) {
-    if (!CancelIoEx(handle, &overlapped)) {
-      const DWORD cancel_error = GetLastError();
-      if (cancel_error != ERROR_NOT_FOUND) {
+                          bool pending, DWORD& bytes_transferred) noexcept {
+  if (pending) {
+    const DWORD wait_result =
+        WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs);
+    if (wait_result != WAIT_OBJECT_0) {
+      if (!CancelIoEx(handle, &overlapped)) {
+        const DWORD cancel_error = GetLastError();
+        if (cancel_error != ERROR_NOT_FOUND) {
+          return false;
+        }
+      }
+      if (WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs) !=
+          WAIT_OBJECT_0) {
         return false;
       }
-    }
-    if (WaitForSingleObject(overlapped.hEvent, kIoTimeoutMs) != WAIT_OBJECT_0) {
       return false;
     }
-    return false;
   }
+
+  // For handles opened with FILE_FLAG_OVERLAPPED, the immediate-success path
+  // does not make lpNumberOfBytes{Read,Written} the authoritative completion
+  // count. Always resolve the transfer count from OVERLAPPED so a response that
+  // is already buffered cannot be mistaken for an empty frame.
   return GetOverlappedResult(handle, &overlapped, &bytes_transferred, FALSE) ==
          TRUE;
 }
@@ -138,19 +147,23 @@ bool WriteBoundedFrame(HANDLE pipe, std::string_view frame) noexcept {
   }
   OVERLAPPED overlapped{};
   overlapped.hEvent = event.get();
-  DWORD bytes_written = 0;
   const BOOL wrote = WriteFile(pipe, frame.data(), static_cast<DWORD>(frame.size()),
-                               &bytes_written, &overlapped);
-  if (wrote == FALSE) {
-    if (GetLastError() != ERROR_IO_PENDING ||
-        !CompleteOverlappedIo(pipe, overlapped, bytes_written)) {
-      return false;
-    }
+                               nullptr, &overlapped);
+  const DWORD error = wrote == FALSE ? GetLastError() : ERROR_SUCCESS;
+  if (wrote == FALSE && error != ERROR_IO_PENDING) {
+    return false;
+  }
+
+  DWORD bytes_written = 0;
+  if (!CompleteOverlappedIo(pipe, overlapped, error == ERROR_IO_PENDING,
+                            bytes_written)) {
+    return false;
   }
   return bytes_written == frame.size();
 }
 
 bool ReadBoundedFrame(HANDLE pipe, std::string& frame) noexcept {
+  frame.clear();
   std::vector<char> buffer(kMaxFrameBytes);
   ScopedHandle event(CreateEventW(nullptr, TRUE, FALSE, nullptr));
   if (event.get() == nullptr) {
@@ -158,20 +171,23 @@ bool ReadBoundedFrame(HANDLE pipe, std::string& frame) noexcept {
   }
   OVERLAPPED overlapped{};
   overlapped.hEvent = event.get();
-  DWORD bytes_read = 0;
   const BOOL read = ReadFile(pipe, buffer.data(), static_cast<DWORD>(buffer.size()),
-                             &bytes_read, &overlapped);
-  if (read == FALSE) {
-    const DWORD error = GetLastError();
-    if (error == ERROR_MORE_DATA || error != ERROR_IO_PENDING ||
-        !CompleteOverlappedIo(pipe, overlapped, bytes_read)) {
-      return false;
-    }
-  }
-  if (bytes_read == 0 || bytes_read > kMaxFrameBytes) {
+                             nullptr, &overlapped);
+  const DWORD error = read == FALSE ? GetLastError() : ERROR_SUCCESS;
+  if (read == FALSE && error != ERROR_IO_PENDING) {
+    // A message larger than the bounded frame is rejected rather than
+    // reassembled from ERROR_MORE_DATA fragments.
     return false;
   }
-  frame.assign(buffer.data(), bytes_read);
+
+  DWORD bytes_read = 0;
+  if (!CompleteOverlappedIo(pipe, overlapped, error == ERROR_IO_PENDING,
+                            bytes_read) ||
+      bytes_read == 0 || bytes_read > kMaxFrameBytes) {
+    return false;
+  }
+  buffer.resize(bytes_read);
+  frame.assign(buffer.begin(), buffer.end());
   return true;
 }
 
