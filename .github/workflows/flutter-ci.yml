@@ -8,9 +8,11 @@ on:
       - 'feat/**'
       - 'fix/**'
       - 'release/**'
+      - 'test/**'
     paths:
       - 'src/client/quantara_app/**'
       - 'scripts/android-cold-start-smoke.sh'
+      - 'scripts/android-upgrade-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
   pull_request:
     branches:
@@ -18,9 +20,11 @@ on:
       - dev
       - 'feat/**'
       - 'fix/**'
+      - 'test/**'
     paths:
       - 'src/client/quantara_app/**'
       - 'scripts/android-cold-start-smoke.sh'
+      - 'scripts/android-upgrade-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
 
 permissions:
@@ -35,6 +39,7 @@ env:
   ANDROID_PACKAGE: com.quantara.quantara_app
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
   ANDROID_DEBUG_ARTIFACT: quantara-android-debug-${{ github.sha }}
+  ANDROID_PREVIOUS_DEBUG_ARTIFACT: quantara-android-debug-previous-${{ github.sha }}
   QUANTARA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
@@ -48,6 +53,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -133,6 +140,33 @@ jobs:
           ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
           sha256sum "$apk" | tee SHA256SUMS.txt
 
+      - name: Build previous-base Android QA APK for upgrade certification
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_build="$(sed -nE 's/^version:.*\+([0-9]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+          test -n "$candidate_build"
+          test "$candidate_build" -gt 1
+          previous_build=$((candidate_build - 1))
+          if [ -n '${{ github.event.pull_request.base.sha }}' ]; then
+            base_sha='${{ github.event.pull_request.base.sha }}'
+          else
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          test -n "$base_sha"
+          previous_root="$RUNNER_TEMP/quantara-previous"
+          git worktree add --detach "$previous_root" "$base_sha"
+          trap 'git worktree remove --force "$previous_root" >/dev/null 2>&1 || true' EXIT
+          pushd "$previous_root/src/client/quantara_app" >/dev/null
+          flutter pub get
+          flutter build apk --debug --build-number="$previous_build"
+          popd >/dev/null
+          mkdir -p "$RUNNER_TEMP/previous-apk"
+          cp "$previous_root/src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk" \
+            "$RUNNER_TEMP/previous-apk/app-debug-previous.apk"
+          git worktree remove --force "$previous_root"
+          trap - EXIT
+
       - name: Upload PWA QA candidate
         uses: actions/upload-artifact@v4
         with:
@@ -152,11 +186,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload previous-base Android QA candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ANDROID_PREVIOUS_DEBUG_ARTIFACT }}
+          path: ${{ runner.temp }}/previous-apk/app-debug-previous.apk
+          if-no-files-found: error
+          retention-days: 14
+
   android-launch:
-    name: Android API cold-start smoke
+    name: Android API cold-start smoke and in-place upgrade
     needs: flutter
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -171,14 +213,24 @@ jobs:
           name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
           path: apk
 
-      - name: Resolve Android QA candidate path
+      - name: Download previous-base Android QA candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ANDROID_PREVIOUS_DEBUG_ARTIFACT }}
+          path: previous-apk
+
+      - name: Resolve Android QA candidate paths
         shell: bash
         run: |
           set -euo pipefail
           apk_path="$(find apk -type f -name 'app-debug.apk' -print -quit)"
+          previous_apk_path="$(find previous-apk -type f -name 'app-debug-previous.apk' -print -quit)"
           test -n "$apk_path"
           test -f "$apk_path"
+          test -n "$previous_apk_path"
+          test -f "$previous_apk_path"
           echo "ANDROID_QA_APK_PATH=$apk_path" >> "$GITHUB_ENV"
+          echo "ANDROID_PREVIOUS_QA_APK_PATH=$previous_apk_path" >> "$GITHUB_ENV"
 
       - name: Enable KVM group permissions
         run: |
@@ -186,7 +238,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Boot hardware-accelerated emulator and verify cold start
+      - name: Boot hardware-accelerated emulator and verify cold start plus upgrade
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
@@ -194,9 +246,11 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: bash scripts/android-cold-start-smoke.sh "$ANDROID_QA_APK_PATH"
+          script: |
+            bash scripts/android-cold-start-smoke.sh "$ANDROID_QA_APK_PATH"
+            bash scripts/android-upgrade-smoke.sh "$ANDROID_PREVIOUS_QA_APK_PATH" "$ANDROID_QA_APK_PATH"
 
-      - name: Upload Android launch diagnostics
+      - name: Upload Android launch and upgrade diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -207,5 +261,14 @@ jobs:
             android-pid-after-settle.txt
             android-logcat.txt
             android-jobscheduler.txt
+            android-upgrade-previous-start.txt
+            android-upgrade-previous-pid.txt
+            android-upgrade-before-package.txt
+            android-upgrade-install.txt
+            android-upgrade-after-package.txt
+            android-upgrade-candidate-start.txt
+            android-upgrade-candidate-pid.txt
+            android-upgrade-candidate-pid-after-settle.txt
+            android-upgrade-logcat.txt
           if-no-files-found: ignore
           retention-days: 14
