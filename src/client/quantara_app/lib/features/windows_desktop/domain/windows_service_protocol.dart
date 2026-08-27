@@ -40,6 +40,69 @@ enum WindowsServiceMessageKind {
   }
 }
 
+enum WindowsServiceSafetyState {
+  disarmed,
+  interrupted,
+  reconciliationRequired;
+
+  static WindowsServiceSafetyState parse(String value) {
+    for (final state in values) {
+      if (state.name == value) return state;
+    }
+    throw const WindowsServiceProtocolException(
+      'Unknown Windows service safety state.',
+    );
+  }
+}
+
+/// Typed view of the authenticated read-only service status response.
+///
+/// The native service contract deliberately exposes no entry authority. Any
+/// missing, non-boolean or `true` value therefore fails closed rather than being
+/// interpreted as a capability by the Flutter client.
+final class WindowsServiceStatusSnapshot {
+  const WindowsServiceStatusSnapshot._({
+    required this.requestId,
+    required this.safetyState,
+  });
+
+  factory WindowsServiceStatusSnapshot.fromFrame(WindowsServiceFrame frame) {
+    if (frame.kind != WindowsServiceMessageKind.statusSnapshot) {
+      throw const WindowsServiceProtocolException(
+        'Windows service frame is not a status snapshot.',
+      );
+    }
+
+    final payload = frame.payload;
+    if (payload.length != 2 ||
+        !payload.containsKey('serviceState') ||
+        !payload.containsKey('entryAuthority')) {
+      throw const WindowsServiceProtocolException(
+        'Malformed Windows service status snapshot.',
+      );
+    }
+
+    final serviceState = payload['serviceState'];
+    final entryAuthority = payload['entryAuthority'];
+    if (serviceState is! String || entryAuthority is! bool || entryAuthority) {
+      throw const WindowsServiceProtocolException(
+        'Windows service status snapshot failed closed validation.',
+      );
+    }
+
+    return WindowsServiceStatusSnapshot._(
+      requestId: frame.requestId,
+      safetyState: WindowsServiceSafetyState.parse(serviceState),
+    );
+  }
+
+  final String requestId;
+  final WindowsServiceSafetyState safetyState;
+
+  /// The read-only status protocol never grants entry authority.
+  bool get entryAuthority => false;
+}
+
 final class WindowsServiceFrame {
   WindowsServiceFrame({
     required this.requestId,
