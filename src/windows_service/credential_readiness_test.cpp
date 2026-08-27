@@ -16,22 +16,25 @@ int wmain() {
   std::filesystem::remove_all(root, cleanup_error);
 
   try {
-    if (quantara::EvaluateCredentialReadiness(root) !=
-        quantara::CredentialReadiness::kMissing) {
+    const auto missing = quantara::EvaluateCredentialReadiness(root);
+    if (missing != quantara::CredentialReadiness::kMissing ||
+        quantara::CredentialReadinessRequiresReconciliation(missing)) {
       return 1;
     }
 
     quantara::CredentialVault vault(root);
     vault.Store(L"bitunix-api-key", "test-key");
-    if (quantara::EvaluateCredentialReadiness(root) !=
-        quantara::CredentialReadiness::kIncomplete) {
+    const auto incomplete = quantara::EvaluateCredentialReadiness(root);
+    if (incomplete != quantara::CredentialReadiness::kIncomplete ||
+        !quantara::CredentialReadinessRequiresReconciliation(incomplete)) {
       std::filesystem::remove_all(root, cleanup_error);
       return 2;
     }
 
     vault.Store(L"bitunix-api-secret", "test-secret");
-    if (quantara::EvaluateCredentialReadiness(root) !=
-        quantara::CredentialReadiness::kReady) {
+    const auto ready = quantara::EvaluateCredentialReadiness(root);
+    if (ready != quantara::CredentialReadiness::kReady ||
+        quantara::CredentialReadinessRequiresReconciliation(ready)) {
       std::filesystem::remove_all(root, cleanup_error);
       return 3;
     }
@@ -41,8 +44,9 @@ int wmain() {
     std::ofstream corrupt(corrupt_path, std::ios::binary | std::ios::trunc);
     corrupt << "not-dpapi";
     corrupt.close();
-    if (quantara::EvaluateCredentialReadiness(root) !=
-        quantara::CredentialReadiness::kInvalid) {
+    const auto invalid = quantara::EvaluateCredentialReadiness(root);
+    if (invalid != quantara::CredentialReadiness::kInvalid ||
+        !quantara::CredentialReadinessRequiresReconciliation(invalid)) {
       std::filesystem::remove_all(root, cleanup_error);
       return 4;
     }
