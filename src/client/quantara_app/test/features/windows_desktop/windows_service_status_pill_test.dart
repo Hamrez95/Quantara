@@ -77,18 +77,21 @@ void main() {
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    final reader = readerFor(
-      '{"protocolVersion":1,"requestId":"ui.3","kind":"statusSnapshot","payload":{"serviceState":"disarmed","entryAuthority":false}}',
-    );
+    try {
+      final reader = readerFor(
+        '{"protocolVersion":1,"requestId":"ui.3","kind":"statusSnapshot","payload":{"serviceState":"disarmed","entryAuthority":false}}',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: WindowsServiceStatusPill(reader: reader)),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: WindowsServiceStatusPill(reader: reader)),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.textContaining('Windows service:'), findsNothing);
+      expect(find.textContaining('Windows service:'), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }
