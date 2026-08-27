@@ -26,6 +26,16 @@ on:
         type: string
         required: false
         default: ''
+      include_windows:
+        description: Build, sign and atomically publish the Windows x64 installer
+        type: boolean
+        required: true
+        default: false
+      allow_first_windows_release:
+        description: Explicitly acknowledge first managed Windows publication when no prior Windows manifest exists
+        type: boolean
+        required: true
+        default: false
       release_notes:
         description: Optional notes
         required: false
@@ -45,18 +55,31 @@ env:
   TAG_PREFIX: quantara-v
 
 jobs:
-  release:
+  prepare:
+    name: Prepare immutable release source
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    environment: production
+    timeout-minutes: 15
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      previous_version: ${{ steps.version.outputs.previous_version }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      build_number: ${{ steps.version.outputs.build_number }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Guard canonical source branch
-        run: test "${{ github.ref_name }}" = dev
+      - name: Guard canonical immutable source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.ref_name }}" = dev
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$GITHUB_SHA"
+          echo "source_sha=$actual" >> "$GITHUB_OUTPUT"
 
       - name: Require current dev Android upgrade certification
         env:
@@ -77,11 +100,22 @@ jobs:
           fi
           echo "Certified by Flutter client CI run $certification_run for $GITHUB_SHA."
 
+      - name: Guard optional Windows release configuration
+        if: ${{ inputs.include_windows }}
+        env:
+          EXPECTED_PUBLISHER: ${{ vars.QUANTARA_WINDOWS_PUBLISHER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EXPECTED_PUBLISHER"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Test release version helper
         run: python -m unittest discover -s scripts/release -p 'test_release_version.py' -v
+
       - name: Calculate immutable product version
         id: version
         shell: bash
@@ -93,11 +127,13 @@ jobs:
           printf '%s\n' "$output" >> "$GITHUB_OUTPUT"
           version="$(printf '%s\n' "$output" | sed -n 's/^version=//p')"
           tag="$(printf '%s\n' "$output" | sed -n 's/^tag=//p')"
+          build_number="$(git rev-list --count HEAD)"
           test -n "$version"
           test -n "$tag"
+          test "$build_number" -gt 0
           ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null
           echo "previous_version=$previous" >> "$GITHUB_OUTPUT"
-          echo "build_number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
 
       - name: Guard Android build number against published APKs
         env:
@@ -109,11 +145,51 @@ jobs:
             | python scripts/release/release_manifest.py guard-build \
                 --candidate '${{ steps.version.outputs.build_number }}'
 
+  windows:
+    name: Build verified Windows release artifact
+    needs: prepare
+    if: ${{ inputs.include_windows }}
+    uses: ./.github/workflows/release-windows-artifact.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.source_sha }}
+      version: ${{ needs.prepare.outputs.version }}
+      build_number: ${{ needs.prepare.outputs.build_number }}
+      expected_publisher: ${{ vars.QUANTARA_WINDOWS_PUBLISHER }}
+    secrets:
+      QUANTARA_WINDOWS_PFX_BASE64: ${{ secrets.QUANTARA_WINDOWS_PFX_BASE64 }}
+      QUANTARA_WINDOWS_PFX_PASSWORD: ${{ secrets.QUANTARA_WINDOWS_PFX_PASSWORD }}
+
+  release:
+    name: Publish immutable release
+    needs: [prepare, windows]
+    if: ${{ always() && needs.prepare.result == 'success' && (inputs.include_windows == false || needs.windows.result == 'success') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify immutable publication source
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = '${{ needs.prepare.outputs.source_sha }}'
+          test "$actual" = '$GITHUB_SHA'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+
       - name: Quality gates
         working-directory: ${{ env.APP_DIR }}
         run: |
@@ -130,6 +206,7 @@ jobs:
           test -n "$KEYSTORE_BASE64"
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/quantara.jks"
           chmod 600 "$RUNNER_TEMP/quantara.jks"
+
       - name: Build signed Android and PWA artifacts
         working-directory: ${{ env.APP_DIR }}
         env:
@@ -139,13 +216,13 @@ jobs:
           QUANTARA_ANDROID_KEY_ALIAS: ${{ secrets.QUANTARA_ANDROID_KEY_ALIAS }}
           QUANTARA_ANDROID_KEY_PASSWORD: ${{ secrets.QUANTARA_ANDROID_KEY_PASSWORD }}
         run: |
-          flutter build apk --release --build-name='${{ steps.version.outputs.version }}' --build-number='${{ steps.version.outputs.build_number }}'
-          flutter build appbundle --release --build-name='${{ steps.version.outputs.version }}' --build-number='${{ steps.version.outputs.build_number }}'
-          flutter build web --release --base-href '/Quantara/' --dart-define=APP_VERSION='${{ steps.version.outputs.version }}' --dart-define=APP_COMMIT='${{ github.sha }}'
+          flutter build apk --release --build-name='${{ needs.prepare.outputs.version }}' --build-number='${{ needs.prepare.outputs.build_number }}'
+          flutter build appbundle --release --build-name='${{ needs.prepare.outputs.version }}' --build-number='${{ needs.prepare.outputs.build_number }}'
+          flutter build web --release --base-href '/Quantara/' --dart-define=APP_VERSION='${{ needs.prepare.outputs.version }}' --dart-define=APP_COMMIT='${{ needs.prepare.outputs.source_sha }}'
           mkdir -p release
-          cp build/app/outputs/flutter-apk/app-release.apk "release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.apk"
-          cp build/app/outputs/bundle/release/app-release.aab "release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.aab"
-          (cd build/web && zip -qr "../../release/Quantara-${{ steps.version.outputs.version }}-pwa.zip" .)
+          cp build/app/outputs/flutter-apk/app-release.apk "release/Quantara-${{ needs.prepare.outputs.version }}+${{ needs.prepare.outputs.build_number }}-android.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "release/Quantara-${{ needs.prepare.outputs.version }}+${{ needs.prepare.outputs.build_number }}-android.aab"
+          (cd build/web && zip -qr "../../release/Quantara-${{ needs.prepare.outputs.version }}-pwa.zip" .)
 
       - name: Verify Android identity, signature and artifacts
         id: integrity
@@ -153,8 +230,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apk="release/Quantara-${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}-android.apk"
-          pwa="release/Quantara-${{ steps.version.outputs.version }}-pwa.zip"
+          apk="release/Quantara-${{ needs.prepare.outputs.version }}+${{ needs.prepare.outputs.build_number }}-android.apk"
+          pwa="release/Quantara-${{ needs.prepare.outputs.version }}-pwa.zip"
           apkanalyzer="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
           apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           "$apkanalyzer" manifest application-id "$apk" | grep -Fxq com.quantara.quantara_app
@@ -165,7 +242,6 @@ jobs:
           echo "android_sha256=$(sha256sum "$apk" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "pwa_sha256=$(sha256sum "$pwa" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "android_signing_identity=$signer" >> "$GITHUB_OUTPUT"
-          (cd release && sha256sum * > SHA256SUMS.txt)
 
       - name: Guard Android identity against previous published release
         working-directory: ${{ env.APP_DIR }}
@@ -190,6 +266,55 @@ jobs:
             echo 'No prior channel release-manifest.json exists; signer continuity starts with this managed release.'
           fi
 
+      - name: Download signed Windows installer
+        if: ${{ inputs.include_windows }}
+        uses: actions/download-artifact@v4
+        with:
+          name: quantara-windows-release-${{ needs.prepare.outputs.source_sha }}
+          path: ${{ env.APP_DIR }}/release
+
+      - name: Verify Windows artifact and publisher continuity
+        if: ${{ inputs.include_windows }}
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          filename='${{ needs.windows.outputs.artifact_filename }}'
+          expected_sha='${{ needs.windows.outputs.sha256 }}'
+          signing_identity='${{ needs.windows.outputs.signing_identity }}'
+          installer="release/$filename"
+          test -n "$filename"
+          test -n "$expected_sha"
+          test -n "$signing_identity"
+          test -s "$installer"
+          actual_sha="$(sha256sum "$installer" | awk '{print $1}')"
+          test "$actual_sha" = "$expected_sha"
+
+          if [ '${{ inputs.channel }}' = beta ]; then
+            manifest_url="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq 'map(select(.draft == false and .prerelease == true and any(.assets[]?; .name == "release-manifest.json")))[0].assets | map(select(.name == "release-manifest.json"))[0].browser_download_url // ""')"
+          else
+            manifest_url="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq 'map(select(.draft == false and .prerelease == false and any(.assets[]?; .name == "release-manifest.json")))[0].assets | map(select(.name == "release-manifest.json"))[0].browser_download_url // ""')"
+          fi
+
+          previous_manifest="$RUNNER_TEMP/previous-windows-release-manifest.json"
+          if [ -n "$manifest_url" ]; then
+            curl --fail --location --proto '=https' --tlsv1.2 "$manifest_url" --output "$previous_manifest"
+          else
+            printf '%s\n' '{"artifacts":{}}' > "$previous_manifest"
+          fi
+
+          guard_args=(
+            --previous-manifest "$previous_manifest"
+            --windows-signing-identity "$signing_identity"
+            --windows-architecture x64
+          )
+          if [ '${{ inputs.allow_first_windows_release }}' = true ]; then
+            guard_args+=(--allow-first-windows-release)
+          fi
+          python ../../../scripts/release/windows_release_guard.py "${guard_args[@]}"
+
       - name: Generate machine-readable update manifest
         working-directory: ${{ env.APP_DIR }}
         env:
@@ -200,56 +325,87 @@ jobs:
           set -euo pipefail
           manifest_channel=stable
           if [ '${{ inputs.channel }}' = beta ]; then manifest_channel=canary; fi
-          tag='${{ steps.version.outputs.tag }}'
-          version='${{ steps.version.outputs.version }}'
-          build='${{ steps.version.outputs.build_number }}'
+          tag='${{ needs.prepare.outputs.tag }}'
+          version='${{ needs.prepare.outputs.version }}'
+          build='${{ needs.prepare.outputs.build_number }}'
           base_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/$tag"
           published_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          python ../../../scripts/release/release_manifest.py manifest \
-            --channel "$manifest_channel" \
-            --version "$version" \
-            --build-number "$build" \
-            --published-at "$published_at" \
-            --minimum-supported-version '${{ steps.version.outputs.previous_version }}' \
-            --release-notes "$RELEASE_NOTES" \
-            --rollout-percent '${{ inputs.rollout_percent }}' \
-            --revoked-builds "$REVOKED_BUILDS" \
-            --android-url "$base_url/Quantara-$version+$build-android.apk" \
-            --android-sha256 '${{ steps.integrity.outputs.android_sha256 }}' \
-            --android-package-id com.quantara.quantara_app \
-            --android-signing-identity '${{ steps.integrity.outputs.android_signing_identity }}' \
-            --pwa-url "$base_url/Quantara-$version-pwa.zip" \
-            --pwa-sha256 '${{ steps.integrity.outputs.pwa_sha256 }}' \
+
+          manifest_args=(
+            manifest
+            --channel "$manifest_channel"
+            --version "$version"
+            --build-number "$build"
+            --published-at "$published_at"
+            --minimum-supported-version '${{ needs.prepare.outputs.previous_version }}'
+            --release-notes "$RELEASE_NOTES"
+            --rollout-percent '${{ inputs.rollout_percent }}'
+            --revoked-builds "$REVOKED_BUILDS"
+            --android-url "$base_url/Quantara-$version+$build-android.apk"
+            --android-sha256 '${{ steps.integrity.outputs.android_sha256 }}'
+            --android-package-id com.quantara.quantara_app
+            --android-signing-identity '${{ steps.integrity.outputs.android_signing_identity }}'
+            --pwa-url "$base_url/Quantara-$version-pwa.zip"
+            --pwa-sha256 '${{ steps.integrity.outputs.pwa_sha256 }}'
             --output release/release-manifest.json
+          )
+
+          if [ '${{ inputs.include_windows }}' = true ]; then
+            manifest_args+=(
+              --windows-url "$base_url/${{ needs.windows.outputs.artifact_filename }}"
+              --windows-sha256 '${{ needs.windows.outputs.sha256 }}'
+              --windows-signing-identity '${{ needs.windows.outputs.signing_identity }}'
+              --windows-architecture x64
+            )
+          fi
+
+          python ../../../scripts/release/release_manifest.py "${manifest_args[@]}"
           python -m json.tool release/release-manifest.json >/dev/null
+          (cd release && rm -f SHA256SUMS.txt && sha256sum * > SHA256SUMS.txt)
 
       - name: Release summary
+        shell: bash
         run: |
+          set -euo pipefail
+          platforms='Android (signed APK/AAB), PWA archive'
+          windows_state='not included'
+          if [ '${{ inputs.include_windows }}' = true ]; then
+            platforms="$platforms, Windows x64 signed installer"
+            windows_state="included; Authenticode signer and SHA-256 verified"
+          fi
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           ## Quantara release candidate
-          - Source: `dev` @ `${{ github.sha }}`
-          - Previous app version: `${{ steps.version.outputs.previous_version }}`
-          - Version: `${{ steps.version.outputs.version }}+${{ steps.version.outputs.build_number }}`
-          - Tag: `${{ steps.version.outputs.tag }}`
-          - Platforms: Android (signed APK/AAB), PWA archive
-          - Android upgrade compatibility: same canonical package/signer required; minimum supported version `${{ steps.version.outputs.previous_version }}`
-          - Current-dev certification: exact commit must have passed Flutter client CI including API 34/35/36 upgrade matrix
-          - Update manifest: `release-manifest.json` published atomically with release artifacts
+          - Source: `dev` @ `${{ needs.prepare.outputs.source_sha }}`
+          - Previous app version: `${{ needs.prepare.outputs.previous_version }}`
+          - Version: `${{ needs.prepare.outputs.version }}+${{ needs.prepare.outputs.build_number }}`
+          - Tag: `${{ needs.prepare.outputs.tag }}`
+          - Platforms: $platforms
+          - Android upgrade compatibility: same canonical package/signer required; minimum supported version `${{ needs.prepare.outputs.previous_version }}`
+          - Current-dev certification: exact commit passed Flutter client CI including API 34/35/36 upgrade matrix before release
+          - Update manifest: `release-manifest.json` is generated only after all selected artifacts pass integrity/identity gates
           - Staged rollout eligibility: `${{ inputs.rollout_percent }}%`
           - Emergency revocation: optional older build list; clients recover only through a newer signed/checksummed artifact
-          - Windows/iOS: not built or verified
+          - Windows: $windows_state
+          - iOS: not built or verified
           EOF
+
       - name: Publish immutable GitHub release
         working-directory: ${{ env.APP_DIR }}
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
           prerelease=''
           if [ '${{ inputs.channel }}' = beta ]; then prerelease='--prerelease'; fi
-          gh release create '${{ steps.version.outputs.tag }}' release/* \
-            --target '${{ github.sha }}' --title "Quantara ${{ steps.version.outputs.version }}" $prerelease \
-            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ steps.version.outputs.previous_version }}.\nStaged rollout eligibility: ${{ inputs.rollout_percent }}%.\nEmergency revocation recovery is forward-only through this signed/checksummed release.\nPlatforms: signed Android APK/AAB, PWA archive."
-      - name: Remove temporary key
+          platforms='signed Android APK/AAB, PWA archive'
+          if [ '${{ inputs.include_windows }}' = true ]; then
+            platforms="$platforms, signed Windows x64 installer"
+          fi
+          gh release create '${{ needs.prepare.outputs.tag }}' release/* \
+            --target '${{ needs.prepare.outputs.source_sha }}' --title "Quantara ${{ needs.prepare.outputs.version }}" $prerelease \
+            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ needs.prepare.outputs.build_number }}\nCommit: ${{ needs.prepare.outputs.source_sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ needs.prepare.outputs.previous_version }}.\nStaged rollout eligibility: ${{ inputs.rollout_percent }}%.\nEmergency revocation recovery is forward-only through this signed/checksummed release.\nPlatforms: $platforms."
+
+      - name: Remove temporary Android signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/quantara.jks"
