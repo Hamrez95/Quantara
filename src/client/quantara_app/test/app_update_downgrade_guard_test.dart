@@ -80,6 +80,20 @@ void main() {
     expect(controller.error, contains('current build'));
   });
 
+  test('rejects lower build even when semantic version is newer', () async {
+    final controller = controllerFor(
+      currentVersion: '1.2.0',
+      currentBuild: 126,
+      publishedVersion: '1.3.0',
+      publishedBuild: 125,
+    );
+    addTearDown(controller.dispose);
+
+    expect(await controller.check(), isFalse);
+    expect(controller.result, isNull);
+    expect(controller.error, contains('current build'));
+  });
+
   test('allows a newer semantic version with a monotonic build', () async {
     final controller = controllerFor(
       currentVersion: '1.2.0',
