@@ -4,6 +4,8 @@ project(quantara_windows_service LANGUAGES CXX)
 
 add_executable(quantara_windows_service
   main.cpp
+  credential_readiness.cpp
+  credential_readiness.h
   credential_vault.cpp
   credential_vault.h
   ipc_request_protocol.cpp
@@ -107,6 +109,27 @@ target_compile_options(quantara_windows_service_credential_vault_test PRIVATE
   /permissive-
 )
 target_link_libraries(quantara_windows_service_credential_vault_test PRIVATE advapi32 crypt32)
+
+add_executable(quantara_windows_service_credential_readiness_test
+  credential_readiness.cpp
+  credential_readiness.h
+  credential_readiness_test.cpp
+  credential_vault.cpp
+  credential_vault.h
+)
+target_compile_features(quantara_windows_service_credential_readiness_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_credential_readiness_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_credential_readiness_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
+target_link_libraries(quantara_windows_service_credential_readiness_test PRIVATE advapi32 crypt32)
 
 add_executable(quantara_windows_service_response_test
   ipc_request_protocol.cpp
