@@ -102,7 +102,10 @@ void main() {
     expect(requests, 1);
     expect(find.text('A new version is available.'), findsOneWidget);
     expect(find.text('Safer update flow.'), findsOneWidget);
-    expect(find.byKey(const ValueKey('app-update-artifact-metadata')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('app-update-artifact-metadata')),
+      findsOneWidget,
+    );
     expect(find.text('Latest version: 1.3.0 (130)'), findsOneWidget);
     expect(find.text('Package: com.quantara.quantara_app'), findsOneWidget);
     expect(find.text('Signer: release-cert'), findsOneWidget);
