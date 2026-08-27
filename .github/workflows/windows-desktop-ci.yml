@@ -52,7 +52,31 @@ jobs:
 
       - name: Build fail-closed Windows service host
         shell: pwsh
-        run: ./scripts/build-windows-service.ps1 -Configuration Release
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipTests
+
+      - name: Test Windows service host
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter service
+
+      - name: Test Windows credential vault
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter credential
+
+      - name: Test Windows status response
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter response
+
+      - name: Test Windows authenticated session
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter session
+
+      - name: Test Windows read-only listener
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter listener
+
+      - name: Test Windows network recovery
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter network
 
       - name: Prepare existing service for upgrade
         shell: powershell
