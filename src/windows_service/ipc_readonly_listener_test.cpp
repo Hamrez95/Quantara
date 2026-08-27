@@ -50,10 +50,13 @@ int wmain() {
 
   std::atomic<quantara::ServiceSafetyState> safety_state{
       quantara::ServiceSafetyState::kDisarmed};
+  std::atomic<quantara::CredentialReadiness> credential_readiness{
+      quantara::CredentialReadiness::kReady};
   std::atomic<bool> listener_ok{false};
   std::thread listener([&]() {
     listener_ok.store(quantara::RunReadOnlyStatusListener(
-                          stop_event, pipe_name, safety_state, ready_event),
+                          stop_event, pipe_name, safety_state,
+                          credential_readiness, ready_event),
                       std::memory_order_relaxed);
   });
 
