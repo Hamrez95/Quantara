@@ -1,0 +1,30 @@
+name: Format probe
+
+on:
+  push:
+    branches:
+      - 'feat/80-windows-status-snapshot-contract-v2'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Print formatter diff
+        shell: bash
+        run: |
+          dart format test/features/windows_desktop/windows_service_status_snapshot_test.dart
+          git diff -- test/features/windows_desktop/windows_service_status_snapshot_test.dart
