@@ -1,8 +1,10 @@
 // Keep stable public named constructor parameters while storing dependencies privately.
 // ignore_for_file: prefer_initializing_formals
 
+import '../../windows_desktop/data/platform_windows_service_status_command.dart';
 import '../data/app_update_download_verifier.dart';
 import '../domain/app_update_models.dart';
+import 'windows_service_update_preflight.dart';
 
 final class AppUpdateInstallException implements Exception {
   const AppUpdateInstallException(this.message);
@@ -21,18 +23,23 @@ abstract interface class AppUpdateInstallerGateway {
 /// native installer handoff.
 ///
 /// The caller must provide an explicit user confirmation for each attempt.
-/// PWA artifacts never enter the native installer path. The gateway receives
-/// bytes only after package/signing preflight and SHA-256 verification have
-/// succeeded in [AppUpdateDownloadVerifier].
+/// PWA artifacts never enter the native installer path. Windows additionally
+/// requires an authenticated, explicitly disarmed service before any artifact
+/// download begins. The gateway receives bytes only after package/signing
+/// preflight and SHA-256 verification have succeeded in
+/// [AppUpdateDownloadVerifier].
 final class AppUpdateInstallCoordinator {
   AppUpdateInstallCoordinator({
     required AppUpdateDownloadVerifier verifier,
     required AppUpdateInstallerGateway installerGateway,
+    WindowsServiceUpdatePreflight? windowsServicePreflight,
   }) : _verifier = verifier,
-       _installerGateway = installerGateway;
+       _installerGateway = installerGateway,
+       _windowsServicePreflight = windowsServicePreflight;
 
   final AppUpdateDownloadVerifier _verifier;
   final AppUpdateInstallerGateway _installerGateway;
+  final WindowsServiceUpdatePreflight? _windowsServicePreflight;
 
   Future<void> downloadVerifyAndHandoff({
     required AppReleaseArtifact artifact,
@@ -47,6 +54,18 @@ final class AppUpdateInstallCoordinator {
       throw const AppUpdateInstallException(
         'PWA updates must use the service-worker update flow.',
       );
+    }
+    if (artifact.platform == AppReleasePlatform.windows) {
+      final preflight =
+          _windowsServicePreflight ??
+          WindowsServiceUpdatePreflight(
+            reader: createPlatformWindowsServiceStatusReader(),
+          );
+      try {
+        await preflight.assertSafeForInstallerHandoff();
+      } on WindowsServiceUpdatePreflightException catch (error) {
+        throw AppUpdateInstallException(error.message);
+      }
     }
 
     final verified = await _verifier.downloadAndVerify(artifact);
