@@ -1,6 +1,7 @@
 #include "bitunix_https_readonly_transport.h"
 
 #include <iostream>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -55,6 +56,24 @@ int main() {
                "Fragments must fail closed.");
 
   mutated = valid;
+  mutated.resource =
+      "/api/v1/futures/position/get_pending_positions?evil=BTCUSDT";
+  ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
+               "Unknown query keys must fail closed at the transport boundary.");
+
+  mutated = valid;
+  mutated.resource =
+      "/api/v1/futures/position/get_pending_positions?symbol=BTCUSDT&symbol=ETHUSDT";
+  ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
+               "Duplicate query keys must fail closed at the transport boundary.");
+
+  mutated = valid;
+  mutated.resource =
+      "/api/v1/futures/position/get_pending_positions?symbol=BTC%2GUSDT";
+  ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
+               "Malformed percent encoding must fail closed.");
+
+  mutated = valid;
   mutated.headers.pop_back();
   ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
                "Missing required headers must fail closed.");
@@ -69,6 +88,21 @@ int main() {
   ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
                "Header injection must fail closed.");
 
+  mutated = valid;
+  mutated.headers[2].second = "not-a-timestamp";
+  ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
+               "Malformed timestamps must fail closed.");
+
+  mutated = valid;
+  mutated.headers[3].second = "not-a-signature";
+  ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
+               "Malformed signatures must fail closed.");
+
+  mutated = valid;
+  mutated.headers[4].second = "text/plain";
+  ok &= Expect(!quantara::ValidateBitunixHttpsReadOnlyEnvelope(mutated),
+               "Content type mutation must fail closed.");
+
   quantara::BitunixHttpsReadOnlyLimits invalid_limits;
   invalid_limits.max_body_bytes = 0;
   ok &= Expect(!quantara::ExecuteBitunixHttpsReadOnly(valid, invalid_limits).has_value(),
@@ -78,6 +112,12 @@ int main() {
   invalid_limits.receive_timeout_ms = 0;
   ok &= Expect(!quantara::ExecuteBitunixHttpsReadOnly(valid, invalid_limits).has_value(),
                "Zero receive timeout must fail before network I/O.");
+
+  invalid_limits = {};
+  invalid_limits.connect_timeout_ms =
+      static_cast<unsigned long>((std::numeric_limits<int>::max)()) + 1UL;
+  ok &= Expect(!quantara::ExecuteBitunixHttpsReadOnly(valid, invalid_limits).has_value(),
+               "Timeouts that cannot be represented by WinHTTP must fail before I/O.");
 
   if (!ok) return 1;
   std::cout << "Bitunix HTTPS read-only transport boundary tests passed.\n";
