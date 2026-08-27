@@ -7,8 +7,9 @@
 
 namespace quantara {
 
-bool ProcessAuthenticatedReadOnlyFrame(HANDLE pipe, ServiceSafetyState state,
-                                       RequestReplayGuard& replay_guard) noexcept {
+bool ProcessAuthenticatedReadOnlyFrame(
+    HANDLE pipe, ServiceSafetyState state, CredentialReadiness credential_readiness,
+    RequestReplayGuard& replay_guard) noexcept {
   try {
     std::vector<std::uint8_t> message;
     if (!ReadAuthenticatedLocalMessage(pipe, message)) {
@@ -20,7 +21,8 @@ bool ProcessAuthenticatedReadOnlyFrame(HANDLE pipe, ServiceSafetyState state,
       return false;
     }
 
-    const auto response = EncodeCanonicalReadOnlyResponse(*request, state);
+    const auto response =
+        EncodeCanonicalReadOnlyResponse(*request, state, credential_readiness);
     if (!response.has_value()) {
       return false;
     }

@@ -12,6 +12,8 @@ constexpr std::string_view kHandshakeSuffix =
     "\",\"kind\":\"handshake\",\"payload\":{}}";
 constexpr std::string_view kStatusSuffix =
     "\",\"kind\":\"statusRequest\",\"payload\":{}}";
+constexpr std::string_view kCredentialReadinessSuffix =
+    "\",\"kind\":\"credentialReadinessRequest\",\"payload\":{}}";
 
 bool IsSafeRequestId(std::string_view value) noexcept {
   if (value.empty() || value.size() > 64) {
@@ -58,8 +60,13 @@ std::optional<ReadOnlyRequest> DecodeCanonicalReadOnlyRequest(
                              ReadOnlyRequestKind::kHandshake)) {
       return handshake;
     }
-    return DecodeWithSuffix(text, kStatusSuffix,
-                            ReadOnlyRequestKind::kStatusRequest);
+    if (const auto status =
+            DecodeWithSuffix(text, kStatusSuffix,
+                             ReadOnlyRequestKind::kStatusRequest)) {
+      return status;
+    }
+    return DecodeWithSuffix(text, kCredentialReadinessSuffix,
+                            ReadOnlyRequestKind::kCredentialReadinessRequest);
   } catch (...) {
     return std::nullopt;
   }

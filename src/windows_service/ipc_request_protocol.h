@@ -15,6 +15,7 @@ constexpr std::size_t kWindowsServiceMaxFrameBytes = 64 * 1024;
 enum class ReadOnlyRequestKind {
   kHandshake,
   kStatusRequest,
+  kCredentialReadinessRequest,
 };
 
 struct ReadOnlyRequest final {

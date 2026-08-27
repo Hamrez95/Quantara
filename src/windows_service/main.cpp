@@ -26,6 +26,8 @@ constexpr wchar_t kStatusPipeName[] =
 
 std::atomic<quantara::ServiceSafetyState> g_safety_state{
     quantara::ServiceSafetyState::kDisarmed};
+std::atomic<quantara::CredentialReadiness> g_credential_readiness{
+    quantara::CredentialReadiness::kInvalid};
 SERVICE_STATUS_HANDLE g_status_handle = nullptr;
 SERVICE_STATUS g_status{};
 HANDLE g_stop_event = nullptr;
@@ -54,13 +56,12 @@ quantara::ServiceSafetyState SafetyStateForCredentialReadiness(
              : quantara::ServiceSafetyState::kDisarmed;
 }
 
-quantara::ServiceSafetyState CredentialStartupSafetyState() noexcept {
+quantara::CredentialReadiness CredentialStartupReadiness() noexcept {
   const auto root = ProgramDataCredentialRoot();
   if (!root.has_value()) {
-    return quantara::ServiceSafetyState::kReconciliationRequired;
+    return quantara::CredentialReadiness::kInvalid;
   }
-  return SafetyStateForCredentialReadiness(
-      quantara::EvaluateCredentialReadiness(*root));
+  return quantara::EvaluateCredentialReadiness(*root);
 }
 
 quantara::ServiceSafetyState SafetyStateAfterPowerEvent(
@@ -145,7 +146,10 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   // credentials remain disarmed. Partial/corrupt credential state (or an
   // inability to resolve the protected production vault) requires explicit
   // reconciliation before any future execution layer can be considered.
-  g_safety_state.store(CredentialStartupSafetyState(),
+  const auto credential_readiness = CredentialStartupReadiness();
+  g_credential_readiness.store(credential_readiness,
+                               std::memory_order_relaxed);
+  g_safety_state.store(SafetyStateForCredentialReadiness(credential_readiness),
                        std::memory_order_relaxed);
 
   // Network lifecycle ownership belongs to the service boundary rather than
@@ -164,7 +168,8 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   std::atomic<bool> listener_ok{false};
   std::thread listener([&]() {
     const bool result = quantara::RunReadOnlyStatusListener(
-        g_stop_event, kStatusPipeName, g_safety_state, listener_ready);
+        g_stop_event, kStatusPipeName, g_safety_state, g_credential_readiness,
+        listener_ready);
     listener_ok.store(result, std::memory_order_relaxed);
     if (!result && g_stop_event != nullptr) {
       SetEvent(g_stop_event);
@@ -264,6 +269,19 @@ bool RunIpcProtocolSelfTest() noexcept {
     const auto decoded = quantara::DecodeCanonicalReadOnlyRequest(valid_bytes);
     if (!decoded.has_value() || decoded->request_id != "status-1" ||
         decoded->kind != quantara::ReadOnlyRequestKind::kStatusRequest) {
+      return false;
+    }
+
+    const std::string credential_status =
+        "{\"protocolVersion\":1,\"requestId\":\"credential-1\",\"kind\":\"credentialReadinessRequest\",\"payload\":{}}";
+    const std::vector<std::uint8_t> credential_status_bytes(
+        credential_status.begin(), credential_status.end());
+    const auto credential_decoded =
+        quantara::DecodeCanonicalReadOnlyRequest(credential_status_bytes);
+    if (!credential_decoded.has_value() ||
+        credential_decoded->request_id != "credential-1" ||
+        credential_decoded->kind !=
+            quantara::ReadOnlyRequestKind::kCredentialReadinessRequest) {
       return false;
     }
 

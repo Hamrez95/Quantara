@@ -72,7 +72,7 @@ int wmain() {
   const bool server_ok =
       connection_ok && quantara::ProcessAuthenticatedReadOnlyFrame(
                            pipe, quantara::ServiceSafetyState::kDisarmed,
-                           replay_guard);
+                           quantara::CredentialReadiness::kReady, replay_guard);
 
   FlushFileBuffers(pipe);
   DisconnectNamedPipe(pipe);
