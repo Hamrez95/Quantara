@@ -1,5 +1,7 @@
 #include "credential_readiness.h"
 
+#include <windows.h>
+
 #include <filesystem>
 #include <fstream>
 #include <string>
