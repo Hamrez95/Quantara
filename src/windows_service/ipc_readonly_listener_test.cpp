@@ -36,8 +36,15 @@ int wmain() {
       L"\\\\.\\pipe\\QuantaraExecutionService.listener-self-test." +
       std::to_wstring(GetCurrentProcessId());
   HANDLE stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-  if (stop_event == nullptr) {
-    std::wcerr << L"Could not create listener stop event.\n";
+  HANDLE ready_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (stop_event == nullptr || ready_event == nullptr) {
+    if (stop_event != nullptr) {
+      CloseHandle(stop_event);
+    }
+    if (ready_event != nullptr) {
+      CloseHandle(ready_event);
+    }
+    std::wcerr << L"Could not create listener lifecycle events.\n";
     return 1;
   }
 
@@ -45,12 +52,15 @@ int wmain() {
       quantara::ServiceSafetyState::kDisarmed};
   std::atomic<bool> listener_ok{false};
   std::thread listener([&]() {
-    listener_ok.store(
-        quantara::RunReadOnlyStatusListener(stop_event, pipe_name, safety_state),
-        std::memory_order_relaxed);
+    listener_ok.store(quantara::RunReadOnlyStatusListener(
+                          stop_event, pipe_name, safety_state, ready_event),
+                      std::memory_order_relaxed);
   });
 
-  HANDLE client = ConnectLocalClient(pipe_name);
+  const bool became_ready =
+      WaitForSingleObject(ready_event, 5000) == WAIT_OBJECT_0;
+  HANDLE client = became_ready ? ConnectLocalClient(pipe_name)
+                               : INVALID_HANDLE_VALUE;
   bool client_ok = client != INVALID_HANDLE_VALUE;
   if (client_ok) {
     DWORD message_mode = PIPE_READMODE_MESSAGE;
@@ -90,9 +100,11 @@ int wmain() {
   SetEvent(stop_event);
   CancelSynchronousIo(listener.native_handle());
   listener.join();
+  CloseHandle(ready_event);
   CloseHandle(stop_event);
 
-  if (!client_ok || !listener_ok.load(std::memory_order_relaxed)) {
+  if (!became_ready || !client_ok ||
+      !listener_ok.load(std::memory_order_relaxed)) {
     std::wcerr << L"SCM-safe read-only listener self-test failed.\n";
     return 1;
   }
