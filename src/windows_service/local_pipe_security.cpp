@@ -54,11 +54,37 @@ bool HasWellKnownMembership(HANDLE token, WELL_KNOWN_SID_TYPE sid_type) noexcept
     return false;
   }
 
-  BOOL is_member = FALSE;
-  if (!CheckTokenMembership(token, sid_buffer.data(), &is_member)) {
+  // OpenProcessToken returns a primary token. CheckTokenMembership requires an
+  // impersonation token when a non-null token handle is supplied, so using it
+  // here silently rejects legitimate desktop peers running under a different
+  // account from the LocalSystem service. Read enabled groups directly instead;
+  // this preserves TOKEN_QUERY-only access and the same fail-closed semantics.
+  DWORD required = 0;
+  GetTokenInformation(token, TokenGroups, nullptr, 0, &required);
+  if (required == 0 || GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
     return false;
   }
-  return is_member == TRUE;
+
+  std::vector<BYTE> groups_buffer(required);
+  if (!GetTokenInformation(token, TokenGroups, groups_buffer.data(), required,
+                           &required)) {
+    return false;
+  }
+
+  const auto* groups =
+      reinterpret_cast<const TOKEN_GROUPS*>(groups_buffer.data());
+  for (DWORD index = 0; index < groups->GroupCount; ++index) {
+    const SID_AND_ATTRIBUTES& group = groups->Groups[index];
+    if (group.Sid == nullptr || !IsValidSid(group.Sid)) {
+      continue;
+    }
+    const bool enabled = (group.Attributes & SE_GROUP_ENABLED) != 0;
+    const bool deny_only = (group.Attributes & SE_GROUP_USE_FOR_DENY_ONLY) != 0;
+    if (enabled && !deny_only && EqualSid(group.Sid, sid_buffer.data()) == TRUE) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool ReadTokenUserSid(HANDLE token, std::vector<BYTE>& buffer,
