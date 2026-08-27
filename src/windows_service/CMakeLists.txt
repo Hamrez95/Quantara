@@ -315,3 +315,28 @@ target_compile_options(quantara_windows_service_bitunix_request_authorizer_test 
   /permissive-
 )
 target_link_libraries(quantara_windows_service_bitunix_request_authorizer_test PRIVATE advapi32 bcrypt crypt32)
+
+add_executable(quantara_windows_service_bitunix_readonly_request_test
+  bitunix_readonly_request.cpp
+  bitunix_readonly_request.h
+  bitunix_readonly_request_test.cpp
+  bitunix_request_authorizer.cpp
+  bitunix_request_authorizer.h
+  bitunix_request_signer.cpp
+  bitunix_request_signer.h
+  credential_vault.cpp
+  credential_vault.h
+)
+target_compile_features(quantara_windows_service_bitunix_readonly_request_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_bitunix_readonly_request_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_bitunix_readonly_request_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
+target_link_libraries(quantara_windows_service_bitunix_readonly_request_test PRIVATE advapi32 bcrypt crypt32)
