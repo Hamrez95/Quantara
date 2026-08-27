@@ -170,7 +170,11 @@ int main() {
   for (const auto boundary : {RecoveryLifecycleBoundary::kRestart,
                               RecoveryLifecycleBoundary::kUpdate,
                               RecoveryLifecycleBoundary::kRollback}) {
-    coordinator.Reconcile({Verified(true)});
+    const auto restored = coordinator.Reconcile({Verified(true)});
+    ok &= Expect(
+        restored.mode == ManagementOnlyRecoveryMode::kManageExistingOnly &&
+            coordinator.CanManageExistingPositions(),
+        "Lifecycle-boundary test setup must begin from management-only state.");
     coordinator.MarkLifecycleBoundary(boundary);
     ok &= Expect(coordinator.snapshot().mode ==
                      ManagementOnlyRecoveryMode::kReconciliationRequired &&
