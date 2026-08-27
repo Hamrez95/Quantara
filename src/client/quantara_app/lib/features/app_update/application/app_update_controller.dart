@@ -94,10 +94,25 @@ final class AppUpdateController extends ChangeNotifier {
           'Published update is below the minimum supported version.',
         );
       }
+
+      final versionComparison = _compareVersions(
+        artifact.version,
+        currentVersion,
+      );
+      if (versionComparison < 0) {
+        throw const FormatException(
+          'Published update would downgrade the current app; explicit recovery is required.',
+        );
+      }
+      if (artifact.buildNumber < currentBuildNumber) {
+        throw const FormatException(
+          'Published update would downgrade the current build; explicit recovery is required.',
+        );
+      }
+
       final revoked = manifest.revokedBuilds.contains(currentBuildNumber);
       final newerBuild = artifact.buildNumber > currentBuildNumber;
-      final newerVersion =
-          _compareVersions(artifact.version, currentVersion) > 0;
+      final newerVersion = versionComparison > 0;
       final belowMinimumSupported =
           _compareVersions(currentVersion, manifest.minimumSupportedVersion) <
           0;
