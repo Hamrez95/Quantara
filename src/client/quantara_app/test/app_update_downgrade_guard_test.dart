@@ -36,7 +36,11 @@ void main() {
         'rolloutPercent': 100,
         'revokedBuilds': <int>[],
       });
-      return http.Response(body, 200, headers: {'content-type': 'application/json'});
+      return http.Response(
+        body,
+        200,
+        headers: {'content-type': 'application/json'},
+      );
     });
     return AppUpdateController(
       manifestClient: AppUpdateManifestClient(
@@ -52,19 +56,22 @@ void main() {
     );
   }
 
-  test('rejects lower semantic version even when build number is higher', () async {
-    final controller = controllerFor(
-      currentVersion: '1.2.0',
-      currentBuild: 126,
-      publishedVersion: '1.1.9',
-      publishedBuild: 999,
-    );
-    addTearDown(controller.dispose);
+  test(
+    'rejects lower semantic version even when build number is higher',
+    () async {
+      final controller = controllerFor(
+        currentVersion: '1.2.0',
+        currentBuild: 126,
+        publishedVersion: '1.1.9',
+        publishedBuild: 999,
+      );
+      addTearDown(controller.dispose);
 
-    expect(await controller.check(), isFalse);
-    expect(controller.result, isNull);
-    expect(controller.error, contains('explicit recovery is required'));
-  });
+      expect(await controller.check(), isFalse);
+      expect(controller.result, isNull);
+      expect(controller.error, contains('explicit recovery is required'));
+    },
+  );
 
   test('rejects lower build for the same semantic version', () async {
     final controller = controllerFor(
