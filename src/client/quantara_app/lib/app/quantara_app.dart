@@ -20,6 +20,7 @@ import '../features/owner_alpha/domain/realtime_market_runtime_models.dart';
 import '../features/owner_alpha/presentation/opportunity_discovery_coverage_banner.dart';
 import '../features/owner_alpha/presentation/owner_alpha_page.dart';
 import '../features/portfolio_risk/presentation/portfolio_risk_panel.dart';
+import '../features/windows_desktop/presentation/windows_service_status_pill.dart';
 
 class QuantaraApp extends StatefulWidget {
   const QuantaraApp({
@@ -363,6 +364,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
             OpportunityDiscoveryCoverageBanner(
               coverage: _opportunityDiscoveryCoverage,
             ),
+            const WindowsServiceStatusPill(),
             Expanded(
               child: OwnerAlphaPage(
                 repository: _repository,
