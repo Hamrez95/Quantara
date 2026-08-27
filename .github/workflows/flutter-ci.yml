@@ -67,13 +67,9 @@ jobs:
       - name: Verify formatting
         shell: bash
         run: |
-          set +e
-          dart format --output=none --set-exit-if-changed lib test tool
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            git diff -- lib test tool
-          fi
-          exit "$status"
+          dart format lib/features/app_update/presentation/app_update_card.dart test/app_update_card_test.dart
+          git diff -- lib/features/app_update/presentation/app_update_card.dart test/app_update_card_test.dart
+          exit 1
 
       - name: Analyze
         shell: bash
