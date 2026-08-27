@@ -24,75 +24,71 @@ void main() {
     );
   }
 
-  testWidgets(
-    'shows authenticated disarmed service without entry authority',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          readerFor(
-            '{"protocolVersion":1,"requestId":"ui.1","kind":"statusSnapshot","payload":{"serviceState":"disarmed","entryAuthority":false}}',
-          ),
+  testWidgets('shows authenticated disarmed service without entry authority', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        readerFor(
+          '{"protocolVersion":1,"requestId":"ui.1","kind":"statusSnapshot","payload":{"serviceState":"disarmed","entryAuthority":false}}',
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Windows service: disarmed'), findsOneWidget);
-      expect(find.textContaining('running'), findsNothing);
-    },
-  );
+    expect(find.text('Windows service: disarmed'), findsOneWidget);
+    expect(find.textContaining('running'), findsNothing);
+  });
 
-  testWidgets(
-    'surfaces reconciliation-required state distinctly',
-    (tester) async {
-      await tester.pumpWidget(
-        host(
-          readerFor(
-            '{"protocolVersion":1,"requestId":"ui.2","kind":"statusSnapshot","payload":{"serviceState":"reconciliationRequired","entryAuthority":false}}',
-          ),
+  testWidgets('surfaces reconciliation-required state distinctly', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        readerFor(
+          '{"protocolVersion":1,"requestId":"ui.2","kind":"statusSnapshot","payload":{"serviceState":"reconciliationRequired","entryAuthority":false}}',
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('Windows service: reconcile'), findsOneWidget);
-    },
-  );
+    expect(find.text('Windows service: reconcile'), findsOneWidget);
+  });
 
-  testWidgets(
-    'fails closed when the service response cannot be verified',
-    (tester) async {
-      final reader = WindowsServiceStatusReader(
-        command: () async => const WindowsServiceStatusCommandResult(
-          exitCode: 5,
-          stdout: '',
-          stderr: 'ignored diagnostic',
-        ),
-      );
+  testWidgets('fails closed when the service response cannot be verified', (
+    tester,
+  ) async {
+    final reader = WindowsServiceStatusReader(
+      command: () async => const WindowsServiceStatusCommandResult(
+        exitCode: 5,
+        stdout: '',
+        stderr: 'ignored diagnostic',
+      ),
+    );
 
-      await tester.pumpWidget(host(reader));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(host(reader));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Windows service: unverified'), findsOneWidget);
-      expect(find.byIcon(Icons.shield_outlined), findsOneWidget);
-    },
-  );
+    expect(find.text('Windows service: unverified'), findsOneWidget);
+    expect(find.byIcon(Icons.shield_outlined), findsOneWidget);
+  });
 
-  testWidgets(
-    'does not render on unsupported platforms by default',
-    (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
-      final reader = readerFor(
-        '{"protocolVersion":1,"requestId":"ui.3","kind":"statusSnapshot","payload":{"serviceState":"disarmed","entryAuthority":false}}',
-      );
+  testWidgets('does not render on unsupported platforms by default', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final reader = readerFor(
+      '{"protocolVersion":1,"requestId":"ui.3","kind":"statusSnapshot","payload":{"serviceState":"disarmed","entryAuthority":false}}',
+    );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: WindowsServiceStatusPill(reader: reader)),
-        ),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: WindowsServiceStatusPill(reader: reader)),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Windows service:'), findsNothing);
-    },
-  );
+    expect(find.textContaining('Windows service:'), findsNothing);
+  });
 }
