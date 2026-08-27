@@ -4,7 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$SkipBuild,
     [switch]$SkipTests,
-    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'bitunix-signing', 'bitunix-authorization')]
+    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'bitunix-signing', 'bitunix-authorization', 'bitunix-readonly')]
     [string]$TestFilter = 'all'
 )
 
@@ -74,6 +74,7 @@ $existingPositionManagementPolicyTestExe = Join-Path $buildRoot "$Configuration/
 $managementOnlyRecoveryCoordinatorTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_management_only_recovery_coordinator_test.exe"
 $bitunixRequestSignerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_request_signer_test.exe"
 $bitunixRequestAuthorizerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_request_authorizer_test.exe"
+$bitunixReadOnlyRequestTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_readonly_request_test.exe"
 
 $requiredExecutables = @(
     @{ Path = $serviceExe; Name = 'Windows service executable' },
@@ -89,7 +90,8 @@ $requiredExecutables = @(
     @{ Path = $existingPositionManagementPolicyTestExe; Name = 'existing-position management policy test executable' },
     @{ Path = $managementOnlyRecoveryCoordinatorTestExe; Name = 'management-only recovery coordinator test executable' },
     @{ Path = $bitunixRequestSignerTestExe; Name = 'Bitunix request signer parity test executable' },
-    @{ Path = $bitunixRequestAuthorizerTestExe; Name = 'Bitunix protected request authorizer test executable' }
+    @{ Path = $bitunixRequestAuthorizerTestExe; Name = 'Bitunix protected request authorizer test executable' },
+    @{ Path = $bitunixReadOnlyRequestTestExe; Name = 'Bitunix read-only request contract test executable' }
 )
 foreach ($required in $requiredExecutables) {
     if (-not (Test-Path $required.Path)) {
@@ -112,6 +114,9 @@ if (-not $SkipTests) {
     }
     if ($TestFilter -in @('all', 'service', 'bitunix-authorization')) {
         Invoke-BoundedNativeTest -Path $bitunixRequestAuthorizerTestExe -Name 'quantara_windows_service_bitunix_request_authorizer_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-readonly')) {
+        Invoke-BoundedNativeTest -Path $bitunixReadOnlyRequestTestExe -Name 'quantara_windows_service_bitunix_readonly_request_test'
     }
     if ($TestFilter -in @('all', 'client')) {
         Invoke-BoundedNativeTest -Path $clientExe -Name 'quantara_windows_service_client --self-test' -Arguments @('--self-test')
