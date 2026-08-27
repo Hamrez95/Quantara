@@ -1,14 +1,17 @@
 #include <windows.h>
+#include <ShlObj.h>
 
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <vector>
 
+#include "credential_readiness.h"
 #include "credential_vault.h"
 #include "ipc_readonly_listener.h"
 #include "ipc_request_protocol.h"
@@ -26,6 +29,39 @@ std::atomic<quantara::ServiceSafetyState> g_safety_state{
 SERVICE_STATUS_HANDLE g_status_handle = nullptr;
 SERVICE_STATUS g_status{};
 HANDLE g_stop_event = nullptr;
+
+std::optional<std::filesystem::path> ProgramDataCredentialRoot() noexcept {
+  PWSTR raw_path = nullptr;
+  const HRESULT result =
+      SHGetKnownFolderPath(FOLDERID_ProgramData, KF_FLAG_DEFAULT, nullptr,
+                           &raw_path);
+  if (FAILED(result) || raw_path == nullptr) {
+    if (raw_path != nullptr) {
+      CoTaskMemFree(raw_path);
+    }
+    return std::nullopt;
+  }
+
+  std::filesystem::path root(raw_path);
+  CoTaskMemFree(raw_path);
+  return root / L"Quantara" / L"ServiceCredentials";
+}
+
+quantara::ServiceSafetyState SafetyStateForCredentialReadiness(
+    quantara::CredentialReadiness readiness) noexcept {
+  return quantara::CredentialReadinessRequiresReconciliation(readiness)
+             ? quantara::ServiceSafetyState::kReconciliationRequired
+             : quantara::ServiceSafetyState::kDisarmed;
+}
+
+quantara::ServiceSafetyState CredentialStartupSafetyState() noexcept {
+  const auto root = ProgramDataCredentialRoot();
+  if (!root.has_value()) {
+    return quantara::ServiceSafetyState::kReconciliationRequired;
+  }
+  return SafetyStateForCredentialReadiness(
+      quantara::EvaluateCredentialReadiness(*root));
+}
 
 quantara::ServiceSafetyState SafetyStateAfterPowerEvent(
     DWORD event_type) noexcept {
@@ -105,10 +141,11 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     return;
   }
 
-  // A service start never grants execution authority. IPC is read-only and the
-  // future reconciliation/execution layer must explicitly transition authority
-  // through its own deterministic safety gates.
-  g_safety_state.store(quantara::ServiceSafetyState::kDisarmed,
+  // Credential presence never grants execution authority. Missing or complete
+  // credentials remain disarmed. Partial/corrupt credential state (or an
+  // inability to resolve the protected production vault) requires explicit
+  // reconciliation before any future execution layer can be considered.
+  g_safety_state.store(CredentialStartupSafetyState(),
                        std::memory_order_relaxed);
 
   // Network lifecycle ownership belongs to the service boundary rather than
@@ -329,6 +366,18 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
 }
 
 bool RunSelfTest() noexcept {
+  if (SafetyStateForCredentialReadiness(quantara::CredentialReadiness::kMissing) !=
+          quantara::ServiceSafetyState::kDisarmed ||
+      SafetyStateForCredentialReadiness(quantara::CredentialReadiness::kReady) !=
+          quantara::ServiceSafetyState::kDisarmed ||
+      SafetyStateForCredentialReadiness(
+          quantara::CredentialReadiness::kIncomplete) !=
+          quantara::ServiceSafetyState::kReconciliationRequired ||
+      SafetyStateForCredentialReadiness(quantara::CredentialReadiness::kInvalid) !=
+          quantara::ServiceSafetyState::kReconciliationRequired) {
+    return false;
+  }
+
   g_safety_state.store(quantara::ServiceSafetyState::kDisarmed,
                        std::memory_order_relaxed);
   if (SafetyStateAfterPowerEvent(PBT_APMSUSPEND) !=
