@@ -7,7 +7,7 @@ ServiceSafetyState SafetyStateAfterNetworkChange(
   return ServiceSafetyState::kReconciliationRequired;
 }
 
-VOID CALLBACK NetworkChangeCallback(
+VOID WINAPI NetworkChangeMonitor::NetworkChangeCallback(
     PVOID caller_context, PMIB_IPINTERFACE_ROW /*row*/,
     MIB_NOTIFICATION_TYPE /*notification_type*/) {
   if (caller_context == nullptr) {
@@ -30,7 +30,8 @@ bool NetworkChangeMonitor::Start() noexcept {
 
   HANDLE handle = nullptr;
   const DWORD result = NotifyIpInterfaceChange(
-      AF_UNSPEC, &NetworkChangeCallback, this, FALSE, &handle);
+      AF_UNSPEC, &NetworkChangeMonitor::NetworkChangeCallback, this, FALSE,
+      &handle);
   if (result != NO_ERROR || handle == nullptr) {
     return false;
   }
