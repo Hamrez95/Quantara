@@ -24,6 +24,7 @@ marker_value="upgrade-retention-${RANDOM}-${RANDOM}"
 # Create it as the app UID before writing the retention sentinel so the test
 # measures package-manager data retention rather than first-run directory timing.
 adb shell run-as "$ANDROID_PACKAGE" mkdir -p files
+adb shell run-as "$ANDROID_PACKAGE" test -d files
 adb shell run-as "$ANDROID_PACKAGE" sh -c "printf '%s' '$marker_value' > files/$marker_name"
 actual_before="$(adb shell run-as "$ANDROID_PACKAGE" cat "files/$marker_name" | tr -d '\r')"
 test "$actual_before" = "$marker_value"
