@@ -76,15 +76,34 @@ jobs:
             $rsa.Dispose()
           }
 
+      - name: Build unsigned PE fixture
+        id: fixture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP 'quantara-signing-fixture'
+          dotnet new console --force --output $fixtureRoot | Out-Host
+          dotnet build $fixtureRoot --configuration Release --nologo | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "Unsigned PE fixture build failed: $LASTEXITCODE" }
+          $candidate = Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'bin\Release') -Filter '*.exe' -Recurse |
+            Select-Object -First 1
+          if ($null -eq $candidate) { throw 'Unsigned PE fixture executable was not produced.' }
+          $signature = Get-AuthenticodeSignature -FilePath $candidate.FullName
+          if ($signature.Status -ne 'NotSigned') {
+            throw "Unsigned PE fixture unexpectedly has signature status $($signature.Status)."
+          }
+          "path=$($candidate.FullName)" >> $env:GITHUB_OUTPUT
+
       - name: Reject a mismatched publisher before signing
         shell: pwsh
         env:
           PFX_PATH: ${{ steps.certificate.outputs.pfx }}
           PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+          UNSIGNED_PE: ${{ steps.fixture.outputs.path }}
         run: |
           $ErrorActionPreference = 'Stop'
           $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe'
-          Copy-Item "$env:WINDIR\System32\where.exe" $candidate
+          Copy-Item $env:UNSIGNED_PE $candidate
           $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
           try {
             ./scripts/sign-windows-release.ps1 `
@@ -107,10 +126,11 @@ jobs:
           PFX_PATH: ${{ steps.certificate.outputs.pfx }}
           PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
           EXPECTED_SUBJECT: ${{ steps.certificate.outputs.subject }}
+          UNSIGNED_PE: ${{ steps.fixture.outputs.path }}
         run: |
           $ErrorActionPreference = 'Stop'
           $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningUntrusted.exe'
-          Copy-Item "$env:WINDIR\System32\where.exe" $candidate
+          Copy-Item $env:UNSIGNED_PE $candidate
           $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
           $rejected = $false
           try {
@@ -158,6 +178,7 @@ jobs:
         shell: pwsh
         run: |
           Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.pfx') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-signing-fixture') -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe') -Force -ErrorAction SilentlyContinue
           Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningUntrusted.exe') -Force -ErrorAction SilentlyContinue
           Remove-Item (Join-Path $env:RUNNER_TEMP 'not-an-installer.txt') -Force -ErrorAction SilentlyContinue
