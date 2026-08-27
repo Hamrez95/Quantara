@@ -42,6 +42,39 @@ def require_monotonic_build(candidate: int, asset_names: list[str]) -> int:
     return previous
 
 
+def parse_revoked_builds(value: str, *, candidate_build: int) -> list[int]:
+    """Parse an explicit emergency revocation list for forward recovery.
+
+    Revocation never authorizes a downgrade. The newly published candidate must
+    remain newer than every revoked build so affected installations recover by
+    moving forward through the normal signed/checksummed update path.
+    """
+
+    raw = value.strip()
+    if not raw:
+        return []
+
+    revoked: set[int] = set()
+    for token in raw.split(","):
+        normalized = token.strip()
+        if not normalized or not normalized.isascii() or not normalized.isdigit():
+            raise ValueError(
+                "Revoked builds must be a comma-separated list of positive integers."
+            )
+        build = int(normalized)
+        if build < 1:
+            raise ValueError("Revoked build numbers must be positive.")
+        if build >= candidate_build:
+            raise ValueError(
+                "A revoked build must be older than the forward-recovery candidate."
+            )
+        if build in revoked:
+            raise ValueError("Revoked build numbers must be unique.")
+        revoked.add(build)
+
+    return sorted(revoked)
+
+
 def _normalized_identity(value: str) -> str:
     normalized = value.strip().lower().replace(":", "")
     if not normalized:
@@ -115,6 +148,10 @@ def build_manifest(args: argparse.Namespace) -> dict[str, object]:
     if not args.android_package_id.strip() or not args.android_signing_identity.strip():
         raise ValueError("Android identity metadata is required.")
 
+    revoked_builds = parse_revoked_builds(
+        getattr(args, "revoked_builds", ""), candidate_build=args.build_number
+    )
+
     return {
         "schemaVersion": 1,
         "channel": args.channel,
@@ -123,7 +160,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, object]:
         "mandatory": False,
         "releaseNotes": {"en": args.release_notes.strip()},
         "rolloutPercent": args.rollout_percent,
-        "revokedBuilds": [],
+        "revokedBuilds": revoked_builds,
         "artifacts": {
             "android": {
                 "version": args.version.strip(),
@@ -163,6 +200,7 @@ def _parser() -> argparse.ArgumentParser:
     manifest.add_argument("--minimum-supported-version", required=True)
     manifest.add_argument("--release-notes", default="")
     manifest.add_argument("--rollout-percent", type=int, default=100)
+    manifest.add_argument("--revoked-builds", default="")
     manifest.add_argument("--android-url", required=True)
     manifest.add_argument("--android-sha256", required=True)
     manifest.add_argument("--android-package-id", required=True)
