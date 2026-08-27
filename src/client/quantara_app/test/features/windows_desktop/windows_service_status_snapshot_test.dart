@@ -67,7 +67,8 @@ void main() {
 
     for (final payload in payloads) {
       expect(
-        () => WindowsServiceStatusSnapshot.fromFrame(frameWithPayload(payload)),
+        () =>
+            WindowsServiceStatusSnapshot.fromFrame(frameWithPayload(payload)),
         throwsA(isA<WindowsServiceProtocolException>()),
       );
     }
