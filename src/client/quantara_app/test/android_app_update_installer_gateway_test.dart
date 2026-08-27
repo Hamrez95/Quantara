@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/app_update/application/android_app_update_installer_gateway.dart';
 import 'package:quantara_app/features/app_update/application/app_update_install_coordinator.dart';
@@ -134,6 +135,109 @@ void main() {
 
     expect(persistedPath, isNotNull);
     expect(await File(persistedPath!).exists(), isFalse);
+  });
+
+  test('preserves safe Android installer policy diagnostic', () async {
+    String? persistedPath;
+    final gateway = AndroidAppUpdateInstallerGateway(
+      isAndroid: true,
+      temporaryDirectoryProvider: () async => tempDirectory,
+      handoffInvoker: (path) async {
+        persistedPath = path;
+        throw const PlatformException(
+          code: 'install_permission_required',
+          message: 'native detail that must not leak',
+          details: 'private native detail',
+        );
+      },
+    );
+
+    await expectLater(
+      gateway.handoff(_download()),
+      throwsA(
+        isA<AppUpdateInstallException>()
+            .having(
+              (error) => error.message,
+              'category',
+              contains('installer policy requires permission'),
+            )
+            .having(
+              (error) => error.message,
+              'native message',
+              isNot(contains('native detail')),
+            )
+            .having(
+              (error) => error.message,
+              'native details',
+              isNot(contains('private native detail')),
+            ),
+      ),
+    );
+
+    expect(persistedPath, isNotNull);
+    expect(await File(persistedPath!).exists(), isFalse);
+  });
+
+  test('maps blocked installer handoff to a safe policy category', () async {
+    final gateway = AndroidAppUpdateInstallerGateway(
+      isAndroid: true,
+      temporaryDirectoryProvider: () async => tempDirectory,
+      handoffInvoker: (path) async {
+        throw const PlatformException(code: 'installer_blocked');
+      },
+    );
+
+    await expectLater(
+      gateway.handoff(_download()),
+      throwsA(
+        isA<AppUpdateInstallException>().having(
+          (error) => error.message,
+          'category',
+          contains('installer policy blocked'),
+        ),
+      ),
+    );
+  });
+
+  test('unknown platform diagnostics stay fail-closed and sanitized', () async {
+    final gateway = AndroidAppUpdateInstallerGateway(
+      isAndroid: true,
+      temporaryDirectoryProvider: () async => tempDirectory,
+      handoffInvoker: (path) async {
+        throw const PlatformException(
+          code: 'vendor_sensitive_code',
+          message: 'secret native message',
+          details: {'token': 'do-not-log'},
+        );
+      },
+    );
+
+    await expectLater(
+      gateway.handoff(_download()),
+      throwsA(
+        isA<AppUpdateInstallException>()
+            .having(
+              (error) => error.message,
+              'category',
+              contains('unknown platform diagnostic'),
+            )
+            .having(
+              (error) => error.message,
+              'code',
+              isNot(contains('vendor_sensitive_code')),
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              isNot(contains('secret native message')),
+            )
+            .having(
+              (error) => error.message,
+              'details',
+              isNot(contains('do-not-log')),
+            ),
+      ),
+    );
   });
 
   test('removes stale cached APKs before persisting the next build', () async {
