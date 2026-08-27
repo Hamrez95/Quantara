@@ -47,7 +47,12 @@ jobs:
         run: dotnet restore Quantara.sln
 
       - name: Verify whitespace formatting
-        run: dotnet format whitespace Quantara.sln --verify-no-changes --no-restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOTNET_HOST_PATH="$(command -v dotnet)"
+          test -x "$DOTNET_HOST_PATH"
+          dotnet format whitespace Quantara.sln --verify-no-changes --no-restore
 
       - name: Build
         shell: bash
