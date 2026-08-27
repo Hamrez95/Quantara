@@ -1,0 +1,187 @@
+name: Build signed Windows release artifact
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact Quantara source commit to build
+        required: true
+        type: string
+      version:
+        description: Product version without build metadata
+        required: true
+        type: string
+      build_number:
+        description: Monotonic product build number
+        required: true
+        type: string
+      expected_publisher:
+        description: Exact Authenticode certificate subject expected for publication
+        required: true
+        type: string
+    secrets:
+      windows_pfx_base64:
+        required: true
+      windows_pfx_password:
+        required: true
+    outputs:
+      sha256:
+        description: SHA-256 of the signed installer
+        value: ${{ jobs.windows.outputs.sha256 }}
+      signing_identity:
+        description: Verified Authenticode signer subject
+        value: ${{ jobs.windows.outputs.signing_identity }}
+      artifact_filename:
+        description: Canonical signed installer filename
+        value: ${{ jobs.windows.outputs.artifact_filename }}
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.44.8'
+  APP_DIR: src/client/quantara_app
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    outputs:
+      sha256: ${{ steps.sign.outputs.sha256 }}
+      signing_identity: ${{ steps.sign.outputs.signing_identity }}
+      artifact_filename: ${{ steps.package.outputs.artifact_filename }}
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact source commit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne '${{ inputs.source_sha }}') {
+            throw "Windows release checkout drifted. Expected ${{ inputs.source_sha }}, got $actual."
+          }
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build fail-closed Windows service host
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release
+
+      - name: Build native Windows application
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -Configuration Release -GenerateRunner
+
+      - name: Ensure Inno Setup compiler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+            choco install innosetup --no-progress -y
+          }
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+            throw 'Inno Setup compiler is unavailable after installation.'
+          }
+
+      - name: Build unsigned installer candidate
+        id: package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          $buildRoot = (Resolve-Path '${{ env.APP_DIR }}/build/windows/x64/runner/Release').Path
+          $serviceBuildRoot = (Resolve-Path 'build/windows-service/Release').Path
+          $outputDir = Join-Path $PWD 'dist/windows-release'
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+          & $iscc "/DMyAppVersion=${{ inputs.version }}" "/DMyAppBuildRoot=$buildRoot" "/DMyServiceBuildRoot=$serviceBuildRoot" "/DMyOutputDir=$outputDir" 'installer/windows/Quantara.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+          $candidate = Get-ChildItem -LiteralPath $outputDir -Filter 'QuantaraSetup-*.exe' | Select-Object -First 1
+          if ($null -eq $candidate) {
+            throw 'Windows installer candidate was not produced.'
+          }
+          $artifactName = 'Quantara-${{ inputs.version }}+${{ inputs.build_number }}-windows-x64.exe'
+          $canonical = Join-Path $outputDir $artifactName
+          Move-Item -LiteralPath $candidate.FullName -Destination $canonical -Force
+          "artifact_filename=$artifactName" >> $env:GITHUB_OUTPUT
+          "installer_path=$canonical" >> $env:GITHUB_OUTPUT
+
+      - name: Decode production Windows signing certificate
+        id: signing_material
+        shell: pwsh
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.windows_pfx_base64 }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_PFX_BASE64)) {
+            throw 'Production Windows signing certificate is not configured.'
+          }
+          try {
+            $bytes = [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64)
+          }
+          catch {
+            throw 'Production Windows signing certificate is not valid base64.'
+          }
+          if ($bytes.Length -eq 0) {
+            throw 'Production Windows signing certificate decoded to an empty payload.'
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'quantara-release-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, $bytes)
+          "pfx_path=$pfx" >> $env:GITHUB_OUTPUT
+
+      - name: Sign and verify Windows installer
+        id: sign
+        shell: pwsh
+        env:
+          WINDOWS_PFX_PASSWORD: ${{ secrets.windows_pfx_password }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_PFX_PASSWORD)) {
+            throw 'Production Windows signing certificate password is not configured.'
+          }
+          $password = ConvertTo-SecureString $env:WINDOWS_PFX_PASSWORD -AsPlainText -Force
+          $output = ./scripts/sign-windows-release.ps1 `
+            -InstallerPath '${{ steps.package.outputs.installer_path }}' `
+            -CertificatePath '${{ steps.signing_material.outputs.pfx_path }}' `
+            -CertificatePassword $password `
+            -ExpectedPublisher '${{ inputs.expected_publisher }}'
+          $shaLine = $output | Where-Object { $_ -like 'sha256=*' } | Select-Object -First 1
+          $identityLine = $output | Where-Object { $_ -like 'signing_identity=*' } | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($shaLine) -or [string]::IsNullOrWhiteSpace($identityLine)) {
+            throw "Signing gate did not emit required integrity metadata: $($output -join '; ')"
+          }
+          $sha = $shaLine.Substring('sha256='.Length)
+          $identity = $identityLine.Substring('signing_identity='.Length)
+          if ($sha -notmatch '^[a-f0-9]{64}$') {
+            throw "Signing gate emitted a malformed SHA-256: $sha"
+          }
+          if ($identity -ne '${{ inputs.expected_publisher }}') {
+            throw "Signing gate returned unexpected publisher '$identity'."
+          }
+          "sha256=$sha" >> $env:GITHUB_OUTPUT
+          "signing_identity=$identity" >> $env:GITHUB_OUTPUT
+
+      - name: Upload signed Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-windows-release-${{ inputs.source_sha }}
+          path: ${{ steps.package.outputs.installer_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove temporary signing material
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-release-signing.pfx') -Force -ErrorAction SilentlyContinue
