@@ -1,0 +1,35 @@
+name: Temporary Dart formatter
+
+on:
+  push:
+    branches:
+      - feat/81-client-staged-rollout-v3
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Apply canonical Dart formatting
+        working-directory: src/client/quantara_app
+        run: dart format lib test tool
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/client/quantara_app/lib src/client/quantara_app/test src/client/quantara_app/tool
+          git commit -m 'style: apply canonical Dart formatting [skip ci]'
+          git push origin HEAD:${GITHUB_REF_NAME}
