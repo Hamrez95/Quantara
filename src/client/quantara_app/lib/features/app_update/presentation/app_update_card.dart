@@ -297,7 +297,7 @@ final class AppUpdateCard extends StatelessWidget {
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Text(key: key, '$label: $value'),
+      child: Text('$label: $value', key: key),
     );
   }
 
