@@ -21,6 +21,11 @@ on:
         required: true
         default: '100'
         options: ['10', '25', '50', '100']
+      revoked_builds:
+        description: Optional comma-separated older build numbers to revoke; recovery is forward-only
+        type: string
+        required: false
+        default: ''
       release_notes:
         description: Optional notes
         required: false
@@ -189,6 +194,7 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         env:
           RELEASE_NOTES: ${{ inputs.release_notes }}
+          REVOKED_BUILDS: ${{ inputs.revoked_builds }}
         shell: bash
         run: |
           set -euo pipefail
@@ -207,6 +213,7 @@ jobs:
             --minimum-supported-version '${{ steps.version.outputs.previous_version }}' \
             --release-notes "$RELEASE_NOTES" \
             --rollout-percent '${{ inputs.rollout_percent }}' \
+            --revoked-builds "$REVOKED_BUILDS" \
             --android-url "$base_url/Quantara-$version+$build-android.apk" \
             --android-sha256 '${{ steps.integrity.outputs.android_sha256 }}' \
             --android-package-id com.quantara.quantara_app \
@@ -229,6 +236,7 @@ jobs:
           - Current-dev certification: exact commit must have passed Flutter client CI including API 34/35/36 upgrade matrix
           - Update manifest: `release-manifest.json` published atomically with release artifacts
           - Staged rollout eligibility: `${{ inputs.rollout_percent }}%`
+          - Emergency revocation: optional older build list; clients recover only through a newer signed/checksummed artifact
           - Windows/iOS: not built or verified
           EOF
       - name: Publish immutable GitHub release
@@ -241,7 +249,7 @@ jobs:
           if [ '${{ inputs.channel }}' = beta ]; then prerelease='--prerelease'; fi
           gh release create '${{ steps.version.outputs.tag }}' release/* \
             --target '${{ github.sha }}' --title "Quantara ${{ steps.version.outputs.version }}" $prerelease \
-            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ steps.version.outputs.previous_version }}.\nStaged rollout eligibility: ${{ inputs.rollout_percent }}%.\nPlatforms: signed Android APK/AAB, PWA archive."
+            --notes "${{ inputs.release_notes }}\n\nProduct: Quantara\nBuild: ${{ steps.version.outputs.build_number }}\nCommit: ${{ github.sha }}\nAndroid upgrade-compatible: yes, only over the same canonical package/signing lineage. Minimum supported version: ${{ steps.version.outputs.previous_version }}.\nStaged rollout eligibility: ${{ inputs.rollout_percent }}%.\nEmergency revocation recovery is forward-only through this signed/checksummed release.\nPlatforms: signed Android APK/AAB, PWA archive."
       - name: Remove temporary key
         if: always()
         run: rm -f "$RUNNER_TEMP/quantara.jks"

@@ -82,8 +82,26 @@ class ReleaseManifestTests(unittest.TestCase):
                 candidate_signing_identity="AA:BB:CC",
             )
 
+    def test_revoked_builds_are_normalized_for_forward_recovery(self) -> None:
+        self.assertEqual(
+            release_manifest.parse_revoked_builds("129, 127,128", candidate_build=131),
+            [127, 128, 129],
+        )
+        self.assertEqual(
+            release_manifest.parse_revoked_builds("", candidate_build=131), []
+        )
+
+    def test_revoked_builds_reject_ambiguous_or_non_forward_recovery(self) -> None:
+        invalid = ("0", "129,129", "abc", "129,,130", "131", "132")
+        for value in invalid:
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    release_manifest.parse_revoked_builds(value, candidate_build=131)
+
     @staticmethod
-    def _manifest_args(*, rollout_percent: int = 100) -> argparse.Namespace:
+    def _manifest_args(
+        *, rollout_percent: int = 100, revoked_builds: str = ""
+    ) -> argparse.Namespace:
         return argparse.Namespace(
             channel="stable",
             version="1.3.0",
@@ -92,6 +110,7 @@ class ReleaseManifestTests(unittest.TestCase):
             minimum_supported_version="1.2.0",
             release_notes="Safer release integrity.",
             rollout_percent=rollout_percent,
+            revoked_builds=revoked_builds,
             android_url="https://github.com/Hamrez95/Quantara/releases/download/quantara-v1.3.0/Quantara-1.3.0+131-android.apk",
             android_sha256="A" * 64,
             android_package_id="com.quantara.quantara_app",
@@ -102,13 +121,14 @@ class ReleaseManifestTests(unittest.TestCase):
 
     def test_manifest_matches_runtime_schema_and_normalizes_integrity(self) -> None:
         payload = release_manifest.build_manifest(
-            self._manifest_args(rollout_percent=25)
+            self._manifest_args(rollout_percent=25, revoked_builds="129,127")
         )
 
         self.assertEqual(payload["schemaVersion"], 1)
         self.assertEqual(payload["channel"], "stable")
         self.assertEqual(payload["publishedAt"], "2026-08-27T06:00:00Z")
         self.assertEqual(payload["rolloutPercent"], 25)
+        self.assertEqual(payload["revokedBuilds"], [127, 129])
         android = payload["artifacts"]["android"]
         self.assertEqual(android["buildNumber"], 131)
         self.assertEqual(android["sha256"], "a" * 64)
