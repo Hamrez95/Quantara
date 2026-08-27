@@ -218,6 +218,7 @@ final class AppUpdateCheckResult {
     required this.updateAvailable,
     required this.mandatory,
     required this.revoked,
+    this.stagedRolloutDeferred = false,
     this.artifact,
     this.releaseNotes = '',
   });
@@ -228,6 +229,7 @@ final class AppUpdateCheckResult {
   final bool updateAvailable;
   final bool mandatory;
   final bool revoked;
+  final bool stagedRolloutDeferred;
   final AppReleaseArtifact? artifact;
   final String releaseNotes;
 }
