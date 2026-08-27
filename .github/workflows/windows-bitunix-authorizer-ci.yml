@@ -1,0 +1,43 @@
+name: Windows Bitunix authorizer
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'src/windows_service/bitunix_request_authorizer.*'
+      - 'src/windows_service/bitunix_request_authorizer_test.cpp'
+      - 'src/windows_service/bitunix_request_signer.*'
+      - 'src/windows_service/credential_vault.*'
+      - '.github/workflows/windows-bitunix-authorizer-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authorizer:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile fail-closed authorizer test
+        shell: cmd
+        working-directory: src/windows_service
+        run: >-
+          cl.exe /nologo /std:c++20 /EHsc /W4 /WX /permissive-
+          /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /DNOMINMAX
+          bitunix_request_authorizer.cpp bitunix_request_signer.cpp credential_vault.cpp
+          bitunix_request_authorizer_test.cpp
+          /Fe:bitunix_request_authorizer_test.exe
+          /link advapi32.lib bcrypt.lib crypt32.lib
+      - name: Run bounded authorizer regression
+        shell: pwsh
+        working-directory: src/windows_service
+        run: |
+          $process = Start-Process -FilePath .\bitunix_request_authorizer_test.exe -PassThru -NoNewWindow
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Bitunix authorizer test exceeded the 30s fail-closed timeout.'
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Bitunix authorizer test failed with exit code $($process.ExitCode)."
+          }
