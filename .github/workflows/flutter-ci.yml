@@ -9,12 +9,6 @@ on:
       - 'fix/**'
       - 'release/**'
       - 'test/**'
-    paths:
-      - 'src/client/quantara_app/**'
-      - 'scripts/android-cold-start-smoke.sh'
-      - 'scripts/android-upgrade-smoke.sh'
-      - '.github/workflows/flutter-ci.yml'
-      - '.github/workflows/release-quantara.yml'
   pull_request:
     branches:
       - main
