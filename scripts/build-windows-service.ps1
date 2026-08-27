@@ -94,7 +94,7 @@ if (-not $SkipTests) {
     if ($TestFilter -in @('all', 'client')) {
         Invoke-BoundedNativeTest -Path $clientExe -Name 'quantara_windows_service_client --self-test' -Arguments @('--self-test')
     }
-    if ($TestFilter -in @('all', 'provisioner')) {
+    if ($TestFilter -in @('all', 'credential', 'provisioner')) {
         Invoke-BoundedNativeTest -Path $credentialsExe -Name 'quantara_windows_credentials --self-test' -Arguments @('--self-test')
     }
     if ($TestFilter -in @('all', 'tray')) {
