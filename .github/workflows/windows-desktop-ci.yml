@@ -58,6 +58,10 @@ jobs:
         shell: pwsh
         run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter service
 
+      - name: Test Windows read-only status client
+        shell: pwsh
+        run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter client
+
       - name: Test Windows credential vault
         shell: pwsh
         run: ./scripts/build-windows-service.ps1 -Configuration Release -SkipBuild -TestFilter credential
@@ -114,6 +118,29 @@ jobs:
           if ($configText -notmatch [regex]::Escape($serviceExe)) {
             throw "Service executable path does not match the packaged host. Expected: $serviceExe Actual: $configText"
           }
+
+      - name: Smoke authenticated read-only service status
+        shell: powershell
+        run: |
+          $service = Get-Service -Name $env:QUANTARA_SERVICE_NAME -ErrorAction Stop
+          Start-Service -Name $env:QUANTARA_SERVICE_NAME
+          $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(15))
+
+          $clientExe = (Resolve-Path 'build/windows-service/Release/quantara_windows_service_client.exe').Path
+          $raw = & $clientExe --status
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authenticated Windows status client failed with exit code $LASTEXITCODE."
+          }
+          $snapshot = $raw | ConvertFrom-Json
+          if ($snapshot.protocolVersion -ne 1 -or $snapshot.kind -ne 'statusSnapshot') {
+            throw "Unexpected Windows service status protocol response: $raw"
+          }
+          if ($snapshot.payload.serviceState -ne 'disarmed' -or $snapshot.payload.entryAuthority -ne $false) {
+            throw "Windows service did not start fail-closed: $raw"
+          }
+
+          Stop-Service -Name $env:QUANTARA_SERVICE_NAME
+          $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(15))
 
       - name: Remove service after lifecycle smoke
         if: always()
@@ -198,6 +225,7 @@ jobs:
             dist/windows/quantara-windows-release.zip
             dist/windows/QuantaraSetup-*.exe
             build/windows-service/Release/quantara_windows_service.exe
+            build/windows-service/Release/quantara_windows_service_client.exe
             src/client/quantara_app/hot-path-performance-windows.json
           if-no-files-found: error
           retention-days: 14
