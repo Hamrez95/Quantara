@@ -82,14 +82,16 @@ class ReleaseManifestTests(unittest.TestCase):
                 candidate_signing_identity="AA:BB:CC",
             )
 
-    def test_manifest_matches_runtime_schema_and_normalizes_integrity(self) -> None:
-        args = argparse.Namespace(
+    @staticmethod
+    def _manifest_args(*, rollout_percent: int = 100) -> argparse.Namespace:
+        return argparse.Namespace(
             channel="stable",
             version="1.3.0",
             build_number=131,
             published_at="2026-08-27T06:00:00+00:00",
             minimum_supported_version="1.2.0",
             release_notes="Safer release integrity.",
+            rollout_percent=rollout_percent,
             android_url="https://github.com/Hamrez95/Quantara/releases/download/quantara-v1.3.0/Quantara-1.3.0+131-android.apk",
             android_sha256="A" * 64,
             android_package_id="com.quantara.quantara_app",
@@ -98,32 +100,35 @@ class ReleaseManifestTests(unittest.TestCase):
             pwa_sha256="B" * 64,
         )
 
-        payload = release_manifest.build_manifest(args)
+    def test_manifest_matches_runtime_schema_and_normalizes_integrity(self) -> None:
+        payload = release_manifest.build_manifest(
+            self._manifest_args(rollout_percent=25)
+        )
 
         self.assertEqual(payload["schemaVersion"], 1)
         self.assertEqual(payload["channel"], "stable")
         self.assertEqual(payload["publishedAt"], "2026-08-27T06:00:00Z")
+        self.assertEqual(payload["rolloutPercent"], 25)
         android = payload["artifacts"]["android"]
         self.assertEqual(android["buildNumber"], 131)
         self.assertEqual(android["sha256"], "a" * 64)
         self.assertEqual(android["packageId"], "com.quantara.quantara_app")
         self.assertEqual(android["signingIdentity"], "AA:BB:CC")
 
+    def test_manifest_rejects_rollout_outside_percentage_bounds(self) -> None:
+        for invalid in (-1, 101):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "between 0 and 100"):
+                    release_manifest.build_manifest(
+                        self._manifest_args(rollout_percent=invalid)
+                    )
+
     def test_manifest_rejects_non_https_artifact(self) -> None:
-        args = argparse.Namespace(
-            channel="canary",
-            version="1.3.0-beta.1",
-            build_number=131,
-            published_at="2026-08-27T06:00:00Z",
-            minimum_supported_version="1.2.0",
-            release_notes="",
-            android_url="http://downloads.example/Quantara.apk",
-            android_sha256="a" * 64,
-            android_package_id="com.quantara.quantara_app",
-            android_signing_identity="AA:BB:CC",
-            pwa_url="https://downloads.example/Quantara-pwa.zip",
-            pwa_sha256="b" * 64,
-        )
+        args = self._manifest_args()
+        args.channel = "canary"
+        args.version = "1.3.0-beta.1"
+        args.android_url = "http://downloads.example/Quantara.apk"
+        args.pwa_url = "https://downloads.example/Quantara-pwa.zip"
         with self.assertRaisesRegex(ValueError, "trusted HTTPS"):
             release_manifest.build_manifest(args)
 
