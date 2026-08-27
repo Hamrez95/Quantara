@@ -14,6 +14,8 @@ namespace {
 
 constexpr wchar_t kWindowClassName[] = L"QuantaraTrayStatusMonitor";
 constexpr wchar_t kWindowTitle[] = L"Quantara status monitor";
+constexpr wchar_t kSingleInstanceMutexName[] =
+    L"Local\\QuantaraWindowsTrayStatusMonitor";
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT_PTR kRefreshTimerId = 1;
 constexpr UINT kRefreshIntervalMs = 5000;
@@ -22,6 +24,8 @@ constexpr DWORD kMaxStatusBytes = 64 * 1024;
 constexpr UINT kOpenCommand = 1001;
 constexpr UINT kStatusCommand = 1002;
 constexpr UINT kExitCommand = 1003;
+
+UINT g_taskbar_created_message = 0;
 
 class ScopedHandle final {
  public:
@@ -240,6 +244,16 @@ NOTIFYICONDATAW BuildTrayData(HWND window, ServiceTrayState state) {
   return data;
 }
 
+bool AddTrayIcon(HWND window, ServiceTrayState state) noexcept {
+  auto data = BuildTrayData(window, state);
+  if (!Shell_NotifyIconW(NIM_ADD, &data)) {
+    return false;
+  }
+  data.uVersion = NOTIFYICON_VERSION_4;
+  Shell_NotifyIconW(NIM_SETVERSION, &data);
+  return true;
+}
+
 void UpdateTray(HWND window, ServiceTrayState state) {
   auto data = BuildTrayData(window, state);
   Shell_NotifyIconW(NIM_MODIFY, &data);
@@ -281,14 +295,19 @@ void ShowTrayMenu(HWND window, ServiceTrayState state) {
 LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wparam,
                                  LPARAM lparam) {
   static ServiceTrayState state = ServiceTrayState::unavailable;
+  if (g_taskbar_created_message != 0 && message == g_taskbar_created_message) {
+    AddTrayIcon(window, state);
+    return 0;
+  }
+
   switch (message) {
     case WM_CREATE: {
       state = QueryServiceState();
-      auto data = BuildTrayData(window, state);
-      if (!Shell_NotifyIconW(NIM_ADD, &data)) {
+      if (!AddTrayIcon(window, state)) {
         return -1;
       }
       if (SetTimer(window, kRefreshTimerId, kRefreshIntervalMs, nullptr) == 0) {
+        auto data = BuildTrayData(window, state);
         Shell_NotifyIconW(NIM_DELETE, &data);
         return -1;
       }
@@ -363,6 +382,21 @@ int RunSelfTest() {
 }
 
 int RunTrayMonitor(HINSTANCE instance) {
+  SetLastError(ERROR_SUCCESS);
+  ScopedHandle single_instance(
+      CreateMutexW(nullptr, FALSE, kSingleInstanceMutexName));
+  if (single_instance.get() == nullptr) {
+    return 4;
+  }
+  if (GetLastError() == ERROR_ALREADY_EXISTS) {
+    return 0;
+  }
+
+  g_taskbar_created_message = RegisterWindowMessageW(L"TaskbarCreated");
+  if (g_taskbar_created_message == 0) {
+    return 5;
+  }
+
   WNDCLASSEXW window_class{};
   window_class.cbSize = sizeof(window_class);
   window_class.lpfnWndProc = WindowProcedure;
