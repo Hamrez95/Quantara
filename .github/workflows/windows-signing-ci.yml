@@ -1,0 +1,131 @@
+name: Windows signing gate
+
+on:
+  push:
+    branches:
+      - dev
+      - 'feat/**'
+      - 'fix/**'
+    paths:
+      - 'scripts/sign-windows-release.ps1'
+      - '.github/workflows/windows-signing-ci.yml'
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'scripts/sign-windows-release.ps1'
+      - '.github/workflows/windows-signing-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-signing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signing-smoke:
+    name: Verify fail-closed Authenticode signing helper
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create isolated CI-only signing identity
+        id: certificate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $subject = 'CN=Quantara CI Test Publisher'
+          $passwordText = [Guid]::NewGuid().ToString('N')
+          $password = ConvertTo-SecureString $passwordText -AsPlainText -Force
+          $certificate = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject $subject `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -KeyAlgorithm RSA `
+            -KeyLength 2048 `
+            -HashAlgorithm SHA256 `
+            -NotAfter (Get-Date).AddDays(1)
+          if ($null -eq $certificate) { throw 'CI signing certificate was not created.' }
+
+          $pfx = Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.pfx'
+          Export-PfxCertificate -Cert $certificate -FilePath $pfx -Password $password | Out-Null
+          $cer = Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.cer'
+          Export-Certificate -Cert $certificate -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+
+          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+          "pfx=$pfx" >> $env:GITHUB_OUTPUT
+          "password=$passwordText" >> $env:GITHUB_OUTPUT
+          "subject=$subject" >> $env:GITHUB_OUTPUT
+
+      - name: Sign and verify an isolated PE copy
+        shell: pwsh
+        env:
+          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
+          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+          EXPECTED_SUBJECT: ${{ steps.certificate.outputs.subject }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningSmoke.exe'
+          Copy-Item "$env:WINDIR\System32\where.exe" $candidate
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $output = ./scripts/sign-windows-release.ps1 `
+            -InstallerPath $candidate `
+            -CertificatePath $env:PFX_PATH `
+            -CertificatePassword $password `
+            -ExpectedPublisher $env:EXPECTED_SUBJECT
+          $text = $output -join "`n"
+          if ($text -notmatch '(?m)^sha256=[a-f0-9]{64}$') {
+            throw "Signing helper did not emit a canonical SHA-256: $text"
+          }
+          if ($text -notmatch '(?m)^signing_identity=CN=Quantara CI Test Publisher$') {
+            throw "Signing helper did not emit the verified publisher: $text"
+          }
+          $signature = Get-AuthenticodeSignature -FilePath $candidate
+          if ($signature.Status -ne 'Valid') {
+            throw "Signed smoke artifact did not verify: $($signature.Status)"
+          }
+
+      - name: Reject a mismatched publisher before signing
+        shell: pwsh
+        env:
+          PFX_PATH: ${{ steps.certificate.outputs.pfx }}
+          PFX_PASSWORD: ${{ steps.certificate.outputs.password }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidate = Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe'
+          Copy-Item "$env:WINDIR\System32\where.exe" $candidate
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          try {
+            ./scripts/sign-windows-release.ps1 `
+              -InstallerPath $candidate `
+              -CertificatePath $env:PFX_PATH `
+              -CertificatePassword $password `
+              -ExpectedPublisher 'CN=Unexpected Publisher'
+            throw 'Publisher mismatch was accepted.'
+          }
+          catch {
+            if ($_.Exception.Message -eq 'Publisher mismatch was accepted.') { throw }
+          }
+          if ((Get-AuthenticodeSignature -FilePath $candidate).Status -ne 'NotSigned') {
+            throw 'Publisher mismatch mutated the candidate before rejection.'
+          }
+
+      - name: Remove CI-only signing identity
+        if: always()
+        shell: pwsh
+        env:
+          THUMBPRINT: ${{ steps.certificate.outputs.thumbprint }}
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:THUMBPRINT)) {
+            Remove-Item "Cert:\CurrentUser\My\$env:THUMBPRINT" -Force -ErrorAction SilentlyContinue
+            Remove-Item "Cert:\CurrentUser\Root\$env:THUMBPRINT" -Force -ErrorAction SilentlyContinue
+          }
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.pfx') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'quantara-ci-signing.cer') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningSmoke.exe') -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'QuantaraSigningMismatch.exe') -Force -ErrorAction SilentlyContinue
