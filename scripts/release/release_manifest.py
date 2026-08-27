@@ -8,6 +8,7 @@ import json
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlparse
 
 _SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
@@ -39,6 +40,48 @@ def require_monotonic_build(candidate: int, asset_names: list[str]) -> int:
             f"published build {previous}."
         )
     return previous
+
+
+def _normalized_identity(value: str) -> str:
+    normalized = value.strip().lower().replace(":", "")
+    if not normalized:
+        raise ValueError("Android signing identity must not be empty.")
+    return normalized
+
+
+def require_android_identity_compatible(
+    previous_manifest: dict[str, object],
+    *,
+    candidate_package_id: str,
+    candidate_signing_identity: str,
+) -> None:
+    artifacts = previous_manifest.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("Previous release manifest is missing artifacts.")
+    android = artifacts.get("android")
+    if not isinstance(android, dict):
+        raise ValueError("Previous release manifest is missing Android metadata.")
+
+    previous_package_id = android.get("packageId")
+    previous_signing_identity = android.get("signingIdentity")
+    if not isinstance(previous_package_id, str) or not previous_package_id.strip():
+        raise ValueError("Previous release manifest has no Android package identity.")
+    if not isinstance(previous_signing_identity, str):
+        raise ValueError("Previous release manifest has no Android signing identity.")
+
+    candidate_package = candidate_package_id.strip()
+    if not candidate_package:
+        raise ValueError("Candidate Android package identity must not be empty.")
+    if previous_package_id.strip() != candidate_package:
+        raise ValueError(
+            "Candidate Android package identity does not match the previous published release."
+        )
+    if _normalized_identity(previous_signing_identity) != _normalized_identity(
+        candidate_signing_identity
+    ):
+        raise ValueError(
+            "Candidate Android signing identity does not match the previous published release."
+        )
 
 
 def _https_url(value: str) -> str:
@@ -105,6 +148,11 @@ def _parser() -> argparse.ArgumentParser:
     guard = subcommands.add_parser("guard-build")
     guard.add_argument("--candidate", type=int, required=True)
 
+    identity_guard = subcommands.add_parser("guard-identity")
+    identity_guard.add_argument("--previous-manifest", required=True)
+    identity_guard.add_argument("--android-package-id", required=True)
+    identity_guard.add_argument("--android-signing-identity", required=True)
+
     manifest = subcommands.add_parser("manifest")
     manifest.add_argument("--channel", choices=("stable", "canary"), required=True)
     manifest.add_argument("--version", required=True)
@@ -133,12 +181,24 @@ def main() -> int:
             print(f"previous_build={previous}")
             return 0
 
+        if args.command == "guard-identity":
+            with Path(args.previous_manifest).open(encoding="utf-8") as handle:
+                previous_manifest = json.load(handle)
+            if not isinstance(previous_manifest, dict):
+                raise ValueError("Previous release manifest root must be an object.")
+            require_android_identity_compatible(
+                previous_manifest,
+                candidate_package_id=args.android_package_id,
+                candidate_signing_identity=args.android_signing_identity,
+            )
+            return 0
+
         payload = build_manifest(args)
         with open(args.output, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True)
             handle.write("\n")
         return 0
-    except (OSError, ValueError) as error:
+    except (json.JSONDecodeError, OSError, ValueError) as error:
         print(error, file=sys.stderr)
         return 2
 
