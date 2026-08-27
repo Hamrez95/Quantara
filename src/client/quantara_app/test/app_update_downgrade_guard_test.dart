@@ -8,46 +8,46 @@ import 'package:quantara_app/features/app_update/data/app_update_manifest_client
 import 'package:quantara_app/features/app_update/domain/app_update_models.dart';
 
 void main() {
-  AppUpdateController controllerFor({
+  const checksum =
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+  AppUpdateController makeController({
     required String currentVersion,
     required int currentBuild,
     required String publishedVersion,
     required int publishedBuild,
   }) {
     final client = MockClient((request) async {
-      final body = jsonEncode({
+      final manifest = <String, Object?>{
         'schemaVersion': 1,
         'channel': 'stable',
         'publishedAt': '2026-08-27T00:00:00Z',
         'minimumSupportedVersion': '1.0.0',
         'mandatory': false,
-        'releaseNotes': {'en': 'Release notes'},
-        'artifacts': {
-          'android': {
+        'releaseNotes': <String, String>{'en': 'Release notes'},
+        'artifacts': <String, Object?>{
+          'android': <String, Object?>{
             'version': publishedVersion,
             'buildNumber': publishedBuild,
             'url': 'https://releases.example.test/Quantara.apk',
-            'sha256':
-                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            'sha256': checksum,
             'packageId': 'com.quantara.quantara_app',
             'signingIdentity': 'AA11',
           },
         },
         'rolloutPercent': 100,
         'revokedBuilds': <int>[],
-      });
-      return http.Response(
-        body,
-        200,
-        headers: {'content-type': 'application/json'},
-      );
+      };
+      return http.Response(jsonEncode(manifest), 200);
     });
+
+    final manifestClient = AppUpdateManifestClient(
+      client: client,
+      stableManifestUri: Uri.parse('https://updates.example.test/stable.json'),
+      canaryManifestUri: Uri.parse('https://updates.example.test/canary.json'),
+    );
     return AppUpdateController(
-      manifestClient: AppUpdateManifestClient(
-        client: client,
-        stableManifestUri: Uri.parse('https://updates.example.test/stable.json'),
-        canaryManifestUri: Uri.parse('https://updates.example.test/canary.json'),
-      ),
+      manifestClient: manifestClient,
       currentVersion: currentVersion,
       currentBuildNumber: currentBuild,
       platform: AppReleasePlatform.android,
@@ -56,25 +56,22 @@ void main() {
     );
   }
 
-  test(
-    'rejects lower semantic version even when build number is higher',
-    () async {
-      final controller = controllerFor(
-        currentVersion: '1.2.0',
-        currentBuild: 126,
-        publishedVersion: '1.1.9',
-        publishedBuild: 999,
-      );
-      addTearDown(controller.dispose);
+  test('rejects semantic downgrade', () async {
+    final controller = makeController(
+      currentVersion: '1.2.0',
+      currentBuild: 126,
+      publishedVersion: '1.1.9',
+      publishedBuild: 999,
+    );
+    addTearDown(controller.dispose);
 
-      expect(await controller.check(), isFalse);
-      expect(controller.result, isNull);
-      expect(controller.error, contains('explicit recovery is required'));
-    },
-  );
+    expect(await controller.check(), isFalse);
+    expect(controller.result, isNull);
+    expect(controller.error, contains('explicit recovery is required'));
+  });
 
-  test('rejects lower build for the same semantic version', () async {
-    final controller = controllerFor(
+  test('rejects same-version build downgrade', () async {
+    final controller = makeController(
       currentVersion: '1.2.0',
       currentBuild: 126,
       publishedVersion: '1.2.0',
@@ -87,8 +84,8 @@ void main() {
     expect(controller.error, contains('current build'));
   });
 
-  test('rejects lower build even when semantic version is newer', () async {
-    final controller = controllerFor(
+  test('rejects lower build for newer version', () async {
+    final controller = makeController(
       currentVersion: '1.2.0',
       currentBuild: 126,
       publishedVersion: '1.3.0',
@@ -101,8 +98,8 @@ void main() {
     expect(controller.error, contains('current build'));
   });
 
-  test('allows a newer semantic version with a monotonic build', () async {
-    final controller = controllerFor(
+  test('allows newer version with monotonic build', () async {
+    final controller = makeController(
       currentVersion: '1.2.0',
       currentBuild: 126,
       publishedVersion: '1.2.1',
