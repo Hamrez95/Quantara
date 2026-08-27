@@ -105,7 +105,7 @@ if (-not $SkipTests) {
     if ($TestFilter -in @('all', 'position-management', 'recovery')) {
         Invoke-BoundedNativeTest -Path $managementOnlyRecoveryCoordinatorTestExe -Name 'quantara_windows_service_management_only_recovery_coordinator_test'
     }
-    if ($TestFilter -in @('all', 'bitunix-signing')) {
+    if ($TestFilter -in @('all', 'service', 'bitunix-signing')) {
         Invoke-BoundedNativeTest -Path $bitunixRequestSignerTestExe -Name 'quantara_windows_service_bitunix_request_signer_test'
     }
     if ($TestFilter -in @('all', 'client')) {
