@@ -46,6 +46,7 @@ Name: "startup"; Description: "Start Quantara with Windows (UI only, trading rem
 Source: "{#MyAppBuildRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#MyServiceBuildRoot}\quantara_windows_service.exe"; DestDir: "{app}\service"; Flags: ignoreversion
 Source: "{#MyServiceBuildRoot}\quantara_windows_service_client.exe"; DestDir: "{app}\service"; Flags: ignoreversion
+Source: "{#MyServiceBuildRoot}\quantara_windows_credentials.exe"; DestDir: "{app}\service"; Flags: ignoreversion
 Source: "{#MyServiceBuildRoot}\quantara_windows_tray.exe"; DestDir: "{app}\service"; Flags: ignoreversion
 Source: "..\..\scripts\manage-windows-service.ps1"; DestDir: "{app}\service"; Flags: ignoreversion
 Source: "..\..\scripts\manage-windows-service.ps1"; Flags: dontcopy

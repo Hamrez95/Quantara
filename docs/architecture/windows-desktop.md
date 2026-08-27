@@ -6,7 +6,7 @@ Status: Release Candidate foundation. Windows is a native Flutter desktop build,
 
 The RC package contains the foreground Quantara cockpit and public realtime monitoring. A dedicated Windows Service host is packaged and registered as `QuantaraExecutionService`. The service currently owns **zero trading authority**: no exchange execution engine is wired into it, no IPC request can mutate trading state, and every service start begins disarmed. Install/update never silently starts or arms it.
 
-The service boundary now includes a kernel-authenticated local named pipe for versioned **read-only status** IPC, bounded request replay rejection, a Windows DPAPI credential-vault primitive with protected ACLs, deterministic SCM stop/shutdown handling, fail-closed power transitions, and network-interface change monitoring. These foundations do not themselves grant order authority or provision exchange credentials.
+The service boundary now includes a kernel-authenticated local named pipe for versioned **read-only status** IPC, bounded request replay rejection, a Windows DPAPI credential vault with protected ACLs, an explicit local-admin credential provisioner, deterministic SCM stop/shutdown handling, fail-closed power transitions, and network-interface change monitoring. These foundations do not themselves grant order authority; the service still does not load provisioned credentials into an executor.
 
 Suspend moves the service into an interrupted state. Resume and any network-interface change require reconciliation rather than restoring prior authority. Repeated recovery events are idempotently fail-closed.
 
@@ -20,7 +20,7 @@ Suspend moves the service into an interrupted state. Resume and any network-inte
 4. compiles the x64 Release bundle;
 5. packages a ZIP suitable for internal RC testing.
 
-`scripts/build-windows-service.ps1 -Configuration Release` separately builds `quantara_windows_service.exe` with the pinned Windows C++ toolchain and executes bounded native self-tests for the service host, credential vault, read-only response/session/listener contracts and network-change recovery.
+`scripts/build-windows-service.ps1 -Configuration Release` separately builds `quantara_windows_service.exe`, the authenticated read-only status client, `quantara_windows_credentials.exe` and the tray monitor with the pinned Windows C++ toolchain. It executes bounded native self-tests for the service host, credential vault/provisioner, read-only response/session/listener contracts and network-change recovery.
 
 The Windows GitHub workflow builds both targets, exercises service registration/removal against the Windows Service Control Manager, compiles the Inno Setup installer and uploads the internal RC artifacts. The SCM smoke verifies that installation leaves the service stopped/disarmed and that uninstall removes the registration.
 
@@ -32,15 +32,18 @@ The Windows GitHub workflow builds both targets, exercises service registration/
 - Uninstall stops and removes the service before installed files are removed.
 - The local status pipe authenticates the connected Windows peer before reading a bounded message and only accepts the versioned read-only request allowlist.
 - Duplicate request IDs are rejected within a bounded replay window.
-- The DPAPI vault is only a protected-storage primitive; authenticated credential provisioning and execution-engine ownership remain separate future gates.
+- The credential provisioner is packaged beside the service but is never launched automatically by install/update. Production store/remove/status operations require an elevated local administrator.
+- Credential values are not accepted in process arguments or printed back. Store operations accept only bounded redirected standard input for the allowlisted Bitunix API key/API secret slots, then persist through the existing DPAPI machine-protected vault.
+- The provisioner resolves its production vault from the canonical Windows ProgramData known folder, rejects managed-path reparse points, and status output contains presence booleans only.
 
 ## Security boundary
 
 - Public realtime data remains separate from private exchange and order authority.
-- API secrets are never generated, copied or logged by the Windows build or installer.
+- API secrets are never generated, copied into source, placed in command-line arguments, or logged by the Windows build/installer/provisioner.
 - Local Live stays disarmed on launch and persisted settings cannot restore armed/running state.
 - The Windows Service currently cannot submit, cancel or manage exchange orders because no protected executor is attached to it.
 - Read-only IPC does not expose an unauthenticated LAN endpoint and does not accept mutating command kinds.
+- Provisioning protected credentials does not arm the service or grant execution authority; service-side credential loading and executor ownership remain separate gates.
 - Network/power lifecycle changes never restore authority; they downgrade trust and require reconciliation.
 - The unsigned installer/ZIP is for internal testing only; stable distribution requires code signing and physical upgrade validation.
 
@@ -49,7 +52,7 @@ The Windows GitHub workflow builds both targets, exercises service registration/
 Before a signed Windows Stable release:
 
 1. clean install and in-place upgrade with retained local settings/secure credentials;
-2. authenticated credential provisioning plus explicit platform-neutral execution-engine wiring through deterministic Risk/Allocation/Autonomy gates;
+2. explicit service-side credential loading plus platform-neutral execution-engine wiring through deterministic Risk/Allocation/Autonomy gates;
 3. native tray/minimize controls with no hidden authority escalation;
 4. keyboard navigation and text scaling;
 5. physical reboot/service-restart/sleep/hibernate/network-switch recovery evidence;

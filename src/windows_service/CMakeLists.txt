@@ -53,6 +53,25 @@ target_compile_options(quantara_windows_service_client PRIVATE
 )
 target_link_libraries(quantara_windows_service_client PRIVATE advapi32)
 
+add_executable(quantara_windows_credentials
+  credential_provisioner.cpp
+  credential_vault.cpp
+  credential_vault.h
+)
+target_compile_features(quantara_windows_credentials PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_credentials PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_credentials PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
+target_link_libraries(quantara_windows_credentials PRIVATE advapi32 crypt32 ole32 shell32)
+
 add_executable(quantara_windows_tray WIN32
   tray_monitor.cpp
 )
