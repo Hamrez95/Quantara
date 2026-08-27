@@ -14,4 +14,7 @@ enum class CredentialReadiness {
 CredentialReadiness EvaluateCredentialReadiness(
     const std::filesystem::path& root) noexcept;
 
+bool CredentialReadinessRequiresReconciliation(
+    CredentialReadiness readiness) noexcept;
+
 }  // namespace quantara
