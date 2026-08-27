@@ -65,6 +65,7 @@ $clientExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_clien
 $credentialsExe = Join-Path $buildRoot "$Configuration/quantara_windows_credentials.exe"
 $trayExe = Join-Path $buildRoot "$Configuration/quantara_windows_tray.exe"
 $credentialVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_vault_test.exe"
+$credentialReadinessTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_readiness_test.exe"
 $responseTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_response_test.exe"
 $sessionTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_session_test.exe"
 $listenerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_listener_test.exe"
@@ -76,6 +77,7 @@ $requiredExecutables = @(
     @{ Path = $credentialsExe; Name = 'Windows credential provisioner executable' },
     @{ Path = $trayExe; Name = 'Windows tray status monitor executable' },
     @{ Path = $credentialVaultTestExe; Name = 'credential vault test executable' },
+    @{ Path = $credentialReadinessTestExe; Name = 'credential readiness test executable' },
     @{ Path = $responseTestExe; Name = 'response test executable' },
     @{ Path = $sessionTestExe; Name = 'session test executable' },
     @{ Path = $listenerTestExe; Name = 'listener test executable' },
@@ -102,6 +104,7 @@ if (-not $SkipTests) {
     }
     if ($TestFilter -in @('all', 'credential')) {
         Invoke-BoundedNativeTest -Path $credentialVaultTestExe -Name 'quantara_windows_service_credential_vault_test'
+        Invoke-BoundedNativeTest -Path $credentialReadinessTestExe -Name 'quantara_windows_service_credential_readiness_test'
     }
     if ($TestFilter -in @('all', 'response')) {
         Invoke-BoundedNativeTest -Path $responseTestExe -Name 'quantara_windows_service_response_test'
