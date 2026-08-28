@@ -361,3 +361,21 @@ target_compile_options(quantara_windows_service_bitunix_https_readonly_transport
   /permissive-
 )
 target_link_libraries(quantara_windows_service_bitunix_https_readonly_transport_test PRIVATE winhttp)
+
+add_executable(quantara_windows_service_bitunix_exchange_truth_parser_test
+  bitunix_exchange_truth_parser.cpp
+  bitunix_exchange_truth_parser.h
+  bitunix_exchange_truth_parser_test.cpp
+)
+target_compile_features(quantara_windows_service_bitunix_exchange_truth_parser_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_bitunix_exchange_truth_parser_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_bitunix_exchange_truth_parser_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
