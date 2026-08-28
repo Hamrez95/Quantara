@@ -1,5 +1,6 @@
 #include "bitunix_exchange_truth_reader.h"
 
+#include <windows.h>
 #include <bcrypt.h>
 
 #include <array>
