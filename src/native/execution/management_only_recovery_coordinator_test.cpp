@@ -6,6 +6,9 @@
 
 namespace {
 
+using quantara::BitunixExchangeTruthSnapshot;
+using quantara::BitunixPendingOrder;
+using quantara::BitunixPendingOrdersSnapshot;
 using quantara::BitunixPendingPosition;
 using quantara::DurableReconciliationEvidence;
 using quantara::ExistingExchangePositionFacts;
@@ -42,16 +45,35 @@ BitunixPendingPosition ParsedPosition(std::string id = "position-1",
   return position;
 }
 
+BitunixExchangeTruthSnapshot ProtectedTruth() {
+  BitunixPendingOrder protection{};
+  protection.order_id = "protection-1";
+  protection.position_id = "position-1";
+  protection.symbol = "BTCUSDT";
+  protection.status = "NEW";
+  protection.reduce_only = true;
+  protection.take_profit_price = "70000";
+  protection.stop_loss_price = "60000";
+
+  BitunixPendingOrdersSnapshot pending{};
+  pending.orders.push_back(std::move(protection));
+  pending.total = 1;
+  return {.positions = {ParsedPosition()}, .pending_orders = std::move(pending)};
+}
+
 DurableReconciliationEvidence DurableEvidence(
     std::string id = "position-1", std::string symbol = "BTCUSDT") {
   DurableReconciliationEvidence evidence{};
   evidence.position_id = std::move(id);
   evidence.symbol = std::move(symbol);
   evidence.has_unambiguous_quantara_identity = true;
+  // These stale/pre-populated flags must be ignored by the Windows worker. The
+  // worker recomputes current protection only from the pending-order snapshot.
   evidence.has_complete_exchange_stop = true;
   evidence.has_complete_exchange_take_profit_ladder = true;
   evidence.has_conflicting_order_fill_or_history = false;
   evidence.has_durable_reconstruction = true;
+  evidence.expected_take_profit_order_count = 1;
   return evidence;
 }
 
@@ -225,14 +247,14 @@ int main() {
 
   WindowsManagementOnlyWorkerCore worker;
   const auto worker_reconciled = worker.ReconcileFreshExchangeTruth(
-      {ParsedPosition()}, {DurableEvidence()});
+      ProtectedTruth(), {DurableEvidence()});
   ok &= Expect(worker_reconciled.has_value() &&
                    worker.CanManageExistingPositions() &&
                    !worker.CanOpenNewEntry(),
                "Windows worker may manage only a fully verified existing position.");
 
   const auto missing_evidence = worker.ReconcileFreshExchangeTruth(
-      {ParsedPosition()}, {});
+      ProtectedTruth(), {});
   ok &= Expect(!missing_evidence.has_value() &&
                    !worker.CanManageExistingPositions() &&
                    worker.snapshot().mode ==
@@ -240,7 +262,7 @@ int main() {
                "Missing durable evidence must revoke prior management authority.");
 
   const auto duplicate_evidence = worker.ReconcileFreshExchangeTruth(
-      {ParsedPosition()}, {DurableEvidence(), DurableEvidence()});
+      ProtectedTruth(), {DurableEvidence(), DurableEvidence()});
   ok &= Expect(!duplicate_evidence.has_value() &&
                    !worker.CanManageExistingPositions(),
                "Duplicate durable evidence must fail closed.");
@@ -248,12 +270,33 @@ int main() {
   auto ambiguous = DurableEvidence();
   ambiguous.has_unambiguous_quantara_identity = false;
   const auto ambiguous_result = worker.ReconcileFreshExchangeTruth(
-      {ParsedPosition()}, {ambiguous});
+      ProtectedTruth(), {ambiguous});
   ok &= Expect(ambiguous_result.has_value() &&
                    ambiguous_result->classification ==
                        ExistingPositionClassification::kExternalUnmanaged &&
                    !worker.CanManageExistingPositions(),
                "Ambiguous ownership must remain unmanaged in the Windows worker.");
+
+  auto no_orders = ProtectedTruth();
+  no_orders.pending_orders.orders.clear();
+  no_orders.pending_orders.total = 0;
+  const auto stale_flags_ignored = worker.ReconcileFreshExchangeTruth(
+      no_orders, {DurableEvidence()});
+  ok &= Expect(stale_flags_ignored.has_value() &&
+                   stale_flags_ignored->classification ==
+                       ExistingPositionClassification::kAmbiguous &&
+                   !worker.CanManageExistingPositions(),
+               "Pre-populated durable protection flags must not replace current exchange order truth.");
+
+  auto unknown_ladder = DurableEvidence();
+  unknown_ladder.expected_take_profit_order_count = 0;
+  const auto unknown_ladder_result = worker.ReconcileFreshExchangeTruth(
+      ProtectedTruth(), {unknown_ladder});
+  ok &= Expect(unknown_ladder_result.has_value() &&
+                   unknown_ladder_result->classification ==
+                       ExistingPositionClassification::kAmbiguous &&
+                   !worker.CanManageExistingPositions(),
+               "Unknown durable TP ladder size must remain reconciliation-only.");
 
   worker.MarkLifecycleBoundary(RecoveryLifecycleBoundary::kUpdate);
   ok &= Expect(!worker.CanManageExistingPositions() &&
