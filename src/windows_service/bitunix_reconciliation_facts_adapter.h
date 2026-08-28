@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <optional>
-#include <set>
 #include <string>
 
 namespace quantara {
@@ -33,7 +32,8 @@ struct DurableReconciliationEvidence final {
 // order snapshot. Durable ownership/reconstruction facts are preserved exactly.
 // A matching non-reduce-only/non-NEW order or contradictory position/symbol
 // identity is treated as a conflict. TP completeness is never inferred unless
-// durable state supplied an explicit expected order count.
+// durable state supplied an explicit expected order count. The scan is bounded
+// by the exchange reader's 100-order page and performs no allocation.
 [[nodiscard]] inline std::optional<DurableReconciliationEvidence>
 ApplyCurrentExchangeProtectionEvidence(
     const BitunixPendingPosition& position,
@@ -51,9 +51,10 @@ ApplyCurrentExchangeProtectionEvidence(
   joined.has_complete_exchange_stop = false;
   joined.has_complete_exchange_take_profit_ladder = false;
 
-  std::set<std::string> take_profit_order_ids;
+  std::size_t take_profit_order_count = 0;
   bool stop_seen = false;
-  for (const auto& order : pending_orders.orders) {
+  for (std::size_t i = 0; i < pending_orders.orders.size(); ++i) {
+    const auto& order = pending_orders.orders[i];
     const bool same_position_id =
         !order.position_id.empty() && order.position_id == position.position_id;
     const bool same_symbol = order.symbol == position.symbol;
@@ -73,17 +74,30 @@ ApplyCurrentExchangeProtectionEvidence(
 
     if (!order.stop_loss_price.empty()) stop_seen = true;
     if (!order.take_profit_price.empty()) {
-      if (order.order_id.empty() || !take_profit_order_ids.insert(order.order_id).second) {
+      if (order.order_id.empty()) {
         joined.has_conflicting_order_fill_or_history = true;
         continue;
       }
+      bool duplicate_order_id = false;
+      for (std::size_t previous = 0; previous < i; ++previous) {
+        const auto& prior = pending_orders.orders[previous];
+        if (!prior.take_profit_price.empty() && prior.order_id == order.order_id) {
+          duplicate_order_id = true;
+          break;
+        }
+      }
+      if (duplicate_order_id) {
+        joined.has_conflicting_order_fill_or_history = true;
+        continue;
+      }
+      ++take_profit_order_count;
     }
   }
 
   joined.has_complete_exchange_stop = stop_seen;
   joined.has_complete_exchange_take_profit_ladder =
       joined.expected_take_profit_order_count > 0 &&
-      take_profit_order_ids.size() == joined.expected_take_profit_order_count;
+      take_profit_order_count == joined.expected_take_profit_order_count;
   return joined;
 }
 
