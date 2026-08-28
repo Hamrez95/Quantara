@@ -82,7 +82,7 @@ bool IsCanonicalStatusResponse(std::string_view response,
         response.size() - expected_prefix.size() - kSuffix.size();
     const auto state = response.substr(expected_prefix.size(), state_length);
     return state == "disarmed" || state == "interrupted" ||
-           state == "reconciliationRequired";
+           state == "reconciliationRequired" || state == "manageExistingOnly";
   } catch (...) {
     return false;
   }
@@ -270,6 +270,14 @@ int RunSelfTest() {
       "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
       "\"disarmed\",\"entryAuthority\":false}}";
+  const std::string valid_management_status_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
+      "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
+      "\"manageExistingOnly\",\"entryAuthority\":false}}";
+  const std::string unsafe_management_status_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
+      "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
+      "\"manageExistingOnly\",\"entryAuthority\":true}}";
   const std::string valid_readiness_response =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.2\","
       "\"kind\":\"credentialReadinessSnapshot\",\"payload\":{"
@@ -287,6 +295,10 @@ int RunSelfTest() {
       status_request.size() > kMaxFrameBytes ||
       readiness_request.size() > kMaxFrameBytes ||
       !IsCanonicalStatusResponse(valid_status_response, "self-test.1") ||
+      !IsCanonicalStatusResponse(valid_management_status_response,
+                                 "self-test.1") ||
+      IsCanonicalStatusResponse(unsafe_management_status_response,
+                                "self-test.1") ||
       IsCanonicalStatusResponse(mismatched_status_response, "self-test.1") ||
       !IsCanonicalCredentialReadinessResponse(valid_readiness_response,
                                                "self-test.2") ||

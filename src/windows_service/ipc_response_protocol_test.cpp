@@ -5,6 +5,10 @@
 
 int wmain() {
   using quantara::CredentialReadiness;
+  using quantara::ExistingPositionClassification;
+  using quantara::ExistingPositionManagementAuthority;
+  using quantara::ManagementOnlyRecoveryMode;
+  using quantara::ManagementOnlyRecoverySnapshot;
   using quantara::ReadOnlyRequest;
   using quantara::ReadOnlyRequestKind;
   using quantara::ServiceSafetyState;
@@ -38,6 +42,53 @@ int wmain() {
       interrupted->find("\"entryAuthority\":false") == std::string::npos ||
       interrupted->find("\"serviceState\":\"interrupted\"") == std::string::npos) {
     std::wcerr << L"Interrupted state must remain fail-closed.\n";
+    return 1;
+  }
+
+  const ManagementOnlyRecoverySnapshot manage_existing{
+      ManagementOnlyRecoveryMode::kManageExistingOnly,
+      ExistingPositionClassification::kManaged,
+      ExistingPositionManagementAuthority::kManageExistingOnly,
+      true,
+      "allManagedVerified"};
+  if (quantara::ServiceSafetyStateFromManagementOnlySnapshot(manage_existing) !=
+      ServiceSafetyState::kManageExistingOnly) {
+    std::wcerr << L"Verified management-only recovery state mapping mismatch.\n";
+    return 1;
+  }
+  const auto management_status = quantara::EncodeCanonicalReadOnlyResponse(
+      ReadOnlyRequest{"status-managed", ReadOnlyRequestKind::kStatusRequest},
+      ServiceSafetyState::kManageExistingOnly, CredentialReadiness::kReady);
+  if (!management_status.has_value() ||
+      management_status->find("\"serviceState\":\"manageExistingOnly\"") ==
+          std::string::npos ||
+      management_status->find("\"entryAuthority\":false") ==
+          std::string::npos) {
+    std::wcerr << L"Management-only status must never imply entry authority.\n";
+    return 1;
+  }
+
+  const ManagementOnlyRecoverySnapshot reconcile_required{
+      ManagementOnlyRecoveryMode::kReconciliationRequired,
+      ExistingPositionClassification::kAmbiguous,
+      ExistingPositionManagementAuthority::kReconciliationOnly,
+      true,
+      "freshExchangeTruthRequired"};
+  if (quantara::ServiceSafetyStateFromManagementOnlySnapshot(
+          reconcile_required) != ServiceSafetyState::kReconciliationRequired) {
+    std::wcerr << L"Reconciliation-required worker state mapping mismatch.\n";
+    return 1;
+  }
+
+  const ManagementOnlyRecoverySnapshot inconsistent{
+      ManagementOnlyRecoveryMode::kManageExistingOnly,
+      ExistingPositionClassification::kManaged,
+      ExistingPositionManagementAuthority::kManageExistingOnly,
+      false,
+      "invalid"};
+  if (quantara::ServiceSafetyStateFromManagementOnlySnapshot(inconsistent) !=
+      ServiceSafetyState::kDisarmed) {
+    std::wcerr << L"Inconsistent management authority must fail closed.\n";
     return 1;
   }
 
