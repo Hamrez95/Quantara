@@ -118,6 +118,65 @@ int main() {
                  "Parsed order facts must preserve protection metadata exactly.");
   }
 
+  if (positions.has_value() && positions->size() == 1 && orders.has_value()) {
+    quantara::DurableReconciliationEvidence durable{};
+    durable.position_id = "pos-1";
+    durable.symbol = "BTCUSDT";
+    durable.has_unambiguous_quantara_identity = true;
+    durable.has_conflicting_order_fill_or_history = false;
+    durable.has_durable_reconstruction = true;
+    durable.expected_take_profit_order_count = 1;
+
+    const auto protected_evidence =
+        quantara::ApplyCurrentExchangeProtectionEvidence(
+            positions->front(), durable, *orders);
+    ok &= Expect(protected_evidence.has_value() &&
+                     protected_evidence->has_unambiguous_quantara_identity &&
+                     protected_evidence->has_durable_reconstruction &&
+                     protected_evidence->has_complete_exchange_stop &&
+                     protected_evidence->has_complete_exchange_take_profit_ladder &&
+                     !protected_evidence->has_conflicting_order_fill_or_history,
+                 "Complete reduce-only exchange protection must join durable evidence without changing ownership.");
+
+    auto unknown_ladder = durable;
+    unknown_ladder.expected_take_profit_order_count = 0;
+    const auto unknown_ladder_evidence =
+        quantara::ApplyCurrentExchangeProtectionEvidence(
+            positions->front(), unknown_ladder, *orders);
+    ok &= Expect(unknown_ladder_evidence.has_value() &&
+                     unknown_ladder_evidence->has_complete_exchange_stop &&
+                     !unknown_ladder_evidence->has_complete_exchange_take_profit_ladder,
+                 "TP completeness must remain false when durable expected ladder size is unknown.");
+
+    auto conflicting_orders = *orders;
+    conflicting_orders.orders.front().reduce_only = false;
+    const auto conflicting_evidence =
+        quantara::ApplyCurrentExchangeProtectionEvidence(
+            positions->front(), durable, conflicting_orders);
+    ok &= Expect(conflicting_evidence.has_value() &&
+                     conflicting_evidence->has_conflicting_order_fill_or_history &&
+                     !conflicting_evidence->has_complete_exchange_stop &&
+                     !conflicting_evidence->has_complete_exchange_take_profit_ladder,
+                 "Non-reduce-only matching orders must fail protection evidence closed.");
+
+    auto aliased_orders = *orders;
+    aliased_orders.orders.front().symbol = "ETHUSDT";
+    const auto aliased_evidence =
+        quantara::ApplyCurrentExchangeProtectionEvidence(
+            positions->front(), durable, aliased_orders);
+    ok &= Expect(aliased_evidence.has_value() &&
+                     aliased_evidence->has_conflicting_order_fill_or_history &&
+                     !aliased_evidence->has_complete_exchange_stop,
+                 "Contradictory order identity must be classified as conflicting evidence.");
+
+    auto incomplete_orders = *orders;
+    incomplete_orders.total = 2;
+    ok &= Expect(!quantara::ApplyCurrentExchangeProtectionEvidence(
+                      positions->front(), durable, incomplete_orders)
+                      .has_value(),
+                 "Incomplete order pages must fail the protection join closed.");
+  }
+
   ok &= Expect(!quantara::ParseBitunixPendingPositionsResponse(
                     R"json({"code":10001,"data":[]})json")
                     .has_value(),
