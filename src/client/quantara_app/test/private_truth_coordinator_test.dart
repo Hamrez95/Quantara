@@ -173,7 +173,10 @@ void main() {
   test('private fill truth rejects duplicate matching filled orders', () {
     final result = PrivateTruthFillMatchPolicy.match(
       projection: projection(
-        orders: [order(), order(orderId: 'order-2')],
+        orders: [
+          order(),
+          order(orderId: 'order-2'),
+        ],
         positions: [position()],
       ),
       orderId: 'order-1',
@@ -198,11 +201,7 @@ void main() {
         ],
         positions: [
           position(),
-          position(
-            positionId: 'eth-position',
-            symbol: 'ETHUSDT',
-            quantity: 1,
-          ),
+          position(positionId: 'eth-position', symbol: 'ETHUSDT', quantity: 1),
         ],
       ),
       orderId: 'order-1',
