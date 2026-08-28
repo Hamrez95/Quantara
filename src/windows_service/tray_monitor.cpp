@@ -54,6 +54,7 @@ enum class ServiceTrayState {
   disarmed,
   interrupted,
   reconciliation_required,
+  manage_existing_only,
 };
 
 std::filesystem::path ExecutableDirectory() {
@@ -108,6 +109,9 @@ ServiceTrayState ParseCanonicalStatus(std::string_view response) noexcept {
   if (state == "reconciliationRequired") {
     return ServiceTrayState::reconciliation_required;
   }
+  if (state == "manageExistingOnly") {
+    return ServiceTrayState::manage_existing_only;
+  }
   return ServiceTrayState::unavailable;
 }
 
@@ -119,6 +123,8 @@ std::wstring StateLabel(ServiceTrayState state) {
       return L"Interrupted - entries blocked";
     case ServiceTrayState::reconciliation_required:
       return L"Reconciliation required - entries blocked";
+    case ServiceTrayState::manage_existing_only:
+      return L"Managing verified existing positions - entries blocked";
     case ServiceTrayState::unavailable:
     default:
       return L"Status unavailable - entries unverified";
@@ -363,17 +369,24 @@ int RunSelfTest() {
       "{\"protocolVersion\":1,\"requestId\":\"self-test.3\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
       "\"reconciliationRequired\",\"entryAuthority\":false}}";
-  const std::string unsafe =
+  const std::string management_only =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.4\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
-      "\"disarmed\",\"entryAuthority\":true}}";
+      "\"manageExistingOnly\",\"entryAuthority\":false}}";
+  const std::string unsafe =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.5\","
+      "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
+      "\"manageExistingOnly\",\"entryAuthority\":true}}";
 
   if (ParseCanonicalStatus(disarmed) != ServiceTrayState::disarmed ||
       ParseCanonicalStatus(interrupted) != ServiceTrayState::interrupted ||
       ParseCanonicalStatus(reconciliation) !=
           ServiceTrayState::reconciliation_required ||
+      ParseCanonicalStatus(management_only) !=
+          ServiceTrayState::manage_existing_only ||
       ParseCanonicalStatus(unsafe) != ServiceTrayState::unavailable ||
       ParseCanonicalStatus("not-json") != ServiceTrayState::unavailable ||
+      StateLabel(ServiceTrayState::manage_existing_only).empty() ||
       StateLabel(ServiceTrayState::unavailable).empty()) {
     std::cerr << "Windows tray status monitor self-test failed.\n";
     return 1;
