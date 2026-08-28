@@ -17,6 +17,7 @@ import '../data/bitunix_local_live_api_client.dart';
 import '../data/bitunix_private_websocket_client.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/exchange_position_ownership.dart';
+import '../domain/full_position_stop_policy.dart';
 import '../domain/local_live_cycle_readiness.dart';
 import '../domain/local_live_management_only_after_flat.dart';
 import '../domain/local_live_no_chase_gate.dart';
@@ -1000,13 +1001,37 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               'Filled quantity was too small for even one exchange-valid target and was closed.',
             );
           }
+          final quantityTolerance = math
+              .pow(10, -rules.quantityPrecision)
+              .toDouble();
+          final protectedPositionId = position.positionId;
+          bool fullStopConfirmedBy(List<BitunixPendingProtection> evidence) =>
+              evidence.any(
+                (item) => FullPositionStopPolicy.isConfirmed(
+                  evidencePositionId: item.positionId,
+                  expectedPositionId: protectedPositionId,
+                  stopLossPrice: item.stopLossPrice,
+                  stopLossQuantity: item.stopLossQuantity,
+                  remainingQuantity: quantity,
+                  quantityTolerance: quantityTolerance,
+                ),
+              );
           var protections = await exchange.fetchPendingProtection(
             credentials,
             symbol: idea.symbol,
             positionId: position.positionId,
           );
           var stopOrderId = protections
-              .where((item) => item.stopLossPrice > 0)
+              .where(
+                (item) => FullPositionStopPolicy.isConfirmed(
+                  evidencePositionId: item.positionId,
+                  expectedPositionId: protectedPositionId,
+                  stopLossPrice: item.stopLossPrice,
+                  stopLossQuantity: item.stopLossQuantity,
+                  remainingQuantity: quantity,
+                  quantityTolerance: quantityTolerance,
+                ),
+              )
               .map((item) => item.orderId)
               .firstOrNull;
           stopOrderId ??= await exchange.placePositionStop(
@@ -1020,7 +1045,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
             symbol: idea.symbol,
             positionId: position.positionId,
           );
-          if (!protections.any((item) => item.stopLossPrice > 0)) {
+          if (!fullStopConfirmedBy(protections)) {
             await exchange.closePositionReduceOnly(
               position: position,
               clientId: '$clientId-unprotected-close',
@@ -1083,8 +1108,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                 symbol: idea.symbol,
                 positionId: position.positionId,
               );
-              final fullStopConfirmed = confirmedProtection.any(
-                (item) => item.stopLossPrice > 0,
+              final fullStopConfirmed = fullStopConfirmedBy(
+                confirmedProtection,
               );
               final ladderConfirmed = _targetLadderConfirmed(
                 protection: confirmedProtection,
@@ -1096,9 +1121,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               );
               if (fullStopConfirmed && ladderConfirmed) break;
             }
-            final fullStopConfirmed = confirmedProtection.any(
-              (item) => item.stopLossPrice > 0,
-            );
+            final fullStopConfirmed = fullStopConfirmedBy(confirmedProtection);
             final ladderConfirmed = _targetLadderConfirmed(
               protection: confirmedProtection,
               targetOrderIds: targetOrderIds,
@@ -2185,12 +2208,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }) {
     final prices = protection
         .where(
-          (item) =>
-              item.positionId == managed.positionId &&
-              item.stopLossPrice > 0 &&
-              (item.stopLossQuantity <= 0 ||
-                  item.stopLossQuantity + quantityTolerance >=
-                      remainingQuantity),
+          (item) => FullPositionStopPolicy.isConfirmed(
+            evidencePositionId: item.positionId,
+            expectedPositionId: managed.positionId,
+            stopLossPrice: item.stopLossPrice,
+            stopLossQuantity: item.stopLossQuantity,
+            remainingQuantity: remainingQuantity,
+            quantityTolerance: quantityTolerance,
+          ),
         )
         .map((item) => item.stopLossPrice)
         .where((item) => item.isFinite && item > 0)
