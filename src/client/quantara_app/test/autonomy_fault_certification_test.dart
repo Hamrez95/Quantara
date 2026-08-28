@@ -11,33 +11,29 @@ void main() {
     Set<AutonomySafetyInvariant>? passed,
     Set<AutonomySafetyInvariant> failed = const {},
     DateTime? observedAt,
-  }) =>
-      AutonomyFaultObservation(
-        scenarioId: id,
-        domain: domain,
-        observedAtUtc: observedAt ?? at,
-        passedInvariants: passed ?? allInvariants,
-        failedInvariants: failed,
-      );
+  }) => AutonomyFaultObservation(
+    scenarioId: id,
+    domain: domain,
+    observedAtUtc: observedAt ?? at,
+    passedInvariants: passed ?? allInvariants,
+    failedInvariants: failed,
+  );
 
   List<AutonomyFaultObservation> completeMatrix() => [
-        observation(
-          'market-disconnect-storm',
-          AutonomyFaultDomain.marketFeed,
-        ),
-        observation(
-          'private-submit-timeout',
-          AutonomyFaultDomain.privateExecution,
-        ),
-        observation(
-          'process-death-after-submit',
-          AutonomyFaultDomain.processStorage,
-        ),
-        observation(
-          'strategy-quarantined-open',
-          AutonomyFaultDomain.strategyPolicy,
-        ),
-      ];
+    observation('market-disconnect-storm', AutonomyFaultDomain.marketFeed),
+    observation(
+      'private-submit-timeout',
+      AutonomyFaultDomain.privateExecution,
+    ),
+    observation(
+      'process-death-after-submit',
+      AutonomyFaultDomain.processStorage,
+    ),
+    observation(
+      'strategy-quarantined-open',
+      AutonomyFaultDomain.strategyPolicy,
+    ),
+  ];
 
   test('certifies only complete zero-tolerance evidence', () {
     final result = AutonomyFaultCertificationPolicy.evaluate(completeMatrix());
