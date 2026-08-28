@@ -21,10 +21,7 @@ void main() {
 
   List<AutonomyFaultObservation> completeMatrix() => [
     observation('market-disconnect-storm', AutonomyFaultDomain.marketFeed),
-    observation(
-      'private-submit-timeout',
-      AutonomyFaultDomain.privateExecution,
-    ),
+    observation('private-submit-timeout', AutonomyFaultDomain.privateExecution),
     observation(
       'process-death-after-submit',
       AutonomyFaultDomain.processStorage,
@@ -40,7 +37,10 @@ void main() {
 
     expect(result.certified, isTrue);
     expect(result.blockReasons, isEmpty);
-    expect(result.coveredDomains, AutonomyFaultCertificationPolicy.requiredDomains);
+    expect(
+      result.coveredDomains,
+      AutonomyFaultCertificationPolicy.requiredDomains,
+    );
     expect(result.failedInvariants, isEmpty);
   });
 
@@ -135,23 +135,26 @@ void main() {
     );
   });
 
-  test('duplicate scenario identities cannot inflate certification evidence', () {
-    final observations = completeMatrix()
-      ..add(
-        observation(
-          'market-disconnect-storm',
-          AutonomyFaultDomain.marketFeed,
-        ),
+  test(
+    'duplicate scenario identities cannot inflate certification evidence',
+    () {
+      final observations = completeMatrix()
+        ..add(
+          observation(
+            'market-disconnect-storm',
+            AutonomyFaultDomain.marketFeed,
+          ),
+        );
+
+      final result = AutonomyFaultCertificationPolicy.evaluate(observations);
+
+      expect(result.certified, isFalse);
+      expect(
+        result.blockReasons,
+        contains('duplicateScenarioIdentity:market-disconnect-storm'),
       );
-
-    final result = AutonomyFaultCertificationPolicy.evaluate(observations);
-
-    expect(result.certified, isFalse);
-    expect(
-      result.blockReasons,
-      contains('duplicateScenarioIdentity:market-disconnect-storm'),
-    );
-  });
+    },
+  );
 
   test('non-UTC observations fail closed', () {
     final observations = completeMatrix();
