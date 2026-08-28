@@ -11,20 +11,33 @@ void main() {
     Set<AutonomySafetyInvariant>? passed,
     Set<AutonomySafetyInvariant> failed = const {},
     DateTime? observedAt,
-  }) => AutonomyFaultObservation(
-    scenarioId: id,
-    domain: domain,
-    observedAtUtc: observedAt ?? at,
-    passedInvariants: passed ?? allInvariants,
-    failedInvariants: failed,
-  );
+  }) =>
+      AutonomyFaultObservation(
+        scenarioId: id,
+        domain: domain,
+        observedAtUtc: observedAt ?? at,
+        passedInvariants: passed ?? allInvariants,
+        failedInvariants: failed,
+      );
 
   List<AutonomyFaultObservation> completeMatrix() => [
-    observation('market-disconnect-storm', AutonomyFaultDomain.marketFeed),
-    observation('private-submit-timeout', AutonomyFaultDomain.privateExecution),
-    observation('process-death-after-submit', AutonomyFaultDomain.processStorage),
-    observation('strategy-quarantined-open', AutonomyFaultDomain.strategyPolicy),
-  ];
+        observation(
+          'market-disconnect-storm',
+          AutonomyFaultDomain.marketFeed,
+        ),
+        observation(
+          'private-submit-timeout',
+          AutonomyFaultDomain.privateExecution,
+        ),
+        observation(
+          'process-death-after-submit',
+          AutonomyFaultDomain.processStorage,
+        ),
+        observation(
+          'strategy-quarantined-open',
+          AutonomyFaultDomain.strategyPolicy,
+        ),
+      ];
 
   test('certifies only complete zero-tolerance evidence', () {
     final result = AutonomyFaultCertificationPolicy.evaluate(completeMatrix());
@@ -37,13 +50,17 @@ void main() {
 
   test('fails closed when one required fault domain is missing', () {
     final observations = completeMatrix()
-      ..removeWhere((item) => item.domain == AutonomyFaultDomain.processStorage);
+      ..removeWhere(
+        (item) => item.domain == AutonomyFaultDomain.processStorage,
+      );
 
     final result = AutonomyFaultCertificationPolicy.evaluate(observations);
 
     expect(result.certified, isFalse);
     expect(
-      result.blockReasons.any((reason) => reason.startsWith('faultDomainsMissing:')),
+      result.blockReasons.any(
+        (reason) => reason.startsWith('faultDomainsMissing:'),
+      ),
       isTrue,
     );
   });
@@ -53,10 +70,26 @@ void main() {
       AutonomySafetyInvariant.ambiguousOutcomeRetainsRisk,
     });
     final observations = [
-      observation('market-disconnect-storm', AutonomyFaultDomain.marketFeed, passed: limited),
-      observation('private-submit-timeout', AutonomyFaultDomain.privateExecution, passed: limited),
-      observation('process-death-after-submit', AutonomyFaultDomain.processStorage, passed: limited),
-      observation('strategy-quarantined-open', AutonomyFaultDomain.strategyPolicy, passed: limited),
+      observation(
+        'market-disconnect-storm',
+        AutonomyFaultDomain.marketFeed,
+        passed: limited,
+      ),
+      observation(
+        'private-submit-timeout',
+        AutonomyFaultDomain.privateExecution,
+        passed: limited,
+      ),
+      observation(
+        'process-death-after-submit',
+        AutonomyFaultDomain.processStorage,
+        passed: limited,
+      ),
+      observation(
+        'strategy-quarantined-open',
+        AutonomyFaultDomain.strategyPolicy,
+        passed: limited,
+      ),
     ];
 
     final result = AutonomyFaultCertificationPolicy.evaluate(observations);
@@ -108,7 +141,12 @@ void main() {
 
   test('duplicate scenario identities cannot inflate certification evidence', () {
     final observations = completeMatrix()
-      ..add(observation('market-disconnect-storm', AutonomyFaultDomain.marketFeed));
+      ..add(
+        observation(
+          'market-disconnect-storm',
+          AutonomyFaultDomain.marketFeed,
+        ),
+      );
 
     final result = AutonomyFaultCertificationPolicy.evaluate(observations);
 
@@ -130,7 +168,10 @@ void main() {
     final result = AutonomyFaultCertificationPolicy.evaluate(observations);
 
     expect(result.certified, isFalse);
-    expect(result.blockReasons, contains('nonUtcObservation:market-disconnect-storm'));
+    expect(
+      result.blockReasons,
+      contains('nonUtcObservation:market-disconnect-storm'),
+    );
   });
 
   test('empty evidence never certifies', () {
