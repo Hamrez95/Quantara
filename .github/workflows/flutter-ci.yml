@@ -68,12 +68,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          dart format test/autonomy_fault_certification_test.dart
-          git diff -- test/autonomy_fault_certification_test.dart
-          exit 1
+        run: dart format --output=none --set-exit-if-changed lib test tool
 
       - name: Analyze
         shell: bash
