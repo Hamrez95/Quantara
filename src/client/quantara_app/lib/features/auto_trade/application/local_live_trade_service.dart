@@ -1107,7 +1107,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                 symbol: idea.symbol,
                 positionId: position.positionId,
               );
-              final fullStopConfirmed = fullStopConfirmedBy(confirmedProtection);
+              final fullStopConfirmed = fullStopConfirmedBy(
+                confirmedProtection,
+              );
               final ladderConfirmed = _targetLadderConfirmed(
                 protection: confirmedProtection,
                 targetOrderIds: targetOrderIds,
@@ -2205,15 +2207,14 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   }) {
     final prices = protection
         .where(
-          (item) =>
-              FullPositionStopPolicy.isConfirmed(
-                evidencePositionId: item.positionId,
-                expectedPositionId: managed.positionId,
-                stopLossPrice: item.stopLossPrice,
-                stopLossQuantity: item.stopLossQuantity,
-                remainingQuantity: remainingQuantity,
-                quantityTolerance: quantityTolerance,
-              ),
+          (item) => FullPositionStopPolicy.isConfirmed(
+            evidencePositionId: item.positionId,
+            expectedPositionId: managed.positionId,
+            stopLossPrice: item.stopLossPrice,
+            stopLossQuantity: item.stopLossQuantity,
+            remainingQuantity: remainingQuantity,
+            quantityTolerance: quantityTolerance,
+          ),
         )
         .map((item) => item.stopLossPrice)
         .where((item) => item.isFinite && item > 0)

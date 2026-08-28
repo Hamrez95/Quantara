@@ -23,9 +23,12 @@ void main() {
     expect(confirmed(evidencePositionId: 'position-2'), isFalse);
   });
 
-  test('rejects positive stop that protects only part of remaining quantity', () {
-    expect(confirmed(stopQuantity: 0.4), isFalse);
-  });
+  test(
+    'rejects positive stop that protects only part of remaining quantity',
+    () {
+      expect(confirmed(stopQuantity: 0.4), isFalse);
+    },
+  );
 
   test('accepts Bitunix whole-position stop convention', () {
     expect(confirmed(stopQuantity: 0), isTrue);
