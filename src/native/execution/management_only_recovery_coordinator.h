@@ -40,6 +40,11 @@ class ManagementOnlyRecoveryCoordinator final {
   // transition and cannot auto-arm the worker.
   void MarkLifecycleBoundary(RecoveryLifecycleBoundary boundary) noexcept;
 
+  // A new exchange-truth cycle must revoke any previously granted management
+  // authority before parsing/joining/validating the fresh evidence. Callers may
+  // provide only static reason strings whose lifetime outlives the snapshot.
+  void RequireFreshReconciliation(std::string_view reason) noexcept;
+
   // Reconciliation accepts exchange-truth facts only. This coordinator never
   // grants new-entry authority; verified positions can only be managed in
   // place after the shared fail-closed position policy accepts the portfolio.
