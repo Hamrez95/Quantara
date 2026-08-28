@@ -49,6 +49,11 @@ void ManagementOnlyRecoveryCoordinator::MarkLifecycleBoundary(
   snapshot_ = ReconciliationRequired(BoundaryReason(boundary));
 }
 
+void ManagementOnlyRecoveryCoordinator::RequireFreshReconciliation(
+    std::string_view reason) noexcept {
+  snapshot_ = ReconciliationRequired(reason);
+}
+
 ManagementOnlyRecoverySnapshot ManagementOnlyRecoveryCoordinator::Reconcile(
     const std::vector<ExistingExchangePositionFacts>& positions) noexcept {
   const auto decision = EvaluateExistingPortfolio(positions);
