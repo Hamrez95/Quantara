@@ -1,0 +1,30 @@
+name: Private truth formatter diagnostic
+
+on:
+  push:
+    branches:
+      - 'fix/107-private-fill-ambiguity'
+
+permissions:
+  contents: read
+
+jobs:
+  formatter-diff:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Print exact formatter diff
+        shell: bash
+        run: |
+          dart format test/private_truth_coordinator_test.dart
+          git diff -- test/private_truth_coordinator_test.dart
+          test -n "$(git diff -- test/private_truth_coordinator_test.dart)"
