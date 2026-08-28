@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -22,6 +24,20 @@ std::filesystem::path TestRoot() {
   return std::filesystem::path(temp_path) /
          (L"quantara-bitunix-truth-reader-" +
           std::to_wstring(GetCurrentProcessId()));
+}
+
+bool IsLowerHexNonce(const std::string& value) {
+  return value.size() == 32 &&
+         std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+           return std::isdigit(ch) || (ch >= 'a' && ch <= 'f');
+         });
+}
+
+bool IsDecimalTimestamp(const std::string& value) {
+  return !value.empty() &&
+         std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+           return std::isdigit(ch) != 0;
+         });
 }
 
 std::optional<quantara::BitunixHttpsReadOnlyResponse> GoodTransport(
@@ -72,6 +88,23 @@ int main() {
   std::error_code ignored;
   std::filesystem::remove_all(root, ignored);
 
+  const auto generated_positions_auth =
+      quantara::GenerateBitunixReadOnlyAuthStamp();
+  const auto generated_orders_auth = quantara::GenerateBitunixReadOnlyAuthStamp();
+  ok &= Expect(generated_positions_auth.has_value() &&
+                   generated_orders_auth.has_value(),
+               "Windows CSPRNG must produce fresh Bitunix auth stamps.");
+  if (generated_positions_auth.has_value() && generated_orders_auth.has_value()) {
+    ok &= Expect(IsLowerHexNonce(generated_positions_auth->nonce) &&
+                     IsLowerHexNonce(generated_orders_auth->nonce),
+                 "Generated Bitunix nonces must be 128-bit lowercase hex.");
+    ok &= Expect(IsDecimalTimestamp(generated_positions_auth->timestamp) &&
+                     IsDecimalTimestamp(generated_orders_auth->timestamp),
+                 "Generated Bitunix timestamps must be Unix-millisecond decimals.");
+    ok &= Expect(generated_positions_auth->nonce != generated_orders_auth->nonce,
+                 "Independent private reads must use distinct CSPRNG nonces.");
+  }
+
   const quantara::BitunixReadOnlyAuthStamp positions_auth{
       "00112233445566778899aabbccddeeff", "1767225600123"};
   const quantara::BitunixReadOnlyAuthStamp orders_auth{
@@ -93,6 +126,13 @@ int main() {
                      snapshot->pending_orders.orders.size() == 1 &&
                      snapshot->pending_orders.total == 1,
                  "Complete read-only exchange truth must compose atomically.");
+
+    if (generated_positions_auth.has_value() && generated_orders_auth.has_value()) {
+      const auto generated_snapshot = quantara::ReadBitunixExchangeTruth(
+          root, *generated_positions_auth, *generated_orders_auth, GoodTransport);
+      ok &= Expect(generated_snapshot.has_value(),
+                   "Fresh generated auth stamps must satisfy the read-only exchange-truth contract.");
+    }
 
     ok &= Expect(!quantara::ReadBitunixExchangeTruth(
                       root, positions_auth, positions_auth, GoodTransport)

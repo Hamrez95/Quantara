@@ -24,6 +24,12 @@ using BitunixReadOnlyTransport = std::optional<BitunixHttpsReadOnlyResponse> (*)
     const BitunixReadOnlyHttpEnvelope& envelope,
     const BitunixHttpsReadOnlyLimits& limits) noexcept;
 
+// Generates one fresh authentication stamp for a private read. The nonce uses
+// the Windows system-preferred CSPRNG and the timestamp is current Unix epoch
+// milliseconds. Failure to obtain either value is fail-closed.
+[[nodiscard]] std::optional<BitunixReadOnlyAuthStamp>
+GenerateBitunixReadOnlyAuthStamp() noexcept;
+
 // Executes one bounded, authenticated, read-only reconciliation cycle against
 // the two allowlisted Bitunix endpoints. The cycle is accepted only when both
 // responses parse successfully and the pending-order page is complete. It never
