@@ -13,17 +13,23 @@ void main() {
     expect(symbols, containsAll(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT']));
   });
 
-  test('watchlist and Local Live normalization preserve more than thirty symbols', () {
-    final symbols = List.generate(64, (index) => 'Q${index}USDT');
-    final preferences = LocalLivePreferences(
-      symbols: symbols,
-      timeframes: const {'1h'},
-      leverage: 5,
-      riskPercent: 0.25,
-      dailyLossLimitPercent: 1,
-    ).normalized(symbols);
+  test(
+    'watchlist and Local Live normalization preserve more than thirty symbols',
+    () {
+      final symbols = List.generate(64, (index) => 'Q${index}USDT');
+      final preferences = LocalLivePreferences(
+        symbols: symbols,
+        timeframes: const {'1h'},
+        leverage: 5,
+        riskPercent: 0.25,
+        dailyLossLimitPercent: 1,
+      ).normalized(symbols);
 
-    expect(preferences.symbols, symbols);
-    expect(LocalLiveRealtimeUniverse.build(preferences).streams, hasLength(64));
-  });
+      expect(preferences.symbols, symbols);
+      expect(
+        LocalLiveRealtimeUniverse.build(preferences).streams,
+        hasLength(64),
+      );
+    },
+  );
 }
