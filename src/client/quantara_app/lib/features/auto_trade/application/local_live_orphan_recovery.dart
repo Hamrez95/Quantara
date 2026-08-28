@@ -262,3 +262,20 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
     return null;
   }
 }
+
+/// The entry REST fallback has already proved the symbol was flat before submit.
+/// It may therefore adopt exchange position truth only when Bitunix returns one
+/// and only one live position for that symbol. Multiple positions are ambiguous
+/// and must remain unresolved instead of binding to an arbitrary `first` item.
+extension UniqueBitunixLivePositionListSelection on List<BitunixLivePosition> {
+  BitunixLivePosition? get firstOrNull {
+    if (length != 1) return null;
+    final candidate = first;
+    if (candidate.positionId.trim().isEmpty ||
+        !candidate.quantity.isFinite ||
+        candidate.quantity <= 0) {
+      return null;
+    }
+    return candidate;
+  }
+}
