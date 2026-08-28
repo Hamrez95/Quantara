@@ -4,7 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$SkipBuild,
     [switch]$SkipTests,
-    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'bitunix-signing', 'bitunix-authorization', 'bitunix-readonly', 'bitunix-https')]
+    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'bitunix-signing', 'bitunix-authorization', 'bitunix-readonly', 'bitunix-https', 'bitunix-truth')]
     [string]$TestFilter = 'all'
 )
 
@@ -76,6 +76,7 @@ $bitunixRequestSignerTestExe = Join-Path $buildRoot "$Configuration/quantara_win
 $bitunixRequestAuthorizerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_request_authorizer_test.exe"
 $bitunixReadOnlyRequestTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_readonly_request_test.exe"
 $bitunixHttpsReadOnlyTransportTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_https_readonly_transport_test.exe"
+$bitunixExchangeTruthParserTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_exchange_truth_parser_test.exe"
 
 $requiredExecutables = @(
     @{ Path = $serviceExe; Name = 'Windows service executable' },
@@ -93,7 +94,8 @@ $requiredExecutables = @(
     @{ Path = $bitunixRequestSignerTestExe; Name = 'Bitunix request signer parity test executable' },
     @{ Path = $bitunixRequestAuthorizerTestExe; Name = 'Bitunix protected request authorizer test executable' },
     @{ Path = $bitunixReadOnlyRequestTestExe; Name = 'Bitunix read-only request contract test executable' },
-    @{ Path = $bitunixHttpsReadOnlyTransportTestExe; Name = 'Bitunix HTTPS read-only transport test executable' }
+    @{ Path = $bitunixHttpsReadOnlyTransportTestExe; Name = 'Bitunix HTTPS read-only transport test executable' },
+    @{ Path = $bitunixExchangeTruthParserTestExe; Name = 'Bitunix exchange-truth parser test executable' }
 )
 foreach ($required in $requiredExecutables) {
     if (-not (Test-Path $required.Path)) {
@@ -122,6 +124,9 @@ if (-not $SkipTests) {
     }
     if ($TestFilter -in @('all', 'service', 'bitunix-https')) {
         Invoke-BoundedNativeTest -Path $bitunixHttpsReadOnlyTransportTestExe -Name 'quantara_windows_service_bitunix_https_readonly_transport_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-truth')) {
+        Invoke-BoundedNativeTest -Path $bitunixExchangeTruthParserTestExe -Name 'quantara_windows_service_bitunix_exchange_truth_parser_test'
     }
     if ($TestFilter -in @('all', 'client')) {
         Invoke-BoundedNativeTest -Path $clientExe -Name 'quantara_windows_service_client --self-test' -Arguments @('--self-test')
