@@ -53,8 +53,8 @@ final class LocalLiveTradeConfiguration {
   final int scanIntervalSeconds;
 
   void validate() {
-    if (symbols.isEmpty || symbols.length > 30) {
-      throw const FormatException('Select between 1 and 30 symbols.');
+    if (symbols.isEmpty) {
+      throw const FormatException('Select at least one symbol.');
     }
     if (timeframes.isEmpty ||
         timeframes.any(

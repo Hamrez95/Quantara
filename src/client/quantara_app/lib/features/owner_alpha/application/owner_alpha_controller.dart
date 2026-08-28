@@ -54,8 +54,41 @@ final class OwnerAlphaController extends ChangeNotifier {
     }
   }
 
-  static const defaultSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'AVAXUSDT'];
-  static const maximumSymbols = 30;
+  /// Curated from Bitunix USDT perpetual markets with sustained liquidity and
+  /// broad market relevance (reviewed 2026-08-28). This is an onboarding
+  /// preset, not a trading recommendation and it never grants live authority.
+  static const defaultSymbols = [
+    'BTCUSDT',
+    'ETHUSDT',
+    'SOLUSDT',
+    'XRPUSDT',
+    'HYPEUSDT',
+    'ENAUSDT',
+    'DOGEUSDT',
+    'LINKUSDT',
+    'SUIUSDT',
+    'BNBUSDT',
+    'TAOUSDT',
+    '1000PEPEUSDT',
+    'ADAUSDT',
+    'PUMPFUNUSDT',
+    'UNIUSDT',
+    'AAVEUSDT',
+    'WLDUSDT',
+    'NEARUSDT',
+    'FARTCOINUSDT',
+    'BEAMXUSDT',
+    'AVAXUSDT',
+    'LTCUSDT',
+    'BCHUSDT',
+    'WIFUSDT',
+    'DOTUSDT',
+    'TRXUSDT',
+    'ARBUSDT',
+    'OPUSDT',
+    'PENDLEUSDT',
+    'SUSHIUSDT',
+  ];
   static final _symbolPattern = RegExp(r'^[A-Z0-9]{2,20}$');
   static const timeframes = ['5m', '15m', '30m', '1h', '4h', '1D'];
   static const outcomeCatchUpBatchSize = 2;
@@ -155,7 +188,6 @@ final class OwnerAlphaController extends ChangeNotifier {
           .map(_normalizeSymbol)
           .whereType<String>()
           .toSet()
-          .take(maximumSymbols)
           .toList(growable: false);
       if (normalized.isNotEmpty) {
         _symbols = normalized;
@@ -412,12 +444,6 @@ final class OwnerAlphaController extends ChangeNotifier {
         'This symbol is already in the watchlist.',
       );
     }
-    if (_symbols.length >= maximumSymbols) {
-      return _t(
-        'حداکثر ۳۰ نماد قابل پایش است.',
-        'You can monitor up to 30 symbols.',
-      );
-    }
     final added = await _requestScan(
       symbols: [..._symbols, symbol],
       persistSettings: true,
@@ -508,7 +534,6 @@ final class OwnerAlphaController extends ChangeNotifier {
         .map(_normalizeSymbol)
         .whereType<String>()
         .toSet()
-        .take(maximumSymbols)
         .toList(growable: false);
     if (normalized.isEmpty) {
       return _t(

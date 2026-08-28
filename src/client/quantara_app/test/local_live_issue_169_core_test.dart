@@ -7,14 +7,14 @@ import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart
 import 'package:quantara_app/features/owner_alpha/domain/profit_protection_policy.dart';
 
 void main() {
-  test('Local Live accepts a mobile-safe universe larger than twelve', () {
+  test('Local Live accepts a user-selected universe without a symbol cap', () {
     final symbols = List.generate(20, (index) => 'Q${index}USDT');
     expect(() => _configuration(symbols: symbols).validate(), returnsNormally);
     expect(
       () => _configuration(
-        symbols: List.generate(31, (index) => 'Q${index}USDT'),
+        symbols: List.generate(120, (index) => 'Q${index}USDT'),
       ).validate(),
-      throwsFormatException,
+      returnsNormally,
     );
   });
 
