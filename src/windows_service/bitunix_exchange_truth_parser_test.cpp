@@ -1,4 +1,5 @@
 #include "bitunix_exchange_truth_parser.h"
+#include "bitunix_reconciliation_facts_adapter.h"
 
 #include <iostream>
 #include <string_view>
@@ -41,6 +42,48 @@ int main() {
                      position.position_mode == "ONE_WAY" && position.quantity == "0.001" &&
                      position.leverage == 5,
                  "Parsed position facts must preserve the read-only exchange truth exactly.");
+
+    quantara::DurableReconciliationEvidence verified{};
+    verified.position_id = "pos-1";
+    verified.symbol = "BTCUSDT";
+    verified.has_unambiguous_quantara_identity = true;
+    verified.has_complete_exchange_stop = true;
+    verified.has_complete_exchange_take_profit_ladder = true;
+    verified.has_conflicting_order_fill_or_history = false;
+    verified.has_durable_reconstruction = true;
+    const auto facts =
+        quantara::BuildExistingExchangePositionFacts(position, verified);
+    ok &= Expect(facts.has_value() && facts->isolated_margin &&
+                     facts->has_unambiguous_quantara_identity &&
+                     facts->has_complete_exchange_stop &&
+                     facts->has_complete_exchange_take_profit_ladder &&
+                     !facts->has_conflicting_order_fill_or_history &&
+                     facts->has_durable_reconstruction,
+                 "Matching durable/current-cycle evidence must map without inference.");
+
+    auto mismatched = verified;
+    mismatched.position_id = "pos-other";
+    ok &= Expect(!quantara::BuildExistingExchangePositionFacts(position, mismatched)
+                      .has_value(),
+                 "Durable position-id mismatch must fail closed.");
+    mismatched = verified;
+    mismatched.symbol = "ETHUSDT";
+    ok &= Expect(!quantara::BuildExistingExchangePositionFacts(position, mismatched)
+                      .has_value(),
+                 "Durable symbol mismatch must fail closed.");
+
+    quantara::DurableReconciliationEvidence unknown{};
+    unknown.position_id = "pos-1";
+    unknown.symbol = "BTCUSDT";
+    const auto unknown_facts =
+        quantara::BuildExistingExchangePositionFacts(position, unknown);
+    ok &= Expect(unknown_facts.has_value() &&
+                     !unknown_facts->has_unambiguous_quantara_identity &&
+                     !unknown_facts->has_complete_exchange_stop &&
+                     !unknown_facts->has_complete_exchange_take_profit_ladder &&
+                     unknown_facts->has_conflicting_order_fill_or_history &&
+                     !unknown_facts->has_durable_reconstruction,
+                 "Missing evidence must remain fail-closed instead of being inferred.");
   }
 
   constexpr std::string_view kValidOrders = R"json(
