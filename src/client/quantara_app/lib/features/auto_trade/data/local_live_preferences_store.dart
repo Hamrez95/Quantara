@@ -30,7 +30,6 @@ class LocalLivePreferences {
   static const maximumDailyLossPercent = 10.0;
   static const minimumConcurrentPositionCount = 1;
   static const maximumConcurrentPositionCount = 3;
-  static const maximumSymbolCount = 30;
   static const recommendedStrategies = <AnalysisStrategy>[
     AnalysisStrategy.structureZones,
     AnalysisStrategy.trendPullback,
@@ -66,7 +65,6 @@ class LocalLivePreferences {
         .map((item) => item.trim().toUpperCase())
         .where(allowed.contains)
         .toSet()
-        .take(maximumSymbolCount)
         .toList(growable: false);
     final defaults = LocalLivePreferences.defaults(availableSymbols);
     final keptTimeframes = timeframes

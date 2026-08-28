@@ -31,7 +31,6 @@ abstract final class LocalLiveRealtimeUniverse {
             .map((value) => value.trim().toUpperCase())
             .where((value) => RegExp(r'^[A-Z0-9]{5,24}$').hasMatch(value))
             .toSet()
-            .take(LocalLivePreferences.maximumSymbolCount)
             .toList(growable: false)
           ..sort();
     final timeframes =
@@ -55,8 +54,10 @@ abstract final class LocalLiveRealtimeUniverse {
               interval: _intervalByTimeframe[timeframe]!,
             ),
       ],
-      maximumStreams:
-          LocalLivePreferences.maximumSymbolCount * _intervalByTimeframe.length,
+      // The configured user universe is the capacity. There is deliberately no
+      // product-level symbol cap; execution authority remains separately
+      // guarded by Local Live risk and connection checks.
+      maximumStreams: symbols.length * timeframes.length,
     );
   }
 

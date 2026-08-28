@@ -285,8 +285,8 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                         const SizedBox(height: 4),
                         Text(
                           _t(
-                            'تا ۳۰ نماد قابل انتخاب است. اسکن به‌صورت کنترل‌شده انجام می‌شود و سه پوزیشن فقط سقف هم‌زمانی است، نه هدف اجباری.',
-                            'Up to 30 symbols may be selected. Scanning remains paced, and three positions is only a concurrency ceiling—not a forced target.',
+                            'نمادهای واچ‌لیست قابل انتخاب‌اند. اسکن به‌صورت کنترل‌شده انجام می‌شود و سه پوزیشن فقط سقف هم‌زمانی است، نه هدف اجباری.',
+                            'Watchlist symbols may be selected. Scanning remains paced, and three positions is only a concurrency ceiling—not a forced target.',
                           ),
                           style: Theme.of(sheetContext).textTheme.bodySmall,
                         ),
@@ -312,11 +312,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
                                     ? null
                                     : (selected) => mutate(() {
                                         if (selected) {
-                                          if (_enabledSymbols.length <
-                                              LocalLivePreferences
-                                                  .maximumSymbolCount) {
-                                            _enabledSymbols.add(symbol);
-                                          }
+                                          _enabledSymbols.add(symbol);
                                         } else if (_enabledSymbols.length > 1) {
                                           _enabledSymbols.remove(symbol);
                                         }

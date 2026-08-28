@@ -26,7 +26,9 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
   factory BitunixOwnerAlphaRepository({
     required http.Client client,
     Duration timeout = const Duration(seconds: 10),
-    Duration requestSpacing = const Duration(milliseconds: 120),
+    // Four requests are dispatched together. Keep the following batch at or
+    // below Bitunix's documented public-market limit of ten requests/second.
+    Duration requestSpacing = const Duration(milliseconds: 400),
     DateTime Function()? now,
   }) {
     return BitunixOwnerAlphaRepository._(
@@ -552,10 +554,10 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         result.add(symbol);
       }
     }
-    if (result.isEmpty || result.length > 12) {
+    if (result.isEmpty) {
       throw const OwnerAlphaDataException(
-        'واچ‌لیست باید بین ۱ تا ۱۲ نماد داشته باشد.',
-        'The watchlist must contain between 1 and 12 symbols.',
+        'واچ‌لیست باید دست‌کم یک نماد داشته باشد.',
+        'The watchlist must contain at least one symbol.',
       );
     }
     return result;
