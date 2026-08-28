@@ -1,10 +1,13 @@
 #include "management_only_recovery_coordinator.h"
+#include "../../windows_service/management_only_worker_core.h"
 
 #include <iostream>
 #include <string_view>
 
 namespace {
 
+using quantara::BitunixPendingPosition;
+using quantara::DurableReconciliationEvidence;
 using quantara::ExistingExchangePositionFacts;
 using quantara::ExistingPositionClassification;
 using quantara::ExistingPositionManagementAuthority;
@@ -12,6 +15,7 @@ using quantara::ManagementOnlyRecoveryCoordinator;
 using quantara::ManagementOnlyRecoveryMode;
 using quantara::ManagementOnlyRecoverySnapshot;
 using quantara::RecoveryLifecycleBoundary;
+using quantara::WindowsManagementOnlyWorkerCore;
 
 ExistingExchangePositionFacts Verified(bool managed = false) {
   return {.position_id = "position-1",
@@ -23,6 +27,32 @@ ExistingExchangePositionFacts Verified(bool managed = false) {
           .has_conflicting_order_fill_or_history = false,
           .has_durable_reconstruction = true,
           .is_already_managed = managed};
+}
+
+BitunixPendingPosition ParsedPosition(std::string id = "position-1",
+                                      std::string symbol = "BTCUSDT") {
+  BitunixPendingPosition position{};
+  position.position_id = std::move(id);
+  position.symbol = std::move(symbol);
+  position.quantity = "0.001";
+  position.side = "LONG";
+  position.margin_mode = "ISOLATION";
+  position.position_mode = "ONE_WAY";
+  position.leverage = 5;
+  return position;
+}
+
+DurableReconciliationEvidence DurableEvidence(
+    std::string id = "position-1", std::string symbol = "BTCUSDT") {
+  DurableReconciliationEvidence evidence{};
+  evidence.position_id = std::move(id);
+  evidence.symbol = std::move(symbol);
+  evidence.has_unambiguous_quantara_identity = true;
+  evidence.has_complete_exchange_stop = true;
+  evidence.has_complete_exchange_take_profit_ladder = true;
+  evidence.has_conflicting_order_fill_or_history = false;
+  evidence.has_durable_reconstruction = true;
+  return evidence;
 }
 
 bool Expect(bool condition, const char* message) {
@@ -76,6 +106,16 @@ int main() {
                        ExistingPositionManagementAuthority::kManageExistingOnly,
                        "allOrphansRecoverable",
                        "Duplicate reconciliation must be idempotent.");
+
+  coordinator.RequireFreshReconciliation("freshExchangeTruthRequired");
+  ok &= ExpectSnapshot(coordinator.snapshot(),
+                       ManagementOnlyRecoveryMode::kReconciliationRequired,
+                       ExistingPositionClassification::kAmbiguous,
+                       ExistingPositionManagementAuthority::kReconciliationOnly,
+                       "freshExchangeTruthRequired",
+                       "A fresh exchange-truth cycle must revoke prior authority.");
+  ok &= Expect(!coordinator.CanManageExistingPositions(),
+               "Fresh reconciliation must revoke management authority before validation.");
 
   coordinator.MarkLifecycleBoundary(RecoveryLifecycleBoundary::kNetworkRestored);
   ok &= ExpectSnapshot(coordinator.snapshot(),
@@ -182,6 +222,45 @@ int main() {
                      !coordinator.CanOpenNewEntry(),
                  "Restart/update/rollback must strip authority fail-closed.");
   }
+
+  WindowsManagementOnlyWorkerCore worker;
+  const auto worker_reconciled = worker.ReconcileFreshExchangeTruth(
+      {ParsedPosition()}, {DurableEvidence()});
+  ok &= Expect(worker_reconciled.has_value() &&
+                   worker.CanManageExistingPositions() &&
+                   !worker.CanOpenNewEntry(),
+               "Windows worker may manage only a fully verified existing position.");
+
+  const auto missing_evidence = worker.ReconcileFreshExchangeTruth(
+      {ParsedPosition()}, {});
+  ok &= Expect(!missing_evidence.has_value() &&
+                   !worker.CanManageExistingPositions() &&
+                   worker.snapshot().mode ==
+                       ManagementOnlyRecoveryMode::kReconciliationRequired,
+               "Missing durable evidence must revoke prior management authority.");
+
+  const auto duplicate_evidence = worker.ReconcileFreshExchangeTruth(
+      {ParsedPosition()}, {DurableEvidence(), DurableEvidence()});
+  ok &= Expect(!duplicate_evidence.has_value() &&
+                   !worker.CanManageExistingPositions(),
+               "Duplicate durable evidence must fail closed.");
+
+  auto ambiguous = DurableEvidence();
+  ambiguous.has_unambiguous_quantara_identity = false;
+  const auto ambiguous_result = worker.ReconcileFreshExchangeTruth(
+      {ParsedPosition()}, {ambiguous});
+  ok &= Expect(ambiguous_result.has_value() &&
+                   ambiguous_result->classification ==
+                       ExistingPositionClassification::kExternalUnmanaged &&
+                   !worker.CanManageExistingPositions(),
+               "Ambiguous ownership must remain unmanaged in the Windows worker.");
+
+  worker.MarkLifecycleBoundary(RecoveryLifecycleBoundary::kUpdate);
+  ok &= Expect(!worker.CanManageExistingPositions() &&
+                   !worker.CanOpenNewEntry() &&
+                   worker.snapshot().mode ==
+                       ManagementOnlyRecoveryMode::kReconciliationRequired,
+               "Windows update boundary must strip management authority.");
 
   return ok ? 0 : 1;
 }
