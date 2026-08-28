@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/application/private_truth_coordinator.dart';
 import 'package:quantara_app/features/auto_trade/data/bitunix_private_websocket_client.dart';
 import 'package:quantara_app/features/auto_trade/domain/auto_trade_models.dart';
+import 'package:quantara_app/features/auto_trade/domain/private_truth_models.dart';
 
 final class _CoordinatorTransport implements PrivateWsTransport {
   final StreamController<Object?> controller = StreamController<Object?>();
@@ -79,6 +80,138 @@ void main() {
     },
     syncedAt: now,
   );
+
+  PrivateOrderUpdate order({
+    String orderId = 'order-1',
+    String clientId = 'client-1',
+    String symbol = 'BTCUSDT',
+    String status = 'FILLED',
+    double dealAmount = 0.01,
+  }) => PrivateOrderUpdate(
+    event: 'UPDATE',
+    orderId: orderId,
+    clientId: clientId,
+    symbol: symbol,
+    side: 'BUY',
+    orderType: 'MARKET',
+    orderStatus: status,
+    quantity: dealAmount,
+    dealAmount: dealAmount,
+    averagePrice: 100000,
+    fee: 0.1,
+    updatedAtUtc: now,
+  );
+
+  PrivatePositionUpdate position({
+    String positionId = 'position-1',
+    String symbol = 'BTCUSDT',
+    double quantity = 0.01,
+  }) => PrivatePositionUpdate(
+    event: 'UPDATE',
+    positionId: positionId,
+    symbol: symbol,
+    side: 'LONG',
+    marginMode: 'ISOLATION',
+    positionMode: 'ONE_WAY',
+    leverage: 3,
+    margin: 50,
+    quantity: quantity,
+    realizedPnl: 0,
+    unrealizedPnl: 1,
+    funding: 0,
+    fee: 0.1,
+  );
+
+  PrivateTruthProjection projection({
+    required Iterable<PrivateOrderUpdate> orders,
+    required Iterable<PrivatePositionUpdate> positions,
+  }) => PrivateTruthProjection(
+    cycleId: 1,
+    health: PrivateTruthHealth.fresh,
+    lagReason: PrivateTruthLagReason.none,
+    updatedAtUtc: now,
+    restVerifiedAtUtc: now,
+    balances: const {},
+    orders: {for (final item in orders) item.orderId: item},
+    positions: {for (final item in positions) item.positionId: item},
+    protections: const {},
+    resourceExchangeTimes: const {},
+    recentEventIdentities: const [],
+    metrics: const PrivateTruthMetrics(),
+  );
+
+  test('private fill truth accepts one unique filled order and position', () {
+    final result = PrivateTruthFillMatchPolicy.match(
+      projection: projection(orders: [order()], positions: [position()]),
+      orderId: 'order-1',
+      clientId: 'client-1',
+      symbol: 'BTCUSDT',
+    );
+
+    expect(result, isNotNull);
+    expect(result!.order.orderId, 'order-1');
+    expect(result.position.positionId, 'position-1');
+  });
+
+  test('private fill truth rejects multiple compatible positions', () {
+    final result = PrivateTruthFillMatchPolicy.match(
+      projection: projection(
+        orders: [order()],
+        positions: [
+          position(),
+          position(positionId: 'position-2', quantity: 0.02),
+        ],
+      ),
+      orderId: 'order-1',
+      clientId: 'client-1',
+      symbol: 'BTCUSDT',
+    );
+
+    expect(result, isNull);
+  });
+
+  test('private fill truth rejects duplicate matching filled orders', () {
+    final result = PrivateTruthFillMatchPolicy.match(
+      projection: projection(
+        orders: [
+          order(),
+          order(orderId: 'order-2'),
+        ],
+        positions: [position()],
+      ),
+      orderId: 'order-1',
+      clientId: 'client-1',
+      symbol: 'BTCUSDT',
+    );
+
+    expect(result, isNull);
+  });
+
+  test('private fill truth ignores unrelated order and position evidence', () {
+    final result = PrivateTruthFillMatchPolicy.match(
+      projection: projection(
+        orders: [
+          order(),
+          order(
+            orderId: 'eth-order',
+            clientId: 'eth-client',
+            symbol: 'ETHUSDT',
+            dealAmount: 1,
+          ),
+        ],
+        positions: [
+          position(),
+          position(positionId: 'eth-position', symbol: 'ETHUSDT', quantity: 1),
+        ],
+      ),
+      orderId: 'order-1',
+      clientId: 'client-1',
+      symbol: 'BTCUSDT',
+    );
+
+    expect(result, isNotNull);
+    expect(result!.position.positionId, 'position-1');
+  });
 
   test(
     'reconnect blocks entries until a fresh REST rebuild completes',

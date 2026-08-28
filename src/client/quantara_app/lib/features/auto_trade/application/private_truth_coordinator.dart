@@ -14,6 +14,57 @@ typedef PrivateTruthRestFetcher =
     );
 typedef PrivateTruthClock = DateTime Function();
 
+abstract final class PrivateTruthFillMatchPolicy {
+  static PrivateTruthFillConfirmation? match({
+    required PrivateTruthProjection projection,
+    required String orderId,
+    required String clientId,
+    required String symbol,
+  }) {
+    final normalizedOrderId = orderId.trim();
+    final normalizedClientId = clientId.trim();
+    final normalizedSymbol = symbol.trim().toUpperCase();
+    if (normalizedSymbol.isEmpty ||
+        (normalizedOrderId.isEmpty && normalizedClientId.isEmpty)) {
+      return null;
+    }
+
+    final filledOrders = projection.orders.values
+        .where(
+          (order) =>
+              order.symbol.toUpperCase() == normalizedSymbol &&
+              ((normalizedOrderId.isNotEmpty &&
+                      order.orderId.trim() == normalizedOrderId) ||
+                  (normalizedClientId.isNotEmpty &&
+                      order.clientId.trim() == normalizedClientId)) &&
+              order.orderStatus.toUpperCase() == 'FILLED' &&
+              order.dealAmount.isFinite &&
+              order.dealAmount > 0,
+        )
+        .toList(growable: false);
+    if (filledOrders.length != 1) return null;
+    final order = filledOrders.single;
+
+    final matchingPositions = projection.positions.values
+        .where(
+          (item) =>
+              !item.closed &&
+              item.positionId.trim().isNotEmpty &&
+              item.symbol.toUpperCase() == normalizedSymbol &&
+              item.quantity.isFinite &&
+              item.quantity > 0 &&
+              item.quantity + 1e-9 >= order.dealAmount,
+        )
+        .toList(growable: false);
+    if (matchingPositions.length != 1) return null;
+
+    return PrivateTruthFillConfirmation(
+      order: order,
+      position: matchingPositions.single,
+    );
+  }
+}
+
 final class PrivateTruthCoordinator {
   PrivateTruthCoordinator(
     this._socketClient,
@@ -203,33 +254,13 @@ final class PrivateTruthCoordinator {
     required String symbol,
     Duration timeout = const Duration(milliseconds: 3500),
   }) async {
-    PrivateTruthFillConfirmation? match(PrivateTruthProjection projection) {
-      final normalizedOrderId = orderId.trim();
-      final normalizedClientId = clientId.trim();
-      final normalizedSymbol = symbol.trim().toUpperCase();
-      final matchingOrders = projection.orders.values.where(
-        (order) =>
-            order.symbol.toUpperCase() == normalizedSymbol &&
-            ((normalizedOrderId.isNotEmpty &&
-                    order.orderId.trim() == normalizedOrderId) ||
-                (normalizedClientId.isNotEmpty &&
-                    order.clientId.trim() == normalizedClientId)),
-      );
-      final order = matchingOrders
-          .where((item) => item.orderStatus.toUpperCase() == 'FILLED')
-          .firstOrNull;
-      if (order == null || order.dealAmount <= 0) return null;
-      final position = projection.positions.values
-          .where(
-            (item) =>
-                !item.closed &&
-                item.symbol.toUpperCase() == normalizedSymbol &&
-                item.quantity + 1e-9 >= order.dealAmount,
-          )
-          .firstOrNull;
-      if (position == null) return null;
-      return PrivateTruthFillConfirmation(order: order, position: position);
-    }
+    PrivateTruthFillConfirmation? match(PrivateTruthProjection projection) =>
+        PrivateTruthFillMatchPolicy.match(
+          projection: projection,
+          orderId: orderId,
+          clientId: clientId,
+          symbol: symbol,
+        );
 
     final immediate = match(_projection);
     if (immediate != null) return immediate;
