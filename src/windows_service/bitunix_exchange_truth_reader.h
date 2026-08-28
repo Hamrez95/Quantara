@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "bitunix_exchange_truth_parser.h"
 #include "bitunix_https_readonly_transport.h"
