@@ -1,5 +1,10 @@
 #include "bitunix_exchange_truth_reader.h"
 
+#include <bcrypt.h>
+
+#include <array>
+#include <chrono>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -25,6 +30,36 @@ bool ValidAuthStamp(const BitunixReadOnlyAuthStamp& stamp) noexcept {
 }
 
 }  // namespace
+
+std::optional<BitunixReadOnlyAuthStamp>
+GenerateBitunixReadOnlyAuthStamp() noexcept {
+  try {
+    std::array<unsigned char, 16> random_bytes{};
+    if (BCryptGenRandom(nullptr, random_bytes.data(),
+                        static_cast<ULONG>(random_bytes.size()),
+                        BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) {
+      return std::nullopt;
+    }
+
+    constexpr char kHex[] = "0123456789abcdef";
+    std::string nonce;
+    nonce.reserve(random_bytes.size() * 2);
+    for (const auto byte : random_bytes) {
+      nonce.push_back(kHex[(byte >> 4) & 0x0f]);
+      nonce.push_back(kHex[byte & 0x0f]);
+    }
+
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    const auto timestamp_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    if (timestamp_ms <= 0) return std::nullopt;
+
+    return BitunixReadOnlyAuthStamp{std::move(nonce),
+                                    std::to_string(timestamp_ms)};
+  } catch (...) {
+    return std::nullopt;
+  }
+}
 
 std::optional<BitunixExchangeTruthSnapshot> ReadBitunixExchangeTruth(
     const std::filesystem::path& credential_root,
