@@ -416,3 +416,25 @@ target_compile_options(quantara_windows_service_bitunix_exchange_truth_reader_te
   /permissive-
 )
 target_link_libraries(quantara_windows_service_bitunix_exchange_truth_reader_test PRIVATE advapi32 bcrypt crypt32 winhttp)
+
+add_executable(quantara_windows_service_bitunix_management_only_reconciliation_test
+  bitunix_management_only_reconciliation.cpp
+  bitunix_management_only_reconciliation.h
+  bitunix_management_only_reconciliation_test.cpp
+  ../native/execution/existing_position_management_policy.cpp
+  ../native/execution/existing_position_management_policy.h
+  ../native/execution/management_only_recovery_coordinator.cpp
+  ../native/execution/management_only_recovery_coordinator.h
+)
+target_compile_features(quantara_windows_service_bitunix_management_only_reconciliation_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_bitunix_management_only_reconciliation_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_bitunix_management_only_reconciliation_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
