@@ -30,8 +30,26 @@ std::string_view ServiceSafetyStateName(ServiceSafetyState state) noexcept {
       return "interrupted";
     case ServiceSafetyState::kReconciliationRequired:
       return "reconciliationRequired";
+    case ServiceSafetyState::kManageExistingOnly:
+      return "manageExistingOnly";
   }
   return "unknown";
+}
+
+ServiceSafetyState ServiceSafetyStateFromManagementOnlySnapshot(
+    const ManagementOnlyRecoverySnapshot& snapshot) noexcept {
+  if (snapshot.mode == ManagementOnlyRecoveryMode::kManageExistingOnly &&
+      snapshot.authority ==
+          ExistingPositionManagementAuthority::kManageExistingOnly &&
+      snapshot.blocks_new_entries) {
+    return ServiceSafetyState::kManageExistingOnly;
+  }
+  if (snapshot.mode == ManagementOnlyRecoveryMode::kReconciliationRequired ||
+      snapshot.authority ==
+          ExistingPositionManagementAuthority::kReconciliationOnly) {
+    return ServiceSafetyState::kReconciliationRequired;
+  }
+  return ServiceSafetyState::kDisarmed;
 }
 
 std::string_view CredentialReadinessName(CredentialReadiness readiness) noexcept {
