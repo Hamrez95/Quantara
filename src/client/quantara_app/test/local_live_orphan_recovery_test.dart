@@ -216,4 +216,46 @@ void main() {
     expect(decision.allowed, isFalse);
     expect(decision.reason, contains('do not cover'));
   });
+
+  test('REST fallback accepts exactly one valid position candidate', () {
+    final candidates = <BitunixLivePosition>[position];
+    expect(candidates.firstOrNull?.positionId, 'xrp-position-1');
+  });
+
+  test('REST fallback rejects ambiguous position candidates', () {
+    const second = BitunixLivePosition(
+      positionId: 'xrp-position-2',
+      symbol: 'XRPUSDT',
+      quantity: 10,
+      side: 'SELL',
+      marginMode: 'ISOLATION',
+      positionMode: 'HEDGE',
+      leverage: 10,
+      averageOpenPrice: 1.07,
+      realizedPnl: 0,
+      unrealizedPnl: 0,
+      fee: 0,
+      funding: 0,
+    );
+    final candidates = <BitunixLivePosition>[position, second];
+    expect(candidates.firstOrNull, isNull);
+  });
+
+  test('REST fallback rejects invalid single-position identity', () {
+    const invalid = BitunixLivePosition(
+      positionId: '',
+      symbol: 'XRPUSDT',
+      quantity: 67.8,
+      side: 'BUY',
+      marginMode: 'ISOLATION',
+      positionMode: 'HEDGE',
+      leverage: 10,
+      averageOpenPrice: 1.069,
+      realizedPnl: 0,
+      unrealizedPnl: 0,
+      fee: 0,
+      funding: 0,
+    );
+    expect(<BitunixLivePosition>[invalid].firstOrNull, isNull);
+  });
 }
