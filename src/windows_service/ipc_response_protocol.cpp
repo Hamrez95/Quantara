@@ -20,6 +20,12 @@ bool IsSafeResponseRequestId(std::string_view value) noexcept {
   return true;
 }
 
+bool IsManageExistingClassification(
+    ExistingPositionClassification classification) noexcept {
+  return classification == ExistingPositionClassification::kManaged ||
+         classification == ExistingPositionClassification::kRecoverableOrphan;
+}
+
 }  // namespace
 
 std::string_view ServiceSafetyStateName(ServiceSafetyState state) noexcept {
@@ -41,6 +47,7 @@ ServiceSafetyState ServiceSafetyStateFromManagementOnlySnapshot(
   if (snapshot.mode == ManagementOnlyRecoveryMode::kManageExistingOnly &&
       snapshot.authority ==
           ExistingPositionManagementAuthority::kManageExistingOnly &&
+      IsManageExistingClassification(snapshot.classification) &&
       snapshot.blocks_new_entries) {
     return ServiceSafetyState::kManageExistingOnly;
   }
