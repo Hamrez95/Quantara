@@ -15,6 +15,14 @@ typedef PrivateTruthRestFetcher =
 typedef PrivateTruthClock = DateTime Function();
 
 abstract final class PrivateTruthFillMatchPolicy {
+  static String? _expectedPositionSide(String orderSide) {
+    return switch (orderSide.trim().toUpperCase()) {
+      'BUY' => 'LONG',
+      'SELL' => 'SHORT',
+      _ => null,
+    };
+  }
+
   static PrivateTruthFillConfirmation? match({
     required PrivateTruthProjection projection,
     required String orderId,
@@ -44,6 +52,8 @@ abstract final class PrivateTruthFillMatchPolicy {
         .toList(growable: false);
     if (filledOrders.length != 1) return null;
     final order = filledOrders.single;
+    final expectedPositionSide = _expectedPositionSide(order.side);
+    if (expectedPositionSide == null) return null;
 
     final matchingPositions = projection.positions.values
         .where(
@@ -51,6 +61,7 @@ abstract final class PrivateTruthFillMatchPolicy {
               !item.closed &&
               item.positionId.trim().isNotEmpty &&
               item.symbol.toUpperCase() == normalizedSymbol &&
+              item.side.trim().toUpperCase() == expectedPositionSide &&
               item.quantity.isFinite &&
               item.quantity > 0 &&
               item.quantity + 1e-9 >= order.dealAmount,
