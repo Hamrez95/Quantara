@@ -1,0 +1,73 @@
+name: Temporary #107 REST side patch
+
+on:
+  push:
+    branches:
+      - fix/107-rest-fill-side-binding
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/107-rest-fill-side-binding
+      - name: Apply fail-closed REST fill side binding
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          service_path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
+          service = service_path.read_text()
+
+          call_old = """              orderId: placed.orderId,\n              symbol: idea.symbol,\n            );"""
+          call_new = """              orderId: placed.orderId,\n              symbol: idea.symbol,\n              expectedPositionSide: idea.direction == TradeDirection.long\n                  ? 'LONG'\n                  : 'SHORT',\n            );"""
+          count = service.count(call_old)
+          if count != 2:
+              raise SystemExit(f'expected 2 REST reconciliation call sites, found {count}')
+          service = service.replace(call_old, call_new)
+
+          sig_old = """    required String orderId,\n    required String symbol,\n  }) async {"""
+          sig_new = """    required String orderId,\n    required String symbol,\n    required String expectedPositionSide,\n  }) async {"""
+          if service.count(sig_old) != 1:
+              raise SystemExit('REST reconciliation signature anchor changed')
+          service = service.replace(sig_old, sig_new)
+
+          return_old = """    return (detail: detail, position: positions.firstOrNull);"""
+          return_new = """    return (\n      detail: detail,\n      position: positions.uniqueMatchingSide(expectedPositionSide),\n    );"""
+          if service.count(return_old) != 1:
+              raise SystemExit('REST reconciliation selection anchor changed')
+          service = service.replace(return_old, return_new)
+          service_path.write_text(service)
+
+          helper_path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_orphan_recovery.dart')
+          helper = helper_path.read_text()
+          helper_old = """    return candidate;\n  }\n}\n"""
+          helper_new = """    return candidate;\n  }\n\n  BitunixLivePosition? uniqueMatchingSide(String expectedSide) {\n    final candidate = firstOrNull;\n    if (candidate == null) return null;\n\n    String? normalized(String raw) {\n      final value = raw.trim().toUpperCase();\n      if (value.contains('BUY') || value.contains('LONG')) return 'LONG';\n      if (value.contains('SELL') || value.contains('SHORT')) return 'SHORT';\n      return null;\n    }\n\n    final expected = normalized(expectedSide);\n    final actual = normalized(candidate.side);\n    if (expected == null || actual == null || actual != expected) return null;\n    return candidate;\n  }\n}\n"""
+          if helper.count(helper_old) != 1:
+              raise SystemExit('position selection extension anchor changed')
+          helper = helper.replace(helper_old, helper_new)
+          helper_path.write_text(helper)
+
+          test_path = Path('src/client/quantara_app/test/local_live_orphan_recovery_test.dart')
+          test = test_path.read_text()
+          test_anchor = """  test('REST fallback rejects invalid single-position identity', () {"""
+          if test.count(test_anchor) != 1:
+              raise SystemExit('REST fallback test anchor changed')
+          additions = """  test('REST fallback accepts a unique position on the expected long side', () {\n    final candidates = <BitunixLivePosition>[position];\n    expect(\n      candidates.uniqueMatchingSide('LONG')?.positionId,\n      'xrp-position-1',\n    );\n  });\n\n  test('REST fallback rejects a unique position on the opposite side', () {\n    final candidates = <BitunixLivePosition>[position];\n    expect(candidates.uniqueMatchingSide('SHORT'), isNull);\n  });\n\n  test('REST fallback normalizes SELL to the expected short side', () {\n    const shortPosition = BitunixLivePosition(\n      positionId: 'xrp-position-short',\n      symbol: 'XRPUSDT',\n      quantity: 12,\n      side: 'SELL',\n      marginMode: 'ISOLATION',\n      positionMode: 'HEDGE',\n      leverage: 10,\n      averageOpenPrice: 1.069,\n      realizedPnl: 0,\n      unrealizedPnl: 0,\n      fee: 0,\n      funding: 0,\n    );\n    expect(\n      <BitunixLivePosition>[shortPosition]\n          .uniqueMatchingSide('SHORT')\n          ?.positionId,\n      'xrp-position-short',\n    );\n  });\n\n"""
+          test = test.replace(test_anchor, additions + test_anchor)
+          test_path.write_text(test)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
+                  src/client/quantara_app/lib/features/auto_trade/application/local_live_orphan_recovery.dart \
+                  src/client/quantara_app/test/local_live_orphan_recovery_test.dart
+          git commit -m "fix(auto-trade): bind REST fill truth to position side"
+          git push origin HEAD:fix/107-rest-fill-side-binding
