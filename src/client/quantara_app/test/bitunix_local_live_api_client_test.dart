@@ -117,7 +117,7 @@ void main() {
     },
   );
 
-  test('emergency close returns only after exact position is exchange-flat', () async {
+  test('emergency close requires exchange-flat position', () async {
     var requestCount = 0;
     final api = client((request) async {
       requestCount++;
@@ -137,7 +137,10 @@ void main() {
         );
       }
       expect(request.method, 'GET');
-      expect(request.url.path, '/api/v1/futures/position/get_pending_positions');
+      expect(
+        request.url.path,
+        '/api/v1/futures/position/get_pending_positions',
+      );
       expect(request.url.queryParameters['symbol'], 'BTCUSDT');
       return http.Response(
         jsonEncode({'code': 0, 'msg': 'Success', 'data': []}),
@@ -155,7 +158,7 @@ void main() {
     expect(requestCount, 2);
   });
 
-  test('emergency close rejects mismatched mutation identity', () async {
+  test('emergency close rejects mismatched identity', () async {
     final api = client((request) async {
       expect(request.method, 'POST');
       return http.Response(
@@ -184,7 +187,7 @@ void main() {
     );
   });
 
-  test('emergency close fails closed while exact position remains open', () async {
+  test('emergency close fails closed if position remains open', () async {
     var positionReads = 0;
     final api = client((request) async {
       if (request.method == 'POST') {
