@@ -127,6 +127,27 @@ target_compile_options(quantara_windows_service_credential_vault_test PRIVATE
 )
 target_link_libraries(quantara_windows_service_credential_vault_test PRIVATE advapi32 crypt32)
 
+add_executable(quantara_windows_service_recovery_evidence_vault_test
+  recovery_evidence_vault.cpp
+  recovery_evidence_vault.h
+  recovery_evidence_vault_test.cpp
+  credential_vault.cpp
+  credential_vault.h
+)
+target_compile_features(quantara_windows_service_recovery_evidence_vault_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_recovery_evidence_vault_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_recovery_evidence_vault_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
+target_link_libraries(quantara_windows_service_recovery_evidence_vault_test PRIVATE advapi32 crypt32)
+
 add_executable(quantara_windows_service_credential_readiness_test
   credential_readiness.cpp
   credential_readiness.h

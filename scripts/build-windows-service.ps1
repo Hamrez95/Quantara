@@ -4,7 +4,7 @@ param(
     [string]$Configuration = 'Release',
     [switch]$SkipBuild,
     [switch]$SkipTests,
-    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'bitunix-signing', 'bitunix-authorization', 'bitunix-readonly', 'bitunix-https', 'bitunix-truth', 'bitunix-cycle', 'bitunix-reconcile')]
+    [ValidateSet('all', 'service', 'client', 'tray', 'credential', 'provisioner', 'response', 'session', 'listener', 'network', 'position-management', 'recovery', 'recovery-vault', 'bitunix-signing', 'bitunix-authorization', 'bitunix-readonly', 'bitunix-https', 'bitunix-truth', 'bitunix-cycle', 'bitunix-reconcile')]
     [string]$TestFilter = 'all'
 )
 
@@ -65,6 +65,7 @@ $clientExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_clien
 $credentialsExe = Join-Path $buildRoot "$Configuration/quantara_windows_credentials.exe"
 $trayExe = Join-Path $buildRoot "$Configuration/quantara_windows_tray.exe"
 $credentialVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_vault_test.exe"
+$recoveryEvidenceVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_recovery_evidence_vault_test.exe"
 $credentialReadinessTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_readiness_test.exe"
 $responseTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_response_test.exe"
 $sessionTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_session_test.exe"
@@ -86,6 +87,7 @@ $requiredExecutables = @(
     @{ Path = $credentialsExe; Name = 'Windows credential provisioner executable' },
     @{ Path = $trayExe; Name = 'Windows tray status monitor executable' },
     @{ Path = $credentialVaultTestExe; Name = 'credential vault test executable' },
+    @{ Path = $recoveryEvidenceVaultTestExe; Name = 'recovery evidence vault test executable' },
     @{ Path = $credentialReadinessTestExe; Name = 'credential readiness test executable' },
     @{ Path = $responseTestExe; Name = 'response test executable' },
     @{ Path = $sessionTestExe; Name = 'session test executable' },
@@ -110,6 +112,9 @@ foreach ($required in $requiredExecutables) {
 if (-not $SkipTests) {
     if ($TestFilter -in @('all', 'service')) {
         Invoke-BoundedNativeTest -Path $serviceExe -Name 'quantara_windows_service --self-test' -Arguments @('--self-test')
+    }
+    if ($TestFilter -in @('all', 'service', 'recovery', 'recovery-vault')) {
+        Invoke-BoundedNativeTest -Path $recoveryEvidenceVaultTestExe -Name 'quantara_windows_service_recovery_evidence_vault_test'
     }
     if ($TestFilter -in @('all', 'service', 'position-management')) {
         Invoke-BoundedNativeTest -Path $existingPositionManagementPolicyTestExe -Name 'quantara_windows_service_existing_position_management_policy_test'
