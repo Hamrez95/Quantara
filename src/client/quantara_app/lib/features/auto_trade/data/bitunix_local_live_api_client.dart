@@ -481,9 +481,15 @@ final class BitunixLocalLiveApiClient {
     required String orderId,
     required BitunixApiCredentials credentials,
   }) async {
+    final expectedOrderId = orderId.trim();
+    if (expectedOrderId.isEmpty) {
+      throw const LocalLiveTradeSafeException(
+        'Order detail identity was missing.',
+      );
+    }
     final response = await _signedGet(
       '/api/v1/futures/trade/get_order_detail',
-      {'orderId': orderId},
+      {'orderId': expectedOrderId},
       credentials,
     );
     final item = _firstMap(response['data']);
@@ -492,8 +498,14 @@ final class BitunixLocalLiveApiClient {
         'Bitunix order detail was empty.',
       );
     }
+    final returnedOrderId = _string(item['orderId']).trim();
+    if (returnedOrderId != expectedOrderId) {
+      throw const LocalLiveTradeSafeException(
+        'Bitunix order detail identity did not match the requested order.',
+      );
+    }
     return BitunixOrderDetail(
-      orderId: _string(item['orderId']),
+      orderId: returnedOrderId,
       clientId: _string(item['clientId']),
       symbol: _string(item['symbol']),
       quantity: _number(item['qty']),
