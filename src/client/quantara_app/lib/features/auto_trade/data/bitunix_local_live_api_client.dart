@@ -708,19 +708,51 @@ final class BitunixLocalLiveApiClient {
     required String clientId,
     required BitunixApiCredentials credentials,
   }) async {
+    final expectedPositionId = position.positionId.trim();
+    if (expectedPositionId.isEmpty) {
+      throw const LocalLiveTradeSafeException(
+        'Emergency close position identity was missing.',
+      );
+    }
     final response = await _signedPost(
       '/api/v1/futures/trade/flash_close_position',
-      SplayTreeMap<String, Object?>.from({'positionId': position.positionId}),
+      SplayTreeMap<String, Object?>.from({'positionId': expectedPositionId}),
       credentials,
     );
     final data = _firstMap(response['data']);
-    final positionId = _string(data?['positionId']);
-    if (positionId.isEmpty) {
+    final returnedPositionId = _string(data?['positionId']).trim();
+    if (returnedPositionId != expectedPositionId) {
       throw const LocalLiveTradeSafeException(
-        'Bitunix did not confirm the emergency position close.',
+        'Bitunix emergency close identity did not match the requested position.',
       );
     }
-    return BitunixPlacedOrder(orderId: positionId, clientId: clientId);
+
+    // A successful mutation acknowledgement is not proof that exposure is
+    // flat. Re-read bounded current position truth and return only when the
+    // exact position identity disappears from the exchange snapshot. Other
+    // same-symbol positions do not prove or disprove closure of this position.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final positions = await fetchPositions(
+        credentials,
+        symbol: position.symbol,
+      );
+      final targetStillOpen = positions.any(
+        (item) =>
+            item.positionId.trim() == expectedPositionId && item.quantity > 0,
+      );
+      if (!targetStillOpen) {
+        return BitunixPlacedOrder(
+          orderId: returnedPositionId,
+          clientId: clientId,
+        );
+      }
+      if (attempt < 2) {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+    }
+    throw const LocalLiveTradeSafeException(
+      'Emergency close was acknowledged but exchange still reports position exposure.',
+    );
   }
 
   Future<Map<String, Object?>> _publicGet(
