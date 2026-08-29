@@ -17,11 +17,11 @@ using quantara::ExecuteExistingPositionMutation;
 ExistingExchangePositionFacts VerifiedPosition() {
   return {.position_id = "position-1",
           .symbol = "BTCUSDT",
-          .has_quantara_identity = true,
           .isolated_margin = true,
+          .has_unambiguous_quantara_identity = true,
           .has_complete_exchange_stop = true,
-          .has_complete_tp_ladder = true,
-          .has_conflicting_exchange_history = false,
+          .has_complete_exchange_take_profit_ladder = true,
+          .has_conflicting_order_fill_or_history = false,
           .has_durable_reconstruction = true,
           .is_already_managed = true};
 }
