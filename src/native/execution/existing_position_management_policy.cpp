@@ -9,6 +9,11 @@ constexpr ExistingPositionManagementDecision Decision(
   return {classification, authority, true, reason};
 }
 
+constexpr ExistingPositionMutationDecision MutationDecision(
+    bool allowed, std::string_view reason) {
+  return {allowed, reason};
+}
+
 bool HasIdentity(const ExistingExchangePositionFacts& facts) noexcept {
   return !facts.position_id.empty() && !facts.symbol.empty();
 }
@@ -83,6 +88,52 @@ ExistingPositionManagementDecision EvaluateExistingPortfolio(
                       : ExistingPositionClassification::kManaged,
                   ExistingPositionManagementAuthority::kManageExistingOnly,
                   any_recoverable ? "allOrphansRecoverable" : "allManagedVerified");
+}
+
+ExistingPositionMutationDecision AuthorizeExistingPositionMutation(
+    const ExistingPositionManagementDecision& portfolio_decision,
+    const ExistingExchangePositionFacts& position,
+    const ExistingPositionMutationRequest& request) noexcept {
+  if (portfolio_decision.authority !=
+          ExistingPositionManagementAuthority::kManageExistingOnly ||
+      !portfolio_decision.blocks_new_entries) {
+    return MutationDecision(false, "managementAuthorityUnavailable");
+  }
+
+  const auto current = ClassifyExistingExchangePosition(position);
+  if (current.authority !=
+      ExistingPositionManagementAuthority::kManageExistingOnly) {
+    return MutationDecision(false, "positionNoLongerManageable");
+  }
+
+  if (request.position_id.empty() || request.symbol.empty() ||
+      request.position_id != position.position_id ||
+      request.symbol != position.symbol) {
+    return MutationDecision(false, "positionIdentityMismatch");
+  }
+  if (!request.reduce_only) {
+    return MutationDecision(false, "reduceOnlyRequired");
+  }
+  if (request.increases_exposure) {
+    return MutationDecision(false, "exposureIncreaseForbidden");
+  }
+  if (request.changes_margin_mode) {
+    return MutationDecision(false, "marginModeChangeForbidden");
+  }
+
+  switch (request.kind) {
+    case ExistingPositionMutationKind::kReduceOnlyClose:
+      return MutationDecision(true, "reduceOnlyCloseAuthorized");
+    case ExistingPositionMutationKind::kTightenStop:
+      if (request.widens_stop) {
+        return MutationDecision(false, "stopWideningForbidden");
+      }
+      return MutationDecision(true, "tightenStopAuthorized");
+    case ExistingPositionMutationKind::kUnsupported:
+      return MutationDecision(false, "unsupportedManagementMutation");
+  }
+
+  return MutationDecision(false, "unsupportedManagementMutation");
 }
 
 }  // namespace quantara
