@@ -34,6 +34,8 @@ std::atomic<quantara::CredentialReadiness> g_credential_readiness{
 SERVICE_STATUS_HANDLE g_status_handle = nullptr;
 SERVICE_STATUS g_status{};
 HANDLE g_stop_event = nullptr;
+HANDLE g_network_reconciliation_event = nullptr;
+HANDLE g_power_reconciliation_event = nullptr;
 
 std::optional<std::filesystem::path> ProgramDataCredentialRoot() noexcept {
   PWSTR raw_path = nullptr;
@@ -67,8 +69,9 @@ quantara::CredentialReadiness CredentialStartupReadiness() noexcept {
   return quantara::EvaluateCredentialReadiness(*root);
 }
 
-quantara::ServiceSafetyState ReconcileStartupManagementOnly(
-    quantara::CredentialReadiness readiness) noexcept {
+quantara::ServiceSafetyState ReconcileManagementOnly(
+    quantara::CredentialReadiness readiness,
+    quantara::RecoveryLifecycleBoundary boundary) noexcept {
   if (readiness != quantara::CredentialReadiness::kReady) {
     return SafetyStateForCredentialReadiness(readiness);
   }
@@ -79,7 +82,7 @@ quantara::ServiceSafetyState ReconcileStartupManagementOnly(
   }
 
   quantara::WindowsManagementOnlyWorkerCore worker;
-  worker.MarkLifecycleBoundary(quantara::RecoveryLifecycleBoundary::kRestart);
+  worker.MarkLifecycleBoundary(boundary);
 
   const auto positions_auth = quantara::GenerateBitunixReadOnlyAuthStamp();
   const auto orders_auth = quantara::GenerateBitunixReadOnlyAuthStamp();
@@ -96,8 +99,9 @@ quantara::ServiceSafetyState ReconcileStartupManagementOnly(
   // The Windows service does not yet own a durable Quantara recovery-evidence
   // reader. Passing an empty evidence set is deliberate: current exchange
   // positions are classified as external/unmanaged and can never be adopted by
-  // inference. This slice wires production read-only exchange truth while
-  // preserving fail-closed ownership until durable evidence is integrated.
+  // inference. This slice wires fresh read-only exchange truth on lifecycle
+  // boundaries while preserving fail-closed ownership until durable evidence
+  // is integrated.
   const std::vector<quantara::DurableReconciliationEvidence> durable_evidence;
   const auto snapshot =
       worker.ReconcileFreshExchangeTruth(*truth, durable_evidence);
@@ -153,12 +157,28 @@ DWORD WINAPI ServiceControlHandler(DWORD control, DWORD event_type,
         SetEvent(g_stop_event);
       }
       return NO_ERROR;
-    case SERVICE_CONTROL_POWEREVENT:
-      g_safety_state.store(SafetyStateAfterPowerEvent(event_type),
-                           std::memory_order_relaxed);
+    case SERVICE_CONTROL_POWEREVENT: {
+      const auto next = SafetyStateAfterPowerEvent(event_type);
+      g_safety_state.store(next, std::memory_order_relaxed);
+      if (next == quantara::ServiceSafetyState::kReconciliationRequired &&
+          g_power_reconciliation_event != nullptr) {
+        SetEvent(g_power_reconciliation_event);
+      }
       return NO_ERROR;
+    }
     default:
       return NO_ERROR;
+  }
+}
+
+void CloseLifecycleEvents() noexcept {
+  if (g_network_reconciliation_event != nullptr) {
+    CloseHandle(g_network_reconciliation_event);
+    g_network_reconciliation_event = nullptr;
+  }
+  if (g_power_reconciliation_event != nullptr) {
+    CloseHandle(g_power_reconciliation_event);
+    g_power_reconciliation_event = nullptr;
   }
 }
 
@@ -175,10 +195,22 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     ReportServiceStatus(SERVICE_STOPPED, GetLastError());
     return;
   }
+  g_network_reconciliation_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  g_power_reconciliation_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (g_network_reconciliation_event == nullptr ||
+      g_power_reconciliation_event == nullptr) {
+    const DWORD error = GetLastError();
+    CloseLifecycleEvents();
+    CloseHandle(g_stop_event);
+    g_stop_event = nullptr;
+    ReportServiceStatus(SERVICE_STOPPED, error);
+    return;
+  }
 
   HANDLE listener_ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
   if (listener_ready == nullptr) {
     const DWORD error = GetLastError();
+    CloseLifecycleEvents();
     CloseHandle(g_stop_event);
     g_stop_event = nullptr;
     ReportServiceStatus(SERVICE_STOPPED, error);
@@ -192,17 +224,21 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   const auto credential_readiness = CredentialStartupReadiness();
   g_credential_readiness.store(credential_readiness,
                                std::memory_order_relaxed);
-  g_safety_state.store(ReconcileStartupManagementOnly(credential_readiness),
-                       std::memory_order_relaxed);
+  g_safety_state.store(
+      ReconcileManagementOnly(credential_readiness,
+                              quantara::RecoveryLifecycleBoundary::kRestart),
+      std::memory_order_relaxed);
 
   // Network lifecycle ownership belongs to the service boundary rather than
   // the IPC listener. Register monitoring only after the startup exchange read
   // so no lifecycle callback can race a stale reconciliation result into a more
-  // permissive state. Any subsequent network restoration revokes authority and
-  // this slice deliberately does not auto-reconcile or auto-arm.
-  quantara::NetworkChangeMonitor network_monitor(g_safety_state);
+  // permissive state. The callback only revokes authority and signals the
+  // service thread; it never performs exchange I/O itself.
+  quantara::NetworkChangeMonitor network_monitor(
+      g_safety_state, g_network_reconciliation_event);
   if (!network_monitor.Start()) {
     CloseHandle(listener_ready);
+    CloseLifecycleEvents();
     CloseHandle(g_stop_event);
     g_stop_event = nullptr;
     ReportServiceStatus(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR);
@@ -227,6 +263,7 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     listener.join();
     network_monitor.Stop();
     CloseHandle(listener_ready);
+    CloseLifecycleEvents();
     CloseHandle(g_stop_event);
     g_stop_event = nullptr;
     ReportServiceStatus(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR);
@@ -239,7 +276,60 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   // IPC safety state remains disarmed/reconciliation-required unless a verified
   // management-only snapshot exists.
   ReportServiceStatus(SERVICE_RUNNING);
-  WaitForSingleObject(g_stop_event, INFINITE);
+
+  const HANDLE service_events[] = {
+      g_stop_event,
+      g_network_reconciliation_event,
+      g_power_reconciliation_event,
+  };
+  bool stopping = false;
+  while (!stopping) {
+    const DWORD signaled = WaitForMultipleObjects(3, service_events, FALSE,
+                                                  INFINITE);
+    if (signaled == WAIT_OBJECT_0) {
+      stopping = true;
+      continue;
+    }
+    if (signaled != WAIT_OBJECT_0 + 1 && signaled != WAIT_OBJECT_0 + 2) {
+      g_safety_state.store(
+          quantara::ServiceSafetyState::kReconciliationRequired,
+          std::memory_order_relaxed);
+      stopping = true;
+      continue;
+    }
+
+    HANDLE boundary_event =
+        signaled == WAIT_OBJECT_0 + 1 ? g_network_reconciliation_event
+                                      : g_power_reconciliation_event;
+    const auto boundary =
+        signaled == WAIT_OBJECT_0 + 1
+            ? quantara::RecoveryLifecycleBoundary::kNetworkRestored
+            : quantara::RecoveryLifecycleBoundary::kPowerResume;
+
+    // Consume this boundary only immediately before the read. If another
+    // network/power boundary arrives while exchange truth is being read, its
+    // manual-reset event remains signaled and the result below is discarded.
+    ResetEvent(boundary_event);
+    g_safety_state.store(quantara::ServiceSafetyState::kReconciliationRequired,
+                         std::memory_order_relaxed);
+    const auto refreshed_readiness = CredentialStartupReadiness();
+    g_credential_readiness.store(refreshed_readiness,
+                                 std::memory_order_relaxed);
+    const auto reconciled =
+        ReconcileManagementOnly(refreshed_readiness, boundary);
+
+    const bool newer_boundary_arrived =
+        WaitForSingleObject(g_network_reconciliation_event, 0) ==
+            WAIT_OBJECT_0 ||
+        WaitForSingleObject(g_power_reconciliation_event, 0) == WAIT_OBJECT_0;
+    if (newer_boundary_arrived) {
+      g_safety_state.store(
+          quantara::ServiceSafetyState::kReconciliationRequired,
+          std::memory_order_relaxed);
+      continue;
+    }
+    g_safety_state.store(reconciled, std::memory_order_relaxed);
+  }
 
   // The listener may be blocked in ConnectNamedPipe or ReadFile. Cancelling
   // synchronous I/O on its owning thread makes SCM stop/shutdown bounded while
@@ -248,6 +338,7 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   listener.join();
   network_monitor.Stop();
 
+  CloseLifecycleEvents();
   CloseHandle(g_stop_event);
   g_stop_event = nullptr;
   ReportServiceStatus(
@@ -456,6 +547,21 @@ bool RunManagementOnlyRuntimeSelfTest() noexcept {
              *external_snapshot) == quantara::ServiceSafetyState::kDisarmed;
 }
 
+bool RunLifecycleReconciliationEventSelfTest() noexcept {
+  HANDLE event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+  if (event == nullptr) {
+    return false;
+  }
+  if (WaitForSingleObject(event, 0) != WAIT_TIMEOUT || !SetEvent(event) ||
+      WaitForSingleObject(event, 0) != WAIT_OBJECT_0 || !ResetEvent(event) ||
+      WaitForSingleObject(event, 0) != WAIT_TIMEOUT) {
+    CloseHandle(event);
+    return false;
+  }
+  CloseHandle(event);
+  return true;
+}
+
 bool RunSelfTest() noexcept {
   if (SafetyStateForCredentialReadiness(quantara::CredentialReadiness::kMissing) !=
           quantara::ServiceSafetyState::kDisarmed ||
@@ -499,7 +605,8 @@ bool RunSelfTest() noexcept {
 
   return RunCredentialVaultSelfTest() && RunLocalPipeSecuritySelfTest() &&
          RunIpcProtocolSelfTest() && RunAuthenticatedPipeTransportSelfTest() &&
-         RunManagementOnlyRuntimeSelfTest();
+         RunManagementOnlyRuntimeSelfTest() &&
+         RunLifecycleReconciliationEventSelfTest();
 }
 }  // namespace
 
