@@ -260,9 +260,6 @@ void main() {
       fee: 0,
       funding: 0,
     );
-    expect(
-      () => <BitunixLivePosition>[invalid].firstOrNull,
-      throwsStateError,
-    );
+    expect(() => <BitunixLivePosition>[invalid].firstOrNull, throwsStateError);
   });
 }
