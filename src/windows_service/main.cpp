@@ -11,12 +11,15 @@
 #include <thread>
 #include <vector>
 
+#include "bitunix_exchange_truth_reader.h"
 #include "credential_readiness.h"
 #include "credential_vault.h"
 #include "ipc_readonly_listener.h"
 #include "ipc_request_protocol.h"
+#include "ipc_response_protocol.h"
 #include "local_pipe_security.h"
 #include "local_pipe_transport.h"
+#include "management_only_worker_core.h"
 #include "network_change_monitor.h"
 
 namespace {
@@ -62,6 +65,46 @@ quantara::CredentialReadiness CredentialStartupReadiness() noexcept {
     return quantara::CredentialReadiness::kInvalid;
   }
   return quantara::EvaluateCredentialReadiness(*root);
+}
+
+quantara::ServiceSafetyState ReconcileStartupManagementOnly(
+    quantara::CredentialReadiness readiness) noexcept {
+  if (readiness != quantara::CredentialReadiness::kReady) {
+    return SafetyStateForCredentialReadiness(readiness);
+  }
+
+  const auto root = ProgramDataCredentialRoot();
+  if (!root.has_value()) {
+    return quantara::ServiceSafetyState::kReconciliationRequired;
+  }
+
+  quantara::WindowsManagementOnlyWorkerCore worker;
+  worker.MarkLifecycleBoundary(quantara::RecoveryLifecycleBoundary::kRestart);
+
+  const auto positions_auth = quantara::GenerateBitunixReadOnlyAuthStamp();
+  const auto orders_auth = quantara::GenerateBitunixReadOnlyAuthStamp();
+  if (!positions_auth.has_value() || !orders_auth.has_value()) {
+    return quantara::ServiceSafetyState::kReconciliationRequired;
+  }
+
+  const auto truth = quantara::ReadBitunixExchangeTruth(
+      *root, *positions_auth, *orders_auth);
+  if (!truth.has_value()) {
+    return quantara::ServiceSafetyState::kReconciliationRequired;
+  }
+
+  // The Windows service does not yet own a durable Quantara recovery-evidence
+  // reader. Passing an empty evidence set is deliberate: current exchange
+  // positions are classified as external/unmanaged and can never be adopted by
+  // inference. This slice wires production read-only exchange truth while
+  // preserving fail-closed ownership until durable evidence is integrated.
+  const std::vector<quantara::DurableReconciliationEvidence> durable_evidence;
+  const auto snapshot =
+      worker.ReconcileFreshExchangeTruth(*truth, durable_evidence);
+  if (!snapshot.has_value() || worker.CanOpenNewEntry()) {
+    return quantara::ServiceSafetyState::kReconciliationRequired;
+  }
+  return quantara::ServiceSafetyStateFromManagementOnlySnapshot(*snapshot);
 }
 
 quantara::ServiceSafetyState SafetyStateAfterPowerEvent(
@@ -126,7 +169,7 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     return;
   }
 
-  ReportServiceStatus(SERVICE_START_PENDING, NO_ERROR, 5000);
+  ReportServiceStatus(SERVICE_START_PENDING, NO_ERROR, 35000);
   g_stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
   if (g_stop_event == nullptr) {
     ReportServiceStatus(SERVICE_STOPPED, GetLastError());
@@ -142,20 +185,21 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     return;
   }
 
-  // Credential presence never grants execution authority. Missing or complete
-  // credentials remain disarmed. Partial/corrupt credential state (or an
-  // inability to resolve the protected production vault) requires explicit
-  // reconciliation before any future execution layer can be considered.
+  // Credential presence never grants execution authority. Ready credentials
+  // permit only a bounded, read-only startup reconciliation. Partial/corrupt
+  // credentials remain reconciliation-required and missing credentials remain
+  // disarmed.
   const auto credential_readiness = CredentialStartupReadiness();
   g_credential_readiness.store(credential_readiness,
                                std::memory_order_relaxed);
-  g_safety_state.store(SafetyStateForCredentialReadiness(credential_readiness),
+  g_safety_state.store(ReconcileStartupManagementOnly(credential_readiness),
                        std::memory_order_relaxed);
 
   // Network lifecycle ownership belongs to the service boundary rather than
-  // the IPC listener. This keeps the listener deterministic and ensures the
-  // service fails closed before reporting Running when monitoring cannot be
-  // registered with Windows.
+  // the IPC listener. Register monitoring only after the startup exchange read
+  // so no lifecycle callback can race a stale reconciliation result into a more
+  // permissive state. Any subsequent network restoration revokes authority and
+  // this slice deliberately does not auto-reconcile or auto-arm.
   quantara::NetworkChangeMonitor network_monitor(g_safety_state);
   if (!network_monitor.Start()) {
     CloseHandle(listener_ready);
@@ -190,9 +234,10 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   }
   CloseHandle(listener_ready);
 
-  // Report Running only after both lifecycle monitoring and the authenticated
-  // local read-only IPC endpoint are ready. This prevents SCM from advertising
-  // a healthy service that cannot expose its fail-closed status boundary.
+  // Report Running only after lifecycle monitoring and authenticated local
+  // read-only IPC are ready. A Running SCM state is not entry authority; the
+  // IPC safety state remains disarmed/reconciliation-required unless a verified
+  // management-only snapshot exists.
   ReportServiceStatus(SERVICE_RUNNING);
   WaitForSingleObject(g_stop_event, INFINITE);
 
@@ -383,6 +428,34 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
   return server_ok && client_ok.load(std::memory_order_relaxed);
 }
 
+bool RunManagementOnlyRuntimeSelfTest() noexcept {
+  quantara::WindowsManagementOnlyWorkerCore worker;
+  worker.MarkLifecycleBoundary(quantara::RecoveryLifecycleBoundary::kRestart);
+
+  quantara::BitunixExchangeTruthSnapshot empty_truth{};
+  empty_truth.pending_orders.total = 0;
+  const auto empty_snapshot =
+      worker.ReconcileFreshExchangeTruth(empty_truth, {});
+  if (!empty_snapshot.has_value() || worker.CanOpenNewEntry() ||
+      quantara::ServiceSafetyStateFromManagementOnlySnapshot(*empty_snapshot) !=
+          quantara::ServiceSafetyState::kDisarmed) {
+    return false;
+  }
+
+  quantara::BitunixExchangeTruthSnapshot external_truth{};
+  external_truth.positions.push_back({"manual-position-1", "BTCUSDT", "LONG",
+                                      "ISOLATION", "HEDGE", "0.01", 2});
+  external_truth.pending_orders.total = 0;
+  const auto external_snapshot =
+      worker.ReconcileFreshExchangeTruth(external_truth, {});
+  return external_snapshot.has_value() &&
+         external_snapshot->classification ==
+             quantara::ExistingPositionClassification::kExternalUnmanaged &&
+         !worker.CanManageExistingPositions() && !worker.CanOpenNewEntry() &&
+         quantara::ServiceSafetyStateFromManagementOnlySnapshot(
+             *external_snapshot) == quantara::ServiceSafetyState::kDisarmed;
+}
+
 bool RunSelfTest() noexcept {
   if (SafetyStateForCredentialReadiness(quantara::CredentialReadiness::kMissing) !=
           quantara::ServiceSafetyState::kDisarmed ||
@@ -425,7 +498,8 @@ bool RunSelfTest() noexcept {
   }
 
   return RunCredentialVaultSelfTest() && RunLocalPipeSecuritySelfTest() &&
-         RunIpcProtocolSelfTest() && RunAuthenticatedPipeTransportSelfTest();
+         RunIpcProtocolSelfTest() && RunAuthenticatedPipeTransportSelfTest() &&
+         RunManagementOnlyRuntimeSelfTest();
 }
 }  // namespace
 

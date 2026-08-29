@@ -16,6 +16,11 @@ add_executable(quantara_windows_service
   bitunix_exchange_truth_parser.h
   bitunix_exchange_truth_reader.cpp
   bitunix_exchange_truth_reader.h
+  management_only_worker_core.h
+  ../native/execution/existing_position_management_policy.cpp
+  ../native/execution/existing_position_management_policy.h
+  ../native/execution/management_only_recovery_coordinator.cpp
+  ../native/execution/management_only_recovery_coordinator.h
   credential_readiness.cpp
   credential_readiness.h
   credential_vault.cpp
