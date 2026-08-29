@@ -18,8 +18,9 @@ VOID WINAPI NetworkChangeMonitor::NetworkChangeCallback(
 }
 
 NetworkChangeMonitor::NetworkChangeMonitor(
-    std::atomic<ServiceSafetyState>& safety_state) noexcept
-    : safety_state_(safety_state) {}
+    std::atomic<ServiceSafetyState>& safety_state,
+    HANDLE reconciliation_event) noexcept
+    : safety_state_(safety_state), reconciliation_event_(reconciliation_event) {}
 
 NetworkChangeMonitor::~NetworkChangeMonitor() { Stop(); }
 
@@ -56,10 +57,14 @@ bool NetworkChangeMonitor::running() const noexcept {
 void NetworkChangeMonitor::HandleInterfaceChange() noexcept {
   const auto current = safety_state_.load(std::memory_order_relaxed);
   // Any interface mutation can invalidate exchange/public-feed assumptions.
-  // Never restore prior authority from a network callback; require an explicit
-  // reconciliation path to establish fresh truth before future execution.
+  // Revoke prior authority before notifying the service loop. The service loop
+  // may perform one fresh bounded management-only reconciliation, but this
+  // callback itself never restores authority or performs network I/O.
   safety_state_.store(SafetyStateAfterNetworkChange(current),
                       std::memory_order_relaxed);
+  if (reconciliation_event_ != nullptr) {
+    SetEvent(reconciliation_event_);
+  }
 }
 
 }  // namespace quantara
