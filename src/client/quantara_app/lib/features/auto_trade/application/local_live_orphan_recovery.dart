@@ -297,7 +297,9 @@ extension UniqueBitunixLivePositionListSelection on List<BitunixLivePosition> {
     final expected = normalized(expectedSide);
     final actual = normalized(candidate.side);
     if (expected == null || actual == null || actual != expected) {
-      throw StateError('Exchange position side is ambiguous after entry submit.');
+      throw StateError(
+        'Exchange position side is ambiguous after entry submit.',
+      );
     }
     return candidate;
   }
