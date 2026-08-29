@@ -247,12 +247,15 @@ void main() {
 
   test('REST fallback accepts a unique position on the expected long side', () {
     final candidates = <BitunixLivePosition>[position];
-    expect(candidates.uniqueMatchingSide('LONG')?.positionId, 'xrp-position-1');
+    expect(
+      candidates.uniqueMatchingSide('LONG')?.positionId,
+      'xrp-position-1',
+    );
   });
 
-  test('REST fallback rejects a unique position on the opposite side', () {
+  test('REST fallback retains risk for a unique opposite-side position', () {
     final candidates = <BitunixLivePosition>[position];
-    expect(candidates.uniqueMatchingSide('SHORT'), isNull);
+    expect(() => candidates.uniqueMatchingSide('SHORT'), throwsStateError);
   });
 
   test('REST fallback normalizes SELL to the expected short side', () {
@@ -271,11 +274,16 @@ void main() {
       funding: 0,
     );
     expect(
-      <BitunixLivePosition>[
-        shortPosition,
-      ].uniqueMatchingSide('SHORT')?.positionId,
+      <BitunixLivePosition>[shortPosition]
+          .uniqueMatchingSide('SHORT')
+          ?.positionId,
       'xrp-position-short',
     );
+  });
+
+  test('REST fallback retains risk for unknown expected side', () {
+    final candidates = <BitunixLivePosition>[position];
+    expect(() => candidates.uniqueMatchingSide('UNKNOWN'), throwsStateError);
   });
 
   test('REST fallback retains risk for invalid single-position identity', () {
