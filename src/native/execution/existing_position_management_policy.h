@@ -39,11 +39,45 @@ struct ExistingPositionManagementDecision final {
   std::string_view reason;
 };
 
+enum class ExistingPositionMutationKind {
+  kReduceOnlyClose,
+  kTightenStop,
+  kUnsupported,
+};
+
+// Mutation facts are intentionally narrow. This contract cannot express a new
+// entry, leverage increase, margin-mode expansion, or stop widening as an
+// allowed action. Platform adapters must still bind these facts to the exact
+// current exchange position before submitting any request.
+struct ExistingPositionMutationRequest final {
+  ExistingPositionMutationKind kind = ExistingPositionMutationKind::kUnsupported;
+  std::string_view position_id;
+  std::string_view symbol;
+  bool reduce_only = false;
+  bool increases_exposure = true;
+  bool changes_margin_mode = true;
+  bool widens_stop = true;
+};
+
+struct ExistingPositionMutationDecision final {
+  bool allowed = false;
+  std::string_view reason;
+};
+
 ExistingPositionManagementDecision ClassifyExistingExchangePosition(
     const ExistingExchangePositionFacts& facts) noexcept;
 
 // Any external or ambiguous position blocks management of the whole portfolio.
 ExistingPositionManagementDecision EvaluateExistingPortfolio(
     const std::vector<ExistingExchangePositionFacts>& positions) noexcept;
+
+// Authorizes only bounded management of a freshly verified Quantara-owned
+// existing position. It never grants entry authority. A Windows/Bitunix adapter
+// must pass through this gate immediately before a mutation and reconcile fresh
+// exchange truth again afterward.
+ExistingPositionMutationDecision AuthorizeExistingPositionMutation(
+    const ExistingPositionManagementDecision& portfolio_decision,
+    const ExistingExchangePositionFacts& position,
+    const ExistingPositionMutationRequest& request) noexcept;
 
 }  // namespace quantara
