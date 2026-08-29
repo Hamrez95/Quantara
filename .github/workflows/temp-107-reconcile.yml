@@ -1,0 +1,62 @@
+name: Temporary #107 reconcile
+
+on:
+  push:
+    branches:
+      - fix/107-rest-fill-side-binding
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/107-rest-fill-side-binding
+          fetch-depth: 0
+      - name: Reconcile merged REST risk retention with side binding
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin dev
+          set +e
+          git merge --no-commit origin/dev
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -ne 0 ]; then
+            git checkout --theirs src/client/quantara_app/lib/features/auto_trade/application/local_live_orphan_recovery.dart
+            git checkout --theirs src/client/quantara_app/test/local_live_orphan_recovery_test.dart
+            git add src/client/quantara_app/lib/features/auto_trade/application/local_live_orphan_recovery.dart \
+                    src/client/quantara_app/test/local_live_orphan_recovery_test.dart
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+
+          helper_path = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_orphan_recovery.dart')
+          helper = helper_path.read_text()
+          if 'uniqueMatchingSide(String expectedSide)' not in helper:
+              anchor = """    return candidate;\n  }\n}\n"""
+              addition = """    return candidate;\n  }\n\n  BitunixLivePosition? uniqueMatchingSide(String expectedSide) {\n    final candidate = firstOrNull;\n    if (candidate == null) return null;\n\n    String? normalized(String raw) {\n      final value = raw.trim().toUpperCase();\n      if (value.contains('BUY') || value.contains('LONG')) return 'LONG';\n      if (value.contains('SELL') || value.contains('SHORT')) return 'SHORT';\n      return null;\n    }\n\n    final expected = normalized(expectedSide);\n    final actual = normalized(candidate.side);\n    if (expected == null || actual == null || actual != expected) return null;\n    return candidate;\n  }\n}\n"""
+              if helper.count(anchor) != 1:
+                  raise SystemExit('helper reconcile anchor changed')
+              helper = helper.replace(anchor, addition)
+              helper_path.write_text(helper)
+
+          test_path = Path('src/client/quantara_app/test/local_live_orphan_recovery_test.dart')
+          test = test_path.read_text()
+          if "REST fallback accepts a unique position on the expected long side" not in test:
+              anchor = """  test('REST fallback retains risk for invalid single-position identity', () {"""
+              addition = """  test('REST fallback accepts a unique position on the expected long side', () {\n    final candidates = <BitunixLivePosition>[position];\n    expect(candidates.uniqueMatchingSide('LONG')?.positionId, 'xrp-position-1');\n  });\n\n  test('REST fallback rejects a unique position on the opposite side', () {\n    final candidates = <BitunixLivePosition>[position];\n    expect(candidates.uniqueMatchingSide('SHORT'), isNull);\n  });\n\n  test('REST fallback normalizes SELL to the expected short side', () {\n    const shortPosition = BitunixLivePosition(\n      positionId: 'xrp-position-short',\n      symbol: 'XRPUSDT',\n      quantity: 12,\n      side: 'SELL',\n      marginMode: 'ISOLATION',\n      positionMode: 'HEDGE',\n      leverage: 10,\n      averageOpenPrice: 1.069,\n      realizedPnl: 0,\n      unrealizedPnl: 0,\n      fee: 0,\n      funding: 0,\n    );\n    expect(\n      <BitunixLivePosition>[\n        shortPosition,\n      ].uniqueMatchingSide('SHORT')?.positionId,\n      'xrp-position-short',\n    );\n  });\n\n"""
+              if test.count(anchor) != 1:
+                  raise SystemExit('test reconcile anchor changed')
+              test = test.replace(anchor, addition + anchor)
+              test_path.write_text(test)
+          PY
+          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_orphan_recovery.dart \
+                  src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
+                  src/client/quantara_app/test/local_live_orphan_recovery_test.dart
+          git commit -m "merge(dev): reconcile #388 with REST side binding"
+          git push origin HEAD:fix/107-rest-fill-side-binding
