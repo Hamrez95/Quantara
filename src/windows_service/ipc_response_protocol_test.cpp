@@ -92,6 +92,30 @@ int wmain() {
     return 1;
   }
 
+  const ManagementOnlyRecoverySnapshot external_with_invalid_authority{
+      ManagementOnlyRecoveryMode::kManageExistingOnly,
+      ExistingPositionClassification::kExternalUnmanaged,
+      ExistingPositionManagementAuthority::kManageExistingOnly,
+      true,
+      "invalidExternalAuthority"};
+  if (quantara::ServiceSafetyStateFromManagementOnlySnapshot(
+          external_with_invalid_authority) != ServiceSafetyState::kDisarmed) {
+    std::wcerr << L"External positions must never map to management authority.\n";
+    return 1;
+  }
+
+  const ManagementOnlyRecoverySnapshot ambiguous_with_invalid_authority{
+      ManagementOnlyRecoveryMode::kManageExistingOnly,
+      ExistingPositionClassification::kAmbiguous,
+      ExistingPositionManagementAuthority::kManageExistingOnly,
+      true,
+      "invalidAmbiguousAuthority"};
+  if (quantara::ServiceSafetyStateFromManagementOnlySnapshot(
+          ambiguous_with_invalid_authority) != ServiceSafetyState::kDisarmed) {
+    std::wcerr << L"Ambiguous positions must never map to management authority.\n";
+    return 1;
+  }
+
   const auto credential = quantara::EncodeCanonicalReadOnlyResponse(
       ReadOnlyRequest{"credential-1",
                       ReadOnlyRequestKind::kCredentialReadinessRequest},
