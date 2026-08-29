@@ -21,6 +21,7 @@
 #include "local_pipe_transport.h"
 #include "management_only_worker_core.h"
 #include "network_change_monitor.h"
+#include "recovery_evidence_vault.h"
 
 namespace {
 constexpr wchar_t kServiceName[] = L"QuantaraExecutionService";
@@ -96,15 +97,17 @@ quantara::ServiceSafetyState ReconcileManagementOnly(
     return quantara::ServiceSafetyState::kReconciliationRequired;
   }
 
-  // The Windows service does not yet own a durable Quantara recovery-evidence
-  // reader. Passing an empty evidence set is deliberate: current exchange
-  // positions are classified as external/unmanaged and can never be adopted by
-  // inference. This slice wires fresh read-only exchange truth on lifecycle
-  // boundaries while preserving fail-closed ownership until durable evidence
-  // is integrated.
-  const std::vector<quantara::DurableReconciliationEvidence> durable_evidence;
+  // Durable ownership is consumed only from the service-owned protected vault.
+  // Missing storage is a valid empty snapshot (so exchange positions remain
+  // external/unmanaged); corrupt, tampered or unsupported payloads fail closed.
+  quantara::RecoveryEvidenceVault evidence_vault(*root);
+  const auto durable_evidence = evidence_vault.Load();
+  if (!durable_evidence.has_value()) {
+    return quantara::ServiceSafetyState::kReconciliationRequired;
+  }
+
   const auto snapshot =
-      worker.ReconcileFreshExchangeTruth(*truth, durable_evidence);
+      worker.ReconcileFreshExchangeTruth(*truth, *durable_evidence);
   if (!snapshot.has_value() || worker.CanOpenNewEntry()) {
     return quantara::ServiceSafetyState::kReconciliationRequired;
   }
