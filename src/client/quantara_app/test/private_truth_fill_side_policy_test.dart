@@ -105,7 +105,10 @@ void main() {
 
   test('unknown order side fails closed', () {
     expect(
-      match(orderSide: 'UNKNOWN', positions: [position(side: 'LONG')]),
+      match(
+        orderSide: 'UNKNOWN',
+        positions: [position(side: 'LONG')],
+      ),
       isNull,
     );
   });
