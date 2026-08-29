@@ -96,16 +96,24 @@ void main() {
                 200,
               );
             }
+            if (request.url.path ==
+                '/api/v1/futures/trade/flash_close_position') {
+              return http.Response(
+                jsonEncode({
+                  'code': 0,
+                  'data': {'positionId': 'position-1'},
+                  'msg': 'Success',
+                }),
+                200,
+              );
+            }
             expect(
               request.url.path,
-              '/api/v1/futures/trade/flash_close_position',
+              '/api/v1/futures/position/get_pending_positions',
             );
+            expect(request.url.queryParameters['symbol'], 'BTCUSDT');
             return http.Response(
-              jsonEncode({
-                'code': 0,
-                'data': {'positionId': 'position-1'},
-                'msg': 'Success',
-              }),
+              jsonEncode({'code': 0, 'data': [], 'msg': 'Success'}),
               200,
             );
           }),
@@ -143,6 +151,7 @@ void main() {
         expect(observedPaths, [
           '/api/v1/futures/trade/place_order',
           '/api/v1/futures/trade/flash_close_position',
+          '/api/v1/futures/position/get_pending_positions',
         ]);
       },
     );

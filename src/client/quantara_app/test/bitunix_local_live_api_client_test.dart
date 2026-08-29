@@ -14,6 +14,20 @@ void main() {
     apiKey: 'api-key-for-tests',
     secretKey: 'secret-key-for-tests',
   );
+  const livePosition = BitunixLivePosition(
+    positionId: 'position-1',
+    symbol: 'BTCUSDT',
+    quantity: 0.01,
+    side: 'LONG',
+    marginMode: 'ISOLATION',
+    positionMode: 'HEDGE',
+    leverage: 10,
+    averageOpenPrice: 60000,
+    realizedPnl: 0,
+    unrealizedPnl: 0,
+    fee: 0,
+    funding: 0,
+  );
 
   BitunixLocalLiveApiClient client(
     Future<http.Response> Function(http.Request request) handler,
@@ -103,44 +117,126 @@ void main() {
     },
   );
 
-  test('emergency close uses position-id flash close contract', () async {
+  test('emergency close requires exchange-flat position', () async {
+    var requestCount = 0;
     final api = client((request) async {
-      expect(request.method, 'POST');
-      expect(request.url.path, '/api/v1/futures/trade/flash_close_position');
-      final body = jsonDecode(request.body) as Map<String, Object?>;
-      expect(body, {'positionId': 'position-1'});
-      expect(request.body, isNot(contains('withdraw')));
-      expect(request.body, isNot(contains('transfer')));
+      requestCount++;
+      if (request.method == 'POST') {
+        expect(request.url.path, '/api/v1/futures/trade/flash_close_position');
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        expect(body, {'positionId': 'position-1'});
+        expect(request.body, isNot(contains('withdraw')));
+        expect(request.body, isNot(contains('transfer')));
+        return http.Response(
+          jsonEncode({
+            'code': 0,
+            'msg': 'Success',
+            'data': {'positionId': 'position-1'},
+          }),
+          200,
+        );
+      }
+      expect(request.method, 'GET');
+      expect(
+        request.url.path,
+        '/api/v1/futures/position/get_pending_positions',
+      );
+      expect(request.url.queryParameters['symbol'], 'BTCUSDT');
       return http.Response(
-        jsonEncode({
-          'code': 0,
-          'msg': 'Success',
-          'data': {'positionId': 'position-1'},
-        }),
+        jsonEncode({'code': 0, 'msg': 'Success', 'data': []}),
         200,
       );
     });
 
     final result = await api.closePositionReduceOnly(
-      position: const BitunixLivePosition(
-        positionId: 'position-1',
-        symbol: 'BTCUSDT',
-        quantity: 0.01,
-        side: 'LONG',
-        marginMode: 'ISOLATION',
-        positionMode: 'HEDGE',
-        leverage: 10,
-        averageOpenPrice: 60000,
-        realizedPnl: 0,
-        unrealizedPnl: 0,
-        fee: 0,
-        funding: 0,
-      ),
+      position: livePosition,
       clientId: 'ignored-by-flash-close',
       credentials: credentials,
     );
 
     expect(result.orderId, 'position-1');
+    expect(requestCount, 2);
+  });
+
+  test('emergency close rejects mismatched identity', () async {
+    final api = client((request) async {
+      expect(request.method, 'POST');
+      return http.Response(
+        jsonEncode({
+          'code': 0,
+          'msg': 'Success',
+          'data': {'positionId': 'position-stale'},
+        }),
+        200,
+      );
+    });
+
+    expect(
+      () => api.closePositionReduceOnly(
+        position: livePosition,
+        clientId: 'close-identity-test',
+        credentials: credentials,
+      ),
+      throwsA(
+        isA<LocalLiveTradeSafeException>().having(
+          (error) => error.message,
+          'message',
+          contains('identity did not match'),
+        ),
+      ),
+    );
+  });
+
+  test('emergency close fails closed if position remains open', () async {
+    var positionReads = 0;
+    final api = client((request) async {
+      if (request.method == 'POST') {
+        return http.Response(
+          jsonEncode({
+            'code': 0,
+            'msg': 'Success',
+            'data': {'positionId': 'position-1'},
+          }),
+          200,
+        );
+      }
+      positionReads++;
+      return http.Response(
+        jsonEncode({
+          'code': 0,
+          'msg': 'Success',
+          'data': [
+            {
+              'positionId': 'position-1',
+              'symbol': 'BTCUSDT',
+              'qty': '0.01',
+              'side': 'LONG',
+              'marginMode': 'ISOLATION',
+              'positionMode': 'HEDGE',
+              'leverage': 10,
+              'avgOpenPrice': '60000',
+            },
+          ],
+        }),
+        200,
+      );
+    });
+
+    await expectLater(
+      api.closePositionReduceOnly(
+        position: livePosition,
+        clientId: 'close-open-test',
+        credentials: credentials,
+      ),
+      throwsA(
+        isA<LocalLiveTradeSafeException>().having(
+          (error) => error.message,
+          'message',
+          contains('still reports position exposure'),
+        ),
+      ),
+    );
+    expect(positionReads, 3);
   });
 
   test('maps rejected private response to a redacted safe exception', () async {
