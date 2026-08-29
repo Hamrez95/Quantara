@@ -32,6 +32,7 @@ import 'local_live_canonical_decision.dart';
 import 'local_live_economic_ranking.dart';
 import 'local_live_orphan_recovery.dart';
 import 'local_live_portfolio_execution_guard.dart';
+import 'partial_fill_close_confirmation.dart';
 import 'private_truth_account_snapshot.dart';
 import 'private_truth_coordinator.dart';
 import 'profit_lock_promotion_executor.dart';
@@ -966,13 +967,39 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   clientId: '$clientId-partial-close',
                   credentials: credentials,
                 );
-                _auditEvent(
-                  'partial_fill_closed',
-                  'Unresolved partial fill was closed after entry cancellation.',
+                await Future<void>.delayed(const Duration(milliseconds: 400));
+                final postCloseState = await _fetchEntryRestState(
+                  exchange: exchange,
+                  credentials: credentials,
+                  orderId: placed.orderId,
                   symbol: idea.symbol,
+                  expectedPositionSide: idea.direction == TradeDirection.long
+                      ? 'LONG'
+                      : 'SHORT',
                 );
+                detail = postCloseState.detail;
+                position = postCloseState.position;
+                if (PartialFillCloseConfirmationPolicy.provesFlat(
+                  orderStatus: detail.status,
+                  position: position,
+                )) {
+                  _auditEvent(
+                    'partial_fill_closed',
+                    'Partial-fill close was exchange-confirmed flat after entry cancellation.',
+                    symbol: idea.symbol,
+                  );
+                } else {
+                  _auditEvent(
+                    'partial_fill_close_unconfirmed',
+                    'Partial-fill close was submitted but exchange truth still shows exposure; risk remains ambiguous.',
+                    symbol: idea.symbol,
+                  );
+                }
               }
-              if (position == null && detail.status == 'CANCELED') {
+              if (PartialFillCloseConfirmationPolicy.provesFlat(
+                orderStatus: detail.status,
+                position: position,
+              )) {
                 await portfolioGuard.releaseNoExposure(
                   reservationId: activeReservationId,
                   evidence: 'entry-canceled-without-position',

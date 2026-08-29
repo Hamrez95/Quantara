@@ -202,7 +202,7 @@ void main() {
     ).readAsStringSync();
     expect(source, contains('detail.fullyFilled'));
     expect(source, contains('cancelEntryOrder'));
-    expect(source, contains("detail.status == 'CANCELED'"));
+    expect(source, contains('PartialFillCloseConfirmationPolicy.provesFlat'));
     expect(source.contains('if (detail.hasFill && position != null)'), isFalse);
   });
 }
