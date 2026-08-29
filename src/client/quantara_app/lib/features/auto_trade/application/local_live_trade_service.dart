@@ -907,6 +907,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               credentials: credentials,
               orderId: placed.orderId,
               symbol: idea.symbol,
+              expectedPositionSide: idea.direction == TradeDirection.long
+                  ? 'LONG'
+                  : 'SHORT',
             );
             detail = fallback.detail;
             position = fallback.position;
@@ -943,6 +946,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
               credentials: credentials,
               orderId: placed.orderId,
               symbol: idea.symbol,
+              expectedPositionSide: idea.direction == TradeDirection.long
+                  ? 'LONG'
+                  : 'SHORT',
             );
             detail = cleanupState.detail;
             position = cleanupState.position;
@@ -1237,6 +1243,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     required BitunixApiCredentials credentials,
     required String orderId,
     required String symbol,
+    required String expectedPositionSide,
   }) async {
     _privateTruth?.recordRestRequests(2);
     final values = await Future.wait<Object>([
@@ -1245,7 +1252,10 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
     ]);
     final detail = values[0] as BitunixOrderDetail;
     final positions = values[1] as List<BitunixLivePosition>;
-    return (detail: detail, position: positions.firstOrNull);
+    return (
+      detail: detail,
+      position: positions.uniqueMatchingSide(expectedPositionSide),
+    );
   }
 
   BitunixOrderDetail _orderDetailFromPrivateFill(
