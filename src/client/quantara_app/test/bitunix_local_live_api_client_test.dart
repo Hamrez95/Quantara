@@ -163,6 +163,45 @@ void main() {
     );
   });
 
+  test('rejects stale order detail with a mismatched exchange identity', () async {
+    final api = client((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, '/api/v1/futures/trade/get_order_detail');
+      expect(request.url.queryParameters['orderId'], 'entry-current');
+      return http.Response(
+        jsonEncode({
+          'code': 0,
+          'msg': 'Success',
+          'data': {
+            'orderId': 'entry-stale',
+            'clientId': 'q-local-stale',
+            'symbol': 'BTCUSDT',
+            'qty': '0.01',
+            'tradeQty': '0.01',
+            'status': 'FILLED',
+            'fee': '0',
+            'realizedPNL': '0',
+          },
+        }),
+        200,
+      );
+    });
+
+    expect(
+      () => api.fetchOrderDetail(
+        orderId: 'entry-current',
+        credentials: credentials,
+      ),
+      throwsA(
+        isA<LocalLiveTradeSafeException>().having(
+          (error) => error.message,
+          'message',
+          contains('identity did not match'),
+        ),
+      ),
+    );
+  });
+
   test(
     'cancels an unresolved entry using the official batch contract',
     () async {
