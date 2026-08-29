@@ -5,10 +5,13 @@
 
 namespace {
 
+using quantara::AuthorizeExistingPositionMutation;
 using quantara::EvaluateExistingPortfolio;
 using quantara::ExistingExchangePositionFacts;
 using quantara::ExistingPositionClassification;
 using quantara::ExistingPositionManagementAuthority;
+using quantara::ExistingPositionMutationKind;
+using quantara::ExistingPositionMutationRequest;
 
 ExistingExchangePositionFacts Verified(bool managed = false) {
   return {.position_id = "position-1",
@@ -20,6 +23,16 @@ ExistingExchangePositionFacts Verified(bool managed = false) {
           .has_conflicting_order_fill_or_history = false,
           .has_durable_reconstruction = true,
           .is_already_managed = managed};
+}
+
+ExistingPositionMutationRequest SafeMutation(ExistingPositionMutationKind kind) {
+  return {.kind = kind,
+          .position_id = "position-1",
+          .symbol = "BTCUSDT",
+          .reduce_only = true,
+          .increases_exposure = false,
+          .changes_margin_mode = false,
+          .widens_stop = false};
 }
 
 bool Expect(bool condition, const char* message) {
@@ -35,6 +48,12 @@ bool ExpectDecision(const quantara::ExistingPositionManagementDecision& decision
                     decision.authority == authority &&
                     decision.blocks_new_entries && decision.reason == reason,
                 message);
+}
+
+bool ExpectMutation(
+    const quantara::ExistingPositionMutationDecision& decision, bool allowed,
+    std::string_view reason, const char* message) {
+  return Expect(decision.allowed == allowed && decision.reason == reason, message);
 }
 
 }  // namespace
@@ -133,6 +152,94 @@ int main() {
                        ExistingPositionManagementAuthority::kNone,
                        "quantaraOwnershipUnproven",
                        "One external position must block the whole portfolio.");
+
+  const auto verified_position = Verified(true);
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(
+          managed, verified_position,
+          SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose)),
+      true, "reduceOnlyCloseAuthorized",
+      "Verified management-only authority must permit an exact reduce-only close.");
+
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(
+          managed, verified_position,
+          SafeMutation(ExistingPositionMutationKind::kTightenStop)),
+      true, "tightenStopAuthorized",
+      "Verified management-only authority must permit stop tightening.");
+
+  auto wrong_identity =
+      SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose);
+  wrong_identity.position_id = "position-2";
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, verified_position,
+                                        wrong_identity),
+      false, "positionIdentityMismatch",
+      "A mutation for another position identity must fail closed.");
+
+  auto non_reduce_only =
+      SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose);
+  non_reduce_only.reduce_only = false;
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, verified_position,
+                                        non_reduce_only),
+      false, "reduceOnlyRequired",
+      "Management-only mutations must never omit reduce-only semantics.");
+
+  auto increases_exposure =
+      SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose);
+  increases_exposure.increases_exposure = true;
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, verified_position,
+                                        increases_exposure),
+      false, "exposureIncreaseForbidden",
+      "Management-only mutations must never increase exposure.");
+
+  auto changes_margin =
+      SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose);
+  changes_margin.changes_margin_mode = true;
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, verified_position,
+                                        changes_margin),
+      false, "marginModeChangeForbidden",
+      "Management-only mutations must never change margin mode.");
+
+  auto widens_stop = SafeMutation(ExistingPositionMutationKind::kTightenStop);
+  widens_stop.widens_stop = true;
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, verified_position, widens_stop),
+      false, "stopWideningForbidden",
+      "Management-only stop changes must never widen risk.");
+
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(
+          empty, verified_position,
+          SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose)),
+      false, "managementAuthorityUnavailable",
+      "No-open-position portfolio state must not grant mutation authority.");
+
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(
+          mixed_external, verified_position,
+          SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose)),
+      false, "managementAuthorityUnavailable",
+      "An external position in the portfolio must block all management mutations.");
+
+  auto degraded_position = verified_position;
+  degraded_position.has_complete_exchange_stop = false;
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(
+          managed, degraded_position,
+          SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose)),
+      false, "positionNoLongerManageable",
+      "A position that lost verified protection must be reconciled before mutation.");
+
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(
+          managed, verified_position,
+          SafeMutation(ExistingPositionMutationKind::kUnsupported)),
+      false, "unsupportedManagementMutation",
+      "Unknown management mutations must fail closed.");
 
   return ok ? 0 : 1;
 }
