@@ -25,6 +25,8 @@ add_executable(quantara_windows_service
   credential_readiness.h
   credential_vault.cpp
   credential_vault.h
+  recovery_evidence_vault.cpp
+  recovery_evidence_vault.h
   ipc_request_protocol.cpp
   ipc_request_protocol.h
   ipc_response_protocol.cpp
