@@ -4,6 +4,7 @@ import '../../market_analysis/domain/market_regime_models.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../data/bitunix_local_live_api_client.dart';
+import '../domain/full_position_stop_policy.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/trading_pnl_projection.dart';
 
@@ -160,7 +161,14 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
     }
     final stop = stops.single;
     if (stop.orderId.trim().isEmpty ||
-        stop.stopLossQuantity + quantityTolerance < position.quantity) {
+        !FullPositionStopPolicy.isConfirmed(
+          evidencePositionId: stop.positionId,
+          expectedPositionId: positionId,
+          stopLossPrice: stop.stopLossPrice,
+          stopLossQuantity: stop.stopLossQuantity,
+          remainingQuantity: position.quantity,
+          quantityTolerance: quantityTolerance,
+        )) {
       return blocked('The exchange stop does not cover the full position.');
     }
     final stopOnSafeSide = switch (direction) {
