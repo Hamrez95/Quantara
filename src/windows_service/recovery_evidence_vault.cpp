@@ -6,7 +6,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_set>
+#include <utility>
 
 namespace quantara {
 namespace {
