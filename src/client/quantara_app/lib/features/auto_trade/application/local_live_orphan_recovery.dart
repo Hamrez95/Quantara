@@ -264,17 +264,21 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
 }
 
 /// The entry REST fallback has already proved the symbol was flat before submit.
-/// It may therefore adopt exchange position truth only when Bitunix returns one
-/// and only one live position for that symbol. Multiple positions are ambiguous
-/// and must remain unresolved instead of binding to an arbitrary `first` item.
+/// Empty exchange position truth therefore means no current exposure candidate.
+/// Multiple or structurally invalid candidates are different: they are ambiguous
+/// post-submit truth and must throw into the existing entry-lifecycle catch so the
+/// portfolio reservation remains ambiguous instead of being released as flat.
 extension UniqueBitunixLivePositionListSelection on List<BitunixLivePosition> {
   BitunixLivePosition? get firstOrNull {
-    if (length != 1) return null;
-    final candidate = first;
+    if (isEmpty) return null;
+    if (length != 1) {
+      throw StateError('Ambiguous exchange position truth after entry submit.');
+    }
+    final candidate = single;
     if (candidate.positionId.trim().isEmpty ||
         !candidate.quantity.isFinite ||
         candidate.quantity <= 0) {
-      return null;
+      throw StateError('Invalid exchange position truth after entry submit.');
     }
     return candidate;
   }

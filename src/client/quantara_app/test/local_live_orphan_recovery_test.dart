@@ -222,7 +222,11 @@ void main() {
     expect(candidates.firstOrNull?.positionId, 'xrp-position-1');
   });
 
-  test('REST fallback rejects ambiguous position candidates', () {
+  test('REST fallback treats an empty position set as flat', () {
+    expect(<BitunixLivePosition>[].firstOrNull, isNull);
+  });
+
+  test('REST fallback retains risk for ambiguous position candidates', () {
     const second = BitunixLivePosition(
       positionId: 'xrp-position-2',
       symbol: 'XRPUSDT',
@@ -238,7 +242,7 @@ void main() {
       funding: 0,
     );
     final candidates = <BitunixLivePosition>[position, second];
-    expect(candidates.firstOrNull, isNull);
+    expect(() => candidates.firstOrNull, throwsStateError);
   });
 
   test('REST fallback accepts a unique position on the expected long side', () {
@@ -274,7 +278,7 @@ void main() {
     );
   });
 
-  test('REST fallback rejects invalid single-position identity', () {
+  test('REST fallback retains risk for invalid single-position identity', () {
     const invalid = BitunixLivePosition(
       positionId: '',
       symbol: 'XRPUSDT',
@@ -289,6 +293,6 @@ void main() {
       fee: 0,
       funding: 0,
     );
-    expect(<BitunixLivePosition>[invalid].firstOrNull, isNull);
+    expect(() => <BitunixLivePosition>[invalid].firstOrNull, throwsStateError);
   });
 }
