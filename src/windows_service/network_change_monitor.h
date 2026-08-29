@@ -17,7 +17,8 @@ ServiceSafetyState SafetyStateAfterNetworkChange(
 class NetworkChangeMonitor final {
  public:
   explicit NetworkChangeMonitor(
-      std::atomic<ServiceSafetyState>& safety_state) noexcept;
+      std::atomic<ServiceSafetyState>& safety_state,
+      HANDLE reconciliation_event = nullptr) noexcept;
   NetworkChangeMonitor(const NetworkChangeMonitor&) = delete;
   NetworkChangeMonitor& operator=(const NetworkChangeMonitor&) = delete;
   ~NetworkChangeMonitor();
@@ -34,6 +35,7 @@ class NetworkChangeMonitor final {
   void HandleInterfaceChange() noexcept;
 
   std::atomic<ServiceSafetyState>& safety_state_;
+  HANDLE reconciliation_event_ = nullptr;
   HANDLE notification_handle_ = nullptr;
 };
 
