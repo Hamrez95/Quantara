@@ -1,4 +1,5 @@
 #include "bitunix_management_only_reconciliation.h"
+#include "management_only_worker_core.h"
 
 #include <iostream>
 #include <string>
@@ -76,6 +77,42 @@ bool ExchangePositionWithoutDurableEvidenceIsExternal() {
          !coordinator.CanOpenNewEntry();
 }
 
+bool WorkerCorePreservesExternalClassification() {
+  quantara::BitunixExchangeTruthSnapshot truth{};
+  truth.positions.push_back(Position("manual-1"));
+  truth.pending_orders.total = 0;
+
+  quantara::WindowsManagementOnlyWorkerCore worker;
+  const auto snapshot = worker.ReconcileFreshExchangeTruth(truth, {});
+  return snapshot.has_value() &&
+         snapshot->mode == quantara::ManagementOnlyRecoveryMode::kDisarmed &&
+         snapshot->classification ==
+             quantara::ExistingPositionClassification::kExternalUnmanaged &&
+         !worker.CanManageExistingPositions() && !worker.CanOpenNewEntry();
+}
+
+bool WorkerLifecycleBoundaryRevokesManagementAuthority() {
+  quantara::BitunixExchangeTruthSnapshot truth{};
+  truth.positions.push_back(Position("p-1"));
+  truth.pending_orders.orders.push_back(
+      ProtectionOrder("sl-1", "p-1", "BTCUSDT", true, false));
+  truth.pending_orders.orders.push_back(
+      ProtectionOrder("tp-1", "p-1", "BTCUSDT", false, true));
+  truth.pending_orders.total = 2;
+
+  quantara::WindowsManagementOnlyWorkerCore worker;
+  const auto reconciled =
+      worker.ReconcileFreshExchangeTruth(truth, {Durable("p-1")});
+  if (!reconciled.has_value() || !worker.CanManageExistingPositions()) {
+    return false;
+  }
+  worker.MarkLifecycleBoundary(
+      quantara::RecoveryLifecycleBoundary::kNetworkRestored);
+  return worker.snapshot().mode ==
+             quantara::ManagementOnlyRecoveryMode::kReconciliationRequired &&
+         !worker.CanManageExistingPositions() && !worker.CanOpenNewEntry();
+}
+
 bool StaleDurableEvidenceRequiresReconciliation() {
   quantara::BitunixExchangeTruthSnapshot truth{};
   truth.pending_orders.total = 0;
@@ -120,6 +157,8 @@ bool IncompleteProtectionNeverGrantsManagement() {
 int main() {
   if (!VerifiedPositionGrantsManagementOnly() ||
       !ExchangePositionWithoutDurableEvidenceIsExternal() ||
+      !WorkerCorePreservesExternalClassification() ||
+      !WorkerLifecycleBoundaryRevokesManagementAuthority() ||
       !StaleDurableEvidenceRequiresReconciliation() ||
       !DuplicateDurableEvidenceRequiresReconciliation() ||
       !IncompleteProtectionNeverGrantsManagement()) {
