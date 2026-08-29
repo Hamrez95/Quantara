@@ -1,10 +1,12 @@
 #include "management_only_mutation_executor.h"
+#include "../../windows_service/bitunix_management_only_request.h"
 
 #include <iostream>
 #include <string_view>
 
 namespace {
 
+using quantara::BuildBitunixManagementOnlyRequest;
 using quantara::EvaluateExistingPortfolio;
 using quantara::ExistingExchangePositionFacts;
 using quantara::ExistingPositionMutationConfirmation;
@@ -149,6 +151,33 @@ int main() {
   ok &= Expect(!mismatch.completed && mismatch.reason == "positionIdentityMismatch" &&
                    wrong.submit_calls == 0 && wrong.confirm_calls == 0,
                "Mismatched position identity must never reach exchange transport.");
+
+  const ExistingPositionMutationRequest bitunix_close{
+      .kind = ExistingPositionMutationKind::kReduceOnlyClose,
+      .position_id = "19848247723672",
+      .symbol = "BTCUSDT",
+      .reduce_only = true,
+      .increases_exposure = false,
+      .changes_margin_mode = false,
+      .widens_stop = false};
+  const auto built = BuildBitunixManagementOnlyRequest(bitunix_close);
+  ok &= Expect(built.has_value() && built->method == "POST" &&
+                   built->path == "/api/v1/futures/trade/flash_close_position" &&
+                   built->body == "{\"positionId\":\"19848247723672\"}",
+               "Verified close must map only to Bitunix flash-close by exact positionId.");
+
+  auto unsafe_bitunix = bitunix_close;
+  unsafe_bitunix.increases_exposure = true;
+  ok &= Expect(!BuildBitunixManagementOnlyRequest(unsafe_bitunix).has_value(),
+               "Exposure-increasing mutation must never serialize to Bitunix.");
+  unsafe_bitunix = bitunix_close;
+  unsafe_bitunix.kind = ExistingPositionMutationKind::kTightenStop;
+  ok &= Expect(!BuildBitunixManagementOnlyRequest(unsafe_bitunix).has_value(),
+               "Stop mutation must fail closed until explicit symbol/price payload is represented.");
+  unsafe_bitunix = bitunix_close;
+  unsafe_bitunix.position_id = "1984\"}";
+  ok &= Expect(!BuildBitunixManagementOnlyRequest(unsafe_bitunix).has_value(),
+               "Non-numeric position identity must never reach the JSON request body.");
 
   return ok ? 0 : 1;
 }
