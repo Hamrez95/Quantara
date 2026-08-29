@@ -1,20 +1,20 @@
-name: Apply #107 REST ambiguity hardening
+name: "Apply #107 REST ambiguity hardening"
 
 on:
-  pull_request:
-    branches: [dev]
+  push:
+    branches:
+      - fix/107-rest-ambiguous-risk-retention
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.head_ref == 'fix/107-rest-ambiguous-risk-retention'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: fix/107-rest-ambiguous-risk-retention
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: subosito/flutter-action@v2
         with:
@@ -22,8 +22,9 @@ jobs:
           channel: stable
           cache: true
       - name: Apply narrow fail-closed patch and regression test
-        shell: python
+        shell: bash
         run: |
+          python3 - <<'PY'
           from pathlib import Path
 
           service = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
@@ -31,11 +32,11 @@ jobs:
           old = '''  Future<({BitunixOrderDetail detail, BitunixLivePosition? position})>
           _fetchEntryRestState({'''
           new = '''  Future<({
-    BitunixOrderDetail detail,
-    BitunixLivePosition? position,
-    bool positionTruthAmbiguous,
-  })>
-  _fetchEntryRestState({'''
+            BitunixOrderDetail detail,
+            BitunixLivePosition? position,
+            bool positionTruthAmbiguous,
+          })>
+          _fetchEntryRestState({'''
           if old not in text:
               raise SystemExit('service return signature anchor not found')
           text = text.replace(old, new, 1)
@@ -212,10 +213,12 @@ void main() {
   });
 }
 ''')
+          PY
       - name: Format changed Dart files
         working-directory: src/client/quantara_app
         run: dart format lib/features/auto_trade/application/local_live_trade_service.dart lib/features/auto_trade/application/local_live_orphan_recovery.dart test/entry_rest_position_selection_test.dart
       - name: Commit final patch and remove temporary workflow
+        shell: bash
         run: |
           git rm .github/workflows/patch-107-rest-risk-retention.yml
           git add src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart \
@@ -224,4 +227,4 @@ void main() {
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix(auto-trade): retain ambiguous REST exposure risk'
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin HEAD:fix/107-rest-ambiguous-risk-retention
