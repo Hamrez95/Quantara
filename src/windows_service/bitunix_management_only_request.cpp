@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <string_view>
 
 namespace quantara {
 namespace {
@@ -21,8 +22,8 @@ std::optional<BitunixManagementOnlyHttpRequest>
 BuildBitunixManagementOnlyRequest(
     const ExistingPositionMutationRequest& request) noexcept {
   if (request.kind != ExistingPositionMutationKind::kReduceOnlyClose ||
-      request.may_open_new_exposure || request.may_increase_exposure ||
-      request.may_widen_risk || request.may_change_margin_mode ||
+      !request.reduce_only || request.increases_exposure ||
+      request.changes_margin_mode || request.widens_stop ||
       !IsSafePositionId(request.position_id)) {
     return std::nullopt;
   }
@@ -33,7 +34,7 @@ BuildBitunixManagementOnlyRequest(
   return BitunixManagementOnlyHttpRequest{
       .method = "POST",
       .path = "/api/v1/futures/trade/flash_close_position",
-      .body = "{\"positionId\":\"" + request.position_id + "\"}",
+      .body = "{\"positionId\":\"" + std::string(request.position_id) + "\"}",
   };
 }
 
