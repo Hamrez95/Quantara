@@ -8,7 +8,7 @@ namespace quantara {
 // be revoked immediately and any exchange reconciliation already in flight
 // must be prevented from restoring management authority after that boundary.
 constexpr ServiceSafetyState ServiceSafetyStateForStopBoundary() noexcept {
-  return ServiceSafetyState::kReconciliationRequired;
+  return ServiceSafetyState::kInterrupted;
 }
 
 constexpr bool ShouldPublishReconciliationResult(
