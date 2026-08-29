@@ -278,4 +278,21 @@ extension UniqueBitunixLivePositionListSelection on List<BitunixLivePosition> {
     }
     return candidate;
   }
+
+  BitunixLivePosition? uniqueMatchingSide(String expectedSide) {
+    final candidate = firstOrNull;
+    if (candidate == null) return null;
+
+    String? normalized(String raw) {
+      final value = raw.trim().toUpperCase();
+      if (value.contains('BUY') || value.contains('LONG')) return 'LONG';
+      if (value.contains('SELL') || value.contains('SHORT')) return 'SHORT';
+      return null;
+    }
+
+    final expected = normalized(expectedSide);
+    final actual = normalized(candidate.side);
+    if (expected == null || actual == null || actual != expected) return null;
+    return candidate;
+  }
 }

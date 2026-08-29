@@ -241,6 +241,42 @@ void main() {
     expect(candidates.firstOrNull, isNull);
   });
 
+  test('REST fallback accepts a unique position on the expected long side', () {
+    final candidates = <BitunixLivePosition>[position];
+    expect(
+      candidates.uniqueMatchingSide('LONG')?.positionId,
+      'xrp-position-1',
+    );
+  });
+
+  test('REST fallback rejects a unique position on the opposite side', () {
+    final candidates = <BitunixLivePosition>[position];
+    expect(candidates.uniqueMatchingSide('SHORT'), isNull);
+  });
+
+  test('REST fallback normalizes SELL to the expected short side', () {
+    const shortPosition = BitunixLivePosition(
+      positionId: 'xrp-position-short',
+      symbol: 'XRPUSDT',
+      quantity: 12,
+      side: 'SELL',
+      marginMode: 'ISOLATION',
+      positionMode: 'HEDGE',
+      leverage: 10,
+      averageOpenPrice: 1.069,
+      realizedPnl: 0,
+      unrealizedPnl: 0,
+      fee: 0,
+      funding: 0,
+    );
+    expect(
+      <BitunixLivePosition>[shortPosition]
+          .uniqueMatchingSide('SHORT')
+          ?.positionId,
+      'xrp-position-short',
+    );
+  });
+
   test('REST fallback rejects invalid single-position identity', () {
     const invalid = BitunixLivePosition(
       positionId: '',
