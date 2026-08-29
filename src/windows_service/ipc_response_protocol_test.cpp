@@ -2,6 +2,7 @@
 #include <string>
 
 #include "ipc_response_protocol.h"
+#include "service_shutdown_guard.h"
 
 int wmain() {
   using quantara::CredentialReadiness;
@@ -42,6 +43,15 @@ int wmain() {
       interrupted->find("\"entryAuthority\":false") == std::string::npos ||
       interrupted->find("\"serviceState\":\"interrupted\"") == std::string::npos) {
     std::wcerr << L"Interrupted state must remain fail-closed.\n";
+    return 1;
+  }
+
+  if (quantara::ServiceSafetyStateForStopBoundary() !=
+          ServiceSafetyState::kInterrupted ||
+      quantara::ShouldPublishReconciliationResult(true, false) ||
+      quantara::ShouldPublishReconciliationResult(false, true) ||
+      !quantara::ShouldPublishReconciliationResult(false, false)) {
+    std::wcerr << L"Stop/shutdown reconciliation guard mismatch.\n";
     return 1;
   }
 

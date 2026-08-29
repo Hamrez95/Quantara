@@ -22,6 +22,7 @@
 #include "management_only_worker_core.h"
 #include "network_change_monitor.h"
 #include "recovery_evidence_vault.h"
+#include "service_shutdown_guard.h"
 
 namespace {
 constexpr wchar_t kServiceName[] = L"QuantaraExecutionService";
@@ -155,6 +156,11 @@ DWORD WINAPI ServiceControlHandler(DWORD control, DWORD event_type,
   switch (control) {
     case SERVICE_CONTROL_STOP:
     case SERVICE_CONTROL_SHUTDOWN:
+      // Stop/shutdown is an immediate authority boundary. Publish a distinct
+      // fail-closed state before signaling the worker so an in-flight
+      // reconciliation cannot successfully CAS management authority afterward.
+      g_safety_state.store(quantara::ServiceSafetyStateForStopBoundary(),
+                           std::memory_order_seq_cst);
       ReportServiceStatus(SERVICE_STOP_PENDING, NO_ERROR, 5000);
       if (g_stop_event != nullptr) {
         SetEvent(g_stop_event);
@@ -220,10 +226,6 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     return;
   }
 
-  // Credential presence never grants execution authority. Ready credentials
-  // permit only a bounded, read-only startup reconciliation. Partial/corrupt
-  // credentials remain reconciliation-required and missing credentials remain
-  // disarmed.
   const auto credential_readiness = CredentialStartupReadiness();
   g_credential_readiness.store(credential_readiness,
                                std::memory_order_relaxed);
@@ -232,11 +234,6 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
                               quantara::RecoveryLifecycleBoundary::kRestart),
       std::memory_order_relaxed);
 
-  // Network lifecycle ownership belongs to the service boundary rather than
-  // the IPC listener. Register monitoring only after the startup exchange read
-  // so no lifecycle callback can race a stale reconciliation result into a more
-  // permissive state. The callback only revokes authority and signals the
-  // service thread; it never performs exchange I/O itself.
   quantara::NetworkChangeMonitor network_monitor(
       g_safety_state, g_network_reconciliation_event);
   if (!network_monitor.Start()) {
@@ -274,10 +271,6 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
   }
   CloseHandle(listener_ready);
 
-  // Report Running only after lifecycle monitoring and authenticated local
-  // read-only IPC are ready. A Running SCM state is not entry authority; the
-  // IPC safety state remains disarmed/reconciliation-required unless a verified
-  // management-only snapshot exists.
   ReportServiceStatus(SERVICE_RUNNING);
 
   const HANDLE service_events[] = {
@@ -309,9 +302,6 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
             ? quantara::RecoveryLifecycleBoundary::kNetworkRestored
             : quantara::RecoveryLifecycleBoundary::kPowerResume;
 
-    // Consume this boundary only immediately before the read. If another
-    // network/power boundary arrives while exchange truth is being read, its
-    // manual-reset event remains signaled and the result below is discarded.
     ResetEvent(boundary_event);
     g_safety_state.store(quantara::ServiceSafetyState::kReconciliationRequired,
                          std::memory_order_relaxed);
@@ -321,22 +311,42 @@ void WINAPI ServiceMain(DWORD /*argc*/, LPWSTR* /*argv*/) noexcept {
     const auto reconciled =
         ReconcileManagementOnly(refreshed_readiness, boundary);
 
+    const bool stop_requested =
+        WaitForSingleObject(g_stop_event, 0) == WAIT_OBJECT_0;
     const bool newer_boundary_arrived =
         WaitForSingleObject(g_network_reconciliation_event, 0) ==
             WAIT_OBJECT_0 ||
         WaitForSingleObject(g_power_reconciliation_event, 0) == WAIT_OBJECT_0;
-    if (newer_boundary_arrived) {
-      g_safety_state.store(
-          quantara::ServiceSafetyState::kReconciliationRequired,
-          std::memory_order_relaxed);
+    if (!quantara::ShouldPublishReconciliationResult(
+            stop_requested, newer_boundary_arrived)) {
+      if (stop_requested) {
+        g_safety_state.store(quantara::ServiceSafetyStateForStopBoundary(),
+                             std::memory_order_seq_cst);
+        stopping = true;
+      } else {
+        g_safety_state.store(
+            quantara::ServiceSafetyState::kReconciliationRequired,
+            std::memory_order_relaxed);
+      }
       continue;
     }
-    g_safety_state.store(reconciled, std::memory_order_relaxed);
+
+    // Publish only while the state still reflects this reconciliation cycle.
+    // STOP/SHUTDOWN writes kInterrupted first, so a stop that races between the
+    // zero-time event check above and this CAS makes publication fail. If this
+    // CAS wins first, the control handler runs afterward and immediately
+    // overwrites the result with kInterrupted. Either ordering ends fail-closed.
+    auto expected = quantara::ServiceSafetyState::kReconciliationRequired;
+    if (!g_safety_state.compare_exchange_strong(
+            expected, reconciled, std::memory_order_seq_cst,
+            std::memory_order_seq_cst)) {
+      if (expected == quantara::ServiceSafetyStateForStopBoundary()) {
+        stopping = true;
+      }
+      continue;
+    }
   }
 
-  // The listener may be blocked in ConnectNamedPipe or ReadFile. Cancelling
-  // synchronous I/O on its owning thread makes SCM stop/shutdown bounded while
-  // preserving fail-closed behavior for any partial request.
   CancelSynchronousIo(listener.native_handle());
   listener.join();
   network_monitor.Stop();
@@ -491,8 +501,6 @@ bool RunAuthenticatedPipeTransportSelfTest() noexcept {
         written == payload.size();
     client_ok.store(write_ok, std::memory_order_relaxed);
     if (write_ok) {
-      // Keep the authenticated peer connected until the server has consumed
-      // the frame. Closing immediately after WriteFile can race token lookup.
       WaitForSingleObject(client_release, 5000);
     }
     CloseHandle(handle);
@@ -575,6 +583,14 @@ bool RunSelfTest() noexcept {
           quantara::ServiceSafetyState::kReconciliationRequired ||
       SafetyStateForCredentialReadiness(quantara::CredentialReadiness::kInvalid) !=
           quantara::ServiceSafetyState::kReconciliationRequired) {
+    return false;
+  }
+
+  if (quantara::ServiceSafetyStateForStopBoundary() !=
+          quantara::ServiceSafetyState::kInterrupted ||
+      quantara::ShouldPublishReconciliationResult(true, false) ||
+      quantara::ShouldPublishReconciliationResult(false, true) ||
+      !quantara::ShouldPublishReconciliationResult(false, false)) {
     return false;
   }
 
