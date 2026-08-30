@@ -19,8 +19,7 @@ void main() {
   WindowsServiceManagementClient managementClientFor({
     required Future<WindowsServiceManagementCommandResult> Function(
       String positionId,
-    )
-    closeCommand,
+    ) closeCommand,
   }) {
     return WindowsServiceManagementClient(closeCommand: closeCommand);
   }
