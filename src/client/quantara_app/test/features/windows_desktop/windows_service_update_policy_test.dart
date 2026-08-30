@@ -57,32 +57,38 @@ void main() {
       expect(snapshot.reconciliationRequired, isTrue);
     });
 
-    test('contradictory durable ownership and exchange truth remains blocked', () {
-      final snapshot = WindowsServiceUpdatePolicy.resolve(
-        event: WindowsServiceUpdateEvent.reconciliationSucceeded,
-        hasExchangeReportedOpenPositions: false,
-        hasVerifiedQuantaraManagedOpenPositions: true,
-        managementExecutorAvailable: true,
-      );
+    test(
+      'contradictory durable ownership and exchange truth remains blocked',
+      () {
+        final snapshot = WindowsServiceUpdatePolicy.resolve(
+          event: WindowsServiceUpdateEvent.reconciliationSucceeded,
+          hasExchangeReportedOpenPositions: false,
+          hasVerifiedQuantaraManagedOpenPositions: true,
+          managementExecutorAvailable: true,
+        );
 
-      expect(snapshot.mode, WindowsServiceUpdateMode.blocked);
-      expect(snapshot.localManagementAvailable, isFalse);
-      expect(snapshot.reconciliationRequired, isTrue);
-    });
+        expect(snapshot.mode, WindowsServiceUpdateMode.blocked);
+        expect(snapshot.localManagementAvailable, isFalse);
+        expect(snapshot.reconciliationRequired, isTrue);
+      },
+    );
 
-    test('verified existing position with executor permits management only', () {
-      final snapshot = WindowsServiceUpdatePolicy.resolve(
-        event: WindowsServiceUpdateEvent.reconciliationSucceeded,
-        hasExchangeReportedOpenPositions: true,
-        hasVerifiedQuantaraManagedOpenPositions: true,
-        managementExecutorAvailable: true,
-      );
+    test(
+      'verified existing position with executor permits management only',
+      () {
+        final snapshot = WindowsServiceUpdatePolicy.resolve(
+          event: WindowsServiceUpdateEvent.reconciliationSucceeded,
+          hasExchangeReportedOpenPositions: true,
+          hasVerifiedQuantaraManagedOpenPositions: true,
+          managementExecutorAvailable: true,
+        );
 
-      expect(snapshot.mode, WindowsServiceUpdateMode.managingExisting);
-      expect(snapshot.localManagementAvailable, isTrue);
-      expect(snapshot.blocksNewEntries, isTrue);
-      expect(snapshot.requiresExplicitStart, isTrue);
-    });
+        expect(snapshot.mode, WindowsServiceUpdateMode.managingExisting);
+        expect(snapshot.localManagementAvailable, isTrue);
+        expect(snapshot.blocksNewEntries, isTrue);
+        expect(snapshot.requiresExplicitStart, isTrue);
+      },
+    );
 
     test('failed reconciliation remains fail closed', () {
       final snapshot = WindowsServiceUpdatePolicy.resolve(
