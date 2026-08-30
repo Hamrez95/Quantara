@@ -62,16 +62,18 @@ void main() {
   });
 
   test('position-scoped protection rejects stale mismatched identity', () async {
-    final api = client((request) async => http.Response(
-      jsonEncode({
-        'code': 0,
-        'msg': 'Success',
-        'data': {
-          'orderList': [protection(positionId: 'position-stale')],
-        },
-      }),
-      200,
-    ));
+    final api = client(
+      (request) async => http.Response(
+        jsonEncode({
+          'code': 0,
+          'msg': 'Success',
+          'data': {
+            'orderList': [protection(positionId: 'position-stale')],
+          },
+        }),
+        200,
+      ),
+    );
 
     await expectLater(
       api.fetchPendingProtection(
