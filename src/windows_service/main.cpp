@@ -112,7 +112,10 @@ quantara::ServiceSafetyState ReconcileManagementOnly(
   if (!snapshot.has_value() || worker.CanOpenNewEntry()) {
     return quantara::ServiceSafetyState::kReconciliationRequired;
   }
-  return quantara::ServiceSafetyStateFromManagementOnlySnapshot(*snapshot);
+  // The production listener is wired to ExecuteWindowsManagementOnlyRequest by
+  // default, so a verified snapshot may publish management-only authority. The
+  // mapping still requires verified ownership/protection and never grants entry.
+  return quantara::ServiceSafetyStateFromManagementOnlySnapshot(*snapshot, true);
 }
 
 quantara::ServiceSafetyState SafetyStateAfterPowerEvent(
