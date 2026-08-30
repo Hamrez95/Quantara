@@ -1037,6 +1037,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
           final quantityTolerance = math
               .pow(10, -rules.quantityPrecision)
               .toDouble();
+          final priceTolerance =
+              math.pow(10, -rules.pricePrecision).toDouble() / 2;
           final protectedPositionId = position.positionId;
           bool fullStopConfirmedBy(List<BitunixPendingProtection> evidence) =>
               evidence.any(
@@ -1047,6 +1049,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   stopLossQuantity: item.stopLossQuantity,
                   remainingQuantity: quantity,
                   quantityTolerance: quantityTolerance,
+                  expectedStopLossPrice: stopLoss,
+                  priceTolerance: priceTolerance,
                 ),
               );
           var protections = await exchange.fetchPendingProtection(
@@ -1063,6 +1067,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
                   stopLossQuantity: item.stopLossQuantity,
                   remainingQuantity: quantity,
                   quantityTolerance: quantityTolerance,
+                  expectedStopLossPrice: stopLoss,
+                  priceTolerance: priceTolerance,
                 ),
               )
               .map((item) => item.orderId)

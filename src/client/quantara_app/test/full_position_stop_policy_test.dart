@@ -10,6 +10,8 @@ void main() {
     double stopQuantity = 1,
     double remainingQuantity = 1,
     double tolerance = 0.001,
+    double? expectedPrice,
+    double priceTolerance = 0,
   }) => FullPositionStopPolicy.isConfirmed(
     evidencePositionId: evidencePositionId,
     expectedPositionId: expectedPositionId,
@@ -17,6 +19,8 @@ void main() {
     stopLossQuantity: stopQuantity,
     remainingQuantity: remainingQuantity,
     quantityTolerance: tolerance,
+    expectedStopLossPrice: expectedPrice,
+    priceTolerance: priceTolerance,
   );
 
   test('rejects stop belonging to another position', () {
@@ -41,6 +45,23 @@ void main() {
   test('rejects missing or invalid stop price', () {
     expect(confirmed(price: 0), isFalse);
     expect(confirmed(price: double.nan), isFalse);
+  });
+
+  test('binds stop evidence to the expected entry protection price', () {
+    expect(
+      confirmed(price: 99.5, expectedPrice: 100, priceTolerance: 0.01),
+      isFalse,
+    );
+    expect(
+      confirmed(price: 100.005, expectedPrice: 100, priceTolerance: 0.01),
+      isTrue,
+    );
+  });
+
+  test('fails closed for invalid expected-price evidence', () {
+    expect(confirmed(expectedPrice: 0), isFalse);
+    expect(confirmed(expectedPrice: double.nan), isFalse);
+    expect(confirmed(expectedPrice: 100, priceTolerance: -0.01), isFalse);
   });
 
   test('fails closed for invalid quantity evidence', () {
