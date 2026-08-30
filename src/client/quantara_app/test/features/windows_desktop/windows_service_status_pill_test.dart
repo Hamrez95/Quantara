@@ -55,6 +55,22 @@ void main() {
     expect(find.text('Windows service: reconcile'), findsOneWidget);
   });
 
+  testWidgets('surfaces management-only state without entry authority', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        readerFor(
+          '{"protocolVersion":1,"requestId":"ui.management","kind":"statusSnapshot","payload":{"serviceState":"manageExistingOnly","entryAuthority":false}}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Windows service: manage existing only'), findsOneWidget);
+    expect(find.textContaining('unverified'), findsNothing);
+  });
+
   testWidgets('fails closed when the service response cannot be verified', (
     tester,
   ) async {

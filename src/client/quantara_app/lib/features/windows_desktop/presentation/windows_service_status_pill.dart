@@ -140,6 +140,16 @@ _ServiceStatusPresentation _presentation(
         color: QuantaraColors.warning,
         icon: Icons.sync_problem_rounded,
       ),
+    WindowsServiceSafetyState.manageExistingOnly => _ServiceStatusPresentation(
+      label: persian
+          ? 'سرویس ویندوز: فقط مدیریت پوزیشن'
+          : 'Windows service: manage existing only',
+      detail: persian
+          ? 'فقط مدیریت پوزیشن‌های موجود و تأییدشده مجاز است.'
+          : 'Only verified existing positions may be managed.',
+      color: QuantaraColors.warning,
+      icon: Icons.admin_panel_settings_outlined,
+    ),
   };
 }
 

@@ -43,7 +43,8 @@ enum WindowsServiceMessageKind {
 enum WindowsServiceSafetyState {
   disarmed,
   interrupted,
-  reconciliationRequired;
+  reconciliationRequired,
+  manageExistingOnly;
 
   static WindowsServiceSafetyState parse(String value) {
     for (final state in values) {
