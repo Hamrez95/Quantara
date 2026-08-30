@@ -10,6 +10,20 @@
 #include "ipc_readonly_session.h"
 #include "local_pipe_security.h"
 
+namespace {
+
+quantara::ExistingPositionMutationExecutionResult HandleClose(
+    const quantara::ManagementOnlyRequest& request) noexcept {
+  if (request.kind !=
+          quantara::ManagementOnlyRequestKind::kCloseExistingPosition ||
+      request.position_id != "123456789") {
+    return {false, false, false, "unexpectedRequest"};
+  }
+  return {true, true, true, "confirmedByFreshExchangeTruth"};
+}
+
+}  // namespace
+
 int wmain() {
   const std::wstring pipe_name =
       L"\\\\.\\pipe\\QuantaraExecutionService.session-self-test." +
@@ -24,6 +38,10 @@ int wmain() {
       "{\"protocolVersion\":1,\"requestId\":\"status-roundtrip-1\",\"kind\":\"statusRequest\",\"payload\":{}}";
   const std::string expected =
       "{\"protocolVersion\":1,\"requestId\":\"status-roundtrip-1\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"disarmed\",\"entryAuthority\":false}}";
+  const std::string management_request =
+      "{\"protocolVersion\":1,\"requestId\":\"close-roundtrip-1\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"123456789\"}}";
+  const std::string management_expected =
+      "{\"protocolVersion\":1,\"requestId\":\"close-roundtrip-1\",\"kind\":\"managementResult\",\"payload\":{\"completed\":true,\"submissionAttempted\":true,\"exchangeTruthReconciled\":true}}";
 
   std::atomic<bool> client_ok{false};
   std::thread client([&]() {
@@ -41,25 +59,30 @@ int wmain() {
       return;
     }
 
-    DWORD written = 0;
-    if (!WriteFile(handle, request.data(), static_cast<DWORD>(request.size()),
-                   &written, nullptr) ||
-        written != request.size()) {
-      CloseHandle(handle);
-      return;
-    }
+    auto round_trip = [&](const std::string& outbound,
+                          const std::string& expected_response) {
+      DWORD written = 0;
+      if (!WriteFile(handle, outbound.data(), static_cast<DWORD>(outbound.size()),
+                     &written, nullptr) ||
+          written != outbound.size()) {
+        return false;
+      }
 
-    std::vector<char> response(64 * 1024);
-    DWORD read = 0;
-    if (!ReadFile(handle, response.data(), static_cast<DWORD>(response.size()),
-                  &read, nullptr) ||
-        read == 0) {
-      CloseHandle(handle);
-      return;
-    }
-    response.resize(read);
-    client_ok.store(std::string(response.begin(), response.end()) == expected,
-                    std::memory_order_relaxed);
+      std::vector<char> response(64 * 1024);
+      DWORD read = 0;
+      if (!ReadFile(handle, response.data(), static_cast<DWORD>(response.size()),
+                    &read, nullptr) ||
+          read == 0) {
+        return false;
+      }
+      response.resize(read);
+      return std::string(response.begin(), response.end()) == expected_response;
+    };
+
+    const bool read_only_ok = round_trip(request, expected);
+    const bool management_ok =
+        read_only_ok && round_trip(management_request, management_expected);
+    client_ok.store(management_ok, std::memory_order_relaxed);
     CloseHandle(handle);
   });
 
@@ -69,22 +92,29 @@ int wmain() {
       connected == TRUE || connect_error == ERROR_PIPE_CONNECTED;
 
   quantara::RequestReplayGuard replay_guard;
-  const bool server_ok =
-      connection_ok && quantara::ProcessAuthenticatedReadOnlyFrame(
+  const bool read_only_server_ok =
+      connection_ok && quantara::ProcessAuthenticatedFrame(
                            pipe, quantara::ServiceSafetyState::kDisarmed,
-                           quantara::CredentialReadiness::kReady, replay_guard);
+                           quantara::CredentialReadiness::kReady, replay_guard,
+                           HandleClose);
+  const bool management_server_ok =
+      read_only_server_ok && quantara::ProcessAuthenticatedFrame(
+                                 pipe,
+                                 quantara::ServiceSafetyState::kManageExistingOnly,
+                                 quantara::CredentialReadiness::kReady,
+                                 replay_guard, HandleClose);
 
   FlushFileBuffers(pipe);
   DisconnectNamedPipe(pipe);
   CloseHandle(pipe);
   client.join();
 
-  if (!server_ok || !client_ok.load(std::memory_order_relaxed) ||
-      replay_guard.size() != 1) {
-    std::wcerr << L"Authenticated read-only IPC round trip failed.\n";
+  if (!read_only_server_ok || !management_server_ok ||
+      !client_ok.load(std::memory_order_relaxed) || replay_guard.size() != 2) {
+    std::wcerr << L"Authenticated IPC session round trip failed.\n";
     return 1;
   }
 
-  std::wcout << L"Quantara Windows read-only session self-test passed.\n";
+  std::wcout << L"Quantara Windows authenticated session self-test passed.\n";
   return 0;
 }
