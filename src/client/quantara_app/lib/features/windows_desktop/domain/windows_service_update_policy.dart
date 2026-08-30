@@ -100,7 +100,8 @@ final class WindowsServiceUpdatePolicy {
       return _snapshot(event, WindowsServiceUpdateMode.disarmed);
     }
 
-    final canManageVerifiedExisting = hasExchangeReportedOpenPositions &&
+    final canManageVerifiedExisting =
+        hasExchangeReportedOpenPositions &&
         hasVerifiedQuantaraManagedOpenPositions &&
         managementExecutorAvailable;
     if (canManageVerifiedExisting) {
