@@ -42,24 +42,27 @@ void main() {
     expect(result.exchangeTruthReconciled, isTrue);
   });
 
-  test('preserves canonical failed result without pretending success', () async {
-    final client = WindowsServiceManagementClient(
-      closeCommand: (positionId) async => response(
-        exitCode: 8,
-        payload: frame(
-          completed: false,
-          submissionAttempted: true,
-          exchangeTruthReconciled: true,
+  test(
+    'preserves canonical failed result without pretending success',
+    () async {
+      final client = WindowsServiceManagementClient(
+        closeCommand: (positionId) async => response(
+          exitCode: 8,
+          payload: frame(
+            completed: false,
+            submissionAttempted: true,
+            exchangeTruthReconciled: true,
+          ),
         ),
-      ),
-    );
+      );
 
-    final result = await client.closeExistingPosition('7');
+      final result = await client.closeExistingPosition('7');
 
-    expect(result.completed, isFalse);
-    expect(result.submissionAttempted, isTrue);
-    expect(result.exchangeTruthReconciled, isTrue);
-  });
+      expect(result.completed, isFalse);
+      expect(result.submissionAttempted, isTrue);
+      expect(result.exchangeTruthReconciled, isTrue);
+    },
+  );
 
   test('does not invoke helper for non-canonical position id', () async {
     var invoked = false;
@@ -139,21 +142,24 @@ void main() {
     );
   });
 
-  test('does not accept automatic retry semantics for unknown helper failure', () async {
-    var calls = 0;
-    final client = WindowsServiceManagementClient(
-      closeCommand: (positionId) async {
-        calls += 1;
-        throw const WindowsServiceManagementException(
-          'timed out; outcome unknown',
-        );
-      },
-    );
+  test(
+    'does not accept automatic retry semantics for unknown helper failure',
+    () async {
+      var calls = 0;
+      final client = WindowsServiceManagementClient(
+        closeCommand: (positionId) async {
+          calls += 1;
+          throw const WindowsServiceManagementException(
+            'timed out; outcome unknown',
+          );
+        },
+      );
 
-    await expectLater(
-      client.closeExistingPosition('44'),
-      throwsA(isA<WindowsServiceManagementException>()),
-    );
-    expect(calls, 1);
-  });
+      await expectLater(
+        client.closeExistingPosition('44'),
+        throwsA(isA<WindowsServiceManagementException>()),
+      );
+      expect(calls, 1);
+    },
+  );
 }
