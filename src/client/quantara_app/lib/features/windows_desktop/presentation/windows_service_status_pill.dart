@@ -63,175 +63,173 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
 
   Future<void> _showCloseExistingPositionDialog() async {
     final persian = Localizations.localeOf(context).languageCode == 'fa';
-    final controller = TextEditingController();
     final managementClient =
         widget.managementClient ??
         createPlatformWindowsServiceManagementClient();
+    var positionId = '';
     var confirmed = false;
     var busy = false;
     String? errorMessage;
 
-    try {
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (context, setDialogState) {
-              final positionId = controller.text.trim();
-              final validPositionId =
-                  RegExp(r'^[0-9]{1,64}$').hasMatch(positionId) &&
-                  positionId != '0';
-              final canSubmit = validPositionId && confirmed && !busy;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final validPositionId =
+                RegExp(r'^[0-9]{1,64}$').hasMatch(positionId) &&
+                positionId != '0';
+            final canSubmit = validPositionId && confirmed && !busy;
 
-              Future<void> submit() async {
-                if (!canSubmit) {
+            Future<void> submit() async {
+              if (!canSubmit) {
+                return;
+              }
+              setDialogState(() {
+                busy = true;
+                errorMessage = null;
+              });
+              try {
+                final result = await managementClient.closeExistingPosition(
+                  positionId,
+                );
+                if (!dialogContext.mounted) {
                   return;
                 }
-                setDialogState(() {
-                  busy = true;
-                  errorMessage = null;
-                });
-                try {
-                  final result = await managementClient.closeExistingPosition(
-                    positionId,
-                  );
-                  if (!dialogContext.mounted) {
-                    return;
-                  }
-                  if (!result.completed) {
-                    setDialogState(() {
-                      busy = false;
-                      errorMessage = persian
-                          ? 'بسته‌شدن پوزیشن تأیید نشد. پیش از تلاش دوباره، وضعیت صرافی را دوباره تطبیق دهید.'
-                          : 'Position close was not confirmed. Reconcile exchange state before retrying.';
-                    });
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop();
-                  if (!mounted) {
-                    return;
-                  }
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        persian
-                            ? 'بسته‌شدن پوزیشن با وضعیت تازه صرافی تأیید شد.'
-                            : 'Position close was confirmed by fresh exchange state.',
-                      ),
-                    ),
-                  );
-                  _retry();
-                } on WindowsServiceManagementException {
-                  if (!dialogContext.mounted) {
-                    return;
-                  }
+                if (!result.completed) {
                   setDialogState(() {
                     busy = false;
                     errorMessage = persian
-                        ? 'نتیجه عملیات قابل تأیید نیست. پیش از تلاش دوباره، وضعیت صرافی را تطبیق دهید.'
-                        : 'The operation outcome is not verified. Reconcile exchange state before retrying.';
+                        ? 'بسته‌شدن پوزیشن تأیید نشد. پیش از تلاش دوباره، وضعیت صرافی را دوباره تطبیق دهید.'
+                        : 'Position close was not confirmed. Reconcile exchange state before retrying.';
                   });
+                  return;
                 }
-              }
-
-              return AlertDialog(
-                title: Text(
-                  persian ? 'بستن پوزیشن موجود' : 'Close existing position',
-                ),
-                content: SizedBox(
-                  width: 420,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        persian
-                            ? 'فقط پوزیشن موجودی که Quantara آن را دوباره با صرافی تأیید کند قابل بستن است. این مسیر هیچ اختیار ورود جدیدی ایجاد نمی‌کند.'
-                            : 'Only an existing position re-verified by Quantara against the exchange can be closed. This path never grants new-entry authority.',
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: controller,
-                        enabled: !busy,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: persian ? 'Position ID' : 'Position ID',
-                          helperText: persian
-                              ? 'شناسه عددی پوزیشن در صرافی'
-                              : 'Numeric exchange position identifier',
-                          errorText: controller.text.isEmpty || validPositionId
-                              ? null
-                              : (persian
-                                    ? 'شناسه باید ۱ تا ۶۴ رقم و غیرصفر باشد.'
-                                    : 'ID must be 1-64 decimal digits and non-zero.'),
-                        ),
-                        onChanged: (_) => setDialogState(() {}),
-                      ),
-                      const SizedBox(height: 12),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        value: confirmed,
-                        onChanged: busy
-                            ? null
-                            : (value) {
-                                setDialogState(() {
-                                  confirmed = value ?? false;
-                                });
-                              },
-                        title: Text(
-                          persian
-                              ? 'تأیید می‌کنم فقط همین پوزیشن موجود بسته شود.'
-                              : 'I confirm that only this existing position should be closed.',
-                        ),
-                        subtitle: Text(
-                          persian
-                              ? 'در صورت نامشخص بودن نتیجه شبکه، عملیات خودکار تکرار نمی‌شود.'
-                              : 'If the network outcome is ambiguous, the mutation is not retried automatically.',
-                        ),
-                      ),
-                      if (errorMessage != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          errorMessage!,
-                          style: TextStyle(color: QuantaraColors.danger),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.of(dialogContext).pop(),
-                    child: Text(persian ? 'انصراف' : 'Cancel'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: canSubmit ? submit : null,
-                    icon: busy
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.close_rounded),
-                    label: Text(
-                      busy
-                          ? (persian ? 'در حال تأیید…' : 'Confirming…')
-                          : (persian ? 'بستن پوزیشن' : 'Close position'),
+                Navigator.of(dialogContext).pop();
+                if (!mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      persian
+                          ? 'بسته‌شدن پوزیشن با وضعیت تازه صرافی تأیید شد.'
+                          : 'Position close was confirmed by fresh exchange state.',
                     ),
                   ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      controller.dispose();
-    }
+                );
+                _retry();
+              } on WindowsServiceManagementException {
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                setDialogState(() {
+                  busy = false;
+                  errorMessage = persian
+                      ? 'نتیجه عملیات قابل تأیید نیست. پیش از تلاش دوباره، وضعیت صرافی را تطبیق دهید.'
+                      : 'The operation outcome is not verified. Reconcile exchange state before retrying.';
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text(
+                persian ? 'بستن پوزیشن موجود' : 'Close existing position',
+              ),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      persian
+                          ? 'فقط پوزیشن موجودی که Quantara آن را دوباره با صرافی تأیید کند قابل بستن است. این مسیر هیچ اختیار ورود جدیدی ایجاد نمی‌کند.'
+                          : 'Only an existing position re-verified by Quantara against the exchange can be closed. This path never grants new-entry authority.',
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      enabled: !busy,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: persian ? 'Position ID' : 'Position ID',
+                        helperText: persian
+                            ? 'شناسه عددی پوزیشن در صرافی'
+                            : 'Numeric exchange position identifier',
+                        errorText: positionId.isEmpty || validPositionId
+                            ? null
+                            : (persian
+                                  ? 'شناسه باید ۱ تا ۶۴ رقم و غیرصفر باشد.'
+                                  : 'ID must be 1-64 decimal digits and non-zero.'),
+                      ),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          positionId = value.trim();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: confirmed,
+                      onChanged: busy
+                          ? null
+                          : (value) {
+                              setDialogState(() {
+                                confirmed = value ?? false;
+                              });
+                            },
+                      title: Text(
+                        persian
+                            ? 'تأیید می‌کنم فقط همین پوزیشن موجود بسته شود.'
+                            : 'I confirm that only this existing position should be closed.',
+                      ),
+                      subtitle: Text(
+                        persian
+                            ? 'در صورت نامشخص بودن نتیجه شبکه، عملیات خودکار تکرار نمی‌شود.'
+                            : 'If the network outcome is ambiguous, the mutation is not retried automatically.',
+                      ),
+                    ),
+                    if (errorMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        errorMessage!,
+                        style: TextStyle(color: QuantaraColors.danger),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: busy
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: Text(persian ? 'انصراف' : 'Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: canSubmit ? submit : null,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.close_rounded),
+                  label: Text(
+                    busy
+                        ? (persian ? 'در حال تأیید…' : 'Confirming…')
+                        : (persian ? 'بستن پوزیشن' : 'Close position'),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
