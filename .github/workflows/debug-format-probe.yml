@@ -1,0 +1,28 @@
+name: Debug Dart format probe
+
+on:
+  push:
+    branches:
+      - fix/107-bind-pending-protection-identity
+
+permissions:
+  contents: read
+
+jobs:
+  format-probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Print canonical formatter output
+        shell: bash
+        run: |
+          cd src/client/quantara_app
+          dart format test/bitunix_pending_protection_identity_test.dart
+          echo '---FORMAT-PROBE-BEGIN---'
+          cat test/bitunix_pending_protection_identity_test.dart
+          echo '---FORMAT-PROBE-END---'
