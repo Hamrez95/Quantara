@@ -65,6 +65,64 @@ std::string BuildCredentialReadinessRequest(std::string_view request_id) {
          "\",\"kind\":\"credentialReadinessRequest\",\"payload\":{}}";
 }
 
+bool IsCanonicalPositionId(std::wstring_view position_id) noexcept {
+  if (position_id.empty() || position_id.size() > 64 || position_id == L"0") {
+    return false;
+  }
+  for (const wchar_t ch : position_id) {
+    if (ch < L'0' || ch > L'9') {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::string NarrowPositionId(std::wstring_view position_id) {
+  std::string result;
+  result.reserve(position_id.size());
+  for (const wchar_t ch : position_id) {
+    result.push_back(static_cast<char>(ch));
+  }
+  return result;
+}
+
+std::string BuildCloseExistingPositionRequest(std::string_view request_id,
+                                              std::string_view position_id) {
+  return "{\"protocolVersion\":1,\"requestId\":\"" +
+         std::string(request_id) +
+         "\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"" +
+         std::string(position_id) + "\"}}";
+}
+
+bool IsCanonicalManagementResult(std::string_view response,
+                                 std::string_view request_id,
+                                 bool& completed) noexcept {
+  try {
+    const std::string prefix =
+        "{\"protocolVersion\":1,\"requestId\":\"" +
+        std::string(request_id) +
+        "\",\"kind\":\"managementResult\",\"payload\":{\"completed\":";
+    const std::string failed_before_submit =
+        prefix +
+        "false,\"submissionAttempted\":false,\"exchangeTruthReconciled\":false}}";
+    const std::string failed_unreconciled =
+        prefix +
+        "false,\"submissionAttempted\":true,\"exchangeTruthReconciled\":false}}";
+    const std::string failed_after_reconcile =
+        prefix +
+        "false,\"submissionAttempted\":true,\"exchangeTruthReconciled\":true}}";
+    const std::string succeeded =
+        prefix +
+        "true,\"submissionAttempted\":true,\"exchangeTruthReconciled\":true}}";
+    completed = response == succeeded;
+    return completed || response == failed_before_submit ||
+           response == failed_unreconciled || response == failed_after_reconcile;
+  } catch (...) {
+    completed = false;
+    return false;
+  }
+}
+
 bool IsCanonicalStatusResponse(std::string_view response,
                                std::string_view request_id) noexcept {
   try {
@@ -208,6 +266,12 @@ bool ExchangeStatusFrame(HANDLE pipe, std::string_view request,
   return true;
 }
 
+bool ConfigureAndVerifyPipe(HANDLE pipe) noexcept {
+  DWORD mode = PIPE_READMODE_MESSAGE;
+  return SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr) &&
+         ServicePidMatchesPipeServer(pipe);
+}
+
 int RunReadOnlyQuery(bool credential_readiness) {
   if (!WaitNamedPipeW(kStatusPipeName, kIoTimeoutMs)) {
     std::cerr << "Quantara Windows service status pipe is unavailable.\n";
@@ -221,13 +285,7 @@ int RunReadOnlyQuery(bool credential_readiness) {
     std::cerr << "Unable to connect to Quantara Windows service status pipe.\n";
     return 3;
   }
-
-  DWORD mode = PIPE_READMODE_MESSAGE;
-  if (!SetNamedPipeHandleState(pipe.get(), &mode, nullptr, nullptr)) {
-    std::cerr << "Unable to configure Quantara Windows service status pipe.\n";
-    return 4;
-  }
-  if (!ServicePidMatchesPipeServer(pipe.get())) {
+  if (!ConfigureAndVerifyPipe(pipe.get())) {
     std::cerr << "Quantara Windows service peer identity could not be verified.\n";
     return 5;
   }
@@ -256,6 +314,49 @@ int RunReadOnlyQuery(bool credential_readiness) {
   return 0;
 }
 
+int RunCloseExistingPosition(std::wstring_view position_id) {
+  if (!IsCanonicalPositionId(position_id)) {
+    std::cerr << "Position ID must contain 1-64 decimal digits and must not be zero.\n";
+    return 64;
+  }
+  if (!WaitNamedPipeW(kStatusPipeName, kIoTimeoutMs)) {
+    std::cerr << "Quantara Windows service status/control pipe is unavailable.\n";
+    return 2;
+  }
+
+  ScopedHandle pipe(CreateFileW(kStatusPipeName, GENERIC_READ | GENERIC_WRITE, 0,
+                                nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED,
+                                nullptr));
+  if (pipe.get() == INVALID_HANDLE_VALUE) {
+    std::cerr << "Unable to connect to Quantara Windows service status/control pipe.\n";
+    return 3;
+  }
+  if (!ConfigureAndVerifyPipe(pipe.get())) {
+    std::cerr << "Quantara Windows service peer identity could not be verified.\n";
+    return 5;
+  }
+
+  const std::string request_id = BuildRequestId();
+  const std::string request = BuildCloseExistingPositionRequest(
+      request_id, NarrowPositionId(position_id));
+  std::string response;
+  DWORD exchange_error = ERROR_SUCCESS;
+  if (!ExchangeStatusFrame(pipe.get(), request, response, exchange_error)) {
+    std::cerr << "Quantara Windows management exchange failed with Win32 error "
+              << exchange_error << ".\n";
+    return 6;
+  }
+
+  bool completed = false;
+  if (!IsCanonicalManagementResult(response, request_id, completed)) {
+    std::cerr << "Quantara Windows management response failed validation ("
+              << response.size() << " bytes).\n";
+    return 7;
+  }
+  std::cout << response << '\n';
+  return completed ? 0 : 8;
+}
+
 int RunSelfTest() {
   const std::string status_request = BuildStatusRequest("self-test.1");
   const std::string expected_status_request =
@@ -266,6 +367,11 @@ int RunSelfTest() {
   const std::string expected_readiness_request =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.2\","
       "\"kind\":\"credentialReadinessRequest\",\"payload\":{}}";
+  const std::string close_request =
+      BuildCloseExistingPositionRequest("self-test.3", "123456789");
+  const std::string expected_close_request =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.3\","
+      "\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"123456789\"}}";
   const std::string valid_status_response =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
@@ -290,10 +396,38 @@ int RunSelfTest() {
       "{\"protocolVersion\":1,\"requestId\":\"other\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
       "\"disarmed\",\"entryAuthority\":false}}";
+  const std::string completed_management_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.3\","
+      "\"kind\":\"managementResult\",\"payload\":{\"completed\":true,"
+      "\"submissionAttempted\":true,\"exchangeTruthReconciled\":true}}";
+  const std::string failed_management_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.3\","
+      "\"kind\":\"managementResult\",\"payload\":{\"completed\":false,"
+      "\"submissionAttempted\":true,\"exchangeTruthReconciled\":true}}";
+  const std::string unsafe_management_response =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.3\","
+      "\"kind\":\"managementResult\",\"payload\":{\"completed\":true,"
+      "\"submissionAttempted\":false,\"exchangeTruthReconciled\":false}}";
+  bool completed = false;
+  const bool completed_valid = IsCanonicalManagementResult(
+      completed_management_response, "self-test.3", completed);
+  const bool completed_flag = completed;
+  completed = true;
+  const bool failed_valid = IsCanonicalManagementResult(
+      failed_management_response, "self-test.3", completed);
+  const bool failed_flag = completed;
+  completed = false;
+  const bool unsafe_valid = IsCanonicalManagementResult(
+      unsafe_management_response, "self-test.3", completed);
+
   if (status_request != expected_status_request ||
       readiness_request != expected_readiness_request ||
+      close_request != expected_close_request ||
       status_request.size() > kMaxFrameBytes ||
       readiness_request.size() > kMaxFrameBytes ||
+      close_request.size() > kMaxFrameBytes ||
+      !IsCanonicalPositionId(L"123456789") || IsCanonicalPositionId(L"0") ||
+      IsCanonicalPositionId(L"12x") ||
       !IsCanonicalStatusResponse(valid_status_response, "self-test.1") ||
       !IsCanonicalStatusResponse(valid_management_status_response,
                                  "self-test.1") ||
@@ -303,8 +437,10 @@ int RunSelfTest() {
       !IsCanonicalCredentialReadinessResponse(valid_readiness_response,
                                                "self-test.2") ||
       IsCanonicalCredentialReadinessResponse(invalid_readiness_response,
-                                              "self-test.2")) {
-    std::cerr << "Windows service status client self-test failed.\n";
+                                              "self-test.2") ||
+      !completed_valid || !completed_flag || !failed_valid || failed_flag ||
+      unsafe_valid) {
+    std::cerr << "Windows service status/control client self-test failed.\n";
     return 1;
   }
   return 0;
@@ -323,7 +459,11 @@ int wmain(int argc, wchar_t* argv[]) {
       std::wstring_view(argv[1]) == L"--credential-readiness") {
     return RunReadOnlyQuery(true);
   }
+  if (argc == 3 &&
+      std::wstring_view(argv[1]) == L"--close-existing-position") {
+    return RunCloseExistingPosition(argv[2]);
+  }
   std::cerr << "Usage: quantara_windows_service_client.exe "
-               "--status|--credential-readiness\n";
+               "--status|--credential-readiness|--close-existing-position <positionId>\n";
   return 64;
 }
