@@ -5,6 +5,7 @@ class _AutoTradeView extends StatefulWidget {
     required this.controller,
     required this.unattendedController,
     required this.analysisController,
+    super.key,
   });
 
   final AutoTradeController controller;
@@ -15,9 +16,10 @@ class _AutoTradeView extends StatefulWidget {
   State<_AutoTradeView> createState() => _AutoTradeViewState();
 }
 
-class _AutoTradeViewState extends State<_AutoTradeView> {
+class _AutoTradeViewState extends State<_AutoTradeView>
+    with WidgetsBindingObserver {
   late final LocalLiveTradeController _localController =
-      LocalLiveTradeController();
+      LocalLiveTradeController(accountController: widget.controller);
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
 
@@ -26,13 +28,41 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(
+      widget.controller.reconcile(
+        reason: PrivateAccountRefreshReason.accountPageOpened,
+        force: true,
+      ),
+    );
     unawaited(_localController.initialize());
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(
+      widget.controller.reconcile(
+        reason: PrivateAccountRefreshReason.appResume,
+        force: true,
+      ),
+    );
+    unawaited(_localController.refresh());
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _localController.dispose();
     super.dispose();
+  }
+
+  Future<void> refreshAll() async {
+    await widget.controller.reconcile(
+      reason: PrivateAccountRefreshReason.manual,
+      force: true,
+    );
+    await _localController.refresh();
   }
 
   Future<void> _showConnectionDialog() async {
@@ -168,46 +198,28 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              QuantaraColors.violet,
-                              QuantaraColors.cyan,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
+                  _AutoTradeSectionHeader(
+                    leading: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [QuantaraColors.violet, QuantaraColors.cyan],
                         ),
-                        child: const Icon(
-                          Icons.account_balance_wallet_outlined,
-                          color: QuantaraColors.ink,
-                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _t('حساب Bitunix', 'Bitunix account'),
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w900),
-                            ),
-                            Text(
-                              _t(
-                                'اتصال امن، موجودی، پوزیشن‌ها و سفارش‌های فعال',
-                                'Secure connection, balance, positions, and open orders',
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: QuantaraColors.ink,
                       ),
-                      _connectionPill(),
-                    ],
+                    ),
+                    title: _t('حساب Bitunix', 'Bitunix account'),
+                    subtitle: _t(
+                      'اتصال امن، موجودی، پوزیشن‌ها و سفارش‌های فعال',
+                      'Secure connection, balance, positions, and open orders',
+                    ),
+                    status: _connectionPill(),
+                    headline: true,
                   ),
                   const SizedBox(height: 14),
                   _BoundaryNotice(
@@ -244,8 +256,17 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
                 onConnect: _showConnectionDialog,
               )
             else ...[
+              if (widget.controller.reconciliation.health !=
+                  PrivateAccountReconciliationHealth.fresh) ...[
+                PrivateAccountReconciliationBanner(
+                  state: widget.controller.reconciliation,
+                  persian: _fa,
+                ),
+                const SizedBox(height: 12),
+              ],
               _AccountOverviewCard(
                 snapshot: snapshot,
+                reconciliation: widget.controller.reconciliation,
                 maskedApiKey: widget.controller.maskedApiKey ?? '••••••••',
                 onRefresh: widget.controller.isBusy
                     ? null
@@ -260,7 +281,10 @@ class _AutoTradeViewState extends State<_AutoTradeView> {
                 symbols: widget.analysisController.symbols,
               ),
               const SizedBox(height: 16),
-              _OpenPositionsCard(snapshot: snapshot),
+              _OpenPositionsCard(
+                snapshot: snapshot,
+                reconciliation: widget.controller.reconciliation,
+              ),
               const SizedBox(height: 16),
               _OpenOrdersCard(snapshot: snapshot),
             ],
@@ -342,34 +366,151 @@ class _LocalLiveTradeControlCard extends StatefulWidget {
 
 class _LocalLiveTradeControlCardState
     extends State<_LocalLiveTradeControlCard> {
+  final LocalLivePreferencesStore _preferencesStore =
+      const SharedPreferencesLocalLivePreferencesStore();
   final Set<String> _enabledSymbols = {};
   final Set<String> _enabledTimeframes = {'1h', '4h'};
+  final Set<AnalysisStrategy> _enabledStrategies = {
+    ...LocalLivePreferences.recommendedStrategies,
+  };
   int _leverage = 10;
   double _riskPercent = 0.10;
   double _dailyLossLimit = 1;
+  int _maximumConcurrentPositions = 2;
+  int _tp1Percent = 65;
+  int _tp2Percent = 20;
+  int _tp3Percent = 15;
+  bool _preferencesLoaded = false;
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
 
   String _t(String fa, String en) => _fa ? fa : en;
 
+  void _supervisorSetState(VoidCallback callback) => setState(callback);
+
   @override
   void initState() {
     super.initState();
     _enabledSymbols.addAll(widget.analysisController.symbols.take(4));
+    unawaited(_restorePreferences());
   }
+
+  Future<void> _restorePreferences() async {
+    try {
+      final value = await _preferencesStore
+          .load(availableSymbols: widget.analysisController.symbols)
+          .timeout(const Duration(seconds: 2));
+      if (!mounted) return;
+      setState(() {
+        _enabledSymbols
+          ..clear()
+          ..addAll(value.symbols);
+        _enabledTimeframes
+          ..clear()
+          ..addAll(value.timeframes);
+        _enabledStrategies
+          ..clear()
+          ..addAll(value.strategies);
+        _leverage = value.leverage;
+        _riskPercent = value.riskPercent;
+        _dailyLossLimit = value.dailyLossLimitPercent;
+        _maximumConcurrentPositions = value.maximumConcurrentPositions;
+        _tp1Percent = (value.targetAllocation.tp1Fraction * 100).round();
+        _tp2Percent = (value.targetAllocation.tp2Fraction * 100).round();
+        _tp3Percent = 100 - _tp1Percent - _tp2Percent;
+        _preferencesLoaded = true;
+      });
+    } on Object {
+      if (!mounted) return;
+      setState(() => _preferencesLoaded = true);
+    }
+  }
+
+  LocalLivePreferences get _currentPreferences => LocalLivePreferences(
+    symbols: _enabledSymbols.toList(growable: false),
+    timeframes: Set.unmodifiable(_enabledTimeframes),
+    leverage: _leverage,
+    riskPercent: _riskPercent,
+    dailyLossLimitPercent: _dailyLossLimit,
+    maximumConcurrentPositions: _maximumConcurrentPositions,
+    strategies: _enabledStrategies.toList(growable: false),
+    targetAllocation: _targetAllocation,
+  ).normalized(widget.analysisController.symbols);
+
+  ProfitProtectionTargetAllocation get _targetAllocation =>
+      ProfitProtectionTargetAllocation.checked(
+        tp1Fraction: _tp1Percent / 100,
+        tp2Fraction: _tp2Percent / 100,
+        tp3Fraction: _tp3Percent / 100,
+      );
+
+  void _mutateAndSave(VoidCallback mutation) {
+    setState(mutation);
+    unawaited(_preferencesStore.save(_currentPreferences));
+  }
+
+  Future<void> _persistPreferences() =>
+      _preferencesStore.save(_currentPreferences);
 
   @override
   Widget build(BuildContext context) {
     final status = widget.controller.status;
-    final running = status.isRunning;
+    final serviceActive = status.isRunning;
+    final entriesActive =
+        status.state == LocalLiveTradeState.running && status.entriesEnabled;
+    final canResumeEntries = status.canResumeEntries;
+    final phaseOneQuarantine = !ExchangeTruthPhaseOneGate.realEntriesAllowed;
+    final exchangeOpenPositions =
+        widget.accountController.snapshot?.positions
+            .where((position) => position.quantity > 0)
+            .toList(growable: false) ??
+        const <AutoTradePosition>[];
+    final hasExistingPosition = exchangeOpenPositions.isNotEmpty;
+    final authoritativeOpenCount = math.max(
+      status.openPositionCount,
+      exchangeOpenPositions.length,
+    );
+    final unrecoveredCount = math.max(
+      status.unmanagedPositionCount,
+      authoritativeOpenCount - status.managedPositionCount,
+    );
+    final unrecoveredSymbols = status.unmanagedSymbols.isNotEmpty
+        ? status.unmanagedSymbols
+        : exchangeOpenPositions
+              .map((position) => position.symbol.trim().toUpperCase())
+              .where((symbol) => symbol.isNotEmpty)
+              .toSet()
+              .toList(growable: false);
+    final recoverableCount = math.min(
+      unrecoveredCount,
+      status.recoverableOrphanCount,
+    );
+    final recoverableSymbols = status.recoverableOrphanSymbols;
+    final externalCount = math.max(
+      status.externalUnmanagedPositionCount,
+      unrecoveredCount - recoverableCount,
+    );
+    final externalSymbols = status.externalUnmanagedSymbols.isNotEmpty
+        ? status.externalUnmanagedSymbols
+        : unrecoveredSymbols
+              .where((symbol) => !recoverableSymbols.contains(symbol))
+              .toList(growable: false);
+    final phaseOneStartBlocked = phaseOneQuarantine && !hasExistingPosition;
+    final starting = status.state == LocalLiveTradeState.starting;
     final breaker = status.state == LocalLiveTradeState.circuitBreaker;
     final color = breaker
         ? QuantaraColors.danger
-        : running
+        : entriesActive
         ? QuantaraColors.success
+        : serviceActive
+        ? QuantaraColors.warning
         : QuantaraColors.cyan;
     final localizedStatus = LocalLiveMessageLocalizer.localize(
       status.message,
+      persian: _fa,
+    );
+    final modePresentation = ExecutionModePresentation.fromLocalLive(
+      status,
       persian: _fa,
     );
     return SectionCard(
@@ -377,62 +518,91 @@ class _LocalLiveTradeControlCardState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  running
-                      ? Icons.play_circle_fill_rounded
-                      : Icons.phone_android_rounded,
-                  color: color,
-                ),
+          _AutoTradeSectionHeader(
+            leading: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.13),
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _t(
-                        'ترید واقعی محلی · Canary',
-                        'Guarded local live · Canary',
-                      ),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      _t(
-                        'اجرا روی همین گوشی با سرویس دائماً قابل‌مشاهده Android',
-                        'Runs on this phone through a visible Android foreground service',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              StatusPill(
-                label: _stateLabel(status.state),
+              child: Icon(
+                entriesActive
+                    ? Icons.play_circle_fill_rounded
+                    : serviceActive
+                    ? Icons.pause_circle_filled_rounded
+                    : Icons.phone_android_rounded,
                 color: color,
-                icon: running
-                    ? Icons.shield_rounded
-                    : Icons.stop_circle_outlined,
               ),
-            ],
+            ),
+            title: _t(
+              'ترید واقعی محلی · Canary',
+              'Guarded local live · Canary',
+            ),
+            subtitle: _t(
+              'اجرا روی همین گوشی با سرویس دائماً قابل‌مشاهده Android',
+              'Runs on this phone through a visible Android foreground service',
+            ),
+            status: StatusPill(
+              label: _stateLabel(status.state),
+              color: color,
+              icon: entriesActive
+                  ? Icons.shield_rounded
+                  : serviceActive
+                  ? Icons.pause_circle_outline_rounded
+                  : Icons.stop_circle_outlined,
+            ),
           ),
+          const SizedBox(height: 12),
+          _ExecutionModeBanner(presentation: modePresentation),
           const SizedBox(height: 12),
           _BoundaryNotice(
             text: _t(
-              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. نسخه Canary فقط یک پوزیشن هم‌زمان و حداکثر ۰٫۲۵٪ ریسک در هر معامله دارد، Isolated است و هر ورود باید با SL صرافی و سه TP تأیید شود.',
-              'This mode can submit real futures orders. Canary is limited to one concurrent position and 0.25% risk per trade, uses isolated margin, and requires exchange-confirmed SL plus three targets.',
+              'این حالت می‌تواند سفارش واقعی فیوچرز ارسال کند. حداکثر سه پوزیشن Isolated فقط در محدوده بودجه اتمیک ریسک و مارجین پرتفوی مجاز است؛ هر ورود همچنان باید با SL کامل و پوشش کامل حجم توسط هدف‌های فعال تأییدشده صرافی محافظت شود.',
+              'This mode can submit real futures orders. Up to three isolated positions are allowed only inside the atomic portfolio risk and margin budget; every entry still requires a full exchange-confirmed stop and complete coverage by active targets.',
             ),
             color: QuantaraColors.danger,
           ),
+          if (!ExchangeTruthPhaseOneGate.realEntriesAllowed) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'قرنطینه Phase 1 فعال است: ورود واقعی جدید کاملاً غیرفعال است. فقط در صورت وجود پوزیشن فعلی، سرویس می‌تواند در حالت مدیریت و تطبیق بدون Entry شروع شود.',
+                'Phase 1 quarantine is active: every new real entry is disabled. The service may start only in management-only reconciliation mode when an existing position is present.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
+          if (widget.accountController.reconciliation.blocksNewEntries) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'ورود واقعی تا همگام‌سازی تازه و بدون تناقض حساب Bitunix قفل است. مدیریت پوزیشن و حفاظت‌های موجود متوقف نمی‌شود.',
+                'Real entries are locked until Bitunix private-account truth is fresh and coherent. Existing position and protection management continues.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
+          if (recoverableCount > 0) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                'مالکیت Quantara برای $recoverableCount پوزیشن (${recoverableSymbols.join(', ')}) از روی سفارش q-local، تاریخچه Fill و حفاظت صرافی تأیید شده است. بازیابی durable در حال تکمیل است و تا پایان Journal + Risk Ledger + Managed State ورود جدید بسته می‌ماند.',
+                'Quantara ownership is verified for $recoverableCount position(s) (${recoverableSymbols.join(', ')}) from q-local order identity, fill history, and exchange protection. Durable recovery is finishing; new entries stay blocked until Journal + Risk Ledger + Managed State all commit.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
+          if (externalCount > 0) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                '$externalCount پوزیشن صرافی (${externalSymbols.join(', ')}) مالکیت Quantara قابل‌اثبات ندارد یا حقیقت آن مبهم است. این پوزیشن‌ها اسلات و بودجه را اشغال می‌کنند و خودکار Adopt نمی‌شوند؛ ورود جدید تا بسته‌شدن یا اثبات امن مالکیت مسدود است.',
+                '$externalCount exchange position(s) (${externalSymbols.join(', ')}) do not have provable Quantara ownership or remain ambiguous. They consume slots and budget and are never auto-adopted; new entries stay blocked until closure or safe ownership proof.',
+              ),
+              color: QuantaraColors.danger,
+            ),
+          ],
           if (widget.controller.error != null) ...[
             const SizedBox(height: 10),
             _LocalLiveStatusNotice(
@@ -452,6 +622,20 @@ class _LocalLiveTradeControlCardState
               ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
+          if (canResumeEntries) ...[
+            const SizedBox(height: 10),
+            _BoundaryNotice(
+              text: _t(
+                status.openPositionCount == 0
+                    ? 'ورود جدید متوقف است و هیچ پوزیشن بازی برای مدیریت وجود ندارد. برای فعال‌سازی دوباره، دکمه «ازسرگیری ورود» را بزن و همه تأییدهای پول واقعی را دوباره انجام بده.'
+                    : 'پوزیشن موجود با حقیقت صرافی بازیابی و تحت مدیریت قرار گرفته است؛ ورودهای جدید هنوز خاموش‌اند. فقط برای مسلح‌کردن ورودی‌های بعدی «ازسرگیری ورود» را جداگانه تأیید کن.',
+                status.openPositionCount == 0
+                    ? 'New entries are stopped and there is no open position to manage. Use Resume entries and repeat every real-money confirmation to arm entries again.'
+                    : 'The existing position is recovered and managed from exchange truth; new entries are still off. Confirm Resume entries separately only when you intend to arm future entries.',
+              ),
+              color: QuantaraColors.warning,
+            ),
+          ],
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -459,20 +643,100 @@ class _LocalLiveTradeControlCardState
             children: [
               StatusPill(
                 label: _t(
-                  '${status.openPositionCount} پوزیشن باز',
-                  '${status.openPositionCount} open',
+                  '$authoritativeOpenCount/$_maximumConcurrentPositions پوزیشن صرافی',
+                  '$authoritativeOpenCount/$_maximumConcurrentPositions exchange open',
                 ),
-                color: status.openPositionCount > 0
+                color: authoritativeOpenCount > 0
                     ? QuantaraColors.warning
                     : QuantaraColors.cyan,
               ),
               StatusPill(
-                label:
-                    '${status.realizedPnl >= 0 ? '+' : ''}${status.realizedPnl.toStringAsFixed(2)} USDT',
-                color: status.realizedPnl >= 0
+                label: _t(
+                  '${status.managedPositionCount} تحت مدیریت Quantara',
+                  '${status.managedPositionCount} Quantara-managed',
+                ),
+                color: status.managedPositionCount == authoritativeOpenCount
+                    ? QuantaraColors.cyan
+                    : QuantaraColors.warning,
+              ),
+              if (recoverableCount > 0)
+                StatusPill(
+                  label: _t(
+                    '$recoverableCount بازیابی Quantara در انتظار',
+                    '$recoverableCount Quantara recovery pending',
+                  ),
+                  color: QuantaraColors.warning,
+                  icon: Icons.sync_lock_rounded,
+                ),
+              if (externalCount > 0)
+                StatusPill(
+                  label: _t(
+                    '$externalCount پوزیشن خارجی/مبهم',
+                    '$externalCount external/ambiguous',
+                  ),
+                  color: QuantaraColors.danger,
+                  icon: Icons.block_rounded,
+                ),
+              if (status.portfolioBudget != null)
+                StatusPill(
+                  label: _t(
+                    'ریسک آزاد ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
+                    'Risk free ${status.portfolioBudget!.riskAvailable.toStringAsFixed(3)} / ${status.portfolioBudget!.riskLimit.toStringAsFixed(3)} USDT',
+                  ),
+                  color: status.portfolioBudget!.ambiguousRisk > 0
+                      ? QuantaraColors.danger
+                      : status.portfolioBudget!.riskAvailable > 0
+                      ? QuantaraColors.cyan
+                      : QuantaraColors.warning,
+                ),
+              if (status.capitalGuardian != null)
+                StatusPill(
+                  label: _t(
+                    'گاردین: سرمایه ${status.capitalGuardian!.currentEquity.toStringAsFixed(2)} · اوج ${status.capitalGuardian!.peakEquity.toStringAsFixed(2)} · افت ${(status.capitalGuardian!.drawdownFraction * 100).toStringAsFixed(2)}٪ · ${status.capitalGuardian!.drawdownTier} · ریسک ×${status.capitalGuardian!.riskMultiplier.toStringAsFixed(2)} · باز ${status.capitalGuardian!.openRisk.toStringAsFixed(3)} · آزاد ${status.capitalGuardian!.remainingRisk.toStringAsFixed(3)} USDT',
+                    'Guardian: equity ${status.capitalGuardian!.currentEquity.toStringAsFixed(2)} · peak ${status.capitalGuardian!.peakEquity.toStringAsFixed(2)} · drawdown ${(status.capitalGuardian!.drawdownFraction * 100).toStringAsFixed(2)}% · ${status.capitalGuardian!.drawdownTier} · risk ×${status.capitalGuardian!.riskMultiplier.toStringAsFixed(2)} · open ${status.capitalGuardian!.openRisk.toStringAsFixed(3)} · free ${status.capitalGuardian!.remainingRisk.toStringAsFixed(3)} USDT',
+                  ),
+                  color: status.capitalGuardian!.riskMultiplier == 0
+                      ? QuantaraColors.danger
+                      : status.capitalGuardian!.riskMultiplier < 1
+                      ? QuantaraColors.warning
+                      : QuantaraColors.cyan,
+                ),
+              if (status.portfolioBudget != null)
+                StatusPill(
+                  label: _t(
+                    'مارجین رزرو ${status.portfolioBudget!.reservedMargin.toStringAsFixed(2)} · قابل‌استفاده ${status.portfolioBudget!.spendableMargin.toStringAsFixed(2)}',
+                    'Margin reserved ${status.portfolioBudget!.reservedMargin.toStringAsFixed(2)} · spendable ${status.portfolioBudget!.spendableMargin.toStringAsFixed(2)}',
+                  ),
+                  color:
+                      status.portfolioBudget!.accountFresh &&
+                          status.portfolioBudget!.allPositionsProtected
+                      ? QuantaraColors.violet
+                      : QuantaraColors.warning,
+                ),
+              StatusPill(
+                label: status.effectiveSessionNetPnl == null
+                    ? _t('خالص جلسه: ناموجود', 'Session net: unavailable')
+                    : '${status.effectiveSessionNetPnl! >= 0 ? '+' : ''}${status.effectiveSessionNetPnl!.toStringAsFixed(2)} USDT',
+                color: status.effectiveSessionNetPnl == null
+                    ? QuantaraColors.warning
+                    : status.effectiveSessionNetPnl! >= 0
                     ? QuantaraColors.success
                     : QuantaraColors.danger,
               ),
+              if (status.pnlProjection != null)
+                StatusPill(
+                  label: status.pnlProjection!.accountUnrealized.isAvailable
+                      ? _t(
+                          'باز ${_pnlMetricText(status.pnlProjection!.accountUnrealized)}',
+                          'Open ${_pnlMetricText(status.pnlProjection!.accountUnrealized)}',
+                        )
+                      : _t('باز: ناموجود', 'Open: unavailable'),
+                  color:
+                      _pnlMetricColor(
+                        status.pnlProjection!.accountUnrealized,
+                      ) ??
+                      QuantaraColors.warning,
+                ),
               StatusPill(
                 label: _t(
                   '${status.closedPositionCount} بسته',
@@ -483,109 +747,21 @@ class _LocalLiveTradeControlCardState
             ],
           ),
           const Divider(height: 28),
-          AbsorbPointer(
-            absorbing: running || widget.controller.isBusy,
-            child: Opacity(
-              opacity: running ? 0.60 : 1,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _t('نمادهای مجاز', 'Allowed symbols'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final symbol in widget.analysisController.symbols)
-                        FilterChip(
-                          avatar: SymbolAvatar(
-                            symbol: symbol,
-                            size: 22,
-                            showBorder: false,
-                          ),
-                          label: Text(symbol, textDirection: TextDirection.ltr),
-                          selected: _enabledSymbols.contains(symbol),
-                          onSelected: (selected) => setState(() {
-                            if (selected) {
-                              _enabledSymbols.add(symbol);
-                            } else {
-                              _enabledSymbols.remove(symbol);
-                            }
-                          }),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    _t('تایم‌فریم‌های مجاز', 'Allowed timeframes'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final timeframe in const ['15m', '1h', '4h'])
-                        FilterChip(
-                          label: Text(
-                            timeframe,
-                            textDirection: TextDirection.ltr,
-                          ),
-                          selected: _enabledTimeframes.contains(timeframe),
-                          onSelected: (selected) => setState(() {
-                            if (selected) {
-                              _enabledTimeframes.add(timeframe);
-                            } else {
-                              _enabledTimeframes.remove(timeframe);
-                            }
-                          }),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _numberRow(
-                    label: _t('اهرم عمومی', 'Global leverage'),
-                    value: '${_leverage}x',
-                    onMinus: () =>
-                        setState(() => _leverage = math.max(1, _leverage - 1)),
-                    onPlus: () => setState(
-                      () => _leverage = math.min(125, _leverage + 1),
-                    ),
-                  ),
-                  _numberRow(
-                    label: _t('ریسک هر معامله', 'Risk per trade'),
-                    value: '${_riskPercent.toStringAsFixed(2)}%',
-                    onMinus: () => setState(
-                      () => _riskPercent = math.max(0.05, _riskPercent - 0.05),
-                    ),
-                    onPlus: () => setState(
-                      () => _riskPercent = math.min(0.25, _riskPercent + 0.05),
-                    ),
-                  ),
-                  _numberRow(
-                    label: _t('سقف ضرر روزانه', 'Daily loss cap'),
-                    value: '${_dailyLossLimit.toStringAsFixed(2)}%',
-                    onMinus: () => setState(
-                      () => _dailyLossLimit = math.max(
-                        0.25,
-                        _dailyLossLimit - 0.25,
-                      ),
-                    ),
-                    onPlus: () => setState(
-                      () =>
-                          _dailyLossLimit = math.min(2, _dailyLossLimit + 0.25),
-                    ),
-                  ),
-                ],
-              ),
+          if (!_preferencesLoaded) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: 12),
+          ],
+          _buildLocalLiveConfigurationSummary(serviceActive: serviceActive),
+          const SizedBox(height: 12),
+          _buildSupervisorSupportSessionCard(),
+          if (status.managedPositions.isNotEmpty ||
+              exchangeOpenPositions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildManagedPositionTimeframes(
+              status: status,
+              exchangePositions: exchangeOpenPositions,
             ),
-          ),
+          ],
           const SizedBox(height: 14),
           Row(
             children: [
@@ -596,9 +772,18 @@ class _LocalLiveTradeControlCardState
                     foregroundColor: QuantaraColors.ink,
                     minimumSize: const Size.fromHeight(52),
                   ),
-                  onPressed: widget.controller.isBusy || running || breaker
+                  onPressed:
+                      widget.controller.isBusy ||
+                          starting ||
+                          breaker ||
+                          widget
+                              .accountController
+                              .reconciliation
+                              .blocksNewEntries ||
+                          phaseOneStartBlocked ||
+                          (serviceActive && !canResumeEntries)
                       ? null
-                      : _confirmStart,
+                      : () => _confirmStart(recoveryOnly: unrecoveredCount > 0),
                   icon: widget.controller.isBusy
                       ? const SizedBox.square(
                           dimension: 19,
@@ -606,7 +791,21 @@ class _LocalLiveTradeControlCardState
                         )
                       : const Icon(Icons.play_arrow_rounded),
                   label: Text(
-                    _t('شروع ترید', 'Start trading'),
+                    unrecoveredCount > 0
+                        ? serviceActive
+                              ? _t(
+                                  'در انتظار بازیابی امن',
+                                  'Secure recovery pending',
+                                )
+                              : _t(
+                                  'شروع بازیابی و مدیریت امن',
+                                  'Start secure recovery',
+                                )
+                        : phaseOneQuarantine && hasExistingPosition
+                        ? _t('شروع مدیریت', 'Start management')
+                        : canResumeEntries
+                        ? _t('ازسرگیری ورود', 'Resume entries')
+                        : _t('شروع ترید', 'Start trading'),
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -618,7 +817,7 @@ class _LocalLiveTradeControlCardState
                     foregroundColor: QuantaraColors.danger,
                     minimumSize: const Size.fromHeight(52),
                   ),
-                  onPressed: widget.controller.isBusy || !running
+                  onPressed: widget.controller.isBusy || !serviceActive
                       ? null
                       : _confirmStop,
                   icon: const Icon(Icons.stop_circle_outlined),
@@ -684,7 +883,8 @@ class _LocalLiveTradeControlCardState
     );
   }
 
-  Future<void> _confirmStart() async {
+  Future<void> _confirmStart({bool recoveryOnly = false}) async {
+    if (!_preferencesLoaded) return;
     if (!widget.accountController.isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -698,24 +898,64 @@ class _LocalLiveTradeControlCardState
       );
       return;
     }
-    if (_enabledSymbols.isEmpty || _enabledTimeframes.isEmpty) {
+    if (!recoveryOnly &&
+        (_enabledSymbols.isEmpty ||
+            _enabledTimeframes.isEmpty ||
+            _enabledStrategies.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _t(
-              'حداقل یک نماد و یک تایم‌فریم انتخاب کن.',
-              'Select at least one symbol and timeframe.',
+              'حداقل یک نماد، یک تایم‌فریم و یک استراتژی انتخاب کن.',
+              'Select at least one symbol, timeframe and strategy.',
             ),
           ),
         ),
       );
       return;
     }
+    if (!recoveryOnly &&
+        (_riskPercent > 0.50 || _dailyLossLimit > 3 || _leverage > 25)) {
+      final advancedConfirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(_t('تأیید تنظیمات پرریسک', 'Confirm advanced risk')),
+          content: Text(
+            _t(
+              'این تنظیمات می‌توانند زیان واقعی را سریع‌تر افزایش دهند. Quantara استاپ را دورتر نمی‌کند، بعد از ضرر ریسک را بالا نمی‌برد و هر ورود هم‌زمان را به بودجه اتمیک پرتفوی محدود می‌کند. ادامه می‌دهی؟',
+              'These settings can increase real losses faster. Quantara will not widen stops or increase risk after losses, and every concurrent entry remains constrained by the atomic portfolio budget. Continue?',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(_t('بازگشت', 'Go back')),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: QuantaraColors.danger,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(_t('ریسک را می‌پذیرم', 'I accept the risk')),
+            ),
+          ],
+        ),
+      );
+      if (advancedConfirmed != true || !mounted) return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text(_t('فعال‌سازی پول واقعی', 'Enable real-money canary')),
+        title: Text(
+          recoveryOnly
+              ? _t(
+                  'بازیابی امن پوزیشن موجود',
+                  'Securely recover existing position',
+                )
+              : _t('فعال‌سازی پول واقعی', 'Enable real-money canary'),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -723,14 +963,21 @@ class _LocalLiveTradeControlCardState
             children: [
               Text(
                 _t(
-                  'Quantara اجازه ارسال سفارش واقعی فیوچرز خواهد داشت. شروع فقط از همین صفحه انجام می‌شود و بعد از ری‌استارت گوشی خودکار فعال نمی‌شود.',
-                  'Quantara will be allowed to submit real futures orders. It starts only from this visible screen and never auto-arms after a device reboot.',
+                  recoveryOnly
+                      ? 'Quantara فقط مالکیت، تاریخچه و حفاظت پوزیشن باز موجود را از Bitunix بررسی و بازسازی می‌کند. در این مرحله هیچ ورود جدیدی مسلح یا ارسال نمی‌شود.'
+                      : 'Quantara اجازه ارسال سفارش واقعی فیوچرز خواهد داشت. شروع فقط از همین صفحه انجام می‌شود و بعد از ری‌استارت گوشی خودکار فعال نمی‌شود.',
+                  recoveryOnly
+                      ? 'Quantara will only verify and reconstruct ownership, history, and protection for the existing Bitunix position. No new entry is armed or submitted during recovery.'
+                      : 'Quantara will be allowed to submit real futures orders. It starts only from this visible screen and never auto-arms after a device reboot.',
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 '${_t('نمادها', 'Symbols')}: ${_enabledSymbols.join(', ')}',
                 textDirection: TextDirection.ltr,
+              ),
+              Text(
+                '${_t('استراتژی‌ها', 'Strategies')}: ${_enabledStrategies.map(_strategyTitle).join(' · ')}',
               ),
               Text('${_t('اهرم', 'Leverage')}: ${_leverage}x'),
               Text(
@@ -739,11 +986,22 @@ class _LocalLiveTradeControlCardState
               Text(
                 '${_t('حد ضرر روزانه', 'Daily loss cap')}: ${_dailyLossLimit.toStringAsFixed(2)}%',
               ),
+              Text(
+                '${_t('حداکثر پوزیشن هم‌زمان', 'Maximum concurrent positions')}: $_maximumConcurrentPositions',
+              ),
+              Text(
+                '${_t('تقسیم اهداف', 'Target allocation')}: TP1 $_tp1Percent% · TP2 $_tp2Percent% · TP3 $_tp3Percent%',
+                textDirection: TextDirection.ltr,
+              ),
               const SizedBox(height: 12),
               Text(
                 _t(
-                  'تأیید می‌کنم کلید API دسترسی برداشت/انتقال ندارد و اولین اجرا را با موجودی کم انجام می‌دهم.',
-                  'I confirm the API key has no withdrawal/transfer permission and I will use a small balance for the first canary.',
+                  recoveryOnly
+                      ? 'تأیید می‌کنم این مرحله فقط برای بازیابی و مدیریت پوزیشن موجود است و فعال‌سازی ورودهای جدید را جداگانه انجام خواهم داد.'
+                      : 'تأیید می‌کنم کلید API دسترسی برداشت/انتقال ندارد و اولین اجرا را با موجودی کم انجام می‌دهم.',
+                  recoveryOnly
+                      ? 'I confirm this step is only for recovering and managing the existing position; I will arm new entries separately.'
+                      : 'I confirm the API key has no withdrawal/transfer permission and I will use a small balance for the first canary.',
                 ),
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
@@ -757,24 +1015,45 @@ class _LocalLiveTradeControlCardState
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(_t('تأیید و شروع', 'Confirm & start')),
+            child: Text(
+              recoveryOnly
+                  ? _t('تأیید و بازیابی', 'Confirm & recover')
+                  : _t('تأیید و شروع', 'Confirm & start'),
+            ),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
+    await _persistPreferences();
+    if (!mounted) return;
+    final recoverySymbols =
+        widget.accountController.snapshot?.positions
+            .where((position) => position.quantity > 0)
+            .map((position) => position.symbol.trim().toUpperCase())
+            .where((symbol) => symbol.isNotEmpty)
+            .toSet()
+            .toList(growable: false) ??
+        const <String>[];
     final started = await widget.controller.start(
       LocalLiveTradeConfiguration(
-        symbols: _enabledSymbols.toList(growable: false),
-        timeframes: _enabledTimeframes.toList(growable: false),
+        symbols: recoveryOnly
+            ? recoverySymbols
+            : _enabledSymbols.toList(growable: false),
+        timeframes: recoveryOnly && _enabledTimeframes.isEmpty
+            ? const ['15m']
+            : _enabledTimeframes.toList(growable: false),
         leverage: _leverage,
         riskPercent: _riskPercent,
         dailyLossLimitPercent: _dailyLossLimit,
-        maximumConcurrentPositions: 1,
-        strategy: widget.analysisController.strategy,
+        maximumConcurrentPositions: _maximumConcurrentPositions,
+        strategy: _enabledStrategies.first,
+        strategies: _enabledStrategies.toList(growable: false),
         cadence: widget.analysisController.cadence,
         languageCode: widget.analysisController.languageCode,
+        targetAllocation: _targetAllocation,
       ),
+      recoveryOnly: recoveryOnly,
     );
     if (!started && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -827,39 +1106,7 @@ class _LocalLiveTradeControlCardState
     if (policy != null) await widget.controller.stop(policy);
   }
 
-  Future<void> _showAudit() async {
-    final events = await widget.controller.loadAudit();
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: events.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _t('هنوز رویدادی ثبت نشده.', 'No events recorded yet.'),
-                ),
-              )
-            : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                itemCount: events.length,
-                separatorBuilder: (_, _) => const Divider(),
-                itemBuilder: (context, index) {
-                  final event = events[index];
-                  return ListTile(
-                    leading: const Icon(Icons.shield_outlined),
-                    title: Text(event.message),
-                    subtitle: Text(
-                      '${event.symbol ?? event.type} · ${event.at.toLocal()}',
-                      textDirection: TextDirection.ltr,
-                    ),
-                  );
-                },
-              ),
-      ),
-    );
-  }
+  Future<void> _showAudit() => _showDetailedLocalLiveAudit();
 
   String _stateLabel(LocalLiveTradeState state) => switch (state) {
     LocalLiveTradeState.stopped => _t('متوقف', 'Stopped'),
@@ -869,6 +1116,151 @@ class _LocalLiveTradeControlCardState
     LocalLiveTradeState.circuitBreaker => _t('مدار ایمنی', 'Circuit breaker'),
     LocalLiveTradeState.error => _t('خطا', 'Error'),
   };
+}
+
+class _ExecutionModeBanner extends StatelessWidget {
+  const _ExecutionModeBanner({required this.presentation});
+
+  final ExecutionModePresentation presentation;
+
+  @override
+  Widget build(BuildContext context) {
+    final fa = Directionality.of(context) == TextDirection.rtl;
+    final color = switch (presentation.attention) {
+      ExecutionModeAttention.normal =>
+        presentation.newEntriesEnabled
+            ? QuantaraColors.success
+            : QuantaraColors.cyan,
+      ExecutionModeAttention.caution => QuantaraColors.warning,
+      ExecutionModeAttention.critical => QuantaraColors.danger,
+    };
+    return Semantics(
+      container: true,
+      label:
+          '${presentation.title}. ${presentation.status}. '
+          '${presentation.summary}',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(QuantaraRadius.control),
+          border: Border.all(color: color.withValues(alpha: 0.34)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    fa ? 'حالت اجرا' : 'Execution mode',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  StatusPill(
+                    label: presentation.title,
+                    color: color,
+                    icon: presentation.failClosed
+                        ? Icons.lock_outline_rounded
+                        : Icons.shield_outlined,
+                  ),
+                  StatusPill(label: presentation.status, color: color),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(presentation.summary),
+              const SizedBox(height: 6),
+              Text(
+                fa
+                    ? 'Approval Required: در این نسخه به workflow تأیید متصل نیست.'
+                    : 'Approval Required: no approval workflow is connected in this release.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                fa
+                    ? 'Diagnostics · mode=${presentation.mode.name} · runtime=${presentation.rawState}'
+                    : 'Diagnostics · mode=${presentation.mode.name} · runtime=${presentation.rawState}',
+                textDirection: TextDirection.ltr,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AutoTradeSectionHeader extends StatelessWidget {
+  const _AutoTradeSectionHeader({
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    this.headline = false,
+  });
+
+  final Widget leading;
+  final String title;
+  final String subtitle;
+  final Widget status;
+  final bool headline;
+
+  @override
+  Widget build(BuildContext context) {
+    final identity = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        leading,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style:
+                    (headline
+                            ? Theme.of(context).textTheme.headlineSmall
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              Text(subtitle),
+            ],
+          ),
+        ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 420) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identity,
+              const SizedBox(height: 10),
+              Align(alignment: AlignmentDirectional.centerStart, child: status),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: identity),
+            const SizedBox(width: 12),
+            status,
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _LocalLiveStatusNotice extends StatelessWidget {
@@ -996,8 +1388,8 @@ class _LockedServerModeCard extends StatelessWidget {
                   children: [
                     Text(
                       fa
-                          ? 'ترید شبانه سروری · قفل'
-                          : 'Always-on server trading · Locked',
+                          ? 'Capped / Autonomous · قفل انتشار'
+                          : 'Capped / Autonomous · Release locked',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
@@ -1020,8 +1412,8 @@ class _LockedServerModeCard extends StatelessWidget {
           const SizedBox(height: 12),
           _BoundaryNotice(
             text: fa
-                ? 'این بخش عمداً غیرفعال است تا Vault کلید، موتور همیشه‌روشن، مانیتورینگ، WebSocket خصوصی و تست Canary سرور مستقر شوند. هیچ دکمه Start سروری در این نسخه عمل نمی‌کند.'
-                : 'This section is intentionally disabled until the credential vault, always-on worker, monitoring, private WebSocket, and server canary are deployed. No server Start action works in this release.',
+                ? 'این contractها production-ready نیستند و عمداً قفل انتشار مانده‌اند تا Vault کلید، worker پایدار، مانیتورینگ، WebSocket خصوصی و certification کامل شوند. هیچ Start سروری در این نسخه عمل نمی‌کند.'
+                : 'These contracts are not production-ready and remain release-locked until the credential vault, durable worker, monitoring, private WebSocket, and certification are complete. No server Start action works in this release.',
             color: QuantaraColors.violet,
           ),
           if (legacyConfigured) ...[

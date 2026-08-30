@@ -157,6 +157,7 @@ void main() {
 
 final class _ActionableRepository implements OwnerAlphaRepository {
   final _delegate = const FakeOwnerAlphaRepository();
+  final DateTime _signalTime = DateTime.now().toUtc();
 
   @override
   Future<OwnerAlphaSnapshot> scan({
@@ -176,7 +177,9 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       languageCode: languageCode,
     );
     final result = base.radar.first;
-    final analysis = _actionableAnalysis();
+    final signalTime = _signalTime;
+    final analysis = _actionableAnalysis(signalTime);
+    final parentAnalysis = _actionableAnalysis(signalTime, timeframe: '4h');
     final idea = TradeIdea(
       symbol: result.quote.symbol,
       timeframe: '1h',
@@ -195,7 +198,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       requiredMargin: 500,
       estimatedRoundTripCosts: 2,
       setupId: 'BTCUSDT|1h|long|fixed-closed-candle',
-      candleClosedAt: DateTime.utc(2026, 7, 26, 9),
+      candleClosedAt: signalTime,
       summary: 'actionable',
       invalidation: 'stop',
       reasons: const ['test'],
@@ -204,7 +207,7 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       quote: result.quote,
       analysis: analysis,
       idea: idea,
-      analysesByTimeframe: {'1h': analysis},
+      analysesByTimeframe: {'1h': analysis, '4h': parentAnalysis},
       ideasByTimeframe: {'1h': idea},
     );
     return OwnerAlphaSnapshot(
@@ -213,28 +216,39 @@ final class _ActionableRepository implements OwnerAlphaRepository {
       selectedTimeframe: '1h',
       selectedAnalysis: analysis,
       selectedIdea: idea,
-      timeframeDirections: {'1h': analysis.direction},
-      generatedAt: base.generatedAt,
+      timeframeDirections: {
+        '1h': analysis.direction,
+        '4h': parentAnalysis.direction,
+      },
+      generatedAt: signalTime,
     );
   }
 }
 
-TimeframeChartAnalysis _actionableAnalysis() {
+TimeframeChartAnalysis _actionableAnalysis(
+  DateTime generatedAt, {
+  String timeframe = '1h',
+}) {
+  final interval = timeframe == '4h'
+      ? const Duration(hours: 4)
+      : const Duration(hours: 1);
   final candles = List.generate(60, (index) {
-    final open = 100 + index * 0.5;
+    final open = 100 + index * 0.1;
+    final last = index == 59;
+    final close = open + (last ? 0.35 : 0.15);
     return ChartCandle(
-      openTime: DateTime.utc(2026, 7, 26).add(Duration(hours: index)),
+      openTime: generatedAt.subtract(interval * (60 - index)),
       open: open,
-      high: open + 1.2,
-      low: open - 1,
-      close: open + 0.5,
-      volume: 1000 + index.toDouble(),
+      high: close + (last ? 0.1 : 0.7),
+      low: open - (last ? 0.1 : 0.7),
+      close: close,
+      volume: last ? 1400 : 1000 + index.toDouble(),
     );
   });
   final current = candles.last.close;
   return TimeframeChartAnalysis(
     symbol: 'BTCUSDT',
-    timeframe: '1h',
+    timeframe: timeframe,
     candles: candles,
     zones: [
       ChartPriceZone(
@@ -264,8 +278,8 @@ TimeframeChartAnalysis _actionableAnalysis() {
     directionStrength: 0.8,
     volatilityPercent: 0.8,
     summary: 'actionable fixture',
-    generatedAt: DateTime.utc(2026, 7, 29),
-    fingerprint: 'controller-actionable-fixture',
+    generatedAt: generatedAt,
+    fingerprint: 'controller-actionable-fixture-$timeframe',
   );
 }
 

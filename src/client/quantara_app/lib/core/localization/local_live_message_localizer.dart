@@ -17,7 +17,7 @@ class LocalLiveAffordabilitySummary {
 
 abstract final class LocalLiveMessageLocalizer {
   static final RegExp _affordability = RegExp(
-    r'^Available margin is ([0-9.]+) USDT\. The smallest exchange/margin floor among the selected symbols is about ([0-9.]+) USDT \(([^,]+), including three TP quantities and the safety buffer\)\. Shortfall: ([0-9.]+) USDT\. The actual risk and stop distance checks may require more capital\.$',
+    r'^Available margin is ([0-9.]+) USDT\. The smallest exchange/margin floor among the selected symbols is about ([0-9.]+) USDT \(([^,]+), including (?:three TP quantities|one exchange-valid TP quantity) and the safety buffer\)\. Shortfall: ([0-9.]+) USDT\. The actual risk and stop distance checks may require more capital\.$',
   );
 
   static LocalLiveAffordabilitySummary? affordability(String message) {
@@ -29,6 +29,24 @@ abstract final class LocalLiveMessageLocalizer {
       symbol: match.group(3)!,
       shortfall: match.group(4)!,
     );
+  }
+
+  static String localizeAudit({
+    required String kind,
+    required String message,
+    required bool persian,
+  }) {
+    if (!persian) return message.trim().isEmpty ? kind : message;
+    return switch (kind.trim()) {
+      'stop' =>
+        'ورودهای جدید با درخواست کاربر متوقف شدند؛ سفارش‌های محافظتی Bitunix فعال می‌مانند.',
+      'pnl_projection_pending_empty_account' =>
+        'حساب در این چرخه پوزیشن بازی نداشت؛ تکمیل تاریخچه سود و زیان در چرخه‌های بعدی ادامه پیدا می‌کند و این وضعیت خطا نیست.',
+      'scan_skip' => localize(message, persian: true),
+      'target_allocation_adapted' =>
+        'حجم پوزیشن برای همه بخش‌های انتخابی کافی نبود؛ Quantara تعداد اهداف فعال را خودکار کاهش داد و کل حجم را میان سفارش‌های معتبر صرافی پوشش داد.',
+      _ => localize(message, persian: true),
+    };
   }
 
   static String localize(String message, {required bool persian}) {
@@ -82,6 +100,30 @@ abstract final class LocalLiveMessageLocalizer {
           'برای بازکردن پوزیشن Isolated جدید، مارجین USDT قابل استفاده وجود ندارد.',
       'Quantara could not confirm an affordable API-supported symbol from the selected allow-list.':
           'Quantara نتوانست میان نمادهای انتخاب‌شده، نمادی معتبر و متناسب با موجودی تأیید کند.',
+      'No actionable setup passed the selected strategy and timeframe filters.':
+          'هیچ ستاپ قابل اجرایی از فیلتر استراتژی و تایم‌فریم‌های انتخاب‌شده عبور نکرد.',
+      'Actionable setups were skipped because selected timeframes disagreed on direction.':
+          'ستاپ‌های قابل بررسی به‌دلیل تضاد جهت در تایم‌فریم‌های انتخاب‌شده رد شدند.',
+      'The highest-ranked setup was already executed in this local-live history.':
+          'ستاپ برتر قبلاً در تاریخچه ترید محلی اجرا شده و دوباره وارد نمی‌شود.',
+      'The highest-ranked setup was expired or missing a complete protected plan.':
+          'ستاپ برتر منقضی شده یا برنامه کامل Entry، SL و سه TP را ندارد.',
+      'The highest-ranked setup is valid but the live mark price is outside its entry zone.':
+          'ستاپ معتبر است، اما قیمت لحظه‌ای هنوز داخل محدوده ورود قرار ندارد.',
+      'The selected instrument is closed or unavailable for API futures execution.':
+          'نماد انتخاب‌شده بسته است یا اجرای فیوچرز API برای آن در دسترس نیست.',
+      'Calculated position size is below the exchange minimum for three protected target tranches.':
+          'حجم محاسبه‌شده برای تقسیم ایمن بین سه حد سود، از حداقل صرافی کمتر است.',
+      'Calculated position size is below the exchange minimum for even one protected target.':
+          'حجم محاسبه‌شده حتی برای یک حد سود معتبر صرافی هم کمتر از حداقل مجاز است.',
+      'Target allocation automatically collapsed from 3 to 2 exchange-valid targets.':
+          'تقسیم حجم به‌صورت خودکار از سه هدف به دو هدف معتبر صرافی کاهش یافت.',
+      'Target allocation automatically collapsed from 3 to 1 exchange-valid targets.':
+          'تقسیم حجم به‌صورت خودکار از سه هدف به یک هدف معتبر صرافی کاهش یافت.',
+      'Available margin is below the protected entry requirement including the safety buffer.':
+          'مارجین آزاد برای ورود محافظت‌شده همراه با حاشیه ایمنی کافی نیست.',
+      'TP1 largest reduction observed; remaining position moved beyond break-even including costs.':
+          'بخش اصلی حجم در TP1 بسته شد و استاپ باقی‌مانده با احتساب هزینه‌ها به محدوده ریسک‌فری منتقل شد.',
     };
     final known = exact[value];
     if (known != null) return known;

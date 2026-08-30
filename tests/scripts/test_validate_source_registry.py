@@ -4,7 +4,7 @@ import copy
 import importlib.util
 import json
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -38,9 +38,10 @@ class SourceRegistryValidatorTests(unittest.TestCase):
         self.assertEqual([], VALIDATOR.validate_registry(self.registry))
 
     def test_overdue_registry_is_rejected(self) -> None:
+        review_due_at = date.fromisoformat(self.registry["review_due_at"])
         errors = VALIDATOR.validate_registry(
             self.registry,
-            today=date(2026, 8, 21),
+            today=review_due_at + timedelta(days=1),
         )
 
         self.assertTrue(

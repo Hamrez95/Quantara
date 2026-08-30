@@ -12,15 +12,20 @@ on:
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: '3.44.8'
+  PREVIEW_CERT_SHA256: c48f5c19fd4d34182a317dab34477a518fc919800211b191858563e3907536b4
+
 concurrency:
   group: android-alpha-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   android-alpha:
-    name: Test and build Quantara Android
+    name: Test and build persistently signed Preview APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    environment: Preview
     defaults:
       run:
         working-directory: src/client/quantara_app
@@ -28,31 +33,72 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Provision persistent Preview signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.QUANTARA_PREVIEW_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          keystore="$RUNNER_TEMP/quantara-preview.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          keytool -list -v -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > preview-keystore.txt
+          actual="$(grep -m1 'SHA256:' preview-keystore.txt | sed 's/.*SHA256: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test "$actual" = "$PREVIEW_CERT_SHA256"
+          {
+            echo "QUANTARA_PREVIEW_RELEASE=true"
+            echo "QUANTARA_ANDROID_KEYSTORE_PATH=$keystore"
+            echo "QUANTARA_ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "QUANTARA_ANDROID_KEY_ALIAS=$KEY_ALIAS"
+            echo "QUANTARA_ANDROID_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      - name: Restore packages
-        run: flutter pub get
+      - name: Validate source and tests
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --fatal-infos
+          flutter test --reporter expanded
 
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
-
-      - name: Analyze
-        run: flutter analyze --fatal-infos
-
-      - name: Test
-        run: flutter test --reporter expanded
-
-      - name: Build Android release APK
+      - name: Build Preview release APK
         run: flutter build apk --release
 
-      - name: Upload Quantara Android preview
+      - name: Verify Preview identity and signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
+          apksigner_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apkanalyzer_path"
+          test -x "$apksigner_path"
+          "$apkanalyzer_path" manifest application-id "$apk" | grep -Fxq 'com.quantara.quantara_app.alpha'
+          "$apksigner_path" verify --verbose --print-certs "$apk" | tee preview-signing.txt
+          actual="$(grep -m1 'certificate SHA-256 digest:' preview-signing.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
+          test "$actual" = "$PREVIEW_CERT_SHA256"
+          sha256sum "$apk" | tee SHA256SUMS.txt
+
+      - name: Upload signed Preview candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-0.9.0-strategy-validation-preview
-          path: src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+          name: quantara-android-preview-${{ github.sha }}
+          path: |
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
+            src/client/quantara_app/preview-signing.txt
+            src/client/quantara_app/SHA256SUMS.txt
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30

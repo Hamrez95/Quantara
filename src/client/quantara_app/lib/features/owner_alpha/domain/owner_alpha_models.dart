@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import '../../market_analysis/domain/market_chart_models.dart';
+import '../../market_analysis/domain/market_regime_models.dart';
 
 enum TradeDirection { long, short, wait }
 
@@ -94,6 +97,13 @@ final class TradeIdea {
     this.rejectionReason = SetupRejectionReason.none,
     this.strategy = AnalysisStrategy.structureZones,
     this.strategyVersion = '1.1',
+    this.marketRegime = MarketRegime.transition,
+    this.indicatorSnapshot = const {},
+    this.setupQualityScore,
+    this.expectation = '',
+    this.trigger = '',
+    this.contextVersion = '',
+    this.evidenceBreakdown = const {},
   });
 
   final String symbol;
@@ -120,10 +130,20 @@ final class TradeIdea {
   final SetupRejectionReason rejectionReason;
   final AnalysisStrategy strategy;
   final String strategyVersion;
+  final MarketRegime marketRegime;
+  final Map<String, double> indicatorSnapshot;
+  final int? setupQualityScore;
+  final String expectation;
+  final String trigger;
+  final String contextVersion;
+  final Map<String, double> evidenceBreakdown;
+
+  int get displayQualityScore => setupQualityScore ?? confidencePercent;
 
   DateTime get createdAt => candleClosedAt;
 
   Duration get validityWindow => switch (timeframe) {
+    '5m' => const Duration(minutes: 15),
     '15m' => const Duration(minutes: 45),
     '1h' => const Duration(hours: 3),
     '4h' => const Duration(hours: 12),
@@ -155,6 +175,47 @@ final class TradeIdea {
     }
     return notionalValue! / leverage;
   }
+
+  TradeIdea copyWithPlaybookMetadata({
+    required String strategyVersion,
+    required int setupQualityScore,
+    required String expectation,
+    required String trigger,
+    required String contextVersion,
+    required Map<String, double> evidenceBreakdown,
+  }) => TradeIdea(
+    symbol: symbol,
+    timeframe: timeframe,
+    direction: direction,
+    confidencePercent: confidencePercent,
+    entryLower: entryLower,
+    entryUpper: entryUpper,
+    stopLoss: stopLoss,
+    targets: targets,
+    riskReward: riskReward,
+    maximumLoss: maximumLoss,
+    positionSize: positionSize,
+    notionalValue: notionalValue,
+    recommendedLeverage: recommendedLeverage,
+    maximumSafeLeverage: maximumSafeLeverage,
+    requiredMargin: requiredMargin,
+    estimatedRoundTripCosts: estimatedRoundTripCosts,
+    setupId: '$setupId|$strategyVersion',
+    candleClosedAt: candleClosedAt,
+    summary: summary,
+    invalidation: invalidation,
+    reasons: reasons,
+    rejectionReason: rejectionReason,
+    strategy: strategy,
+    strategyVersion: strategyVersion,
+    marketRegime: marketRegime,
+    indicatorSnapshot: indicatorSnapshot,
+    setupQualityScore: setupQualityScore,
+    expectation: expectation,
+    trigger: trigger,
+    contextVersion: contextVersion,
+    evidenceBreakdown: evidenceBreakdown,
+  );
 
   static TradeIdea wait({
     required String symbol,
@@ -326,6 +387,14 @@ final class SignalJournalEntry {
     required this.selectedLeverage,
     required this.summary,
     required this.invalidation,
+    this.setupQualityScore,
+    this.expectation = '',
+    this.trigger = '',
+    this.contextVersion = '',
+    this.evidenceBreakdown = const {},
+    this.confidencePercent = 0,
+    this.riskReward,
+    this.marketRegime = MarketRegime.transition,
     this.sizingCapital = 0,
     this.outcome = SignalOutcome.pendingEntry,
     this.highestTargetHit = 0,
@@ -363,6 +432,14 @@ final class SignalJournalEntry {
     selectedLeverage: idea.recommendedLeverage!,
     summary: idea.summary,
     invalidation: idea.invalidation,
+    setupQualityScore: idea.setupQualityScore,
+    expectation: idea.expectation,
+    trigger: idea.trigger,
+    contextVersion: idea.contextVersion,
+    evidenceBreakdown: idea.evidenceBreakdown,
+    confidencePercent: idea.confidencePercent,
+    riskReward: idea.riskReward,
+    marketRegime: idea.marketRegime,
     sizingCapital: sizingCapital,
   );
 
@@ -387,6 +464,14 @@ final class SignalJournalEntry {
   final int selectedLeverage;
   final String summary;
   final String invalidation;
+  final int? setupQualityScore;
+  final String expectation;
+  final String trigger;
+  final String contextVersion;
+  final Map<String, double> evidenceBreakdown;
+  final int confidencePercent;
+  final double? riskReward;
+  final MarketRegime marketRegime;
   final double sizingCapital;
   final SignalOutcome outcome;
   final int highestTargetHit;
@@ -460,6 +545,14 @@ final class SignalJournalEntry {
     selectedLeverage: selectedLeverage ?? this.selectedLeverage,
     summary: summary,
     invalidation: invalidation,
+    setupQualityScore: setupQualityScore,
+    expectation: expectation,
+    trigger: trigger,
+    contextVersion: contextVersion,
+    evidenceBreakdown: evidenceBreakdown,
+    confidencePercent: confidencePercent,
+    riskReward: riskReward,
+    marketRegime: marketRegime,
     sizingCapital: sizingCapital,
     outcome: outcome ?? this.outcome,
     highestTargetHit: highestTargetHit ?? this.highestTargetHit,
@@ -494,6 +587,14 @@ final class SignalJournalEntry {
     'selectedLeverage': selectedLeverage,
     'summary': summary,
     'invalidation': invalidation,
+    'setupQualityScore': setupQualityScore,
+    'expectation': expectation,
+    'trigger': trigger,
+    'contextVersion': contextVersion,
+    'evidenceBreakdown': evidenceBreakdown,
+    'confidencePercent': confidencePercent,
+    'riskReward': riskReward,
+    'marketRegime': marketRegime.name,
     'sizingCapital': sizingCapital,
     'outcome': outcome.name,
     'highestTargetHit': highestTargetHit,
@@ -564,6 +665,19 @@ final class SignalJournalEntry {
             .toInt(),
         summary: value['summary'] as String,
         invalidation: value['invalidation'] as String,
+        setupQualityScore: _tryBoundedQuality(value['setupQualityScore']),
+        expectation: (value['expectation'] as String?) ?? '',
+        trigger: (value['trigger'] as String?) ?? '',
+        contextVersion: (value['contextVersion'] as String?) ?? '',
+        evidenceBreakdown: _tryEvidenceBreakdown(value['evidenceBreakdown']),
+        confidencePercent: ((value['confidencePercent'] as num?)?.toInt() ?? 0)
+            .clamp(0, 100)
+            .toInt(),
+        riskReward: (value['riskReward'] as num?)?.toDouble(),
+        marketRegime: MarketRegime.values.firstWhere(
+          (item) => item.name == value['marketRegime'],
+          orElse: () => MarketRegime.transition,
+        ),
         sizingCapital: (value['sizingCapital'] as num?)?.toDouble() ?? 0,
         outcome: outcome,
         highestTargetHit: ((value['highestTargetHit'] as num?)?.toInt() ?? 0)
@@ -580,6 +694,24 @@ final class SignalJournalEntry {
     } on Object {
       return null;
     }
+  }
+
+  static int? _tryBoundedQuality(Object? value) {
+    if (value is! num) return null;
+    final quality = value.toInt();
+    return quality < 0 || quality > 100 ? null : quality;
+  }
+
+  static Map<String, double> _tryEvidenceBreakdown(Object? value) {
+    if (value is! Map<Object?, Object?>) return const {};
+    final result = <String, double>{};
+    for (final entry in value.entries) {
+      if (entry.key is! String || entry.value is! num) continue;
+      final number = (entry.value as num).toDouble();
+      if (!number.isFinite || number < 0 || number > 20) continue;
+      result[entry.key as String] = number;
+    }
+    return Map.unmodifiable(result);
   }
 
   static DateTime? _tryDate(Object? value) {
@@ -655,6 +787,10 @@ abstract interface class SetupNotificationGateway {
   Future<void> show(TradeIdea idea, {required String languageCode});
 
   Future<void> openBackgroundSettings();
+
+  Stream<String> get openedSetupIds;
+
+  Future<String?> initialSetupId();
 }
 
 final class NoopSetupNotificationGateway implements SetupNotificationGateway {
@@ -668,4 +804,10 @@ final class NoopSetupNotificationGateway implements SetupNotificationGateway {
 
   @override
   Future<void> openBackgroundSettings() async {}
+
+  @override
+  Stream<String> get openedSetupIds => const Stream.empty();
+
+  @override
+  Future<String?> initialSetupId() async => null;
 }

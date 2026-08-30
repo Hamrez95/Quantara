@@ -6,7 +6,7 @@ import 'package:http/testing.dart';
 import 'package:quantara_app/features/owner_alpha/data/bitunix_owner_alpha_repository.dart';
 
 void main() {
-  test('loads a bounded live radar and four selected timeframes', () async {
+  test('loads a bounded live radar and six selected timeframes', () async {
     var requestCount = 0;
     var now = DateTime.utc(2026, 7, 21, 8);
     final client = MockClient((request) async {
@@ -41,22 +41,22 @@ void main() {
       languageCode: 'fa',
     );
 
-    expect(requestCount, 8);
+    expect(requestCount, 12);
     expect(snapshot.radar, hasLength(2));
     expect(
       snapshot.radar.first.ideasByTimeframe.keys,
-      containsAll(['15m', '1h', '4h']),
+      containsAll(['5m', '15m', '30m', '1h', '4h']),
     );
     expect(
       snapshot.timeframeDirections.keys,
-      containsAll(['15m', '1h', '4h', '1D']),
+      containsAll(['5m', '15m', '30m', '1h', '4h', '1D']),
     );
     expect(snapshot.selectedAnalysis.timeframe, '4h');
     expect(snapshot.selectedAnalysis.candles, hasLength(60));
     expect(snapshot.generatedAt.isUtc, isTrue);
-    expect(snapshot.diagnostics.networkRequests, 8);
+    expect(snapshot.diagnostics.networkRequests, 12);
     expect(snapshot.diagnostics.cacheHits, 0);
-    expect(snapshot.diagnostics.requestedAnalyses, 7);
+    expect(snapshot.diagnostics.requestedAnalyses, 11);
 
     final secondSnapshot = await repository.scan(
       symbols: const ['BTCUSDT', 'ETHUSDT'],
@@ -67,9 +67,9 @@ void main() {
       languageCode: 'fa',
     );
 
-    expect(requestCount, 9);
+    expect(requestCount, 13);
     expect(secondSnapshot.diagnostics.networkRequests, 1);
-    expect(secondSnapshot.diagnostics.cacheHits, 7);
+    expect(secondSnapshot.diagnostics.cacheHits, 11);
 
     now = DateTime.utc(2026, 7, 21, 9);
     final expiredSnapshot = await repository.scan(
@@ -81,8 +81,8 @@ void main() {
       languageCode: 'fa',
     );
 
-    expect(requestCount, 14);
-    expect(expiredSnapshot.diagnostics.networkRequests, 5);
+    expect(requestCount, 22);
+    expect(expiredSnapshot.diagnostics.networkRequests, 9);
     expect(expiredSnapshot.diagnostics.cacheHits, 3);
   });
 
@@ -283,7 +283,9 @@ Map<String, Object> _ticker(String symbol, double price) {
 
 List<Map<String, Object>> _candles(double base, String timeframe) {
   final interval = switch (timeframe) {
+    '5m' => const Duration(minutes: 5),
     '15m' => const Duration(minutes: 15),
+    '30m' => const Duration(minutes: 30),
     '4h' => const Duration(hours: 4),
     '1d' => const Duration(days: 1),
     _ => const Duration(hours: 1),

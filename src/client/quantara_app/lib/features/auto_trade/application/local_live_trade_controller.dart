@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,14 +10,32 @@ import '../data/secure_auto_trade_credentials_store.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_entry_preflight.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/private_account_entry_block_policy.dart';
+import '../domain/private_account_reconciliation.dart';
+import 'auto_trade_controller.dart';
 import 'local_live_trade_service.dart';
 
 final class LocalLiveTradeController extends ChangeNotifier {
-  LocalLiveTradeController({
-    this._credentialsStore = const SecureAutoTradeCredentialsStore(),
-  });
+  factory LocalLiveTradeController({
+    required AutoTradeController accountController,
+    AutoTradeCredentialsStore credentialsStore =
+        const SecureAutoTradeCredentialsStore(),
+    Duration accountPollInterval = const Duration(seconds: 20),
+  }) => LocalLiveTradeController._(
+    accountController,
+    credentialsStore,
+    accountPollInterval,
+  );
 
+  LocalLiveTradeController._(
+    this._accountController,
+    this._credentialsStore,
+    this._accountPollInterval,
+  );
+
+  final AutoTradeController _accountController;
   final AutoTradeCredentialsStore _credentialsStore;
+  final Duration _accountPollInterval;
 
   LocalLiveTradeStatus _status = LocalLiveTradeStatus(
     state: LocalLiveTradeState.stopped,
@@ -26,6 +45,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
   String? _error;
   bool _busy = false;
   bool _disposed = false;
+  bool _accountListenerAttached = false;
+  Timer? _accountPollTimer;
 
   LocalLiveTradeStatus get status => _status;
   String? get error => _error;
@@ -36,6 +57,10 @@ final class LocalLiveTradeController extends ChangeNotifier {
 
   Future<void> initialize() async {
     FlutterForegroundTask.addTaskDataCallback(_onTaskData);
+    if (!_accountListenerAttached) {
+      _accountController.addListener(_onAccountProjectionChanged);
+      _accountListenerAttached = true;
+    }
     final raw = await FlutterForegroundTask.getData<String>(
       key: localLiveStatusKey,
     );
@@ -49,15 +74,26 @@ final class LocalLiveTradeController extends ChangeNotifier {
         message:
             'Android is not running the local execution service. Exchange-native SL/TP orders remain authoritative.',
         openPositionCount: _status.openPositionCount,
+        managedPositionCount: _status.managedPositionCount,
+        managedPositions: _status.managedPositions,
+        unmanagedPositionCount: _status.unmanagedPositionCount,
+        unmanagedSymbols: _status.unmanagedSymbols,
+        entryBlockReason: _status.entryBlockReason,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
+        pnlProjection: _status.pnlProjection,
         entriesEnabled: false,
       );
     }
+    await _reconcileAccountFromStatus(force: true);
+    _updateAccountPolling();
     notifyListeners();
   }
 
-  Future<bool> start(LocalLiveTradeConfiguration configuration) async {
+  Future<bool> start(
+    LocalLiveTradeConfiguration configuration, {
+    bool recoveryOnly = false,
+  }) async {
     if (_busy || _disposed) return false;
     _busy = true;
     _error = null;
@@ -75,8 +111,50 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'Connect and validate the Bitunix account before starting local live trading.',
         );
       }
+      final reconciled = await _accountController.reconcile(
+        reason: PrivateAccountRefreshReason.startPreflight,
+        force: true,
+      );
+      final account = _accountController.snapshot;
+      final reconciliation = _accountController.reconciliation;
+      final completedAt = reconciliation.completedAt;
+      final freshDivergenceForRecovery =
+          recoveryOnly &&
+          account != null &&
+          account.positions.any((position) => position.quantity > 0) &&
+          reconciliation.health ==
+              PrivateAccountReconciliationHealth.divergent &&
+          completedAt != null &&
+          DateTime.now().toUtc().difference(completedAt).abs() <=
+              const Duration(seconds: 20);
+      if (account == null ||
+          (!reconciled && !freshDivergenceForRecovery) ||
+          (!recoveryOnly && reconciliation.blocksNewEntries)) {
+        throw const LocalLiveTradeSafeException(
+          'New entries are blocked until a fresh, coherent Bitunix private-account reconciliation succeeds.',
+        );
+      }
+      if (recoveryOnly &&
+          !account.positions.any((position) => position.quantity > 0)) {
+        throw const LocalLiveTradeSafeException(
+          'No open Bitunix position is available for secure recovery.',
+        );
+      }
 
-      await _ensureAtLeastOneAffordableSymbol(configuration, credentials);
+      final entriesEnabled =
+          ExchangeTruthPhaseOneGate.realEntriesAllowed && !recoveryOnly;
+      if (!entriesEnabled && account.positions.isEmpty) {
+        throw const LocalLiveTradeSafeException(
+          ExchangeTruthPhaseOneGate.reason,
+        );
+      }
+      if (entriesEnabled) {
+        await _ensureAtLeastOneAffordableSymbol(
+          configuration,
+          credentials,
+          account,
+        );
+      }
 
       final permission =
           await FlutterForegroundTask.checkNotificationPermission();
@@ -141,14 +219,37 @@ final class LocalLiveTradeController extends ChangeNotifier {
           'configuration': configuration.toJson(),
           'apiKey': credentials.apiKey,
           'secretKey': credentials.secretKey,
+          'entriesEnabled': entriesEnabled,
         }),
       );
+      final exchangePositions = account.positions
+          .where((position) => position.quantity > 0)
+          .toList(growable: false);
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.starting,
         updatedAt: DateTime.now().toUtc(),
-        message: 'Local live service is starting on this device.',
-        entriesEnabled: true,
+        message: exchangePositions.isNotEmpty
+            ? recoveryOnly
+                  ? 'Local live service is recovering exchange-position ownership in management-only mode.'
+                  : 'Local live service is verifying exchange-position ownership and protection.'
+            : entriesEnabled
+            ? 'Local live service is starting on this device.'
+            : 'Local live service is starting in management-only quarantine.',
+        openPositionCount: exchangePositions.length,
+        managedPositionCount: 0,
+        unmanagedPositionCount: exchangePositions.length,
+        unmanagedSymbols: List.unmodifiable(
+          exchangePositions
+              .map((position) => position.symbol.trim().toUpperCase())
+              .where((symbol) => symbol.isNotEmpty)
+              .toSet(),
+        ),
+        entryBlockReason: exchangePositions.isEmpty
+            ? null
+            : 'exchangeTruthPendingLocalRecovery',
+        entriesEnabled: entriesEnabled && exchangePositions.isEmpty,
       );
+      _updateAccountPolling();
       return true;
     } on LocalLiveTradeSafeException catch (error) {
       _error = error.message;
@@ -171,17 +272,16 @@ final class LocalLiveTradeController extends ChangeNotifier {
   Future<void> _ensureAtLeastOneAffordableSymbol(
     LocalLiveTradeConfiguration configuration,
     BitunixApiCredentials credentials,
+    AutoTradeAccountSnapshot account,
   ) async {
     final client = http.Client();
     try {
       final exchange = BitunixLocalLiveApiClient(client: client);
-      final account = await exchange.fetchAccountSnapshot(credentials);
       if (!LocalLiveEntryPreflightPolicy.shouldCheckNewEntryAffordability(
         openPositionCount: account.positions.length,
       )) {
-        // Starting the service must remain possible so a persisted managed
-        // position can be reconciled. The service's one-position gate still
-        // prevents any additional entry while an exchange position is open.
+        // Existing exchange exposure must remain recoverable even if a market
+        // is currently closed. This preflight is only for arming new entries.
         return;
       }
       if (!account.available.isFinite || account.available <= 0) {
@@ -190,39 +290,86 @@ final class LocalLiveTradeController extends ChangeNotifier {
         );
       }
 
-      LocalLiveEntryAffordability? lowestFloor;
-      String? lowestFloorSymbol;
-      for (final symbol in configuration.symbols) {
+      final executableRules = <String, BitunixInstrumentRules>{};
+      final closedSymbols = <String>[];
+      final apiUnsupportedSymbols = <String>[];
+      final unverifiableSymbols = <String>[];
+      for (final rawSymbol in configuration.symbols) {
+        final symbol = rawSymbol.trim().toUpperCase();
         try {
           final rules = await exchange.fetchInstrumentRules(symbol);
-          if (!rules.open ||
-              !rules.apiSupported ||
-              !rules.minimumQuantity.isFinite ||
-              rules.minimumQuantity <= 0) {
+          if (!rules.apiSupported) {
+            apiUnsupportedSymbols.add(symbol);
             continue;
           }
-          final markPrice = await exchange.fetchMarkPrice(symbol);
-          final leverage = configuration.leverage
-              .clamp(rules.minimumLeverage, rules.maximumLeverage)
-              .toInt();
-          final affordability = LocalLiveEntryAffordability.calculate(
-            availableMargin: account.available,
-            markPrice: markPrice,
-            minimumExchangeQuantity: rules.minimumQuantity,
-            leverage: leverage,
-          );
-          if (affordability.affordable) return;
-          if (lowestFloor == null ||
-              affordability.minimumBufferedMargin <
-                  lowestFloor.minimumBufferedMargin) {
-            lowestFloor = affordability;
-            lowestFloorSymbol = symbol;
+          if (!rules.open) {
+            closedSymbols.add(symbol);
+            continue;
           }
+          if (!rules.minimumQuantity.isFinite ||
+              rules.minimumQuantity <= 0 ||
+              !rules.maximumMarketQuantity.isFinite ||
+              rules.maximumMarketQuantity <= 0 ||
+              rules.minimumLeverage < 1 ||
+              rules.maximumLeverage < rules.minimumLeverage) {
+            unverifiableSymbols.add(symbol);
+            continue;
+          }
+          executableRules[symbol] = rules;
         } on LocalLiveTradeSafeException {
-          // Try the remaining allow-listed symbols. Failure to validate every
-          // symbol still fails closed below.
+          unverifiableSymbols.add(symbol);
         } on FormatException {
-          // Malformed public symbol rules are not usable for live execution.
+          unverifiableSymbols.add(symbol);
+        }
+      }
+
+      if (apiUnsupportedSymbols.isNotEmpty) {
+        throw LocalLiveTradeSafeException(
+          'Bitunix Futures API execution is unavailable for selected symbol(s): '
+          '${apiUnsupportedSymbols.join(', ')}. Remove them before starting Local Live.',
+        );
+      }
+      if (closedSymbols.isNotEmpty) {
+        throw LocalLiveTradeSafeException(
+          'Bitunix reports the selected futures market as closed for: '
+          '${closedSymbols.join(', ')}. Local Live will not start with a closed market; '
+          'change the selection or retry after the market reopens.',
+        );
+      }
+      if (unverifiableSymbols.isNotEmpty) {
+        throw LocalLiveTradeSafeException(
+          'Quantara could not verify current Bitunix Futures execution rules for: '
+          '${unverifiableSymbols.join(', ')}. New entries remain fail-closed.',
+        );
+      }
+      if (executableRules.length != configuration.symbols.toSet().length) {
+        throw const LocalLiveTradeSafeException(
+          'The selected Local Live universe could not be verified completely.',
+        );
+      }
+
+      LocalLiveEntryAffordability? lowestFloor;
+      String? lowestFloorSymbol;
+      for (final entry in executableRules.entries) {
+        final symbol = entry.key;
+        final rules = entry.value;
+        final markPrice = await exchange.fetchMarkPrice(symbol);
+        final leverage = configuration.leverage
+            .clamp(rules.minimumLeverage, rules.maximumLeverage)
+            .toInt();
+        final affordability = LocalLiveEntryAffordability.calculate(
+          availableMargin: account.available,
+          markPrice: markPrice,
+          minimumExchangeQuantity: rules.minimumQuantity,
+          leverage: leverage,
+          takeProfitTranches: 1,
+        );
+        if (affordability.affordable) return;
+        if (lowestFloor == null ||
+            affordability.minimumBufferedMargin <
+                lowestFloor.minimumBufferedMargin) {
+          lowestFloor = affordability;
+          lowestFloorSymbol = symbol;
         }
       }
 
@@ -233,8 +380,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
         throw LocalLiveTradeSafeException(
           'Available margin is $available USDT. The smallest exchange/margin '
           'floor among the selected symbols is about $minimum USDT '
-          '($lowestFloorSymbol, including three TP quantities and the safety '
-          'buffer). Shortfall: $shortfall USDT. The actual risk and stop '
+          '($lowestFloorSymbol, including one exchange-valid TP quantity '
+          'and the safety buffer). Shortfall: $shortfall USDT. The actual risk and stop '
           'distance checks may require more capital.',
         );
       }
@@ -285,10 +432,17 @@ final class LocalLiveTradeController extends ChangeNotifier {
             ? 'Local service stopped after emergency close requests.'
             : 'Local service stopped. Existing exchange SL/TP remains active.',
         openPositionCount: _status.openPositionCount,
+        managedPositionCount: _status.managedPositionCount,
+        managedPositions: _status.managedPositions,
+        unmanagedPositionCount: _status.unmanagedPositionCount,
+        unmanagedSymbols: _status.unmanagedSymbols,
+        entryBlockReason: _status.entryBlockReason,
         closedPositionCount: _status.closedPositionCount,
         realizedPnl: _status.realizedPnl,
+        pnlProjection: _status.pnlProjection,
         entriesEnabled: false,
       );
+      _updateAccountPolling();
       return true;
     } on LocalLiveTradeSafeException catch (error) {
       _error = error.message;
@@ -310,6 +464,8 @@ final class LocalLiveTradeController extends ChangeNotifier {
     );
     if (!_disposed && raw != null) {
       _applyStatus(raw);
+      await _reconcileAccountFromStatus(force: true);
+      _updateAccountPolling();
       notifyListeners();
     }
   }
@@ -350,8 +506,76 @@ final class LocalLiveTradeController extends ChangeNotifier {
 
   void _onTaskData(Object data) {
     if (_disposed || data is! String) return;
+    final previousOpenPositionCount = _status.openPositionCount;
+    final previousExchangeSync = _status.lastSuccessfulExchangeSync;
     _applyStatus(data);
+    final exchangeTruthChanged =
+        previousOpenPositionCount != _status.openPositionCount ||
+        previousExchangeSync != _status.lastSuccessfulExchangeSync;
+    unawaited(_reconcileAccountFromStatus(force: exchangeTruthChanged));
+    _updateAccountPolling();
     notifyListeners();
+  }
+
+  Future<void> _reconcileAccountFromStatus({required bool force}) async {
+    if (_disposed) return;
+    final exchangeSyncedAt = _status.lastSuccessfulExchangeSync;
+    if (exchangeSyncedAt == null) {
+      await _accountController.reconcile(
+        reason: PrivateAccountRefreshReason.localLiveEvent,
+        force: force,
+      );
+      return;
+    }
+    await _accountController.observeLocalLiveOpenPositions(
+      openPositionCount: _status.openPositionCount,
+      observedAt: _status.updatedAt,
+      exchangeSyncedAt: exchangeSyncedAt,
+    );
+  }
+
+  void _updateAccountPolling() {
+    if (_disposed || !_status.isRunning) {
+      _accountPollTimer?.cancel();
+      _accountPollTimer = null;
+      return;
+    }
+    _accountPollTimer ??= Timer.periodic(
+      _accountPollInterval,
+      (_) => unawaited(
+        _accountController.reconcile(
+          reason: PrivateAccountRefreshReason.activePolling,
+        ),
+      ),
+    );
+  }
+
+  void _onAccountProjectionChanged() {
+    if (_disposed || !_status.isRunning || !_status.entriesEnabled) return;
+    final reconciliation = _accountController.reconciliation;
+    final decision = PrivateAccountEntryBlockPolicy.evaluate(
+      explicitlyDisconnected:
+          _accountController.state == AutoTradeConnectionState.disconnected,
+      refreshing: reconciliation.refreshing,
+      health: reconciliation.health,
+    );
+    switch (decision) {
+      case PrivateAccountEntryBlockDecision.none:
+      case PrivateAccountEntryBlockDecision.transientProjectionWarning:
+        return;
+      case PrivateAccountEntryBlockDecision.hardBlockDisconnected:
+        _sendPrivateStateBlock('disconnected');
+        return;
+      case PrivateAccountEntryBlockDecision.hardBlockDivergent:
+        _sendPrivateStateBlock(reconciliation.health.name);
+        return;
+    }
+  }
+
+  void _sendPrivateStateBlock(String reason) {
+    FlutterForegroundTask.sendDataToTask(
+      jsonEncode({'type': 'block_entries_private_state', 'reason': reason}),
+    );
   }
 
   void _applyStatus(String raw) {
@@ -369,6 +593,12 @@ final class LocalLiveTradeController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _accountPollTimer?.cancel();
+    _accountPollTimer = null;
+    if (_accountListenerAttached) {
+      _accountController.removeListener(_onAccountProjectionChanged);
+      _accountListenerAttached = false;
+    }
     FlutterForegroundTask.removeTaskDataCallback(_onTaskData);
     super.dispose();
   }

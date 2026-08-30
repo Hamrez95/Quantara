@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Quantara.Api.AutoTrading;
 using Quantara.Api.Cockpit;
+using Quantara.Api.Supervisor;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseKestrel(options => options.AddServerHeader = false);
@@ -18,6 +19,11 @@ builder.Services.AddSingleton<ICockpitSnapshotProvider, DeterministicCockpitSnap
 builder.Services.AddSingleton<IAutoTradeExecutionCapability, DisabledAutoTradeExecutionCapability>();
 builder.Services.AddSingleton<IAutoTradePreflightService, ConfigurationAutoTradePreflightService>();
 builder.Services.AddSingleton<IAutoTradeControlCoordinator, InMemoryAutoTradeControlCoordinator>();
+builder.Services.AddSingleton<SupervisorAnalysisGate>();
+builder.Services.AddSingleton<SupervisorSupportSessionRegistry>();
+builder.Services.AddSingleton<SupervisorMcpAuditLedger>();
+builder.Services.AddSingleton<SupervisorMcpRateLimiter>();
+builder.Services.AddHttpClient<ISupervisorAnalysisService, OpenAiSupervisorAnalysisService>();
 
 var allowedOrigins = builder.Configuration["QUANTARA_ALLOWED_ORIGINS"]?
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -30,11 +36,14 @@ if (allowedOrigins.Length > 0)
             "quantara-client",
             policy => policy
                 .WithOrigins(allowedOrigins)
-                .WithMethods("GET", "POST")
+                .WithMethods("GET", "POST", "DELETE")
                 .WithHeaders(
                     "Accept",
+                    "Authorization",
                     "Content-Type",
-                    "X-Quantara-Control-Token"));
+                    "Origin",
+                    "X-Quantara-Control-Token",
+                    SupervisorEndpointAuthority.HeaderName));
     });
 }
 
@@ -83,6 +92,8 @@ app.MapGet(
     .Produces<CockpitResponseContract>(StatusCodes.Status200OK);
 
 app.MapAutoTradeEndpoints();
+app.MapSupervisorEndpoints();
+app.MapSupervisorMcpEndpoints();
 
 app.Run();
 

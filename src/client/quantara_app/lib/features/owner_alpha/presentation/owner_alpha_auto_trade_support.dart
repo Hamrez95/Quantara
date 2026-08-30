@@ -1,5 +1,18 @@
 part of 'owner_alpha_page.dart';
 
+String _pnlMetricText(TradingPnlMetric metric) {
+  final value = metric.value;
+  if (value == null) return '—';
+  final prefix = value > 0 ? '+' : '';
+  return '$prefix${value.toStringAsFixed(4)} ${metric.currency}';
+}
+
+Color? _pnlMetricColor(TradingPnlMetric metric) {
+  final value = metric.value;
+  if (value == null) return null;
+  return value >= 0 ? QuantaraColors.success : QuantaraColors.danger;
+}
+
 class _DisconnectedAccountCard extends StatelessWidget {
   const _DisconnectedAccountCard({required this.busy, required this.onConnect});
 
@@ -235,10 +248,20 @@ class _SafetyChip extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: QuantaraColors.cyan),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: 16, color: QuantaraColors.cyan),
+          ),
           const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          Flexible(
+            child: Text(
+              label,
+              softWrap: true,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
         ],
       ),
     );
@@ -248,12 +271,14 @@ class _SafetyChip extends StatelessWidget {
 class _AccountOverviewCard extends StatelessWidget {
   const _AccountOverviewCard({
     required this.snapshot,
+    required this.reconciliation,
     required this.maskedApiKey,
     required this.onRefresh,
     required this.onDisconnect,
   });
 
   final AutoTradeAccountSnapshot snapshot;
+  final PrivateAccountReconciliationState reconciliation;
   final String maskedApiKey;
   final Future<bool> Function()? onRefresh;
   final VoidCallback? onDisconnect;
@@ -261,9 +286,8 @@ class _AccountOverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fa = Directionality.of(context) == TextDirection.rtl;
-    final pnlColor = snapshot.totalUnrealizedPnl >= 0
-        ? QuantaraColors.success
-        : QuantaraColors.danger;
+    final pnl = snapshot.authoritativePnl;
+    final pnlColor = _pnlMetricColor(pnl.accountUnrealized);
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,25 +343,65 @@ class _AccountOverviewCard extends StatelessWidget {
               ),
               MetricTile(
                 label: fa ? 'سود/زیان باز' : 'Unrealized P/L',
-                value: QuantaraNumberFormat.marketValue(
-                  snapshot.totalUnrealizedPnl,
-                  unit: snapshot.marginCoin,
-                ),
+                value: _pnlMetricText(pnl.accountUnrealized),
                 valueColor: pnlColor,
+              ),
+              MetricTile(
+                label: fa ? 'سود تحقق‌یافته ناخالص' : 'Realized gross',
+                value: _pnlMetricText(pnl.accountRealizedGross),
+                valueColor: _pnlMetricColor(pnl.accountRealizedGross),
+              ),
+              MetricTile(
+                label: fa ? 'کارمزد' : 'Fees',
+                value: _pnlMetricText(pnl.accountFees),
+              ),
+              MetricTile(
+                label: fa ? 'فاندینگ' : 'Funding',
+                value: _pnlMetricText(pnl.accountFunding),
+                valueColor: _pnlMetricColor(pnl.accountFunding),
+              ),
+              MetricTile(
+                label: fa ? 'سود/زیان خالص تحقق‌یافته' : 'Net realized',
+                value: _pnlMetricText(pnl.accountNetRealized),
+                valueColor: _pnlMetricColor(pnl.accountNetRealized),
               ),
               MetricTile(
                 label: fa ? 'پوزیشن باز' : 'Open positions',
                 value: snapshot.positions.length.toString(),
               ),
               MetricTile(
-                label: fa ? 'سفارش باز' : 'Open orders',
+                label: fa ? 'کل سفارش‌های Pending' : 'Pending total',
+                value: snapshot.totalPendingOrderCount.toString(),
+              ),
+              MetricTile(
+                label: fa ? 'فید سفارش عادی' : 'Regular feed',
                 value: snapshot.orders.length.toString(),
+              ),
+              MetricTile(
+                label: fa ? 'سفارش حفاظتی' : 'Protection orders',
+                value: snapshot.protectionOrders.length.toString(),
               ),
             ],
           ),
           const SizedBox(height: 14),
           Text(
             '${fa ? 'آخرین همگام‌سازی' : 'Last sync'}: ${snapshot.syncedAt.toLocal()}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Text(
+            '${fa ? 'زمان حسابداری صرافی' : 'Exchange accounting as of'}: ${pnl.asOf.toLocal()} · ${pnl.isVerified ? (fa ? 'تأییدشده' : 'verified') : (fa ? 'نیازمند بررسی' : 'unverified')}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (pnl.warning != null)
+            Text(
+              pnl.warning!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: QuantaraColors.warning),
+            ),
+          Text(
+            '${fa ? 'چرخه تطبیق' : 'Reconciliation cycle'}: ${reconciliation.cycleId ?? '—'}',
+            textDirection: TextDirection.ltr,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -407,13 +471,19 @@ class _AutoTradeUniversePreview extends StatelessWidget {
 }
 
 class _OpenPositionsCard extends StatelessWidget {
-  const _OpenPositionsCard({required this.snapshot});
+  const _OpenPositionsCard({
+    required this.snapshot,
+    required this.reconciliation,
+  });
 
   final AutoTradeAccountSnapshot snapshot;
+  final PrivateAccountReconciliationState reconciliation;
 
   @override
   Widget build(BuildContext context) {
     final fa = Directionality.of(context) == TextDirection.rtl;
+    final stale =
+        reconciliation.health == PrivateAccountReconciliationHealth.stale;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,36 +505,85 @@ class _OpenPositionsCard extends StatelessWidget {
             )
           else
             for (final position in snapshot.positions) ...[
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  child: Text(
-                    position.symbol.isEmpty
-                        ? '?'
-                        : position.symbol.substring(0, 1),
-                  ),
-                ),
-                title: Text(
-                  '${position.symbol} · ${position.side}',
-                  textDirection: TextDirection.ltr,
-                ),
-                subtitle: Text(
-                  '${position.marginMode} · ${position.leverage}x · Qty ${position.quantity}',
-                  textDirection: TextDirection.ltr,
-                ),
-                trailing: Text(
-                  QuantaraNumberFormat.marketValue(
-                    position.unrealizedPnl,
-                    unit: 'USDT',
-                  ),
-                  textDirection: TextDirection.ltr,
-                  style: TextStyle(
-                    color: position.unrealizedPnl >= 0
-                        ? QuantaraColors.success
-                        : QuantaraColors.danger,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+              Builder(
+                builder: (context) {
+                  final positionPnl = snapshot.authoritativePnl.forPositionId(
+                    position.positionId,
+                  );
+                  final unrealized = positionPnl?.unrealized;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          child: Text(
+                            position.symbol.isEmpty
+                                ? '?'
+                                : position.symbol.substring(0, 1),
+                          ),
+                        ),
+                        title: Text(
+                          '${position.symbol} · ${position.side}',
+                          textDirection: TextDirection.ltr,
+                        ),
+                        subtitle: Text(
+                          '${position.marginMode} · ${position.leverage}x · Qty ${position.quantity}',
+                          textDirection: TextDirection.ltr,
+                        ),
+                        trailing: Text(
+                          unrealized == null ? '—' : _pnlMetricText(unrealized),
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(
+                            color: unrealized == null
+                                ? null
+                                : _pnlMetricColor(unrealized),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (positionPnl != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Wrap(
+                            spacing: 16,
+                            runSpacing: 10,
+                            children: [
+                              MetricTile(
+                                label: fa ? 'تحقق‌یافته' : 'Realized',
+                                value: _pnlMetricText(
+                                  positionPnl.realizedGross,
+                                ),
+                                valueColor: _pnlMetricColor(
+                                  positionPnl.realizedGross,
+                                ),
+                              ),
+                              MetricTile(
+                                label: fa ? 'کارمزد' : 'Fees',
+                                value: _pnlMetricText(positionPnl.fees),
+                              ),
+                              MetricTile(
+                                label: fa ? 'فاندینگ' : 'Funding',
+                                value: _pnlMetricText(positionPnl.funding),
+                              ),
+                              MetricTile(
+                                label: fa ? 'خالص' : 'Net',
+                                value: _pnlMetricText(positionPnl.netRealized),
+                                valueColor: _pnlMetricColor(
+                                  positionPnl.netRealized,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              PositionProtectionSummary(
+                protection: snapshot.protectionForPosition(position),
+                stale: stale,
+                persian: fa,
               ),
               const Divider(height: 1),
             ],
@@ -482,27 +601,36 @@ class _OpenOrdersCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fa = Directionality.of(context) == TextDirection.rtl;
+    final regularOrders = snapshot.regularOrdersNotRepresentedByProtection;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            fa ? 'سفارش‌های باز Bitunix' : 'Open Bitunix orders',
+            fa ? 'سفارش‌های Pending Bitunix' : 'Pending Bitunix orders',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
+          const SizedBox(height: 5),
+          Text(
+            fa
+                ? '${snapshot.orders.length} ردیف عادی + ${snapshot.protectionOrders.length} ردیف حفاظتی · ${snapshot.totalPendingOrderCount} سفارش یکتا'
+                : '${snapshot.orders.length} regular feed rows + ${snapshot.protectionOrders.length} protection rows · ${snapshot.totalPendingOrderCount} unique orders',
+            textDirection: TextDirection.ltr,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 12),
-          if (snapshot.orders.isEmpty)
+          if (snapshot.totalPendingOrderCount == 0)
             _CompactEmptyState(
               icon: Icons.receipt_long_outlined,
-              title: fa ? 'سفارش بازی وجود ندارد' : 'No open orders',
+              title: fa ? 'سفارش Pending وجود ندارد' : 'No pending orders',
               message: fa
-                  ? 'پس از ورود، حدضرر کامل و سه هدف مرحله‌ای باید در خود صرافی تأیید شوند.'
-                  : 'After entry, the full stop and three staged targets must be confirmed by the exchange.',
+                  ? 'سفارش‌های عادی و Position TP/SL با دو مسیر مستقل خوانده می‌شوند.'
+                  : 'Regular orders and Position TP/SL are read through independent exchange paths.',
             )
-          else
-            for (final order in snapshot.orders) ...[
+          else ...[
+            for (final order in regularOrders) ...[
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.receipt_long_outlined),
@@ -511,15 +639,47 @@ class _OpenOrdersCard extends StatelessWidget {
                   textDirection: TextDirection.ltr,
                 ),
                 subtitle: Text(
-                  'Qty ${order.filledQuantity}/${order.quantity} · ${order.leverage}x · ${order.marginMode}',
+                  'Regular · Qty ${order.filledQuantity}/${order.quantity} · ${order.leverage}x · ${order.marginMode}',
                   textDirection: TextDirection.ltr,
                 ),
               ),
               const Divider(height: 1),
             ],
+            for (final order in snapshot.protectionOrders) ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.shield_outlined),
+                title: Text(
+                  '${order.symbol} · Position TP/SL',
+                  textDirection: TextDirection.ltr,
+                ),
+                subtitle: Text(
+                  _protectionOrderDescription(order),
+                  textDirection: TextDirection.ltr,
+                ),
+              ),
+              const Divider(height: 1),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  static String _protectionOrderDescription(AutoTradeProtectionOrder order) {
+    final values = <String>[];
+    if (order.stopLossPrice != null) {
+      values.add(
+        'SL ${order.stopLossPrice} · Qty ${order.stopLossQuantity ?? '—'}',
+      );
+    }
+    if (order.takeProfitPrice != null) {
+      values.add(
+        'TP ${order.takeProfitPrice} · Qty ${order.takeProfitQuantity ?? '—'}',
+      );
+    }
+    values.add('ID ${order.exchangeId.isEmpty ? '—' : order.exchangeId}');
+    return values.join(' · ');
   }
 }
 

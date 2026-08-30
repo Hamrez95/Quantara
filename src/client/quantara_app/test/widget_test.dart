@@ -47,28 +47,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('runs a symbol-specific paper strategy report', (tester) async {
+  testWidgets('Home omits Strategy Lab and keeps outcome-focused setup flow', (
+    tester,
+  ) async {
     _setViewport(tester, const Size(390, 844));
     await tester.pumpWidget(_testApp());
     await tester.pumpAndSettle();
 
-    await _openDestination(tester, Icons.candlestick_chart_outlined);
-    await tester.tap(find.text('تست این تحلیل در آزمایشگاه'));
-    await tester.pumpAndSettle();
+    expect(find.text('خانه Quantara'), findsOneWidget);
+    expect(find.text('آزمایشگاه'), findsNothing);
+    expect(find.text('تحلیل'), findsOneWidget);
+    expect(find.text('واچ‌لیست'), findsOneWidget);
+    expect(find.text('ژورنال'), findsOneWidget);
 
-    expect(find.text('آزمایشگاه'), findsWidgets);
-    expect(find.text('BTCUSDT'), findsWidgets);
-    expect(find.text('پیپر / تحقیق'), findsOneWidget);
+    await _openDestination(tester, Icons.inbox_outlined);
 
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('ساخت گزارش تاریخی'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('کارنامه تست'), findsOneWidget);
-    expect(find.text('وین‌ریت'), findsOneWidget);
-    expect(find.text('SL'), findsOneWidget);
-    expect(find.text('TP1 / TP2 / TP3'), findsOneWidget);
+    expect(find.text('آزمایشگاه'), findsNothing);
+    expect(find.text('صندوق پیشنهادها'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -119,14 +114,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Profile & settings'), findsOneWidget);
-    expect(find.text('Radar'), findsWidgets);
+    expect(find.text('Home'), findsWidgets);
     expect(
       Directionality.of(tester.element(find.text('Profile & settings'))),
       TextDirection.ltr,
     );
     expect(preferences.value?.languageCode, 'en');
 
-    await _openDestination(tester, Icons.radar_outlined);
+    await _openDestination(tester, Icons.home_outlined);
     expect(find.text('BTCUSDT'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -141,8 +136,12 @@ void main() {
     await tester.tap(find.byTooltip('حالت روشن'));
     await tester.pump();
     await _openDestination(tester, Icons.candlestick_chart_outlined);
+    final analysisScroll = find.byKey(
+      const PageStorageKey<String>('owner-alpha-2'),
+    );
+    expect(analysisScroll, findsOneWidget);
     for (var attempt = 0; attempt < 6; attempt++) {
-      await tester.drag(find.byType(ListView), const Offset(0, -500));
+      await tester.drag(analysisScroll, const Offset(0, -500));
       await tester.pump();
       expect(tester.takeException(), isNull);
     }
@@ -157,7 +156,7 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('all destinations survive small width and large text', (
+  testWidgets('primary destinations and Home tools survive large text', (
     tester,
   ) async {
     _setViewport(tester, const Size(320, 568));
@@ -167,10 +166,13 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final target in {
+      Icons.home_outlined: 'خانه',
+      Icons.inbox_outlined: 'پیشنهادها',
+      Icons.smart_toy_outlined: 'ترید خودکار',
+      Icons.person_outline_rounded: 'پروفایل',
       Icons.view_list_outlined: 'واچ‌لیست',
       Icons.candlestick_chart_outlined: 'تحلیل',
-      Icons.person_outline_rounded: 'پروفایل',
-      Icons.radar_outlined: 'رادار',
+      Icons.menu_book_outlined: 'ژورنال',
     }.entries) {
       await _openDestination(tester, target.key);
       expect(
@@ -205,13 +207,52 @@ void main() {
 }
 
 Future<void> _openDestination(WidgetTester tester, IconData icon) async {
+  final secondaryLabel = switch (icon) {
+    Icons.candlestick_chart_outlined => 'تحلیل',
+    Icons.view_list_outlined => 'واچ‌لیست',
+    Icons.menu_book_outlined => 'ژورنال',
+    _ => null,
+  };
+  if (secondaryLabel != null) {
+    await _tapNavigationIcon(tester, Icons.home_outlined);
+    await _tapHomeQuickAction(tester, secondaryLabel);
+    return;
+  }
+  await _tapNavigationIcon(tester, icon);
+}
+
+Future<void> _tapHomeQuickAction(WidgetTester tester, String label) async {
+  final target = find.text(label);
+  expect(target, findsOneWidget);
+  await tester.ensureVisible(target);
+  await tester.pump(const Duration(milliseconds: 350));
+  expect(target.hitTestable(), findsOneWidget);
+  await tester.tap(target.hitTestable());
+  await tester.pump(const Duration(milliseconds: 650));
+}
+
+Future<void> _tapNavigationIcon(WidgetTester tester, IconData icon) async {
   final navigation = find.byType(NavigationBar);
   expect(navigation, findsOneWidget);
-  final target = find.descendant(of: navigation, matching: find.byIcon(icon));
-  expect(target, findsOneWidget);
-  await tester.tap(target);
+  var target = find.descendant(of: navigation, matching: find.byIcon(icon));
+  if (target.evaluate().isEmpty) {
+    target = find.descendant(
+      of: navigation,
+      matching: find.byIcon(_selectedIcon(icon)),
+    );
+  }
+  expect(target, findsAtLeastNWidgets(1));
+  await tester.tap(target.first);
   await tester.pumpAndSettle();
 }
+
+IconData _selectedIcon(IconData icon) => switch (icon) {
+  Icons.home_outlined => Icons.home_rounded,
+  Icons.inbox_outlined => Icons.inbox_rounded,
+  Icons.smart_toy_outlined => Icons.smart_toy_rounded,
+  Icons.person_outline_rounded => Icons.person_rounded,
+  _ => icon,
+};
 
 Widget _testApp({MemoryAppPreferencesStore? preferencesStore}) {
   return QuantaraApp(

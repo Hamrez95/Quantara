@@ -6,6 +6,9 @@ import 'package:http/http.dart' as http;
 
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/trading_pnl_projection.dart';
+import 'bitunix_order_book_top.dart';
+import 'bitunix_pnl_mapper.dart';
 import 'bitunix_request_signer.dart';
 
 final class BitunixInstrumentRules {
@@ -56,6 +59,7 @@ final class BitunixLivePosition {
     required this.unrealizedPnl,
     required this.fee,
     required this.funding,
+    this.openedAt,
   });
 
   final String positionId;
@@ -70,6 +74,7 @@ final class BitunixLivePosition {
   final double unrealizedPnl;
   final double fee;
   final double funding;
+  final DateTime? openedAt;
 }
 
 final class BitunixOrderDetail {
@@ -173,6 +178,20 @@ final class BitunixLocalLiveApiClient {
     return price;
   }
 
+  Future<BitunixOrderBookTop> fetchOrderBookTop(String symbol) async {
+    final payload = await _publicGet('/api/v1/futures/market/depth', {
+      'symbol': symbol,
+      'limit': '1',
+    });
+    try {
+      return BitunixOrderBookTop.fromApiPayload(payload);
+    } on FormatException catch (error) {
+      throw LocalLiveTradeSafeException(
+        'Bitunix order book top was unavailable or malformed: ${error.message}',
+      );
+    }
+  }
+
   Future<BitunixInstrumentRules> fetchInstrumentRules(String symbol) async {
     final payload = await _publicGet('/api/v1/futures/market/trading_pairs', {
       'symbols': symbol,
@@ -199,28 +218,55 @@ final class BitunixLocalLiveApiClient {
     );
   }
 
-  Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
+  /// Bounded current-state REST verification for the private WebSocket Hot Path.
+  /// Historical fills/settlements intentionally stay out of this method.
+  Future<AutoTradeAccountSnapshot> fetchCurrentAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
-    final accountResponse = await _signedGet('/api/v1/futures/account', {
-      'marginCoin': 'USDT',
-    }, credentials);
-    final positions = await fetchPositions(credentials);
-    final ordersResponse = await _signedGet(
-      '/api/v1/futures/trade/get_pending_orders',
-      const {'limit': '100'},
-      credentials,
-    );
+    final responses = await Future.wait<Object>([
+      _signedGet('/api/v1/futures/account', {
+        'marginCoin': 'USDT',
+      }, credentials),
+      fetchPositions(credentials),
+      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
+        'limit': '100',
+      }, credentials),
+      fetchPendingProtection(credentials),
+    ]);
+    final accountResponse = responses[0] as Map<String, Object?>;
+    final positions = responses[1] as List<BitunixLivePosition>;
+    final ordersResponse = responses[2] as Map<String, Object?>;
+    final protections = responses[3] as List<BitunixPendingProtection>;
     final account = _firstMap(accountResponse['data']);
     if (account == null) {
       throw const LocalLiveTradeSafeException(
-        'Bitunix account data was empty or malformed.',
+        'Bitunix current account data was empty or malformed.',
       );
     }
     final orderData = ordersResponse['data'];
     final orderMaps = orderData is Map<String, Object?>
         ? _mapList(orderData['orderList'])
         : const <Map<String, Object?>>[];
+    final asOf = _utcNow().toUtc();
+    final protectionOrders = protections
+        .map(
+          (item) => AutoTradeProtectionOrder(
+            exchangeId: item.orderId,
+            positionId: item.positionId,
+            symbol: item.symbol,
+            takeProfitPrice: item.takeProfitPrice > 0
+                ? item.takeProfitPrice
+                : null,
+            takeProfitQuantity: item.takeProfitQuantity > 0
+                ? item.takeProfitQuantity
+                : null,
+            stopLossPrice: item.stopLossPrice > 0 ? item.stopLossPrice : null,
+            stopLossQuantity: item.stopLossQuantity > 0
+                ? item.stopLossQuantity
+                : null,
+          ),
+        )
+        .toList(growable: false);
     return AutoTradeAccountSnapshot(
       marginCoin: _string(account['marginCoin'], fallback: 'USDT'),
       available: _number(account['available']),
@@ -243,11 +289,145 @@ final class BitunixLocalLiveApiClient {
               unrealizedPnl: item.unrealizedPnl,
               liquidationPrice: 0,
               averageOpenPrice: item.averageOpenPrice,
+              realizedPnl: item.realizedPnl,
+              fee: item.fee,
+              funding: item.funding,
+              openedAt: item.openedAt,
             ),
           )
           .toList(growable: false),
       orders: orderMaps.map(_orderFromJson).toList(growable: false),
-      syncedAt: _utcNow().toUtc(),
+      protectionOrders: protectionOrders,
+      protectionVerifications: {
+        for (final position in positions)
+          position.positionId: AutoTradeProtectionVerification.verified(
+            asOf: asOf,
+          ),
+      },
+      syncedAt: asOf,
+    );
+  }
+
+  Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
+    BitunixApiCredentials credentials,
+  ) async {
+    final baseResponses = await Future.wait<Object>([
+      _signedGet('/api/v1/futures/account', {
+        'marginCoin': 'USDT',
+      }, credentials),
+      fetchPositions(credentials),
+      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
+        'limit': '100',
+      }, credentials),
+    ]);
+    final accountResponse = baseResponses[0] as Map<String, Object?>;
+    final positions = baseResponses[1] as List<BitunixLivePosition>;
+    final ordersResponse = baseResponses[2] as Map<String, Object?>;
+    final account = _firstMap(accountResponse['data']);
+    if (account == null) {
+      throw const LocalLiveTradeSafeException(
+        'Bitunix account data was empty or malformed.',
+      );
+    }
+    final orderData = ordersResponse['data'];
+    final orderMaps = orderData is Map<String, Object?>
+        ? _mapList(orderData['orderList'])
+        : const <Map<String, Object?>>[];
+    final unrealizedByPosition = <String, ExchangeUnrealizedPnl>{
+      for (final position in positions)
+        position.positionId: ExchangeUnrealizedPnl(
+          positionId: position.positionId,
+          symbol: position.symbol,
+          value: position.unrealizedPnl,
+          realizedPnl: position.realizedPnl,
+          fee: position.fee,
+          funding: position.funding,
+          openedAt: position.openedAt,
+        ),
+    };
+    var settlementsAvailable = true;
+    var fillsAvailable = true;
+    var sourceVerified = true;
+    final warnings = <String>[];
+    List<ExchangePositionSettlement> settlements = const [];
+    List<ExchangePnlFill> fills = const [];
+    try {
+      final history = await _signedGet(
+        '/api/v1/futures/position/get_history_positions',
+        const {'limit': '100'},
+        credentials,
+      );
+      final parsed = BitunixPnlMapper.settlements(history['data']);
+      settlements = parsed.values;
+      sourceVerified = sourceVerified && parsed.verified;
+      if (parsed.warning != null) warnings.add(parsed.warning!);
+    } on LocalLiveTradeSafeException catch (error) {
+      settlementsAvailable = false;
+      warnings.add(error.message);
+    }
+    try {
+      final history = await _signedGet(
+        '/api/v1/futures/trade/get_history_trades',
+        const {'limit': '100'},
+        credentials,
+      );
+      final parsed = BitunixPnlMapper.fills(
+        history['data'],
+        openPositions: unrealizedByPosition.values,
+        settlements: settlements,
+      );
+      fills = parsed.values;
+      sourceVerified = sourceVerified && parsed.verified;
+      if (parsed.warning != null) warnings.add(parsed.warning!);
+    } on LocalLiveTradeSafeException catch (error) {
+      fillsAvailable = false;
+      sourceVerified = false;
+      warnings.add(error.message);
+    }
+    final asOf = _utcNow().toUtc();
+    final pnlProjection = TradingPnlProjection.reconcile(
+      currency: _string(account['marginCoin'], fallback: 'USDT'),
+      asOf: asOf,
+      unrealizedByPosition: unrealizedByPosition,
+      fills: fills,
+      settlements: settlements,
+      fillsAvailable: fillsAvailable,
+      settlementsAvailable: settlementsAvailable,
+      sourceVerified: sourceVerified,
+      warning: warnings.isEmpty ? null : warnings.toSet().join(' '),
+    );
+    return AutoTradeAccountSnapshot(
+      marginCoin: _string(account['marginCoin'], fallback: 'USDT'),
+      available: _number(account['available']),
+      frozen: _number(account['frozen']),
+      positionMargin: _number(account['margin']),
+      crossUnrealizedPnl: _number(account['crossUnrealizedPNL']),
+      isolatedUnrealizedPnl: _number(account['isolationUnrealizedPNL']),
+      positionMode: _string(account['positionMode'], fallback: 'UNKNOWN'),
+      positions: positions
+          .map(
+            (item) => AutoTradePosition(
+              positionId: item.positionId,
+              symbol: item.symbol,
+              quantity: item.quantity,
+              side: item.side,
+              marginMode: item.marginMode,
+              positionMode: item.positionMode,
+              leverage: item.leverage,
+              margin: 0,
+              unrealizedPnl: item.unrealizedPnl,
+              liquidationPrice: 0,
+              averageOpenPrice: item.averageOpenPrice,
+              realizedPnl: item.realizedPnl,
+              fee: item.fee,
+              funding: item.funding,
+              openedAt: item.openedAt,
+            ),
+          )
+          .toList(growable: false),
+      orders: orderMaps.map(_orderFromJson).toList(growable: false),
+      pnlProjection: pnlProjection,
+      syncedAt: asOf,
     );
   }
 
@@ -270,9 +450,15 @@ final class BitunixLocalLiveApiClient {
     String? symbol,
     String? positionId,
   }) async {
+    final expectedPositionId = positionId?.trim();
+    if (positionId != null && expectedPositionId!.isEmpty) {
+      throw const LocalLiveTradeSafeException(
+        'Protection position identity was missing.',
+      );
+    }
     final query = <String, String>{'limit': '100'};
     if (symbol != null) query['symbol'] = symbol;
-    if (positionId != null) query['positionId'] = positionId;
+    if (expectedPositionId != null) query['positionId'] = expectedPositionId;
     final response = await _signedGet(
       '/api/v1/futures/tpsl/get_pending_orders',
       query,
@@ -282,7 +468,7 @@ final class BitunixLocalLiveApiClient {
     final list = data is Map<String, Object?>
         ? _mapList(data['orderList'])
         : _mapList(data);
-    return list
+    final protections = list
         .map(
           (item) => BitunixPendingProtection(
             orderId: _string(item['id'], fallback: _string(item['orderId'])),
@@ -295,15 +481,30 @@ final class BitunixLocalLiveApiClient {
           ),
         )
         .toList(growable: false);
+    if (expectedPositionId != null &&
+        protections.any(
+          (item) => item.positionId.trim() != expectedPositionId,
+        )) {
+      throw const LocalLiveTradeSafeException(
+        'Bitunix protection identity did not match the requested position.',
+      );
+    }
+    return protections;
   }
 
   Future<BitunixOrderDetail> fetchOrderDetail({
     required String orderId,
     required BitunixApiCredentials credentials,
   }) async {
+    final expectedOrderId = orderId.trim();
+    if (expectedOrderId.isEmpty) {
+      throw const LocalLiveTradeSafeException(
+        'Order detail identity was missing.',
+      );
+    }
     final response = await _signedGet(
       '/api/v1/futures/trade/get_order_detail',
-      {'orderId': orderId},
+      {'orderId': expectedOrderId},
       credentials,
     );
     final item = _firstMap(response['data']);
@@ -312,8 +513,14 @@ final class BitunixLocalLiveApiClient {
         'Bitunix order detail was empty.',
       );
     }
+    final returnedOrderId = _string(item['orderId']).trim();
+    if (returnedOrderId != expectedOrderId) {
+      throw const LocalLiveTradeSafeException(
+        'Bitunix order detail identity did not match the requested order.',
+      );
+    }
     return BitunixOrderDetail(
-      orderId: _string(item['orderId']),
+      orderId: returnedOrderId,
       clientId: _string(item['clientId']),
       symbol: _string(item['symbol']),
       quantity: _number(item['qty']),
@@ -516,19 +723,51 @@ final class BitunixLocalLiveApiClient {
     required String clientId,
     required BitunixApiCredentials credentials,
   }) async {
+    final expectedPositionId = position.positionId.trim();
+    if (expectedPositionId.isEmpty) {
+      throw const LocalLiveTradeSafeException(
+        'Emergency close position identity was missing.',
+      );
+    }
     final response = await _signedPost(
       '/api/v1/futures/trade/flash_close_position',
-      SplayTreeMap<String, Object?>.from({'positionId': position.positionId}),
+      SplayTreeMap<String, Object?>.from({'positionId': expectedPositionId}),
       credentials,
     );
     final data = _firstMap(response['data']);
-    final positionId = _string(data?['positionId']);
-    if (positionId.isEmpty) {
+    final returnedPositionId = _string(data?['positionId']).trim();
+    if (returnedPositionId != expectedPositionId) {
       throw const LocalLiveTradeSafeException(
-        'Bitunix did not confirm the emergency position close.',
+        'Bitunix emergency close identity did not match the requested position.',
       );
     }
-    return BitunixPlacedOrder(orderId: positionId, clientId: clientId);
+
+    // A successful mutation acknowledgement is not proof that exposure is
+    // flat. Re-read bounded current position truth and return only when the
+    // exact position identity disappears from the exchange snapshot. Other
+    // same-symbol positions do not prove or disprove closure of this position.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final positions = await fetchPositions(
+        credentials,
+        symbol: position.symbol,
+      );
+      final targetStillOpen = positions.any(
+        (item) =>
+            item.positionId.trim() == expectedPositionId && item.quantity > 0,
+      );
+      if (!targetStillOpen) {
+        return BitunixPlacedOrder(
+          orderId: returnedPositionId,
+          clientId: clientId,
+        );
+      }
+      if (attempt < 2) {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+    }
+    throw const LocalLiveTradeSafeException(
+      'Emergency close was acknowledged but exchange still reports position exposure.',
+    );
   }
 
   Future<Map<String, Object?>> _publicGet(
@@ -660,6 +899,7 @@ final class BitunixLocalLiveApiClient {
         unrealizedPnl: _number(item['unrealizedPNL']),
         fee: _number(item['fee']),
         funding: _number(item['funding']),
+        openedAt: _timestamp(item['ctime']),
       );
 
   static AutoTradeOrder _orderFromJson(Map<String, Object?> item) =>
@@ -696,6 +936,14 @@ final class BitunixLocalLiveApiClient {
   static double _number(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static DateTime? _timestamp(Object? value) {
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(parsed, isUtc: true);
   }
 
   static int _integer(Object? value, {required int fallback}) {

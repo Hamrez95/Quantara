@@ -8,20 +8,20 @@ on:
       - 'feat/**'
       - 'fix/**'
       - 'release/**'
-    paths:
-      - 'src/client/quantara_app/**'
-      - 'scripts/android-cold-start-smoke.sh'
-      - '.github/workflows/flutter-ci.yml'
+      - 'test/**'
   pull_request:
     branches:
       - main
       - dev
       - 'feat/**'
       - 'fix/**'
+      - 'test/**'
     paths:
       - 'src/client/quantara_app/**'
       - 'scripts/android-cold-start-smoke.sh'
+      - 'scripts/android-upgrade-smoke.sh'
       - '.github/workflows/flutter-ci.yml'
+      - '.github/workflows/release-quantara.yml'
 
 permissions:
   contents: read
@@ -32,13 +32,15 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.44.8'
-  ANDROID_PACKAGE: com.quantara.quantara_app.alpha
+  ANDROID_PACKAGE: com.quantara.quantara_app
   ANDROID_ACTIVITY: com.quantara.quantara_app.SafeMainActivity
-  PREVIEW_ARTIFACT: quantara-android-1.0.0-preview
+  ANDROID_DEBUG_ARTIFACT: quantara-android-debug-${{ github.sha }}
+  ANDROID_PREVIOUS_DEBUG_ARTIFACT: quantara-android-debug-previous-${{ github.sha }}
+  QUANTARA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   flutter:
-    name: Flutter format, analyze, test, and build
+    name: Flutter format, analyze, test, and unsigned QA build
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -47,6 +49,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -64,7 +68,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format --output=none --set-exit-if-changed lib test tool
 
       - name: Analyze
         shell: bash
@@ -84,14 +88,21 @@ jobs:
           cat flutter-test.log
           exit $status
 
+      - name: Run reproducible hot-path software stress gate
+        run: >-
+          dart run tool/hot_path_benchmark.dart
+          --output hot-path-performance.json
+          --build-commit "$QUANTARA_BUILD_COMMIT"
+
       - name: Upload Flutter diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-diagnostics-1.0.0
+          name: flutter-diagnostics-${{ github.sha }}
           path: |
             src/client/quantara_app/flutter-analyze.log
             src/client/quantara_app/flutter-test.log
+            src/client/quantara_app/hot-path-performance.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -100,25 +111,22 @@ jobs:
           flutter build web --release
           --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
 
-      - name: Compile API-configured Android preview
-        run: >-
-          flutter build apk --release
-          --dart-define=QUANTARA_API_BASE_URL=https://api.example.com
-
       - name: Build offline-first web PWA
         run: flutter build web --release
 
-      - name: Build universal Android preview APK
-        run: flutter build apk --release
+      - name: Build Android debug QA APK
+        run: flutter build apk --debug
 
-      - name: Verify preview identity and manifest safety declarations
+      - name: Verify debug manifest safety declarations
         shell: bash
         run: |
           set -euo pipefail
+          apk="build/app/outputs/flutter-apk/app-debug.apk"
           apkanalyzer_path="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name apkanalyzer | sort -V | tail -n 1)"
           test -x "$apkanalyzer_path"
-          "$apkanalyzer_path" manifest application-id build/app/outputs/flutter-apk/app-release.apk | grep -Fxq "$ANDROID_PACKAGE"
-          "$apkanalyzer_path" manifest print build/app/outputs/flutter-apk/app-release.apk > merged-manifest.xml
+          test -f "$apk"
+          "$apkanalyzer_path" manifest application-id "$apk" | grep -Fxq "$ANDROID_PACKAGE"
+          "$apkanalyzer_path" manifest print "$apk" > merged-manifest.xml
           grep -Fq "com.pravera.flutter_foreground_task.service.ForegroundService" merged-manifest.xml
           grep -Fq "android.permission.FOREGROUND_SERVICE_SPECIAL_USE" merged-manifest.xml
           grep -Eq 'android:foregroundServiceType="(specialUse|0x40000000)"' merged-manifest.xml
@@ -126,58 +134,74 @@ jobs:
           ! grep -Fq "android.permission.RECEIVE_BOOT_COMPLETED" merged-manifest.xml
           ! grep -Fq "com.pravera.flutter_foreground_task.service.RebootReceiver" merged-manifest.xml
           ! grep -Fq "com.pravera.flutter_foreground_task.service.RestartReceiver" merged-manifest.xml
+          sha256sum "$apk" | tee SHA256SUMS.txt
 
-      - name: Upload merged Android manifest
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-merged-manifest-1.0.0-preview
-          path: src/client/quantara_app/merged-manifest.xml
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Verify universal APK 16KB ZIP alignment
+      - name: Build previous-base Android QA APK for upgrade certification
         shell: bash
         run: |
           set -euo pipefail
-          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
-          test -x "$zipalign_path"
-          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-release.apk
+          candidate_build="$(sed -nE 's/^version:.*\+([0-9]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+          test -n "$candidate_build"
+          test "$candidate_build" -gt 1
+          previous_build=$((candidate_build - 1))
+          if [ -n '${{ github.event.pull_request.base.sha }}' ]; then
+            base_sha='${{ github.event.pull_request.base.sha }}'
+          else
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          test -n "$base_sha"
+          previous_root="$RUNNER_TEMP/quantara-previous"
+          git worktree add --detach "$previous_root" "$base_sha"
+          trap 'git worktree remove --force "$previous_root" >/dev/null 2>&1 || true' EXIT
+          # Older released sources predate the explicit debug-manifest merge override.
+          # Apply only the current QA/debug overlay so the historical app can be
+          # compiled as an upgrade fixture; production manifest and app data stay
+          # anchored to the selected base commit.
+          install -m 0644 \
+            "$GITHUB_WORKSPACE/src/client/quantara_app/android/app/src/debug/AndroidManifest.xml" \
+            "$previous_root/src/client/quantara_app/android/app/src/debug/AndroidManifest.xml"
+          pushd "$previous_root/src/client/quantara_app" >/dev/null
+          flutter pub get
+          flutter build apk --debug --build-number="$previous_build"
+          popd >/dev/null
+          mkdir -p "$RUNNER_TEMP/previous-apk"
+          cp "$previous_root/src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk" \
+            "$RUNNER_TEMP/previous-apk/app-debug-previous.apk"
+          git worktree remove --force "$previous_root"
+          trap - EXIT
 
-      - name: Build ABI-split Android preview APKs
-        run: flutter build apk --release --split-per-abi
-
-      - name: Verify arm64 APK 16KB ZIP alignment
-        shell: bash
-        run: |
-          set -euo pipefail
-          zipalign_path="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
-          test -x "$zipalign_path"
-          "$zipalign_path" -c -P 16 -v 4 build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-
-      - name: Upload web preview
+      - name: Upload PWA QA candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantara-web-1.0.0-preview
+          name: quantara-pwa-${{ github.sha }}
           path: src/client/quantara_app/build/web
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
 
-      - name: Upload Android 1.0 preview candidate
+      - name: Upload Android debug QA candidate
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PREVIEW_ARTIFACT }}
+          name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
           path: |
-            src/client/quantara_app/build/app/outputs/flutter-apk/app-release.apk
-            src/client/quantara_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            src/client/quantara_app/build/app/outputs/flutter-apk/app-debug.apk
+            src/client/quantara_app/merged-manifest.xml
+            src/client/quantara_app/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload previous-base Android QA candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ANDROID_PREVIOUS_DEBUG_ARTIFACT }}
+          path: ${{ runner.temp }}/previous-apk/app-debug-previous.apk
           if-no-files-found: error
           retention-days: 14
 
   android-launch:
-    name: Android ${{ matrix.api-level }} cold-start smoke
+    name: Android API cold-start smoke and in-place upgrade
     needs: flutter
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -186,11 +210,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Android preview candidate
+      - name: Download Android debug QA candidate
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.PREVIEW_ARTIFACT }}
+          name: ${{ env.ANDROID_DEBUG_ARTIFACT }}
           path: apk
+
+      - name: Download previous-base Android QA candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ANDROID_PREVIOUS_DEBUG_ARTIFACT }}
+          path: previous-apk
+
+      - name: Resolve Android QA candidate paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_path="$(find apk -type f -name 'app-debug.apk' -print -quit)"
+          previous_apk_path="$(find previous-apk -type f -name 'app-debug-previous.apk' -print -quit)"
+          test -n "$apk_path"
+          test -f "$apk_path"
+          test -n "$previous_apk_path"
+          test -f "$previous_apk_path"
+          echo "ANDROID_QA_APK_PATH=$apk_path" >> "$GITHUB_ENV"
+          echo "ANDROID_PREVIOUS_QA_APK_PATH=$previous_apk_path" >> "$GITHUB_ENV"
 
       - name: Enable KVM group permissions
         run: |
@@ -198,7 +241,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Boot hardware-accelerated emulator and verify cold start
+      - name: Boot hardware-accelerated emulator and verify cold start plus upgrade
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
@@ -206,18 +249,29 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: bash scripts/android-cold-start-smoke.sh apk/app-release.apk
+          script: |
+            bash scripts/android-cold-start-smoke.sh "$ANDROID_QA_APK_PATH"
+            bash scripts/android-upgrade-smoke.sh "$ANDROID_PREVIOUS_QA_APK_PATH" "$ANDROID_QA_APK_PATH"
 
-      - name: Upload Android launch diagnostics
+      - name: Upload Android launch and upgrade diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-api-${{ matrix.api-level }}-launch-diagnostics-1.0.0-preview
+          name: android-api-${{ matrix.api-level }}-launch-diagnostics-${{ github.sha }}
           path: |
             android-start.txt
             android-pid.txt
             android-pid-after-settle.txt
             android-logcat.txt
             android-jobscheduler.txt
+            android-upgrade-previous-start.txt
+            android-upgrade-previous-pid.txt
+            android-upgrade-before-package.txt
+            android-upgrade-install.txt
+            android-upgrade-after-package.txt
+            android-upgrade-candidate-start.txt
+            android-upgrade-candidate-pid.txt
+            android-upgrade-candidate-pid-after-settle.txt
+            android-upgrade-logcat.txt
           if-no-files-found: ignore
           retention-days: 14

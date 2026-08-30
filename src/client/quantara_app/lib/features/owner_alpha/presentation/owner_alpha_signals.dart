@@ -1,7 +1,5 @@
 part of 'owner_alpha_page.dart';
 
-enum _SignalFilter { all, live, taken, expired }
-
 class _SignalInboxView extends StatefulWidget {
   const _SignalInboxView({
     required this.controller,
@@ -16,7 +14,8 @@ class _SignalInboxView extends StatefulWidget {
 }
 
 class _SignalInboxViewState extends State<_SignalInboxView> {
-  _SignalFilter _filter = _SignalFilter.all;
+  SignalInboxFilter _filter = SignalInboxFilter.all;
+  SignalInboxSort _sort = SignalInboxSort.recommended;
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
   String _t(String fa, String en) => _fa ? fa : en;
@@ -26,93 +25,122 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     final controller = widget.controller;
     final now = DateTime.now().toUtc();
     final all = controller.signalJournal;
-    final priorityBySetupId = SignalTimeframePriorityResolver.resolve(
-      all,
+    final quotesBySymbol = <String, AlphaMarketQuote>{
+      for (final item
+          in controller.snapshot?.radar ?? const <SymbolRadarResult>[])
+        item.quote.symbol: item.quote,
+    };
+    final marketDataFresh =
+        controller.connectionState == OwnerAlphaConnectionState.fresh ||
+        controller.connectionState == OwnerAlphaConnectionState.refreshing;
+    final filtered = SignalInboxQuery.apply(
+      entries: all,
+      filter: _filter,
+      sort: _sort,
       now: now,
+      isTaken: controller.isTaken,
     );
-    final filtered = all
-        .where((entry) {
-          final lifecycle = entry.lifecycle(
-            now,
-            taken: controller.isTaken(entry.setupId),
-          );
-          return switch (_filter) {
-            _SignalFilter.all => true,
-            _SignalFilter.live =>
-              lifecycle == SignalLifecycle.fresh ||
-                  lifecycle == SignalLifecycle.expiring,
-            _SignalFilter.taken => lifecycle == SignalLifecycle.taken,
-            _SignalFilter.expired =>
-              lifecycle == SignalLifecycle.expired ||
-                  lifecycle == SignalLifecycle.closed,
-          };
-        })
-        .toList(growable: false);
+
+    int count(SignalInboxFilter filter) => SignalInboxQuery.count(
+      entries: all,
+      filter: filter,
+      now: now,
+      isTaken: controller.isTaken,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SignalPolicyCard(controller: controller),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
+        SectionCard(
+          semanticLabel: _t('صندوق پیشنهادها', 'Signal inbox'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _t('صندوق پیشنهادها', 'Signal inbox'),
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(14),
                     ),
+                    child: const Icon(Icons.inbox_rounded),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _t(
-                      'هر پیشنهاد با زمان اعتبار، دلیل و سابقه‌اش اینجا می‌ماند.',
-                      'Every idea keeps its validity, rationale and history here.',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _t('صندوق پیشنهادها', 'Signal inbox'),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _t(
+                            'پیشنهادها و سرنوشت آن‌ها؛ بدون صفحه آزمایشگاه جداگانه.',
+                            'Setups and their outcomes, without a separate lab screen.',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-            StatusPill(
-              label: _t('${all.length} مورد', '${all.length} items'),
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SegmentedButton<_SignalFilter>(
-            showSelectedIcon: false,
-            segments: [
-              ButtonSegment(
-                value: _SignalFilter.all,
-                label: Text(_t('همه', 'All')),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final filter in SignalInboxFilter.values)
+                    FilterChip(
+                      selected: _filter == filter,
+                      showCheckmark: false,
+                      avatar: Icon(_filterIcon(filter), size: 18),
+                      label: Text(
+                        '${_filterLabel(filter)} ${count(filter)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onSelected: (_) => setState(() => _filter = filter),
+                    ),
+                ],
               ),
-              ButtonSegment(
-                value: _SignalFilter.live,
-                icon: const Icon(Icons.bolt_rounded),
-                label: Text(_t('معتبر', 'Live')),
-              ),
-              ButtonSegment(
-                value: _SignalFilter.taken,
-                icon: const Icon(Icons.bookmark_rounded),
-                label: Text(_t('گرفته‌شده', 'Taken')),
-              ),
-              ButtonSegment(
-                value: _SignalFilter.expired,
-                label: Text(_t('بایگانی', 'Archive')),
+              const SizedBox(height: 8),
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 4),
+                leading: const Icon(Icons.sort_rounded),
+                title: Text(_t('مرتب‌سازی', 'Sort')),
+                subtitle: Text(_sortLabel(_sort)),
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final sort in SignalInboxSort.values)
+                          ChoiceChip(
+                            selected: _sort == sort,
+                            showCheckmark: false,
+                            label: Text(_sortLabel(sort)),
+                            onSelected: (_) => setState(() => _sort = sort),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
-            selected: {_filter},
-            onSelectionChanged: (value) =>
-                setState(() => _filter = value.single),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         if (filtered.isEmpty)
           SectionCard(
             child: Padding(
@@ -152,7 +180,9 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
           for (var index = 0; index < filtered.length; index++) ...[
             _SignalJournalCard(
               entry: filtered[index],
-              priority: priorityBySetupId[filtered[index].setupId],
+              nowUtc: now,
+              quote: quotesBySymbol[filtered[index].symbol],
+              marketDataFresh: marketDataFresh,
               taken: controller.isTaken(filtered[index].setupId),
               onOpen: () => widget.onOpenAnalysis(
                 filtered[index].symbol,
@@ -172,6 +202,32 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       ],
     );
   }
+
+  String _filterLabel(SignalInboxFilter filter) => switch (filter) {
+    SignalInboxFilter.all => _t('همه', 'All'),
+    SignalInboxFilter.opportunities => _t('فرصت', 'Open'),
+    SignalInboxFilter.active => _t('فعال', 'Active'),
+    SignalInboxFilter.results => _t('نتیجه', 'Results'),
+    SignalInboxFilter.expired => _t('منقضی', 'Expired'),
+    SignalInboxFilter.taken => _t('گرفتم', 'Taken'),
+  };
+
+  IconData _filterIcon(SignalInboxFilter filter) => switch (filter) {
+    SignalInboxFilter.all => Icons.apps_rounded,
+    SignalInboxFilter.opportunities => Icons.bolt_rounded,
+    SignalInboxFilter.active => Icons.play_circle_outline_rounded,
+    SignalInboxFilter.results => Icons.query_stats_rounded,
+    SignalInboxFilter.expired => Icons.timer_off_outlined,
+    SignalInboxFilter.taken => Icons.bookmark_rounded,
+  };
+
+  String _sortLabel(SignalInboxSort value) => switch (value) {
+    SignalInboxSort.recommended => _t('پیشنهادی', 'Recommended'),
+    SignalInboxSort.score => _t('امتیاز', 'Score'),
+    SignalInboxSort.expiringSoon => _t('انقضا', 'Expiry'),
+    SignalInboxSort.newest => _t('جدیدترین', 'Newest'),
+    SignalInboxSort.latestResult => _t('آخرین نتیجه', 'Latest result'),
+  };
 
   Future<void> _editNote(SignalJournalEntry entry) async {
     final textController = TextEditingController(text: entry.note);
@@ -224,58 +280,68 @@ class _SignalPolicyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SectionCard(
+      semanticLabel: _t(context, 'تنظیمات پیشنهادها', 'Setup preferences'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              DecoratedBox(
+              Container(
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   color: QuantaraColors.violet.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const SizedBox.square(
-                  dimension: 46,
-                  child: Icon(Icons.tune_rounded, color: QuantaraColors.violet),
+                child: const Icon(
+                  Icons.tune_rounded,
+                  color: QuantaraColors.violet,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  _t(context, 'روش پیدا کردن پیشنهاد', 'Signal policy'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _t(context, 'روش پیدا کردن پیشنهاد', 'Setup preferences'),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      _t(
+                        context,
+                        'انتخاب‌ها روی اسکن بعدی اعمال می‌شوند.',
+                        'Choices apply to the next scan.',
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          DropdownButtonFormField<AnalysisStrategy>(
-            initialValue: controller.strategy,
-            decoration: InputDecoration(
-              labelText: _t(context, 'استراتژی', 'Strategy'),
-              helperText: _t(
-                context,
-                'انتخابت روی اسکن بعدی و پیشنهادهای فعلی اعمال می‌شود.',
-                'Your choice applies to current ideas and the next scan.',
-              ),
-            ),
-            items: [
+          Text(
+            _t(context, 'استراتژی', 'Strategy'),
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
               for (final strategy in AnalysisStrategy.values)
-                DropdownMenuItem(
-                  value: strategy,
-                  child: Text(_strategyLabel(context, strategy)),
+                ChoiceChip(
+                  selected: controller.strategy == strategy,
+                  showCheckmark: false,
+                  label: Text(_strategyLabel(context, strategy)),
+                  onSelected: (_) => controller.updateSignalPolicy(
+                    strategy: strategy,
+                    cadence: controller.cadence,
+                  ),
                 ),
             ],
-            onChanged: (strategy) {
-              if (strategy != null) {
-                controller.updateSignalPolicy(
-                  strategy: strategy,
-                  cadence: controller.cadence,
-                );
-              }
-            },
           ),
           const SizedBox(height: 14),
           Text(
@@ -283,34 +349,28 @@ class _SignalPolicyCard extends StatelessWidget {
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const SizedBox(height: 8),
-          SegmentedButton<SignalCadence>(
-            showSelectedIcon: false,
-            segments: [
-              ButtonSegment(
-                value: SignalCadence.conservative,
-                label: Text(_t(context, 'دقیق', 'Selective')),
-              ),
-              ButtonSegment(
-                value: SignalCadence.balanced,
-                label: Text(_t(context, 'متعادل', 'Balanced')),
-              ),
-              ButtonSegment(
-                value: SignalCadence.active,
-                label: Text(_t(context, 'فعال', 'Active')),
-              ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final cadence in SignalCadence.values)
+                ChoiceChip(
+                  selected: controller.cadence == cadence,
+                  showCheckmark: false,
+                  label: Text(_cadenceLabel(context, cadence)),
+                  onSelected: (_) => controller.updateSignalPolicy(
+                    strategy: controller.strategy,
+                    cadence: cadence,
+                  ),
+                ),
             ],
-            selected: {controller.cadence},
-            onSelectionChanged: (value) => controller.updateSignalPolicy(
-              strategy: controller.strategy,
-              cadence: value.single,
-            ),
           ),
           const SizedBox(height: 10),
           Text(
             _t(
               context,
-              'حالت فعال فقط حساسیت روند را بیشتر می‌کند؛ حداقل نسبت سود به زیان و کنترل ریسک حذف نمی‌شوند.',
-              'Active mode increases trend sensitivity; reward/risk and safety gates remain enforced.',
+              'حالت فعال فقط حساسیت را بیشتر می‌کند؛ حداقل نسبت سود به زیان و کنترل ریسک حذف نمی‌شوند.',
+              'Active mode increases sensitivity; reward/risk and safety gates remain enforced.',
             ),
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -319,30 +379,31 @@ class _SignalPolicyCard extends StatelessWidget {
     );
   }
 
-  String _strategyLabel(BuildContext context, AnalysisStrategy strategy) =>
-      switch (strategy) {
-        AnalysisStrategy.structureZones => _t(
-          context,
-          'ناحیه و ساختار',
-          'Structure & zones',
-        ),
-        AnalysisStrategy.trendPullback => _t(
-          context,
-          'پولبک در روند',
-          'Trend pullback',
-        ),
+  String _strategyLabel(BuildContext context, AnalysisStrategy value) =>
+      switch (value) {
+        AnalysisStrategy.structureZones => _t(context, 'ساختار', 'Structure'),
+        AnalysisStrategy.trendPullback => _t(context, 'پولبک', 'Pullback'),
         AnalysisStrategy.momentumContinuation => _t(
           context,
-          'ادامه مومنتوم',
-          'Momentum continuation',
+          'مومنتوم',
+          'Momentum',
         ),
+      };
+
+  String _cadenceLabel(BuildContext context, SignalCadence value) =>
+      switch (value) {
+        SignalCadence.conservative => _t(context, 'دقیق', 'Selective'),
+        SignalCadence.balanced => _t(context, 'متعادل', 'Balanced'),
+        SignalCadence.active => _t(context, 'فعال', 'Active'),
       };
 }
 
 class _SignalJournalCard extends StatelessWidget {
   const _SignalJournalCard({
     required this.entry,
-    required this.priority,
+    required this.nowUtc,
+    required this.quote,
+    required this.marketDataFresh,
     required this.taken,
     required this.onOpen,
     required this.onTakenChanged,
@@ -352,7 +413,9 @@ class _SignalJournalCard extends StatelessWidget {
   });
 
   final SignalJournalEntry entry;
-  final SignalTimeframePriorityKind? priority;
+  final DateTime nowUtc;
+  final AlphaMarketQuote? quote;
+  final bool marketDataFresh;
   final bool taken;
   final VoidCallback onOpen;
   final ValueChanged<bool> onTakenChanged;
@@ -367,285 +430,244 @@ class _SignalJournalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now().toUtc();
-    final lifecycle = entry.lifecycle(now, taken: taken);
-    final color = switch (lifecycle) {
-      SignalLifecycle.fresh => QuantaraColors.success,
-      SignalLifecycle.expiring => QuantaraColors.warning,
-      SignalLifecycle.expired => Theme.of(context).colorScheme.outline,
-      SignalLifecycle.taken => QuantaraColors.cyan,
-      SignalLifecycle.closed => Theme.of(context).colorScheme.secondary,
-    };
-    return AnimatedOpacity(
-      duration: const Duration(milliseconds: 180),
-      opacity: lifecycle == SignalLifecycle.expired ? 0.72 : 1,
-      child: SectionCard(
-        accentColor: color,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                SymbolAvatar(symbol: entry.symbol, size: 48),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${entry.symbol} · ${entry.timeframe}',
-                        textDirection: TextDirection.ltr,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+    final lifecycle = entry.lifecycle(nowUtc, taken: taken);
+    final color = _lifecycleColor(context, lifecycle);
+    final actionable = ActionableSignalPresentation.fromEvidence(
+      entry: entry,
+      nowUtc: nowUtc,
+      marketDataFresh: marketDataFresh,
+      currentPrice: quote?.lastPrice,
+      quoteObservedAtUtc: quote?.observedAt,
+    );
+    return SectionCard(
+      accentColor: color,
+      semanticLabel: '${entry.symbol} ${entry.timeframe}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SymbolAvatar(symbol: entry.symbol, size: 48),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${entry.symbol} · ${entry.timeframe}',
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
-                      Text('${_direction(context)} · ${_strategy(context)}'),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text('${_direction(context)} · ${_strategy(context)}'),
+                  ],
                 ),
-                StatusPill(label: _lifecycle(context, lifecycle), color: color),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                StatusPill(
-                  label: _outcomeLabel(context),
-                  color: _outcomeColor(context),
-                  icon: _outcomeIcon,
-                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              StatusPill(
+                label: _lifecycleLabel(context, lifecycle),
+                color: color,
+              ),
+              StatusPill(
+                label: _outcomeLabel(context),
+                color: _outcomeColor(context),
+                icon: _outcomeIcon,
+              ),
+              if (entry.setupQualityScore != null)
                 StatusPill(
                   label: _t(
                     context,
-                    '${entry.selectedLeverage}x انتخابی',
-                    '${entry.selectedLeverage}x selected',
+                    'کیفیت ستاپ ${entry.setupQualityScore}',
+                    'Setup Quality ${entry.setupQualityScore}',
                   ),
-                  color: QuantaraColors.violet,
-                ),
-                if (priority == SignalTimeframePriorityKind.primary)
-                  StatusPill(
-                    label: _t(context, 'گزینه اصلی', 'Primary setup'),
-                    color: QuantaraColors.cyan,
-                    icon: Icons.stars_rounded,
-                  ),
-                if (priority == SignalTimeframePriorityKind.conflict)
-                  StatusPill(
-                    label: _t(context, 'تعارض تایم‌فریم', 'Timeframe conflict'),
-                    color: QuantaraColors.danger,
-                    icon: Icons.sync_problem_rounded,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _TimeLine(
-              icon: Icons.schedule_rounded,
-              label: _t(context, 'ساخته شد', 'Created'),
-              value: _formatTime(context, entry.createdAt),
-            ),
-            const SizedBox(height: 6),
-            _TimeLine(
-              icon: Icons.timer_outlined,
-              label: _t(context, 'معتبر تا', 'Valid until'),
-              value: _formatTime(context, entry.validUntil),
-              color: color,
-            ),
-            const SizedBox(height: 14),
-            Text(entry.summary),
-            if (priority == SignalTimeframePriorityKind.primary) ...[
-              const SizedBox(height: 8),
-              Text(
-                _t(
-                  context,
-                  'برای این نماد، این تایم‌فریم گزینه اجرای اصلی است؛ تایم بالاتر جهت و تایم پایین‌تر فقط ماشه ورود است.',
-                  'This is the primary execution timeframe for the symbol; higher timeframes define bias and lower timeframes only refine the trigger.',
-                ),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: QuantaraColors.cyan,
-                  fontWeight: FontWeight.w700,
+                ),
+              if (entry.riskReward != null)
+                StatusPill(
+                  label: 'R:R ${entry.riskReward!.toStringAsFixed(2)}',
+                  color: QuantaraColors.success,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ActionableSignalSummary(
+            presentation: actionable,
+            qualityScore: entry.setupQualityScore,
+          ),
+          const SizedBox(height: 12),
+          Text(entry.summary),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 18,
+            runSpacing: 10,
+            children: [
+              if (entry.entryLower != null && entry.entryUpper != null)
+                MetricTile(
+                  label: _t(context, 'ورود', 'Entry'),
+                  value:
+                      '${QuantaraNumberFormat.marketValue(entry.entryLower!)} – ${QuantaraNumberFormat.marketValue(entry.entryUpper!)}',
+                ),
+              if (entry.stopLoss != null)
+                MetricTile(
+                  label: _t(context, 'حد ضرر', 'Stop'),
+                  value: QuantaraNumberFormat.marketValue(entry.stopLoss!),
+                  valueColor: QuantaraColors.danger,
+                ),
+              for (var index = 0; index < entry.targets.length; index++)
+                MetricTile(
+                  label: 'TP${index + 1}',
+                  value: QuantaraNumberFormat.marketValue(entry.targets[index]),
+                  valueColor: QuantaraColors.success,
+                ),
+              MetricTile(
+                label: _t(context, 'ریسک', 'Risk'),
+                value: QuantaraNumberFormat.marketValue(
+                  entry.maximumLoss,
+                  unit: 'USDT',
+                ),
+                valueColor: QuantaraColors.warning,
+              ),
+              MetricTile(
+                label: _t(context, 'مارجین', 'Margin'),
+                value: QuantaraNumberFormat.marketValue(
+                  entry.selectedMargin,
+                  unit: 'USDT',
                 ),
               ),
             ],
-            if (priority == SignalTimeframePriorityKind.conflict) ...[
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _t(
+              context,
+              'سرمایه مبنای محاسبه و بودجه ریسک با هر تغییر اهرم دوباره محاسبه می‌شوند.',
+              'Calculation capital and risk budget are recalculated after every leverage change.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 14),
+          _LeverageControl(
+            key: ValueKey('leverage-${entry.setupId}'),
+            selected: entry.selectedLeverage,
+            recommended: entry.recommendedLeverage,
+            safeCap: entry.maximumSafeLeverage,
+            onChanged: onLeverageChanged,
+          ),
+          const SizedBox(height: 14),
+          _SignalPerformancePanel(entry: entry),
+          const SizedBox(height: 12),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 8),
+            title: Text(
+              _t(context, 'چرا این پیشنهاد ساخته شد؟', 'Why this setup?'),
+            ),
+            children: [
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(entry.invalidation),
+              ),
               const SizedBox(height: 8),
-              Text(
-                _t(
-                  context,
-                  'جهت ستاپ‌های این نماد بین تایم‌فریم‌ها متناقض است؛ هم‌زمان هر دو جهت را نگیر و تا هم‌جهتی صبر کن.',
-                  'This symbol has conflicting setup directions across timeframes. Do not take both directions; wait for alignment.',
-                ),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: QuantaraColors.danger,
-                  fontWeight: FontWeight.w800,
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  '${_t(context, 'نسخه استراتژی', 'Strategy version')}: ${entry.strategyVersion}',
+                  textDirection: TextDirection.ltr,
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 18,
-              runSpacing: 10,
-              children: [
-                if (entry.entryLower != null && entry.entryUpper != null)
-                  MetricTile(
-                    label: _t(context, 'محدوده ورود', 'Entry'),
-                    value:
-                        '${QuantaraNumberFormat.marketValue(entry.entryLower!)} – ${QuantaraNumberFormat.marketValue(entry.entryUpper!)}',
-                  ),
-                if (entry.stopLoss != null)
-                  MetricTile(
-                    label: _t(context, 'خروج اضطراری', 'Stop'),
-                    value: QuantaraNumberFormat.marketValue(entry.stopLoss!),
-                    valueColor: QuantaraColors.danger,
-                  ),
-                for (var index = 0; index < entry.targets.length; index++)
-                  MetricTile(
-                    label: 'TP${index + 1}',
-                    value: QuantaraNumberFormat.marketValue(
-                      entry.targets[index],
-                    ),
-                    valueColor: QuantaraColors.success,
-                  ),
-                if (entry.sizingCapital > 0)
-                  MetricTile(
-                    label: _t(context, 'سرمایه مبنای محاسبه', 'Sizing capital'),
-                    value: QuantaraNumberFormat.marketValue(
-                      entry.sizingCapital,
-                      unit: 'USDT',
-                    ),
-                  ),
-                MetricTile(
-                  label: _t(
-                    context,
-                    'بودجه ریسک (${entry.sizingRiskPercent.toStringAsFixed(2)}٪)',
-                    'Risk budget (${entry.sizingRiskPercent.toStringAsFixed(2)}%)',
-                  ),
-                  value: QuantaraNumberFormat.marketValue(
-                    entry.maximumLoss,
-                    unit: 'USDT',
-                  ),
-                  valueColor: QuantaraColors.warning,
-                ),
-                MetricTile(
-                  label: _t(context, 'ارزش پوزیشن', 'Position notional'),
-                  value: QuantaraNumberFormat.marketValue(
-                    entry.notionalValue,
-                    unit: 'USDT',
-                  ),
-                ),
-                MetricTile(
-                  label: _t(context, 'مارجین لازم', 'Required margin'),
-                  value: QuantaraNumberFormat.marketValue(
-                    entry.selectedMargin,
-                    unit: 'USDT',
-                  ),
-                ),
-              ],
+          ),
+          if (entry.note.isNotEmpty) ...[
+            const Divider(height: 24),
+            Text(
+              _t(context, 'یادداشت من', 'My note'),
+              style: Theme.of(context).textTheme.labelLarge,
             ),
-            const SizedBox(height: 14),
-            _LeverageControl(
-              key: ValueKey('leverage-${entry.setupId}'),
-              selected: entry.selectedLeverage,
-              recommended: entry.recommendedLeverage,
-              safeCap: entry.maximumSafeLeverage,
-              onChanged: onLeverageChanged,
-            ),
-            if (entry.outcome != SignalOutcome.pendingEntry ||
-                !DateTime.now().toUtc().isBefore(entry.validUntil)) ...[
-              const SizedBox(height: 14),
-              _SignalPerformancePanel(entry: entry),
-            ],
-            const SizedBox(height: 12),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(bottom: 8),
-              title: Text(
-                _t(context, 'چرا این پیشنهاد ساخته شد؟', 'Why this idea?'),
-              ),
-              children: [
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(entry.invalidation),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    '${_t(context, 'نسخه استراتژی', 'Strategy version')}: ${entry.strategyVersion}',
-                    textDirection: TextDirection.ltr,
-                  ),
-                ),
-              ],
-            ),
-            if (entry.note.isNotEmpty) ...[
-              const Divider(height: 24),
-              Text(
-                _t(context, 'یادداشت من', 'My note'),
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 4),
-              Text(entry.note),
-            ],
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonalIcon(
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.candlestick_chart_rounded),
-                  label: Text(_t(context, 'دیدن چارت', 'Open chart')),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onNote,
-                  icon: const Icon(Icons.edit_note_rounded),
-                  label: Text(_t(context, 'یادداشت', 'Note')),
-                ),
-                FilterChip(
-                  selected: taken,
-                  onSelected: onTakenChanged,
-                  avatar: const Icon(Icons.bookmark_outline_rounded),
-                  label: Text(_t(context, 'گرفتم', 'Taken')),
-                ),
-                FilterChip(
-                  selected: entry.closed,
-                  onSelected: onClose,
-                  avatar: const Icon(Icons.archive_outlined),
-                  label: Text(_t(context, 'بسته شد', 'Closed')),
-                ),
-              ],
-            ),
+            const SizedBox(height: 4),
+            Text(entry.note),
           ],
-        ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: onOpen,
+                icon: const Icon(Icons.candlestick_chart_rounded),
+                label: Text(_t(context, 'دیدن چارت', 'Open chart')),
+              ),
+              OutlinedButton.icon(
+                onPressed: onNote,
+                icon: const Icon(Icons.edit_note_rounded),
+                label: Text(_t(context, 'یادداشت', 'Note')),
+              ),
+              FilterChip(
+                selected: taken,
+                onSelected: onTakenChanged,
+                avatar: const Icon(Icons.bookmark_outline_rounded),
+                label: Text(_t(context, 'گرفتم', 'Taken')),
+              ),
+              FilterChip(
+                selected: entry.closed,
+                onSelected: onClose,
+                avatar: const Icon(Icons.archive_outlined),
+                label: Text(_t(context, 'بسته شد', 'Closed')),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+
+  Color _lifecycleColor(BuildContext context, SignalLifecycle value) =>
+      switch (value) {
+        SignalLifecycle.fresh => QuantaraColors.success,
+        SignalLifecycle.expiring => QuantaraColors.warning,
+        SignalLifecycle.expired => Theme.of(context).colorScheme.outline,
+        SignalLifecycle.taken => QuantaraColors.cyan,
+        SignalLifecycle.closed => Theme.of(context).colorScheme.secondary,
+      };
+
+  String _lifecycleLabel(BuildContext context, SignalLifecycle value) =>
+      switch (value) {
+        SignalLifecycle.fresh => _t(context, 'تازه', 'Fresh'),
+        SignalLifecycle.expiring => _t(context, 'رو به انقضا', 'Expiring'),
+        SignalLifecycle.expired => _t(context, 'منقضی', 'Expired'),
+        SignalLifecycle.taken => _t(context, 'گرفته‌شده', 'Taken'),
+        SignalLifecycle.closed => _t(context, 'بسته‌شده', 'Closed'),
+      };
 
   String _direction(BuildContext context) =>
       entry.direction == TradeDirection.long
       ? _t(context, 'خرید', 'Long')
       : _t(context, 'فروش', 'Short');
 
+  String _strategy(BuildContext context) => switch (entry.strategy) {
+    AnalysisStrategy.structureZones => _t(context, 'ساختار', 'Structure'),
+    AnalysisStrategy.trendPullback => _t(context, 'پولبک', 'Pullback'),
+    AnalysisStrategy.momentumContinuation => _t(context, 'مومنتوم', 'Momentum'),
+  };
+
   String _outcomeLabel(BuildContext context) => switch (entry.outcome) {
-    SignalOutcome.pendingEntry => _t(
-      context,
-      'منتظر فعال‌شدن ورود',
-      'Waiting for entry',
-    ),
-    SignalOutcome.active => _t(context, 'ورود فعال شد', 'Entry activated'),
+    SignalOutcome.pendingEntry => _t(context, 'منتظر ورود', 'Waiting'),
+    SignalOutcome.active => _t(context, 'فعال', 'Active'),
     SignalOutcome.expiredUntriggered => _t(
       context,
-      'ورود فعال نشد',
-      'Entry not triggered',
+      'فعال نشد',
+      'Not triggered',
     ),
     SignalOutcome.stopped =>
-      entry.highestTargetHit > 0
-          ? _t(
-              context,
-              'TP${entry.highestTargetHit} سپس SL',
-              'TP${entry.highestTargetHit}, then SL',
-            )
-          : 'SL',
+      entry.highestTargetHit > 0 ? 'TP${entry.highestTargetHit} → SL' : 'SL',
     SignalOutcome.tp1 => 'TP1',
     SignalOutcome.tp2 => 'TP2',
     SignalOutcome.tp3 => 'TP3',
@@ -672,41 +694,153 @@ class _SignalJournalCard extends StatelessWidget {
     SignalOutcome.tp2 ||
     SignalOutcome.tp3 => Icons.check_circle_outline_rounded,
   };
+}
 
-  String _strategy(BuildContext context) => switch (entry.strategy) {
-    AnalysisStrategy.structureZones => _t(
+class _ActionableSignalSummary extends StatelessWidget {
+  const _ActionableSignalSummary({
+    required this.presentation,
+    required this.qualityScore,
+  });
+
+  final ActionableSignalPresentation presentation;
+  final int? qualityScore;
+
+  bool _fa(BuildContext context) =>
+      Directionality.of(context) == TextDirection.rtl;
+  String _t(BuildContext context, String fa, String en) =>
+      _fa(context) ? fa : en;
+
+  @override
+  Widget build(BuildContext context) {
+    final persian = _fa(context);
+    final color = _stageColor(context);
+    final stage = presentation.stageLabel(persian: persian);
+    final reason = presentation.conciseReason(persian: persian);
+    final action = presentation.safeNextAction(persian: persian);
+    return Semantics(
+      container: true,
+      label: '$stage. $reason. $action',
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.32)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(_stageIcon, color: color, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    stage,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              reason,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 18,
+              runSpacing: 10,
+              children: [
+                MetricTile(
+                  label: _t(context, 'فاصله تا ورود', 'Distance to entry'),
+                  value: presentation.distanceLabel(persian: persian),
+                ),
+                MetricTile(
+                  label: _t(context, 'سن داده', 'Market age'),
+                  value: presentation.ageLabel(persian: persian),
+                  valueColor: presentation.isDataUncertain ? color : null,
+                ),
+                if (qualityScore != null)
+                  MetricTile(
+                    label: _t(context, 'کیفیت ستاپ', 'Setup quality'),
+                    value: '$qualityScore / 100',
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.shield_outlined, color: color, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${_t(context, 'اقدام امن', 'Safe next action')}: $action',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Material(
+              type: MaterialType.transparency,
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                title: Text(
+                  _t(context, 'جزئیات تشخیصی', 'Diagnostics'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: SelectableText(
+                      presentation.rawReasonCode,
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _stageColor(BuildContext context) => switch (presentation.stage) {
+    ActionableSignalStage.forming => Theme.of(context).colorScheme.primary,
+    ActionableSignalStage.armed => QuantaraColors.cyan,
+    ActionableSignalStage.triggered => QuantaraColors.success,
+    ActionableSignalStage.managing => QuantaraColors.success,
+    ActionableSignalStage.missed => QuantaraColors.warning,
+    ActionableSignalStage.resolved => Theme.of(
       context,
-      'ناحیه و ساختار',
-      'Structure & zones',
-    ),
-    AnalysisStrategy.trendPullback => _t(
-      context,
-      'پولبک روند',
-      'Trend pullback',
-    ),
-    AnalysisStrategy.momentumContinuation => _t(
-      context,
-      'ادامه مومنتوم',
-      'Momentum continuation',
-    ),
+    ).colorScheme.onSurfaceVariant,
+    ActionableSignalStage.dataUncertain => QuantaraColors.danger,
   };
 
-  String _lifecycle(BuildContext context, SignalLifecycle value) =>
-      switch (value) {
-        SignalLifecycle.fresh => _t(context, 'تازه', 'Fresh'),
-        SignalLifecycle.expiring => _t(context, 'رو به انقضا', 'Expiring'),
-        SignalLifecycle.expired => _t(context, 'منقضی', 'Expired'),
-        SignalLifecycle.taken => _t(context, 'گرفته‌شده', 'Taken'),
-        SignalLifecycle.closed => _t(context, 'بسته‌شده', 'Closed'),
-      };
-
-  String _formatTime(BuildContext context, DateTime time) {
-    final local = time.toLocal();
-    final minute = local.minute.toString().padLeft(2, '0');
-    return _fa(context)
-        ? '${local.year}/${local.month}/${local.day}، ${local.hour}:$minute'
-        : '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} ${local.hour}:$minute';
-  }
+  IconData get _stageIcon => switch (presentation.stage) {
+    ActionableSignalStage.forming => Icons.radar_rounded,
+    ActionableSignalStage.armed => Icons.adjust_rounded,
+    ActionableSignalStage.triggered => Icons.bolt_rounded,
+    ActionableSignalStage.managing => Icons.shield_rounded,
+    ActionableSignalStage.missed => Icons.trending_up_rounded,
+    ActionableSignalStage.resolved => Icons.task_alt_rounded,
+    ActionableSignalStage.dataUncertain => Icons.cloud_off_rounded,
+  };
 }
 
 class _SignalPerformancePanel extends StatelessWidget {
@@ -729,105 +863,66 @@ class _SignalPerformancePanel extends StatelessWidget {
         ? QuantaraColors.success
         : QuantaraColors.danger;
     return Container(
-      clipBehavior: Clip.hardEdge,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.24)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _t(context, 'نتیجه شبیه‌سازی', 'Simulated outcome'),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 8),
-            if (pnl == null)
-              Text(
-                _t(
-                  context,
-                  'هنوز نتیجه قیمتی قطعی نشده؛ اسکن‌های بعدی خودکار ادامه می‌دهند.',
-                  'No price outcome yet; future scans keep tracking it automatically.',
-                ),
-              )
-            else
-              Wrap(
-                spacing: 18,
-                runSpacing: 10,
-                children: [
-                  MetricTile(
-                    label: _t(context, 'سود/زیان', 'P/L'),
-                    value:
-                        '${pnl >= 0 ? '+' : ''}${QuantaraNumberFormat.marketValue(pnl, unit: 'USDT')}',
-                    valueColor: color,
-                  ),
-                  MetricTile(
-                    label: _t(context, 'حرکت قیمت', 'Price move'),
-                    value:
-                        '${(entry.priceChangePercent ?? 0) >= 0 ? '+' : ''}${(entry.priceChangePercent ?? 0).toStringAsFixed(2)}%',
-                    valueColor: color,
-                  ),
-                  MetricTile(
-                    label: _t(context, 'بازده مارجین', 'Margin return'),
-                    value:
-                        '${(entry.marginReturnPercent ?? 0) >= 0 ? '+' : ''}${(entry.marginReturnPercent ?? 0).toStringAsFixed(2)}%',
-                    valueColor: color,
-                  ),
-                ],
-              ),
-            const SizedBox(height: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _t(context, 'نتیجه پیشنهاد', 'Setup outcome'),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          if (pnl == null)
             Text(
               _t(
                 context,
-                'این گزارش مستقل از دکمه «گرفتم» و با ورود محافظه‌کارانه محاسبه می‌شود. اگر بعد از TP حد ضرر بخورد، خروج پله‌ای مساوی لحاظ می‌شود؛ کارمزد و لغزش فرضی هم کسر شده‌اند.',
-                'This report runs even when “Taken” is off and uses a conservative fill. If price stops after a TP, equal scale-outs are modeled; estimated fees and slippage are deducted.',
+                'هنوز نتیجه قطعی نشده؛ اسکن‌های بعدی آن را ادامه می‌دهند.',
+                'No final outcome yet; later scans keep tracking it.',
               ),
-              style: Theme.of(context).textTheme.bodySmall,
+            )
+          else
+            Wrap(
+              spacing: 18,
+              runSpacing: 10,
+              children: [
+                MetricTile(
+                  label: _t(context, 'سود/زیان', 'P/L'),
+                  value:
+                      '${pnl >= 0 ? '+' : ''}${QuantaraNumberFormat.marketValue(pnl, unit: 'USDT')}',
+                  valueColor: color,
+                ),
+                MetricTile(
+                  label: _t(context, 'حرکت قیمت', 'Price move'),
+                  value:
+                      '${(entry.priceChangePercent ?? 0) >= 0 ? '+' : ''}${(entry.priceChangePercent ?? 0).toStringAsFixed(2)}%',
+                  valueColor: color,
+                ),
+                MetricTile(
+                  label: _t(context, 'بازده مارجین', 'Margin return'),
+                  value:
+                      '${(entry.marginReturnPercent ?? 0) >= 0 ? '+' : ''}${(entry.marginReturnPercent ?? 0).toStringAsFixed(2)}%',
+                  valueColor: color,
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TimeLine extends StatelessWidget {
-  const _TimeLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final effective = color ?? Theme.of(context).colorScheme.onSurfaceVariant;
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: effective),
-        const SizedBox(width: 7),
-        Text('$label: ', style: Theme.of(context).textTheme.bodySmall),
-        Expanded(
-          child: Text(
-            value,
-            textDirection: TextDirection.ltr,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: effective,
-              fontWeight: FontWeight.w800,
+          const SizedBox(height: 8),
+          Text(
+            _t(
+              context,
+              'این نتیجه مستقل از دکمه «گرفتم» و با ورود محافظه‌کارانه، کارمزد و لغزش محاسبه می‌شود.',
+              'This result is tracked even when “Taken” is off and includes conservative entry, fees and slippage.',
             ),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -872,151 +967,104 @@ class _LeverageControlState extends State<_LeverageControl> {
   @override
   Widget build(BuildContext context) {
     final selected = _draft.round().clamp(1, TradeIdea.maximumManualLeverage);
-    final presets =
-        <int>{
-              1,
-              2,
-              3,
-              5,
-              10,
-              20,
-              50,
-              100,
-              widget.recommended,
-              widget.safeCap,
-              selected,
-            }
-            .where(
-              (value) => value >= 1 && value <= TradeIdea.maximumManualLeverage,
-            )
-            .toList(growable: false)
-          ..sort();
+    final presets = <int>{
+      1,
+      2,
+      3,
+      5,
+      10,
+      widget.recommended,
+      widget.safeCap,
+      selected,
+    }.where((value) => value >= 1).toList(growable: false)..sort();
     final aboveSafe = selected > widget.safeCap;
     final scheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.38),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: aboveSafe
               ? QuantaraColors.warning.withValues(alpha: 0.65)
               : scheme.outlineVariant,
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _persian ? 'اهرم انتخابی' : 'Selected leverage',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _persian ? 'اهرم انتخابی' : 'Selected leverage',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
                 ),
-                StatusPill(
-                  label: '${selected}x',
-                  color: aboveSafe
-                      ? QuantaraColors.warning
-                      : QuantaraColors.cyan,
+              ),
+              StatusPill(
+                label: '${selected}x',
+                color: aboveSafe ? QuantaraColors.warning : QuantaraColors.cyan,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final leverage in presets)
+                ChoiceChip(
+                  selected: leverage == selected,
+                  showCheckmark: false,
+                  label: Text('${leverage}x'),
+                  onSelected: (_) => _commit(leverage),
                 ),
-              ],
-            ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              IconButton.filledTonal(
+                key: ValueKey('leverage-decrease-$selected'),
+                tooltip: _persian ? 'یک واحد کمتر' : 'Decrease by one',
+                onPressed: selected > 1 ? () => _commit(selected - 1) : null,
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              Expanded(
+                child: Text(
+                  _persian
+                      ? 'پیشنهاد ${widget.recommended}x · مرز امن ${widget.safeCap}x'
+                      : 'Suggested ${widget.recommended}x · safe boundary ${widget.safeCap}x',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              IconButton.filledTonal(
+                key: ValueKey('leverage-increase-$selected'),
+                tooltip: _persian ? 'یک واحد بیشتر' : 'Increase by one',
+                onPressed: selected < TradeIdea.maximumManualLeverage
+                    ? () => _commit(selected + 1)
+                    : null,
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+          if (aboveSafe) ...[
             const SizedBox(height: 6),
             Text(
               _persian
-                  ? 'پیشنهاد ${widget.recommended}x · مرز محافظه‌کارانه ${widget.safeCap}x · انتخاب دستی تا ${TradeIdea.maximumManualLeverage}x'
-                  : 'Suggested ${widget.recommended}x · conservative boundary ${widget.safeCap}x · manual selection up to ${TradeIdea.maximumManualLeverage}x',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final leverage in presets) ...[
-                    ChoiceChip(
-                      showCheckmark: false,
-                      selected: leverage == selected,
-                      label: Text('${leverage}x'),
-                      onSelected: (_) => _commit(leverage),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                ],
+                  ? 'اهرم از مرز محافظه‌کارانه بالاتر است؛ فاصله لیکویید کمتر می‌شود.'
+                  : 'Leverage is above the conservative boundary; liquidation distance becomes tighter.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: QuantaraColors.warning,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                IconButton.filledTonal(
-                  key: ValueKey('leverage-decrease-$selected'),
-                  tooltip: _persian ? 'یک واحد کمتر' : 'Decrease by one',
-                  onPressed: selected > 1 ? () => _commit(selected - 1) : null,
-                  icon: const Icon(Icons.remove_rounded),
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        '${selected}x',
-                        textDirection: TextDirection.ltr,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        _persian
-                            ? 'برای مقدار دقیق از دکمه‌های کم و زیاد استفاده کن.'
-                            : 'Use the step buttons for an exact value.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton.filledTonal(
-                  key: ValueKey('leverage-increase-$selected'),
-                  tooltip: _persian ? 'یک واحد بیشتر' : 'Increase by one',
-                  onPressed: selected < TradeIdea.maximumManualLeverage
-                      ? () => _commit(selected + 1)
-                      : null,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ],
-            ),
-            if (aboveSafe) ...[
-              const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    size: 20,
-                    color: QuantaraColors.warning,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _persian
-                          ? 'بالاتر از مرز امن مدل انتخاب شده است. اندازه پوزیشن و زیان برنامه‌ریزی‌شده ثابت می‌ماند، اما مارجین کمتر و فاصله تا لیکویید کوتاه‌تر می‌شود.'
-                          : 'This is above the model safe boundary. Position notional and planned stop loss stay fixed, but margin is lower and liquidation distance becomes tighter.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: QuantaraColors.warning,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }

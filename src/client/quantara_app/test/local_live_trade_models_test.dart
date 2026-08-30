@@ -26,23 +26,45 @@ void main() {
     expect(validConfiguration().validate, returnsNormally);
   });
 
-  test('rejects risk above the 0.25 percent canary ceiling', () {
+  test('accepts bounded advanced risk and rejects values above 2 percent', () {
     expect(
-      () => validConfiguration(riskPercent: 0.30).validate(),
+      validConfiguration(riskPercent: 2, dailyLossLimitPercent: 10).validate,
+      returnsNormally,
+    );
+    expect(
+      () => validConfiguration(riskPercent: 2.01).validate(),
+      throwsFormatException,
+    );
+    expect(
+      () => validConfiguration(dailyLossLimitPercent: 10.01).validate(),
       throwsFormatException,
     );
   });
 
-  test('rejects more than one concurrent position', () {
+  test('accepts one to three concurrent positions and rejects outside cap', () {
+    for (final positions in [1, 2, 3]) {
+      expect(
+        validConfiguration(maximumConcurrentPositions: positions).validate,
+        returnsNormally,
+      );
+    }
     expect(
-      () => validConfiguration(maximumConcurrentPositions: 2).validate(),
+      () => validConfiguration(maximumConcurrentPositions: 0).validate(),
+      throwsFormatException,
+    );
+    expect(
+      () => validConfiguration(maximumConcurrentPositions: 4).validate(),
       throwsFormatException,
     );
   });
 
-  test('rejects unsupported execution timeframes', () {
+  test('accepts 5m and rejects unsupported execution timeframes', () {
     expect(
-      () => validConfiguration(timeframes: const ['5m']).validate(),
+      validConfiguration(timeframes: const ['5m']).validate,
+      returnsNormally,
+    );
+    expect(
+      () => validConfiguration(timeframes: const ['2m']).validate(),
       throwsFormatException,
     );
   });
@@ -52,6 +74,7 @@ void main() {
       leverage: 20,
       riskPercent: 0.20,
       dailyLossLimitPercent: 1.5,
+      maximumConcurrentPositions: 2,
       symbols: const ['BTCUSDT', 'ETHUSDT'],
     );
 
@@ -62,7 +85,7 @@ void main() {
     expect(restored.leverage, 20);
     expect(restored.riskPercent, 0.20);
     expect(restored.dailyLossLimitPercent, 1.5);
-    expect(restored.maximumConcurrentPositions, 1);
+    expect(restored.maximumConcurrentPositions, 2);
   });
 
   test('status reports running only for active or managing-only states', () {
@@ -78,5 +101,31 @@ void main() {
     expect(status(LocalLiveTradeState.starting).isRunning, isFalse);
     expect(status(LocalLiveTradeState.circuitBreaker).isRunning, isFalse);
     expect(status(LocalLiveTradeState.stopped).isRunning, isFalse);
+  });
+
+  test('managing-only can resume entries only with no open position', () {
+    final resumable = LocalLiveTradeStatus(
+      state: LocalLiveTradeState.managingOnly,
+      updatedAt: DateTime.utc(2026, 8, 3),
+      message: 'entries stopped',
+      entriesEnabled: false,
+    );
+    final protectedPosition = LocalLiveTradeStatus(
+      state: LocalLiveTradeState.managingOnly,
+      updatedAt: DateTime.utc(2026, 8, 3),
+      message: 'managing position',
+      openPositionCount: 1,
+      entriesEnabled: false,
+    );
+    final active = LocalLiveTradeStatus(
+      state: LocalLiveTradeState.running,
+      updatedAt: DateTime.utc(2026, 8, 3),
+      message: 'running',
+      entriesEnabled: true,
+    );
+
+    expect(resumable.canResumeEntries, isTrue);
+    expect(protectedPosition.canResumeEntries, isFalse);
+    expect(active.canResumeEntries, isFalse);
   });
 }

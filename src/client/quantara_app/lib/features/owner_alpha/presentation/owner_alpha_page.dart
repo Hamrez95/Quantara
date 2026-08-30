@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:http/http.dart' as http;
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/formatting/number_formatters.dart';
 import '../../../core/localization/app_strings.dart';
@@ -12,36 +17,143 @@ import '../../../core/localization/local_live_message_localizer.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
+import '../../auto_trade/application/local_live_diagnostic_bundle.dart';
+import '../../auto_trade/application/local_live_trade_service.dart';
+import '../../auto_trade/application/read_only_support_session.dart';
 import '../../auto_trade/application/unattended_auto_trade_controller.dart';
 import '../../auto_trade/data/bitunix_private_api_client.dart';
+import '../../auto_trade/data/local_live_preferences_store.dart';
 import '../../auto_trade/data/secure_auto_trade_credentials_store.dart';
 import '../../auto_trade/data/secure_auto_trade_server_config_store.dart';
 import '../../auto_trade/data/unattended_auto_trade_api_client.dart';
 import '../../auto_trade/domain/auto_trade_models.dart';
+import '../../auto_trade/domain/private_account_reconciliation.dart';
+import '../../auto_trade/domain/trading_pnl_projection.dart';
 import '../../auto_trade/domain/unattended_auto_trade_models.dart';
+import '../../auto_trade/presentation/private_account_reconciliation_banner.dart';
+import '../../auto_trade/presentation/position_protection_summary.dart';
+import '../../auto_trade/presentation/tp_allocation_editor.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
+import '../../market_analysis/domain/market_regime_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
-import '../../strategy_lab/data/strategy_lab_runner.dart';
-import '../../strategy_lab/data/platform_strategy_lab_session_store.dart';
-import '../../strategy_lab/domain/strategy_lab_models.dart';
+import '../../trading_journal/application/trading_journal_controller.dart';
+import '../../trading_journal/data/database_trading_journal_store.dart';
+import '../../trading_journal/domain/trading_journal_evidence_packet.dart';
+import '../../trading_journal/presentation/trading_journal_view.dart';
+import '../../trading_lab/application/trading_lab_controller.dart';
+import '../../trading_lab/application/trading_lab_metrics.dart';
+import '../../trading_lab/application/trading_lab_scorecards.dart';
+import '../../trading_lab/data/database_trading_lab_store.dart';
+import '../../trading_lab/domain/trading_lab_account_context.dart';
+import '../../trading_lab/domain/trading_lab_models.dart';
+import '../../trading_lab/domain/trading_lab_real_account_evidence.dart';
 import '../application/owner_alpha_controller.dart';
+import '../application/signal_inbox_query.dart';
 import '../data/owner_alpha_settings_transfer.dart';
+import '../data/realtime_production_runtime.dart';
 import '../data/signal_timeframe_priority.dart';
 import '../domain/owner_alpha_models.dart';
+import '../domain/profit_protection_policy.dart';
+import '../domain/realtime_market_runtime_models.dart';
+import 'actionable_signal_presentation.dart';
+import 'execution_mode_presentation.dart';
+import 'realtime_radar_presentation.dart';
 
 part 'owner_alpha_dashboard.dart';
+part 'owner_alpha_home.dart';
 part 'owner_alpha_watchlist.dart';
 part 'owner_alpha_signals.dart';
 part 'owner_alpha_analysis.dart';
 part 'owner_alpha_auto_trade.dart';
+part 'owner_alpha_local_live_tools.dart';
 part 'owner_alpha_auto_trade_support.dart';
 part 'owner_alpha_auto_trade_unattended.dart';
 part 'owner_alpha_exchange.dart';
 part 'owner_alpha_strategy.dart';
-part 'owner_alpha_strategy_lab.dart';
+part 'owner_alpha_trading_lab.dart';
+part 'owner_alpha_trading_lab_insights.dart';
 
 typedef _OpenAnalysis =
     void Function(String symbol, [String? timeframe, String? setupId]);
+
+void _noopOpenPortfolioRisk() {}
+
+double? _tradingLabWeightedFillPrice(Iterable<ExchangePnlFill> fills) {
+  var quantity = 0.0;
+  var notional = 0.0;
+  for (final fill in fills) {
+    final weight = fill.quantity.abs();
+    quantity += weight;
+    notional += fill.price * weight;
+  }
+  return quantity <= 1e-12 ? null : notional / quantity;
+}
+
+TradingLabRealAccountEvidence _buildTradingLabRealAccountEvidence(
+  AutoTradeController controller,
+) {
+  final snapshot = controller.snapshot;
+  final projection = snapshot?.authoritativePnl;
+  if (projection == null) {
+    return TradingLabRealAccountEvidence.unavailable(
+      asOfUtc: snapshot?.syncedAt,
+    );
+  }
+  final trades = <TradingLabRealAccountTradeEvidence>[];
+  for (final position in projection.positions) {
+    final entryFills = position.fills
+        .where((fill) => !fill.reduceOnly)
+        .toList(growable: false);
+    final exitFills = position.exitFills.toList(growable: false);
+    DateTime? openedAt = position.settlement?.openedAt;
+    if (openedAt == null && entryFills.isNotEmpty) {
+      openedAt = entryFills
+          .map((fill) => fill.occurredAt.toUtc())
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+    }
+    final closedAt = position.settlement?.closedAt.toUtc();
+    final side = entryFills.isEmpty
+        ? ''
+        : entryFills.first.side.trim().toLowerCase();
+    final quantity = entryFills.fold<double>(
+      0,
+      (sum, fill) => sum + fill.quantity.abs(),
+    );
+    trades.add(
+      TradingLabRealAccountTradeEvidence(
+        symbol: position.symbol.trim().toUpperCase(),
+        side: side,
+        state: closedAt != null ? 'closed' : 'open_or_observed',
+        quantity: quantity,
+        averageEntryPrice: _tradingLabWeightedFillPrice(entryFills),
+        averageExitPrice: _tradingLabWeightedFillPrice(exitFills),
+        realizedGrossPnl: position.realizedGross.value,
+        fees: position.fees.value,
+        funding: position.funding.value,
+        netRealizedPnl: position.netRealized.value,
+        unrealizedPnl: position.unrealized.value,
+        openedAtUtc: openedAt?.toUtc(),
+        closedAtUtc: closedAt,
+        asOfUtc: position.asOf.toUtc(),
+        verified: position.isVerified,
+      ),
+    );
+  }
+  return TradingLabRealAccountEvidence(
+    currency: projection.currency,
+    asOfUtc: projection.asOf.toUtc(),
+    verified: projection.isVerified,
+    fillsAvailable: projection.fillsAvailable,
+    settlementsAvailable: projection.settlementsAvailable,
+    accountUnrealizedPnl: projection.accountUnrealized.value,
+    accountRealizedGrossPnl: projection.accountRealizedGross.value,
+    accountFees: projection.accountFees.value,
+    accountFunding: projection.accountFunding.value,
+    accountNetRealizedPnl: projection.accountNetRealized.value,
+    sourceWarningPresent: projection.warning != null,
+    trades: trades,
+  );
+}
 
 class OwnerAlphaPage extends StatefulWidget {
   const OwnerAlphaPage({
@@ -54,6 +166,8 @@ class OwnerAlphaPage extends StatefulWidget {
     required this.locale,
     required this.onToggleTheme,
     required this.onLocaleChanged,
+    this.onOpenPortfolioRisk = _noopOpenPortfolioRisk,
+    this.realtimeMonitor,
     super.key,
   });
 
@@ -66,6 +180,8 @@ class OwnerAlphaPage extends StatefulWidget {
   final Locale locale;
   final VoidCallback onToggleTheme;
   final ValueChanged<Locale> onLocaleChanged;
+  final VoidCallback onOpenPortfolioRisk;
+  final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
 
   @override
   State<OwnerAlphaPage> createState() => _OwnerAlphaPageState();
@@ -82,6 +198,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
         apiClient: UnattendedAutoTradeApiClient(client: _autoTradeHttpClient),
         configStore: const SecureAutoTradeServerConfigStore(),
       );
+  late final TradingJournalController _journalController =
+      TradingJournalController(store: DatabaseTradingJournalStore());
   late final OwnerAlphaController _controller = OwnerAlphaController(
     repository: widget.repository,
     settingsStore: widget.settingsStore,
@@ -90,23 +208,91 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     backgroundScanGateway: widget.backgroundScanGateway,
     languageCode: widget.locale.languageCode,
   );
+  late final TradingLabController _tradingLabController = TradingLabController(
+    marketController: _controller,
+    store: DatabaseTradingLabRunStore(),
+    accountContextProvider: () {
+      final reconciliation = _autoTradeController.reconciliation;
+      final snapshot = _autoTradeController.snapshot;
+      return TradingLabAccountContext(
+        connected: _autoTradeController.isConnected,
+        reconciliationHealth: reconciliation.health.name,
+        refreshing: reconciliation.refreshing,
+        blocksNewEntries: reconciliation.blocksNewEntries,
+        canManageExistingPositions:
+            reconciliation.allowsExistingPositionManagement,
+        syncedAtUtc: snapshot?.syncedAt.toUtc(),
+        marginCoin: snapshot?.marginCoin,
+        available: snapshot?.available,
+        frozen: snapshot?.frozen,
+        positionMargin: snapshot?.positionMargin,
+        unrealizedPnl: snapshot?.totalUnrealizedPnl,
+        estimatedEquity: snapshot?.estimatedEquity,
+        openPositionCount: snapshot?.positions.length,
+        pendingOrderCount: snapshot?.totalPendingOrderCount,
+        allOpenPositionsFullyProtected:
+            snapshot?.allOpenPositionsFullyProtected,
+        warning: reconciliation.warning,
+      );
+    },
+    realAccountEvidenceProvider: () =>
+        _buildTradingLabRealAccountEvidence(_autoTradeController),
+  );
+  final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
+      GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
+  StreamSubscription<String>? _notificationOpenSubscription;
+  late final Future<void> _ownerAlphaInitialization;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_controller.initialize());
+    _ownerAlphaInitialization = _controller.initialize();
+    _notificationOpenSubscription = widget.notificationGateway.openedSetupIds
+        .listen((setupId) => unawaited(_openNotificationSetup(setupId)));
+    unawaited(_consumeInitialNotification());
+    unawaited(_tradingLabController.initialize());
     unawaited(_autoTradeController.initialize());
     unawaited(_unattendedAutoTradeController.initialize());
+    unawaited(_journalController.initialize());
   }
 
   @override
   void dispose() {
+    unawaited(_notificationOpenSubscription?.cancel());
+    _tradingLabController.dispose();
     _controller.dispose();
     _autoTradeController.dispose();
     _unattendedAutoTradeController.dispose();
+    _journalController.dispose();
     _autoTradeHttpClient.close();
     super.dispose();
+  }
+
+  Future<void> _consumeInitialNotification() async {
+    final setupId = await widget.notificationGateway.initialSetupId();
+    if (setupId != null) await _openNotificationSetup(setupId);
+  }
+
+  Future<void> _openNotificationSetup(String setupId) async {
+    await _ownerAlphaInitialization;
+    if (!mounted) return;
+    final signal = _controller.signalEntry(setupId);
+    if (signal == null) {
+      final persian = widget.locale.languageCode != 'en';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            persian
+                ? 'این ستاپ دیگر در ژورنال محلی موجود نیست یا منقضی شده است.'
+                : 'This setup is no longer available in the local journal or has expired.',
+          ),
+        ),
+      );
+      return;
+    }
+    await _openAnalysisContext(signal.symbol, signal.timeframe, signal.setupId);
   }
 
   @override
@@ -149,6 +335,49 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     );
   }
 
+  Future<void> _reconcileJournalFromAccount() async {
+    final snapshot = _autoTradeController.snapshot;
+    if (snapshot == null) return;
+    await _journalController.reconcileVerifiedExchangeClosures(
+      pnlProjection: snapshot.authoritativePnl,
+      openPositionIds: snapshot.positions
+          .map((position) => position.positionId.trim())
+          .where((positionId) => positionId.isNotEmpty)
+          .toSet(),
+    );
+  }
+
+  Future<void> _refreshCurrentDestination() async {
+    switch (_destination) {
+      case 5:
+        final state = _autoTradeViewKey.currentState;
+        if (state != null) {
+          await state.refreshAll();
+        } else {
+          await _autoTradeController.reconcile(
+            reason: PrivateAccountRefreshReason.manual,
+            force: true,
+          );
+        }
+        await _reconcileJournalFromAccount();
+        return;
+      case 6:
+        await _controller.refresh();
+        if (_autoTradeController.isConnected) {
+          await _autoTradeController.reconcile(
+            reason: PrivateAccountRefreshReason.manual,
+            force: true,
+          );
+        }
+        await _reconcileJournalFromAccount();
+        await _journalController.refresh();
+        return;
+      default:
+        await _controller.refresh();
+        return;
+    }
+  }
+
   Future<void> _showAddSymbolDialog() async {
     final strings = AppStrings.of(context);
     final value = await showDialog<String>(
@@ -178,6 +407,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             controller: _controller,
             autoTradeController: _autoTradeController,
             unattendedAutoTradeController: _unattendedAutoTradeController,
+            journalController: _journalController,
+            tradingLabController: _tradingLabController,
             destination: _destination,
             themeMode: widget.themeMode,
             locale: widget.locale,
@@ -185,8 +416,17 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onLocaleChanged: widget.onLocaleChanged,
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
-            onOpenStrategyLab: () => setState(() => _destination = 4),
+            onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
+            onNavigate: (value) {
+              setState(() => _destination = value);
+              if (value == 4 || value == 5 || value == 6) {
+                unawaited(_refreshCurrentDestination());
+              }
+            },
             showTopBar: desktop,
+            realtimeMonitor: widget.realtimeMonitor,
+            autoTradeViewKey: _autoTradeViewKey,
+            onRefresh: _refreshCurrentDestination,
           ),
         );
         if (desktop) {
@@ -197,20 +437,27 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
                   NavigationRail(
                     extended: constraints.maxWidth >= 1320,
                     minExtendedWidth: 220,
-                    selectedIndex: _destination,
+                    selectedIndex:
+                        _desktopDestinationIndexes.contains(_destination)
+                        ? _desktopDestinationIndexes.indexOf(_destination)
+                        : 0,
                     onDestinationSelected: (value) {
-                      setState(() => _destination = value);
+                      setState(
+                        () => _destination = _desktopDestinationIndexes[value],
+                      );
                     },
                     leading: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 18),
                       child: _AlphaLogo(size: 44),
                     ),
-                    destinations: _destinations.indexed
+                    destinations: _desktopDestinationIndexes
                         .map(
-                          (item) => NavigationRailDestination(
-                            icon: Icon(item.$2.icon),
-                            selectedIcon: Icon(item.$2.selectedIcon),
-                            label: Text(_destinationLabel(strings, item.$1)),
+                          (index) => NavigationRailDestination(
+                            icon: Icon(_destinations[index].icon),
+                            selectedIcon: Icon(
+                              _destinations[index].selectedIcon,
+                            ),
+                            label: Text(_destinationLabel(strings, index)),
                           ),
                         )
                         .toList(growable: false),
@@ -233,7 +480,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             destination: _destination,
             themeMode: widget.themeMode,
             onToggleTheme: widget.onToggleTheme,
-            onRefresh: _controller.refresh,
+            onRefresh: _refreshCurrentDestination,
           ),
           body: SafeArea(
             bottom: false,
@@ -247,7 +494,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             child: NavigationBar(
               selectedIndex: _mobileDestinationIndexes.contains(_destination)
                   ? _mobileDestinationIndexes.indexOf(_destination)
-                  : 2,
+                  : 0,
               labelBehavior: constraints.maxWidth < 440
                   ? NavigationDestinationLabelBehavior.onlyShowSelected
                   : NavigationDestinationLabelBehavior.alwaysShow,
@@ -319,7 +566,7 @@ class _QuantaraMobileAppBar extends StatelessWidget
   final int destination;
   final ThemeMode themeMode;
   final VoidCallback onToggleTheme;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
 
   @override
   Size get preferredSize => const Size.fromHeight(64);
@@ -388,7 +635,7 @@ class _QuantaraMobileAppBar extends StatelessWidget
       ),
       actions: [
         IconButton(
-          onPressed: controller.isLoading ? null : onRefresh,
+          onPressed: controller.isLoading ? null : () => unawaited(onRefresh()),
           tooltip: strings.isPersian ? 'به‌روزرسانی' : 'Refresh',
           icon: AnimatedRotation(
             duration: QuantaraMotion.standard,
@@ -480,7 +727,7 @@ class _AddSymbolDialogState extends State<_AddSymbolDialog> {
 }
 
 const _destinations = [
-  _Destination(Icons.radar_outlined, Icons.radar_rounded),
+  _Destination(Icons.home_outlined, Icons.home_rounded),
   _Destination(Icons.inbox_outlined, Icons.inbox_rounded),
   _Destination(
     Icons.candlestick_chart_outlined,
@@ -489,18 +736,21 @@ const _destinations = [
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
   _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
+  _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _mobileDestinationIndexes = [0, 1, 2, 3, 5, 6];
+const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];
+const _mobileDestinationIndexes = [0, 1, 5, 7];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
   2 => strings.analysis,
   3 => strings.watchlist,
-  4 => strings.strategyLab,
+  4 => strings.isPersian ? 'آزمایشگاه بات' : 'Bot Lab',
   5 => strings.isPersian ? 'ترید خودکار' : 'Auto Trade',
-  6 => strings.profile,
-  _ => strings.radar,
+  6 => strings.isPersian ? 'ژورنال' : 'Journal',
+  7 => strings.profile,
+  _ => strings.t('خانه', 'Home'),
 };
 
 final class _Destination {
@@ -515,6 +765,8 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.controller,
     required this.autoTradeController,
     required this.unattendedAutoTradeController,
+    required this.journalController,
+    required this.tradingLabController,
     required this.destination,
     required this.themeMode,
     required this.locale,
@@ -522,13 +774,19 @@ class _OwnerAlphaBody extends StatelessWidget {
     required this.onLocaleChanged,
     required this.onOpenAnalysis,
     required this.onAddSymbol,
-    required this.onOpenStrategyLab,
+    required this.onOpenPortfolioRisk,
+    required this.onNavigate,
     required this.showTopBar,
+    required this.realtimeMonitor,
+    required this.autoTradeViewKey,
+    required this.onRefresh,
   });
 
   final OwnerAlphaController controller;
   final AutoTradeController autoTradeController;
   final UnattendedAutoTradeController unattendedAutoTradeController;
+  final TradingJournalController journalController;
+  final TradingLabController tradingLabController;
   final int destination;
   final ThemeMode themeMode;
   final Locale locale;
@@ -536,14 +794,93 @@ class _OwnerAlphaBody extends StatelessWidget {
   final ValueChanged<Locale> onLocaleChanged;
   final _OpenAnalysis onOpenAnalysis;
   final VoidCallback onAddSymbol;
-  final VoidCallback onOpenStrategyLab;
+  final VoidCallback onOpenPortfolioRisk;
+  final ValueChanged<int> onNavigate;
   final bool showTopBar;
+  final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
+  final GlobalKey<_AutoTradeViewState> autoTradeViewKey;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final marketSnapshot = controller.snapshot;
+    final journalLiveAnalyses = <String, TimeframeChartAnalysis>{
+      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+        for (final entry in radar.analysesByTimeframe.entries)
+          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+              entry.value,
+    };
+    final journalLiveIdeas = <String, TradeIdea>{
+      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+        for (final entry in radar.ideasByTimeframe.entries)
+          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+              entry.value,
+    };
+    final initialMarketLoading =
+        controller.snapshot == null &&
+        destination != 4 &&
+        destination != 5 &&
+        destination != 6 &&
+        destination != 7;
+    if (initialMarketLoading) {
+      final horizontal = wide ? 28.0 : 16.0;
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: CustomScrollView(
+          key: PageStorageKey('owner-alpha-$destination'),
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(horizontal, 14, horizontal, 0),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1280),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (showTopBar) ...[
+                          _AlphaTopBar(
+                            controller: controller,
+                            themeMode: themeMode,
+                            onToggleTheme: onToggleTheme,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
+                        if (controller.error != null) ...[
+                          const SizedBox(height: 12),
+                          _AlphaErrorStrip(
+                            message: controller.error!,
+                            stale: controller.hasStaleSnapshot,
+                            onRetry: controller.refresh,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 32),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: _InitialLoading(controller: controller),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return RefreshIndicator(
-      onRefresh: controller.refresh,
+      onRefresh: onRefresh,
       child: ListView(
         key: PageStorageKey('owner-alpha-$destination'),
         physics: const AlwaysScrollableScrollPhysics(),
@@ -563,7 +900,8 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                   ],
-                  const _LiveBoundaryStrip(),
+                  if (destination != 5 && destination != 6 && destination != 7)
+                    _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
                   if (controller.error != null) ...[
                     const SizedBox(height: 12),
                     _AlphaErrorStrip(
@@ -573,7 +911,7 @@ class _OwnerAlphaBody extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  if (destination == 6)
+                  if (destination == 7)
                     _ProfileView(
                       controller: controller,
                       themeMode: themeMode,
@@ -581,11 +919,32 @@ class _OwnerAlphaBody extends StatelessWidget {
                       onToggleTheme: onToggleTheme,
                       onLocaleChanged: onLocaleChanged,
                     )
+                  else if (destination == 6)
+                    AnimatedBuilder(
+                      animation: journalController,
+                      builder: (context, _) => TradingJournalView(
+                        locale: locale,
+                        projections: journalController.projections,
+                        statistics: journalController.statistics,
+                        performance: journalController.performance,
+                        counterfactual: journalController.counterfactual,
+                        liveAnalyses: journalLiveAnalyses,
+                        liveIdeas: journalLiveIdeas,
+                        isLoading: journalController.isLoading,
+                        error: journalController.error,
+                      ),
+                    )
                   else if (destination == 5)
                     _AutoTradeView(
+                      key: autoTradeViewKey,
                       controller: autoTradeController,
                       unattendedController: unattendedAutoTradeController,
                       analysisController: controller,
+                    )
+                  else if (destination == 4)
+                    _TradingLabView(
+                      controller: tradingLabController,
+                      marketController: controller,
                     )
                   else if (controller.snapshot == null)
                     _InitialLoading(controller: controller)
@@ -595,20 +954,9 @@ class _OwnerAlphaBody extends StatelessWidget {
                         controller: controller,
                         onOpenAnalysis: onOpenAnalysis,
                       ),
-                      2 => Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: onOpenStrategyLab,
-                            icon: const Icon(Icons.science_outlined),
-                            label: Text(AppStrings.of(context).openStrategyLab),
-                          ),
-                          const SizedBox(height: 14),
-                          _AlphaAnalysisView(
-                            controller: controller,
-                            snapshot: controller.snapshot!,
-                          ),
-                        ],
+                      2 => _AlphaAnalysisView(
+                        controller: controller,
+                        snapshot: controller.snapshot!,
                       ),
                       3 => _WatchlistView(
                         controller: controller,
@@ -616,14 +964,13 @@ class _OwnerAlphaBody extends StatelessWidget {
                         onOpenAnalysis: onOpenAnalysis,
                         onAddSymbol: onAddSymbol,
                       ),
-                      4 => _StrategyLabView(
+                      _ => _HomeDashboard(
                         controller: controller,
                         snapshot: controller.snapshot!,
-                      ),
-                      _ => _RadarDashboard(
-                        controller: controller,
-                        snapshot: controller.snapshot!,
+                        realtimeMonitor: realtimeMonitor,
                         onOpenAnalysis: onOpenAnalysis,
+                        onNavigate: onNavigate,
+                        onOpenPortfolioRisk: onOpenPortfolioRisk,
                       ),
                     },
                 ],
@@ -714,35 +1061,134 @@ class _AlphaTopBar extends StatelessWidget {
 }
 
 class _LiveBoundaryStrip extends StatelessWidget {
-  const _LiveBoundaryStrip();
+  const _LiveBoundaryStrip({required this.realtimeMonitor});
+
+  final ValueListenable<RealtimeMarketMonitorSnapshot>? realtimeMonitor;
 
   @override
   Widget build(BuildContext context) {
+    final monitor = realtimeMonitor;
+    if (monitor == null) {
+      return _buildContent(
+        context,
+        const RealtimeMarketMonitorSnapshot.initial(),
+      );
+    }
+    return ValueListenableBuilder<RealtimeMarketMonitorSnapshot>(
+      valueListenable: monitor,
+      builder: (context, snapshot, _) => _buildContent(context, snapshot),
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    RealtimeMarketMonitorSnapshot monitor,
+  ) {
     final strings = AppStrings.of(context);
     final scheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: QuantaraColors.cyan.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: QuantaraColors.cyan.withValues(alpha: 0.25)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.shield_outlined, color: QuantaraColors.cyan),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                strings.liveBoundary,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurface.withValues(alpha: 0.78),
-                  fontWeight: FontWeight.w700,
+    final health = monitor.health;
+    final operational = monitor.operational;
+    final degraded = health?.degraded == true;
+    final statusColor = operational
+        ? degraded
+              ? QuantaraColors.warning
+              : QuantaraColors.success
+        : QuantaraColors.cyan;
+    final status = health == null
+        ? strings.t('در حال آماده‌سازی', 'Preparing')
+        : switch (health.state) {
+            RealtimeMarketRuntimeState.live =>
+              health.degraded
+                  ? strings.t('پایش زنده محدود', 'Degraded live monitoring')
+                  : strings.t('پایش زنده', 'Live monitoring'),
+            RealtimeMarketRuntimeState.paused => strings.t(
+              'پایش پیشنهادها در پس‌زمینه متوقف است',
+              'Signal monitoring is paused in the background',
+            ),
+            RealtimeMarketRuntimeState.failed => strings.t(
+              'خطای پایش',
+              'Monitoring fault',
+            ),
+            RealtimeMarketRuntimeState.bootstrapping => strings.t(
+              'دریافت تاریخچه',
+              'Bootstrapping history',
+            ),
+            _ => strings.t('در حال اتصال', 'Connecting'),
+          };
+    final metrics = health == null
+        ? strings.t(
+            'داده عمومی Bitunix · بدون API Key · بدون سفارش واقعی',
+            'Public Bitunix data · no API key · no real orders',
+          )
+        : strings.t(
+            '${health.activeStreams}/${health.configuredStreams} جریان سالم · ${health.liveShards}/${health.activeShards} اتصال · تأخیر p95 شبکه ${health.p95TransportLag.inMilliseconds}ms · پردازش ${health.p95PipelineLatency.inMilliseconds}ms',
+            '${health.activeStreams}/${health.configuredStreams} healthy streams · ${health.liveShards}/${health.activeShards} shards · p95 transport ${health.p95TransportLag.inMilliseconds}ms · processing ${health.p95PipelineLatency.inMilliseconds}ms',
+          );
+    final limitation = strings.t(
+      'در این نسخه آزمایشی، پایش بلادرنگ فقط وقتی اپ یا تب باز است ادامه دارد.',
+      'In this release candidate, realtime monitoring continues only while the app or tab is open.',
+    );
+    final error = monitor.error;
+    final degradedDetail = health != null && health.quarantinedStreams > 0
+        ? strings.t(
+            '${health.quarantinedStreams} جریان به‌دلیل داده ناسالم قرنطینه شد؛ سایر نمادها فعال مانده‌اند.',
+            '${health.quarantinedStreams} stream was quarantined for malformed data; healthy symbols remain active.',
+          )
+        : null;
+    final detail = error ?? degradedDetail ?? limitation;
+    return Semantics(
+      container: true,
+      label: '$status. $metrics. $detail',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: statusColor.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: statusColor.withValues(alpha: 0.25)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                operational ? Icons.sensors_rounded : Icons.shield_outlined,
+                color: statusColor,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      status,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      metrics,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.78),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      detail,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: error != null
+                            ? scheme.error
+                            : degradedDetail != null
+                            ? QuantaraColors.warning
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -26,7 +26,9 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
   factory BitunixOwnerAlphaRepository({
     required http.Client client,
     Duration timeout = const Duration(seconds: 10),
-    Duration requestSpacing = const Duration(milliseconds: 120),
+    // Four requests are dispatched together. Keep the following batch at or
+    // below Bitunix's documented public-market limit of ten requests/second.
+    Duration requestSpacing = const Duration(milliseconds: 400),
     DateTime Function()? now,
   }) {
     return BitunixOwnerAlphaRepository._(
@@ -54,8 +56,8 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
   static final _symbolPattern = RegExp(r'^[A-Z0-9]{5,24}$');
   static const _apiOrigin = 'https://fapi.bitunix.com';
   static const _maximumResponseBytes = 2 * 1024 * 1024;
-  static const supportedTimeframes = ['15m', '1h', '4h', '1D'];
-  static const opportunityTimeframes = ['15m', '1h', '4h'];
+  static const supportedTimeframes = ['5m', '15m', '30m', '1h', '4h', '1D'];
+  static const opportunityTimeframes = ['5m', '15m', '30m', '1h', '4h'];
   static const _displayNames = {
     'BTCUSDT': 'Bitcoin',
     'ETHUSDT': 'Ethereum',
@@ -150,7 +152,9 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         }
         final analysis =
             analyses['1h'] ??
+            analyses['30m'] ??
             analyses['15m'] ??
+            analyses['5m'] ??
             analyses['4h'] ??
             analyses.values.first;
         final symbolDirections = <String, ChartDirection>{
@@ -519,7 +523,9 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
 
   static Duration _durationFor(String timeframe) {
     return switch (timeframe) {
+      '5m' => const Duration(minutes: 5),
       '15m' => const Duration(minutes: 15),
+      '30m' => const Duration(minutes: 30),
       '1h' => const Duration(hours: 1),
       '4h' => const Duration(hours: 4),
       '1D' => const Duration(days: 1),
@@ -548,10 +554,10 @@ final class BitunixOwnerAlphaRepository implements OwnerAlphaRepository {
         result.add(symbol);
       }
     }
-    if (result.isEmpty || result.length > 12) {
+    if (result.isEmpty) {
       throw const OwnerAlphaDataException(
-        'واچ‌لیست باید بین ۱ تا ۱۲ نماد داشته باشد.',
-        'The watchlist must contain between 1 and 12 symbols.',
+        'واچ‌لیست باید دست‌کم یک نماد داشته باشد.',
+        'The watchlist must contain at least one symbol.',
       );
     }
     return result;
