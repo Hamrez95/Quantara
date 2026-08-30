@@ -217,6 +217,30 @@ void main() {
     expect(decision.reason, contains('do not cover'));
   });
 
+  test('refuses protection identity with the position id on another symbol', () {
+    final inconsistent = protection().toList()
+      ..add(
+        const BitunixPendingProtection(
+          orderId: 'foreign-symbol-stop',
+          positionId: 'xrp-position-1',
+          symbol: 'BTCUSDT',
+          takeProfitPrice: 0,
+          stopLossPrice: 59000,
+          takeProfitQuantity: 0,
+          stopLossQuantity: 67.8,
+        ),
+      );
+    final decision = LocalLiveOrphanRecoveryPolicy.evaluate(
+      position: position,
+      pnl: projection(),
+      protection: inconsistent,
+      entryOrder: quantaraOrder,
+      rules: rules,
+    );
+    expect(decision.allowed, isFalse);
+    expect(decision.reason, contains('identity is inconsistent'));
+  });
+
   test('REST fallback accepts exactly one valid position candidate', () {
     final candidates = <BitunixLivePosition>[position];
     expect(candidates.firstOrNull?.positionId, 'xrp-position-1');
