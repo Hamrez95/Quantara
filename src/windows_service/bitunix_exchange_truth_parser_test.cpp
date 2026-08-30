@@ -1,4 +1,5 @@
 #include "bitunix_exchange_truth_parser.h"
+#include "bitunix_pending_tpsl_parser.h"
 #include "bitunix_reconciliation_facts_adapter.h"
 
 #include <iostream>
@@ -117,6 +118,61 @@ int main() {
                      order.stop_loss_price == "60000",
                  "Parsed order facts must preserve protection metadata exactly.");
   }
+
+  constexpr std::string_view kValidPendingTpSl = R"json(
+    {
+      "code": 0,
+      "data": [
+        {
+          "id": "tpsl-1",
+          "positionId": "pos-1",
+          "symbol": "BTCUSDT",
+          "base": "BTC",
+          "quote": "USDT",
+          "tpPrice": "70000",
+          "slPrice": "60000",
+          "tpQty": "0.001",
+          "slQty": "0.001",
+          "tpStopType": "LAST_PRICE",
+          "slStopType": "LAST_PRICE"
+        }
+      ],
+      "msg": "Success"
+    }
+  )json";
+  const auto pending_tpsl =
+      quantara::ParseBitunixPendingTpSlOrdersResponse(kValidPendingTpSl);
+  ok &= Expect(pending_tpsl.has_value() && pending_tpsl->size() == 1,
+               "A documented pending TP/SL envelope must parse.");
+  if (pending_tpsl.has_value() && pending_tpsl->size() == 1) {
+    const auto& order = pending_tpsl->front();
+    ok &= Expect(order.order_id == "tpsl-1" && order.position_id == "pos-1" &&
+                     order.symbol == "BTCUSDT" &&
+                     order.take_profit_price == "70000" &&
+                     order.stop_loss_price == "60000" &&
+                     order.take_profit_quantity == "0.001" &&
+                     order.stop_loss_quantity == "0.001",
+                 "Dedicated TP/SL truth must preserve exchange-reported prices and quantities exactly.");
+  }
+
+  ok &= Expect(!quantara::ParseBitunixPendingTpSlOrdersResponse(
+                    R"json({"code":0,"data":[{"id":"tpsl-1","positionId":"pos-1","symbol":"BTCUSDT","slPrice":"60000","slQty":0.001}]})json")
+                    .has_value(),
+               "Numeric TP/SL quantities must fail closed because Bitunix documents them as strings.");
+  ok &= Expect(!quantara::ParseBitunixPendingTpSlOrdersResponse(
+                    R"json({"code":0,"data":[{"id":"tpsl-1","positionId":"pos-1","positionId":"pos-2","symbol":"BTCUSDT","slPrice":"60000","slQty":"0.001"}]})json")
+                    .has_value(),
+               "Duplicate dedicated TP/SL identity fields must fail closed.");
+  ok &= Expect(!quantara::ParseBitunixPendingTpSlOrdersResponse(
+                    R"json({"code":0,"data":[{"id":"tpsl-1","positionId":"pos-1","symbol":"BTCUSDT","slPrice":"60000","slQty":""}]})json")
+                    .has_value(),
+               "A TP/SL row without any complete price/quantity protection leg must fail closed.");
+  ok &= Expect(!quantara::ParseBitunixPendingTpSlOrdersResponse(
+                    R"json({"code":10001,"data":[]})json")
+                    .has_value(),
+               "Non-zero dedicated TP/SL response codes must fail closed.");
+  ok &= Expect(!quantara::ParseBitunixPendingTpSlOrdersResponse("{not-json").has_value(),
+               "Malformed dedicated TP/SL JSON must fail closed.");
 
   if (positions.has_value() && positions->size() == 1 && orders.has_value()) {
     quantara::DurableReconciliationEvidence durable{};
