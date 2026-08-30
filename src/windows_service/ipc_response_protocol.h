@@ -25,9 +25,13 @@ std::string_view ServiceSafetyStateName(ServiceSafetyState state) noexcept;
 std::string_view CredentialReadinessName(CredentialReadiness readiness) noexcept;
 
 // Exposes management-only recovery state to the read-only IPC/status surface
-// without turning it into entry authority. Ambiguous/unsupported combinations
-// remain fail-closed.
+// without turning it into entry authority. A successful reconciliation is not
+// itself executable capability: manageExistingOnly may be published only when
+// the running service also owns an attached management-only mutation executor.
+// Until then the same verified snapshot remains reconciliationRequired so the
+// UI/tray cannot claim protection the service cannot actually perform.
 ServiceSafetyState ServiceSafetyStateFromManagementOnlySnapshot(
-    const ManagementOnlyRecoverySnapshot& snapshot) noexcept;
+    const ManagementOnlyRecoverySnapshot& snapshot,
+    bool management_executor_attached = false) noexcept;
 
 }  // namespace quantara
