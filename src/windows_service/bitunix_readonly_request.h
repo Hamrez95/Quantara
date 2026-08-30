@@ -14,6 +14,7 @@ namespace quantara {
 enum class BitunixReadOnlyEndpoint {
   kPendingPositions,
   kPendingOrders,
+  kPendingTpSlOrders,
 };
 
 struct BitunixReadOnlyRequest final {
