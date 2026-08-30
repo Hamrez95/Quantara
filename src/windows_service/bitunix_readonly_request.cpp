@@ -13,6 +13,8 @@ constexpr std::string_view kPendingPositionsPath =
     "/api/v1/futures/position/get_pending_positions";
 constexpr std::string_view kPendingOrdersPath =
     "/api/v1/futures/trade/get_pending_orders";
+constexpr std::string_view kPendingTpSlOrdersPath =
+    "/api/v1/futures/tpsl/get_pending_orders";
 constexpr std::size_t kMaxQueryPairs = 8;
 constexpr std::size_t kMaxQueryValueLength = 128;
 constexpr std::size_t kMaxHeaderValueLength = 256;
@@ -53,6 +55,9 @@ bool IsAllowedKey(BitunixReadOnlyEndpoint endpoint, std::string_view key) noexce
       return key == "symbol" || key == "orderId" || key == "clientId" ||
              key == "status" || key == "startTime" || key == "endTime" ||
              key == "skip" || key == "limit";
+    case BitunixReadOnlyEndpoint::kPendingTpSlOrders:
+      return key == "symbol" || key == "positionId" || key == "side" ||
+             key == "positionMode" || key == "skip" || key == "limit";
   }
   return false;
 }
@@ -63,6 +68,8 @@ std::optional<std::string_view> PathFor(BitunixReadOnlyEndpoint endpoint) noexce
       return kPendingPositionsPath;
     case BitunixReadOnlyEndpoint::kPendingOrders:
       return kPendingOrdersPath;
+    case BitunixReadOnlyEndpoint::kPendingTpSlOrders:
+      return kPendingTpSlOrdersPath;
   }
   return std::nullopt;
 }
@@ -74,6 +81,9 @@ std::optional<BitunixReadOnlyEndpoint> EndpointForPath(
   }
   if (path == kPendingOrdersPath) {
     return BitunixReadOnlyEndpoint::kPendingOrders;
+  }
+  if (path == kPendingTpSlOrdersPath) {
+    return BitunixReadOnlyEndpoint::kPendingTpSlOrders;
   }
   return std::nullopt;
 }
