@@ -218,18 +218,18 @@ void main() {
   });
 
   test('refuses protection identity with the position id on another symbol', () {
-    final inconsistent = protection().toList()
-      ..add(
-        const BitunixPendingProtection(
-          orderId: 'foreign-symbol-stop',
-          positionId: 'xrp-position-1',
-          symbol: 'BTCUSDT',
-          takeProfitPrice: 0,
-          stopLossPrice: 59000,
-          takeProfitQuantity: 0,
-          stopLossQuantity: 67.8,
-        ),
-      );
+    final inconsistent = protection().toList();
+    inconsistent.add(
+      const BitunixPendingProtection(
+        orderId: 'foreign-symbol-stop',
+        positionId: 'xrp-position-1',
+        symbol: 'BTCUSDT',
+        takeProfitPrice: 0,
+        stopLossPrice: 59000,
+        takeProfitQuantity: 0,
+        stopLossQuantity: 67.8,
+      ),
+    );
     final decision = LocalLiveOrphanRecoveryPolicy.evaluate(
       position: position,
       pnl: projection(),
