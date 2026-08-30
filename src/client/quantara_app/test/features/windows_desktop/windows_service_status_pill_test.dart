@@ -19,7 +19,8 @@ void main() {
   WindowsServiceManagementClient managementClientFor({
     required Future<WindowsServiceManagementCommandResult> Function(
       String positionId,
-    ) closeCommand,
+    )
+    closeCommand,
   }) {
     return WindowsServiceManagementClient(closeCommand: closeCommand);
   }
@@ -120,13 +121,14 @@ void main() {
 
     expect(find.text('Close existing position'), findsOneWidget);
     expect(find.text('Close position'), findsOneWidget);
-    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNull);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
 
     await tester.enterText(find.byType(TextField), '123456');
     await tester.tap(
-      find.text(
-        'I confirm that only this existing position should be closed.',
-      ),
+      find.text('I confirm that only this existing position should be closed.'),
     );
     await tester.pump();
 
@@ -170,9 +172,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '12x');
     await tester.tap(
-      find.text(
-        'I confirm that only this existing position should be closed.',
-      ),
+      find.text('I confirm that only this existing position should be closed.'),
     );
     await tester.pump();
 
@@ -180,7 +180,10 @@ void main() {
       find.text('ID must be 1-64 decimal digits and non-zero.'),
       findsOneWidget,
     );
-    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNull);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
     expect(calls, 0);
   });
 
@@ -214,9 +217,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '55');
     await tester.tap(
-      find.text(
-        'I confirm that only this existing position should be closed.',
-      ),
+      find.text('I confirm that only this existing position should be closed.'),
     );
     await tester.pump();
     await tester.tap(find.text('Close position'));
