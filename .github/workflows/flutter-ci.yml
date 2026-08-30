@@ -153,6 +153,13 @@ jobs:
           previous_root="$RUNNER_TEMP/quantara-previous"
           git worktree add --detach "$previous_root" "$base_sha"
           trap 'git worktree remove --force "$previous_root" >/dev/null 2>&1 || true' EXIT
+          # Older released sources predate the explicit debug-manifest merge override.
+          # Apply only the current QA/debug overlay so the historical app can be
+          # compiled as an upgrade fixture; production manifest and app data stay
+          # anchored to the selected base commit.
+          install -m 0644 \
+            "$GITHUB_WORKSPACE/src/client/quantara_app/android/app/src/debug/AndroidManifest.xml" \
+            "$previous_root/src/client/quantara_app/android/app/src/debug/AndroidManifest.xml"
           pushd "$previous_root/src/client/quantara_app" >/dev/null
           flutter pub get
           flutter build apk --debug --build-number="$previous_build"
