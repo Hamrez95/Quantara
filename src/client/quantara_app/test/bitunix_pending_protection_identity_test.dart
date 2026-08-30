@@ -16,21 +16,25 @@ void main() {
 
   BitunixLocalLiveApiClient client(
     Future<http.Response> Function(http.Request request) handler,
-  ) => BitunixLocalLiveApiClient(
-    client: MockClient(handler),
-    utcNow: () => DateTime.utc(2026, 8, 30, 16),
-    secureRandom: Random(107),
-  );
+  ) {
+    return BitunixLocalLiveApiClient(
+      client: MockClient(handler),
+      utcNow: () => DateTime.utc(2026, 8, 30, 16),
+      secureRandom: Random(107),
+    );
+  }
 
-  Map<String, Object?> protection({required String positionId}) => {
-    'id': 'tp-1',
-    'positionId': positionId,
-    'symbol': 'BTCUSDT',
-    'tpPrice': '62000',
-    'slPrice': '59000',
-    'tpQty': '0.01',
-    'slQty': '0.01',
-  };
+  Map<String, Object?> protection({required String positionId}) {
+    return {
+      'id': 'tp-1',
+      'positionId': positionId,
+      'symbol': 'BTCUSDT',
+      'tpPrice': '62000',
+      'slPrice': '59000',
+      'tpQty': '0.01',
+      'slQty': '0.01',
+    };
+  }
 
   test('position-scoped protection accepts exact exchange identity', () async {
     final api = client((request) async {
@@ -62,8 +66,8 @@ void main() {
   });
 
   test('position-scoped protection rejects stale mismatched identity', () async {
-    final api = client(
-      (request) async => http.Response(
+    final api = client((request) async {
+      return http.Response(
         jsonEncode({
           'code': 0,
           'msg': 'Success',
@@ -72,8 +76,8 @@ void main() {
           },
         }),
         200,
-      ),
-    );
+      );
+    });
 
     await expectLater(
       api.fetchPendingProtection(
@@ -92,7 +96,9 @@ void main() {
   });
 
   test('position-scoped protection rejects blank requested identity', () async {
-    final api = client((request) async => http.Response('{}', 500));
+    final api = client((request) async {
+      return http.Response('{}', 500);
+    });
 
     await expectLater(
       api.fetchPendingProtection(
