@@ -84,6 +84,37 @@ function Stop-ServiceIfPresent {
     Wait-ServiceStopped
 }
 
+function Assert-InstalledServicePostconditions {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedServiceExe
+    )
+
+    $service = Get-QuantaraService
+    if ($null -eq $service) {
+        throw "Windows service '$serviceName' was not registered after installation."
+    }
+
+    $service.Refresh()
+    if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+        throw "Windows service '$serviceName' must remain stopped after installation, but is $($service.Status)."
+    }
+
+    $config = & sc.exe qc $serviceName 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installed service configuration cannot be queried: $($config -join ' ')"
+    }
+
+    $configText = $config -join "`n"
+    if ($configText -notmatch 'START_TYPE\s*:\s*2\s+AUTO_START') {
+        throw "Windows service '$serviceName' is not configured for automatic boot startup. Actual: $configText"
+    }
+
+    if ($configText -notmatch [regex]::Escape($ExpectedServiceExe)) {
+        throw "Windows service '$serviceName' executable path does not match the packaged host. Expected: $ExpectedServiceExe Actual: $configText"
+    }
+}
+
 switch ($Action) {
     'PrepareUpgrade' {
         # Updating a running executable is unsafe. Stop the host first, but do
@@ -118,6 +149,12 @@ switch ($Action) {
         # installation/update from silently restoring execution authority. The
         # service is configured for boot startup, and every service start itself
         # begins disarmed.
+        #
+        # Treat installation as incomplete unless the SCM state now proves the
+        # exact packaged executable is registered, automatic boot start is set,
+        # and the service is still stopped. CI repeats these checks externally as
+        # defense in depth, but the helper must be fail-closed on its own too.
+        Assert-InstalledServicePostconditions -ExpectedServiceExe $resolvedServiceExe
     }
 
     'Uninstall' {
