@@ -9,6 +9,8 @@ void main() {
         final snapshot = WindowsServiceUpdatePolicy.resolve(
           event: event,
           hasExchangeReportedOpenPositions: false,
+          hasVerifiedQuantaraManagedOpenPositions: false,
+          managementExecutorAvailable: false,
         );
 
         expect(snapshot.blocksNewEntries, isTrue, reason: event.name);
@@ -22,24 +24,25 @@ void main() {
     },
   );
 
-  test(
-    'update request stops entries but keeps existing management available',
-    () {
-      final snapshot = WindowsServiceUpdatePolicy.resolve(
-        event: WindowsServiceUpdateEvent.updateRequested,
-        hasExchangeReportedOpenPositions: true,
-      );
+  test('update request never creates local management authority by itself', () {
+    final snapshot = WindowsServiceUpdatePolicy.resolve(
+      event: WindowsServiceUpdateEvent.updateRequested,
+      hasExchangeReportedOpenPositions: true,
+      hasVerifiedQuantaraManagedOpenPositions: true,
+      managementExecutorAvailable: true,
+    );
 
-      expect(snapshot.mode, WindowsServiceUpdateMode.preparing);
-      expect(snapshot.blocksNewEntries, isTrue);
-      expect(snapshot.localManagementAvailable, isTrue);
-    },
-  );
+    expect(snapshot.mode, WindowsServiceUpdateMode.preparing);
+    expect(snapshot.blocksNewEntries, isTrue);
+    expect(snapshot.localManagementAvailable, isFalse);
+  });
 
   test('service stop hands authority back to exchange-native protection', () {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
       event: WindowsServiceUpdateEvent.serviceStoppedForInstall,
       hasExchangeReportedOpenPositions: true,
+      hasVerifiedQuantaraManagedOpenPositions: true,
+      managementExecutorAvailable: true,
     );
 
     expect(snapshot.mode, WindowsServiceUpdateMode.installing);
@@ -51,6 +54,8 @@ void main() {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
       event: WindowsServiceUpdateEvent.installSucceeded,
       hasExchangeReportedOpenPositions: false,
+      hasVerifiedQuantaraManagedOpenPositions: false,
+      managementExecutorAvailable: false,
     );
 
     expect(snapshot.mode, WindowsServiceUpdateMode.reconciliationOnly);
@@ -62,6 +67,8 @@ void main() {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
       event: WindowsServiceUpdateEvent.installFailed,
       hasExchangeReportedOpenPositions: true,
+      hasVerifiedQuantaraManagedOpenPositions: true,
+      managementExecutorAvailable: true,
     );
 
     expect(snapshot.mode, WindowsServiceUpdateMode.rollbackRequired);
@@ -71,11 +78,13 @@ void main() {
   });
 
   test(
-    'reconciled open positions resume management without re-arming entries',
+    'verified reconciled position resumes management without entry authority',
     () {
       final snapshot = WindowsServiceUpdatePolicy.resolve(
         event: WindowsServiceUpdateEvent.reconciliationSucceeded,
         hasExchangeReportedOpenPositions: true,
+        hasVerifiedQuantaraManagedOpenPositions: true,
+        managementExecutorAvailable: true,
       );
 
       expect(snapshot.mode, WindowsServiceUpdateMode.managingExisting);
@@ -86,10 +95,25 @@ void main() {
     },
   );
 
+  test('unverified reconciled position remains blocked', () {
+    final snapshot = WindowsServiceUpdatePolicy.resolve(
+      event: WindowsServiceUpdateEvent.reconciliationSucceeded,
+      hasExchangeReportedOpenPositions: true,
+      hasVerifiedQuantaraManagedOpenPositions: false,
+      managementExecutorAvailable: true,
+    );
+
+    expect(snapshot.mode, WindowsServiceUpdateMode.blocked);
+    expect(snapshot.reconciliationRequired, isTrue);
+    expect(snapshot.localManagementAvailable, isFalse);
+  });
+
   test('successful reconciliation without positions ends disarmed', () {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
       event: WindowsServiceUpdateEvent.reconciliationSucceeded,
       hasExchangeReportedOpenPositions: false,
+      hasVerifiedQuantaraManagedOpenPositions: false,
+      managementExecutorAvailable: false,
     );
 
     expect(snapshot.mode, WindowsServiceUpdateMode.disarmed);
@@ -103,6 +127,8 @@ void main() {
     final snapshot = WindowsServiceUpdatePolicy.resolve(
       event: WindowsServiceUpdateEvent.reconciliationFailed,
       hasExchangeReportedOpenPositions: true,
+      hasVerifiedQuantaraManagedOpenPositions: true,
+      managementExecutorAvailable: true,
     );
 
     expect(snapshot.mode, WindowsServiceUpdateMode.blocked);
