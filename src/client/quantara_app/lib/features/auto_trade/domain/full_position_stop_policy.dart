@@ -8,6 +8,8 @@ final class FullPositionStopPolicy {
     required double stopLossQuantity,
     required double remainingQuantity,
     required double quantityTolerance,
+    double? expectedStopLossPrice,
+    double priceTolerance = 0,
   }) {
     if (evidencePositionId.trim() != expectedPositionId.trim() ||
         expectedPositionId.trim().isEmpty ||
@@ -19,6 +21,16 @@ final class FullPositionStopPolicy {
         !quantityTolerance.isFinite ||
         quantityTolerance < 0) {
       return false;
+    }
+
+    if (expectedStopLossPrice != null) {
+      if (!expectedStopLossPrice.isFinite ||
+          expectedStopLossPrice <= 0 ||
+          !priceTolerance.isFinite ||
+          priceTolerance < 0 ||
+          (stopLossPrice - expectedStopLossPrice).abs() > priceTolerance) {
+        return false;
+      }
     }
 
     // Bitunix can represent a whole-position stop with a non-positive
