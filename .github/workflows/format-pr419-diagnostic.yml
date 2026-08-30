@@ -6,32 +6,20 @@ on:
       - feat/360-windows-management-control-ui
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   format:
-    if: github.event.head_commit.message != 'style: apply exact Dart formatting for PR 419'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: '3.12.2'
-      - name: Apply exact Dart formatter output
+      - name: Print exact formatter diff
         working-directory: src/client/quantara_app
         shell: bash
         run: |
           dart --version
           dart format lib/features/windows_desktop/presentation/windows_service_status_pill.dart test/features/windows_desktop/windows_service_status_pill_test.dart
-      - name: Commit formatter output
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/client/quantara_app/lib/features/windows_desktop/presentation/windows_service_status_pill.dart src/client/quantara_app/test/features/windows_desktop/windows_service_status_pill_test.dart
-          if git diff --cached --quiet; then
-            echo 'No formatting changes to commit.'
-            exit 0
-          fi
-          git commit -m 'style: apply exact Dart formatting for PR 419'
-          git push origin HEAD:feat/360-windows-management-control-ui
+          git diff --unified=2 -- lib/features/windows_desktop/presentation/windows_service_status_pill.dart test/features/windows_desktop/windows_service_status_pill_test.dart
