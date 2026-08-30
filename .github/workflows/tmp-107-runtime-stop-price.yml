@@ -1,0 +1,79 @@
+name: Temporary issue 107 runtime patch
+
+on:
+  push:
+    branches:
+      - fix/107-bind-entry-stop-price
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: contains(github.event.head_commit.message, '[apply-stop-price-runtime]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/107-bind-entry-stop-price
+
+      - name: Bind entry stop confirmation to canonical price
+        shell: python
+        run: |
+          from pathlib import Path
+
+          source = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
+          text = source.read_text(encoding='utf-8')
+
+          anchor = """          final quantityTolerance = math
+              .pow(10, -rules.quantityPrecision)
+              .toDouble();
+          final protectedPositionId = position.positionId;
+"""
+          replacement = """          final quantityTolerance = math
+              .pow(10, -rules.quantityPrecision)
+              .toDouble();
+          final priceTolerance =
+              math.pow(10, -rules.pricePrecision).toDouble() / 2;
+          final protectedPositionId = position.positionId;
+"""
+          if text.count(anchor) != 1:
+              raise SystemExit(f'expected exactly one entry tolerance anchor, found {text.count(anchor)}')
+          text = text.replace(anchor, replacement, 1)
+
+          call = """                  expectedPositionId: protectedPositionId,
+                  stopLossPrice: item.stopLossPrice,
+                  stopLossQuantity: item.stopLossQuantity,
+                  remainingQuantity: quantity,
+                  quantityTolerance: quantityTolerance,
+                ),
+"""
+          bound_call = """                  expectedPositionId: protectedPositionId,
+                  stopLossPrice: item.stopLossPrice,
+                  stopLossQuantity: item.stopLossQuantity,
+                  remainingQuantity: quantity,
+                  quantityTolerance: quantityTolerance,
+                  expectedStopLossPrice: stopLoss,
+                  priceTolerance: priceTolerance,
+                ),
+"""
+          if text.count(call) != 2:
+              raise SystemExit(f'expected exactly two entry stop confirmation calls, found {text.count(call)}')
+          text = text.replace(call, bound_call)
+          source.write_text(text, encoding='utf-8')
+
+          workflow = Path('.github/workflows/tmp-107-runtime-stop-price.yml')
+          workflow.unlink()
+
+      - name: Verify exact diff and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test ! -e .github/workflows/tmp-107-runtime-stop-price.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart .github/workflows/tmp-107-runtime-stop-price.yml
+          git commit -m "fix(auto-trade): verify intended entry stop price"
+          git push origin HEAD:fix/107-bind-entry-stop-price
