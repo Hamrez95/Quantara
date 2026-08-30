@@ -62,8 +62,13 @@ int wmain() {
       true,
       "allManagedVerified"};
   if (quantara::ServiceSafetyStateFromManagementOnlySnapshot(manage_existing) !=
+      ServiceSafetyState::kReconciliationRequired) {
+    std::wcerr << L"Verified recovery must not claim management before the runtime executor is attached.\n";
+    return 1;
+  }
+  if (quantara::ServiceSafetyStateFromManagementOnlySnapshot(manage_existing, true) !=
       ServiceSafetyState::kManageExistingOnly) {
-    std::wcerr << L"Verified management-only recovery state mapping mismatch.\n";
+    std::wcerr << L"Attached management-only executor state mapping mismatch.\n";
     return 1;
   }
   const auto management_status = quantara::EncodeCanonicalReadOnlyResponse(
