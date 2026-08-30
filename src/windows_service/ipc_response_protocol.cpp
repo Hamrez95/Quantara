@@ -43,13 +43,16 @@ std::string_view ServiceSafetyStateName(ServiceSafetyState state) noexcept {
 }
 
 ServiceSafetyState ServiceSafetyStateFromManagementOnlySnapshot(
-    const ManagementOnlyRecoverySnapshot& snapshot) noexcept {
+    const ManagementOnlyRecoverySnapshot& snapshot,
+    bool management_executor_attached) noexcept {
   if (snapshot.mode == ManagementOnlyRecoveryMode::kManageExistingOnly &&
       snapshot.authority ==
           ExistingPositionManagementAuthority::kManageExistingOnly &&
       IsManageExistingClassification(snapshot.classification) &&
       snapshot.blocks_new_entries) {
-    return ServiceSafetyState::kManageExistingOnly;
+    return management_executor_attached
+               ? ServiceSafetyState::kManageExistingOnly
+               : ServiceSafetyState::kReconciliationRequired;
   }
   if (snapshot.mode == ManagementOnlyRecoveryMode::kReconciliationRequired ||
       snapshot.authority ==
