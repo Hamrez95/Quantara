@@ -41,7 +41,8 @@ ManagementOnlyRecoverySnapshot ReconcileBitunixManagementOnly(
 
     evidence_used[matched_index] = true;
     const auto current = ApplyCurrentExchangeProtectionEvidence(
-        position, *matched, exchange_truth.pending_orders);
+        position, *matched, exchange_truth.pending_orders,
+        exchange_truth.pending_tpsl_orders);
     if (!current.has_value()) {
       coordinator.RequireFreshReconciliation("exchangeEvidenceJoinFailed");
       return coordinator.snapshot();
