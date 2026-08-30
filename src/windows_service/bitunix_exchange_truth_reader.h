@@ -32,17 +32,27 @@ using BitunixReadOnlyTransport = std::optional<BitunixHttpsReadOnlyResponse> (*)
 [[nodiscard]] std::optional<BitunixReadOnlyAuthStamp>
 GenerateBitunixReadOnlyAuthStamp() noexcept;
 
-// Executes one bounded, authenticated, read-only reconciliation cycle against
-// the three allowlisted Bitunix endpoints. The cycle is accepted only when all
-// responses parse successfully, the generic pending-order page is complete,
-// and the TP/SL response cannot be a saturated/truncated page. It never grants
-// execution authority and performs no order/position mutation.
+// Testable three-stamp form. Each private read must use its own nonce.
 [[nodiscard]] std::optional<BitunixExchangeTruthSnapshot>
 ReadBitunixExchangeTruth(
     const std::filesystem::path& credential_root,
     const BitunixReadOnlyAuthStamp& positions_auth,
     const BitunixReadOnlyAuthStamp& orders_auth,
     const BitunixReadOnlyAuthStamp& tpsl_auth,
+    BitunixReadOnlyTransport transport,
+    const BitunixHttpsReadOnlyLimits& limits = {}) noexcept;
+
+// Runtime convenience form preserves the existing service call contract while
+// generating a fresh independent auth stamp for the third TP/SL truth read.
+// The cycle is accepted only when all three allowlisted GET responses parse
+// successfully, the generic pending-order page is complete, and the TP/SL page
+// is not saturated at its maximum bounded page size. No mutation authority is
+// granted by this reader.
+[[nodiscard]] std::optional<BitunixExchangeTruthSnapshot>
+ReadBitunixExchangeTruth(
+    const std::filesystem::path& credential_root,
+    const BitunixReadOnlyAuthStamp& positions_auth,
+    const BitunixReadOnlyAuthStamp& orders_auth,
     BitunixReadOnlyTransport transport = ExecuteBitunixHttpsReadOnly,
     const BitunixHttpsReadOnlyLimits& limits = {}) noexcept;
 
