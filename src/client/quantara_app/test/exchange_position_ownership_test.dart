@@ -111,6 +111,24 @@ void main() {
     expect(result.positions.single.kind, ExchangePositionOwnershipKind.managed);
   });
 
+  test('duplicate exchange identity cannot remain classified as managed', () {
+    final result = ExchangePositionOwnershipClassifier.classify(
+      account: account(positions: const [position, position]),
+      managedPositions: [managed()],
+    );
+
+    expect(result.exchangeOpenPositionCount, 2);
+    expect(result.managedCount, 0);
+    expect(result.blocksNewEntries, isTrue);
+    for (final assessment in result.positions) {
+      expect(assessment.kind, ExchangePositionOwnershipKind.externalUnmanaged);
+      expect(
+        assessment.recoveryBlocks,
+        contains(ExchangePositionRecoveryBlock.duplicatePositionIdentity),
+      );
+    }
+  });
+
   test(
     'fully protected orphan is not recoverable until Quantara ownership is verified',
     () {
