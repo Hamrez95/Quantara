@@ -51,14 +51,12 @@ final class WindowsServiceUpdatePolicy {
   static WindowsServiceUpdateSnapshot resolve({
     required WindowsServiceUpdateEvent event,
     required bool hasExchangeReportedOpenPositions,
+    required bool hasVerifiedQuantaraManagedOpenPositions,
+    required bool managementExecutorAvailable,
   }) {
     switch (event) {
       case WindowsServiceUpdateEvent.updateRequested:
-        return _snapshot(
-          event,
-          WindowsServiceUpdateMode.preparing,
-          localManagementAvailable: true,
-        );
+        return _snapshot(event, WindowsServiceUpdateMode.preparing);
       case WindowsServiceUpdateEvent.serviceStoppedForInstall:
         return _snapshot(event, WindowsServiceUpdateMode.installing);
       case WindowsServiceUpdateEvent.installSucceeded:
@@ -81,14 +79,46 @@ final class WindowsServiceUpdatePolicy {
           reconciliationRequired: true,
         );
       case WindowsServiceUpdateEvent.reconciliationSucceeded:
-        return _snapshot(
-          event,
-          hasExchangeReportedOpenPositions
-              ? WindowsServiceUpdateMode.managingExisting
-              : WindowsServiceUpdateMode.disarmed,
-          localManagementAvailable: hasExchangeReportedOpenPositions,
+        return _resolveReconciled(
+          event: event,
+          hasExchangeReportedOpenPositions: hasExchangeReportedOpenPositions,
+          hasVerifiedQuantaraManagedOpenPositions:
+              hasVerifiedQuantaraManagedOpenPositions,
+          managementExecutorAvailable: managementExecutorAvailable,
         );
     }
+  }
+
+  static WindowsServiceUpdateSnapshot _resolveReconciled({
+    required WindowsServiceUpdateEvent event,
+    required bool hasExchangeReportedOpenPositions,
+    required bool hasVerifiedQuantaraManagedOpenPositions,
+    required bool managementExecutorAvailable,
+  }) {
+    if (!hasExchangeReportedOpenPositions &&
+        !hasVerifiedQuantaraManagedOpenPositions) {
+      return _snapshot(event, WindowsServiceUpdateMode.disarmed);
+    }
+
+    final canManageVerifiedExisting = hasExchangeReportedOpenPositions &&
+        hasVerifiedQuantaraManagedOpenPositions &&
+        managementExecutorAvailable;
+    if (canManageVerifiedExisting) {
+      return _snapshot(
+        event,
+        WindowsServiceUpdateMode.managingExisting,
+        localManagementAvailable: true,
+      );
+    }
+
+    // Any position that cannot be proven Quantara-owned, any contradictory
+    // ownership/exchange truth, or a missing runtime executor remains blocked.
+    // The caller must reconcile again instead of widening local authority.
+    return _snapshot(
+      event,
+      WindowsServiceUpdateMode.blocked,
+      reconciliationRequired: true,
+    );
   }
 
   static WindowsServiceUpdateSnapshot _snapshot(
