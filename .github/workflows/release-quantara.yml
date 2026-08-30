@@ -22,6 +22,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: quantara-release
@@ -152,3 +154,38 @@ jobs:
       - name: Remove temporary keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/quantara.jks"
+
+  pwa:
+    name: Deploy the release PWA to GitHub Pages
+    needs: release
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter pub get
+          flutter build web --release --base-href '/Quantara/' --dart-define=APP_COMMIT="$GITHUB_SHA"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ env.APP_DIR }}/build/web
+
+  deploy-pwa:
+    name: Publish Quantara PWA
+    needs: pwa
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
