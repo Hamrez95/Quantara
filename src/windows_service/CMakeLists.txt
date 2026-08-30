@@ -12,6 +12,8 @@ add_executable(quantara_windows_service
   bitunix_readonly_request.h
   bitunix_https_readonly_transport.cpp
   bitunix_https_readonly_transport.h
+  bitunix_management_only_https_transport.cpp
+  bitunix_management_only_https_transport.h
   bitunix_exchange_truth_parser.cpp
   bitunix_exchange_truth_parser.h
   bitunix_exchange_truth_reader.cpp
@@ -489,4 +491,33 @@ target_compile_options(quantara_windows_service_management_only_mutation_executo
 add_custom_command(TARGET quantara_windows_service_management_only_mutation_executor_test POST_BUILD
   COMMAND $<TARGET_FILE:quantara_windows_service_management_only_mutation_executor_test>
   COMMENT "Running management-only mutation executor regression test"
+)
+
+add_executable(quantara_windows_service_bitunix_management_https_transport_test
+  bitunix_management_only_https_transport.cpp
+  bitunix_management_only_https_transport.h
+  bitunix_management_only_https_transport_test.cpp
+  bitunix_request_authorizer.cpp
+  bitunix_request_authorizer.h
+  bitunix_request_signer.cpp
+  bitunix_request_signer.h
+  credential_vault.cpp
+  credential_vault.h
+)
+target_compile_features(quantara_windows_service_bitunix_management_https_transport_test PRIVATE cxx_std_20)
+target_compile_definitions(quantara_windows_service_bitunix_management_https_transport_test PRIVATE
+  UNICODE
+  _UNICODE
+  WIN32_LEAN_AND_MEAN
+  NOMINMAX
+)
+target_compile_options(quantara_windows_service_bitunix_management_https_transport_test PRIVATE
+  /W4
+  /WX
+  /permissive-
+)
+target_link_libraries(quantara_windows_service_bitunix_management_https_transport_test PRIVATE advapi32 bcrypt crypt32 winhttp)
+add_custom_command(TARGET quantara_windows_service_bitunix_management_https_transport_test POST_BUILD
+  COMMAND $<TARGET_FILE:quantara_windows_service_bitunix_management_https_transport_test>
+  COMMENT "Running management-only Bitunix HTTPS transport regression test"
 )
