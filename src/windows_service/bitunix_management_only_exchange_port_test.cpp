@@ -42,6 +42,16 @@ std::optional<quantara::BitunixManagementOnlyHttpsResponse> AmbiguousTransport(
   return std::nullopt;
 }
 
+std::optional<quantara::BitunixHttpsReadOnlyResponse> EmptyTpSlTruth(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope) noexcept {
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[]})json"};
+  }
+  return std::nullopt;
+}
+
 std::optional<quantara::BitunixHttpsReadOnlyResponse> ClosedTruthTransport(
     const quantara::BitunixReadOnlyHttpEnvelope& envelope,
     const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
@@ -55,7 +65,7 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> ClosedTruthTransport(
     return quantara::BitunixHttpsReadOnlyResponse{200,
         R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
-  return std::nullopt;
+  return EmptyTpSlTruth(envelope);
 }
 
 std::optional<quantara::BitunixHttpsReadOnlyResponse> StillOpenTruthTransport(
@@ -71,7 +81,7 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StillOpenTruthTransport(
     return quantara::BitunixHttpsReadOnlyResponse{200,
         R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
-  return std::nullopt;
+  return EmptyTpSlTruth(envelope);
 }
 
 std::optional<quantara::BitunixHttpsReadOnlyResponse> StaleOrderTruthTransport(
@@ -87,7 +97,7 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StaleOrderTruthTransport(
     return quantara::BitunixHttpsReadOnlyResponse{200,
         R"json({"code":0,"data":{"orderList":[{"orderId":"sl-1","positionId":"12345","symbol":"BTCUSDT","status":"NEW","reduceOnly":true,"slPrice":"60000"}],"total":1}})json"};
   }
-  return std::nullopt;
+  return EmptyTpSlTruth(envelope);
 }
 
 quantara::ExistingPositionMutationRequest CloseRequest() {
