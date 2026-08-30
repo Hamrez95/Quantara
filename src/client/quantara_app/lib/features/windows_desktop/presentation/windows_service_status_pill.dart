@@ -139,67 +139,69 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
               ),
               content: SizedBox(
                 width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      persian
-                          ? 'فقط پوزیشن موجودی که Quantara آن را دوباره با صرافی تأیید کند قابل بستن است. این مسیر هیچ اختیار ورود جدیدی ایجاد نمی‌کند.'
-                          : 'Only an existing position re-verified by Quantara against the exchange can be closed. This path never grants new-entry authority.',
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      enabled: !busy,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: persian ? 'Position ID' : 'Position ID',
-                        helperText: persian
-                            ? 'شناسه عددی پوزیشن در صرافی'
-                            : 'Numeric exchange position identifier',
-                        errorText: positionId.isEmpty || validPositionId
-                            ? null
-                            : (persian
-                                  ? 'شناسه باید ۱ تا ۶۴ رقم و غیرصفر باشد.'
-                                  : 'ID must be 1-64 decimal digits and non-zero.'),
-                      ),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          positionId = value.trim();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      value: confirmed,
-                      onChanged: busy
-                          ? null
-                          : (value) {
-                              setDialogState(() {
-                                confirmed = value ?? false;
-                              });
-                            },
-                      title: Text(
-                        persian
-                            ? 'تأیید می‌کنم فقط همین پوزیشن موجود بسته شود.'
-                            : 'I confirm that only this existing position should be closed.',
-                      ),
-                      subtitle: Text(
-                        persian
-                            ? 'در صورت نامشخص بودن نتیجه شبکه، عملیات خودکار تکرار نمی‌شود.'
-                            : 'If the network outcome is ambiguous, the mutation is not retried automatically.',
-                      ),
-                    ),
-                    if (errorMessage != null) ...[
-                      const SizedBox(height: 8),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        errorMessage!,
-                        style: TextStyle(color: QuantaraColors.danger),
+                        persian
+                            ? 'فقط پوزیشن موجودی که Quantara آن را دوباره با صرافی تأیید کند قابل بستن است. این مسیر هیچ اختیار ورود جدیدی ایجاد نمی‌کند.'
+                            : 'Only an existing position re-verified by Quantara against the exchange can be closed. This path never grants new-entry authority.',
                       ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        enabled: !busy,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: persian ? 'Position ID' : 'Position ID',
+                          helperText: persian
+                              ? 'شناسه عددی پوزیشن در صرافی'
+                              : 'Numeric exchange position identifier',
+                          errorText: positionId.isEmpty || validPositionId
+                              ? null
+                              : (persian
+                                    ? 'شناسه باید ۱ تا ۶۴ رقم و غیرصفر باشد.'
+                                    : 'ID must be 1-64 decimal digits and non-zero.'),
+                        ),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            positionId = value.trim();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: confirmed,
+                        onChanged: busy
+                            ? null
+                            : (value) {
+                                setDialogState(() {
+                                  confirmed = value ?? false;
+                                });
+                              },
+                        title: Text(
+                          persian
+                              ? 'تأیید می‌کنم فقط همین پوزیشن موجود بسته شود.'
+                              : 'I confirm that only this existing position should be closed.',
+                        ),
+                        subtitle: Text(
+                          persian
+                              ? 'در صورت نامشخص بودن نتیجه شبکه، عملیات خودکار تکرار نمی‌شود.'
+                              : 'If the network outcome is ambiguous, the mutation is not retried automatically.',
+                        ),
+                      ),
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          errorMessage!,
+                          style: TextStyle(color: QuantaraColors.danger),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
               actions: [
