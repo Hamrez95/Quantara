@@ -10,20 +10,25 @@
 #include <string_view>
 #include <vector>
 
+#pragma comment(lib, "advapi32.lib")
+
 namespace {
 
 constexpr wchar_t kWindowClassName[] = L"QuantaraTrayStatusMonitor";
 constexpr wchar_t kWindowTitle[] = L"Quantara status monitor";
 constexpr wchar_t kSingleInstanceMutexName[] =
     L"Local\\QuantaraWindowsTrayStatusMonitor";
+constexpr wchar_t kExecutionServiceName[] = L"QuantaraExecutionService";
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT_PTR kRefreshTimerId = 1;
 constexpr UINT kRefreshIntervalMs = 5000;
 constexpr DWORD kStatusClientTimeoutMs = 3500;
+constexpr DWORD kServiceTransitionTimeoutMs = 20000;
 constexpr DWORD kMaxStatusBytes = 64 * 1024;
 constexpr UINT kOpenCommand = 1001;
 constexpr UINT kStatusCommand = 1002;
-constexpr UINT kExitCommand = 1003;
+constexpr UINT kRestartServiceCommand = 1003;
+constexpr UINT kExitCommand = 1004;
 
 UINT g_taskbar_created_message = 0;
 
@@ -47,6 +52,24 @@ class ScopedHandle final {
 
  private:
   HANDLE handle_;
+};
+
+class ScopedServiceHandle final {
+ public:
+  explicit ScopedServiceHandle(SC_HANDLE handle = nullptr) noexcept
+      : handle_(handle) {}
+  ~ScopedServiceHandle() {
+    if (handle_ != nullptr) {
+      CloseServiceHandle(handle_);
+    }
+  }
+  ScopedServiceHandle(const ScopedServiceHandle&) = delete;
+  ScopedServiceHandle& operator=(const ScopedServiceHandle&) = delete;
+
+  SC_HANDLE get() const noexcept { return handle_; }
+
+ private:
+  SC_HANDLE handle_;
 };
 
 enum class ServiceTrayState {
@@ -226,6 +249,87 @@ ServiceTrayState QueryServiceState() noexcept {
   return ParseCanonicalStatus(output);
 }
 
+bool QueryNativeServiceState(SC_HANDLE service, DWORD& state) noexcept {
+  SERVICE_STATUS_PROCESS status{};
+  DWORD bytes_needed = 0;
+  if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO,
+                            reinterpret_cast<LPBYTE>(&status), sizeof(status),
+                            &bytes_needed)) {
+    return false;
+  }
+  state = status.dwCurrentState;
+  return true;
+}
+
+bool WaitForNativeServiceState(SC_HANDLE service, DWORD desired_state,
+                               DWORD timeout_ms) noexcept {
+  const ULONGLONG deadline = GetTickCount64() + timeout_ms;
+  for (;;) {
+    DWORD current_state = 0;
+    if (!QueryNativeServiceState(service, current_state)) {
+      return false;
+    }
+    if (current_state == desired_state) {
+      return true;
+    }
+    if (GetTickCount64() >= deadline) {
+      return false;
+    }
+    Sleep(100);
+  }
+}
+
+bool RestartExecutionService() noexcept {
+  ScopedServiceHandle manager(
+      OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT));
+  if (manager.get() == nullptr) {
+    return false;
+  }
+
+  ScopedServiceHandle service(OpenServiceW(
+      manager.get(), kExecutionServiceName,
+      SERVICE_QUERY_STATUS | SERVICE_STOP | SERVICE_START));
+  if (service.get() == nullptr) {
+    return false;
+  }
+
+  DWORD state = 0;
+  if (!QueryNativeServiceState(service.get(), state)) {
+    return false;
+  }
+
+  if (state != SERVICE_STOPPED) {
+    if (state == SERVICE_STOP_PENDING) {
+      if (!WaitForNativeServiceState(service.get(), SERVICE_STOPPED,
+                                     kServiceTransitionTimeoutMs)) {
+        return false;
+      }
+    } else {
+      if (state == SERVICE_START_PENDING &&
+          !WaitForNativeServiceState(service.get(), SERVICE_RUNNING,
+                                     kServiceTransitionTimeoutMs)) {
+        return false;
+      }
+      SERVICE_STATUS status{};
+      if (!ControlService(service.get(), SERVICE_CONTROL_STOP, &status) &&
+          GetLastError() != ERROR_SERVICE_NOT_ACTIVE) {
+        return false;
+      }
+      if (!WaitForNativeServiceState(service.get(), SERVICE_STOPPED,
+                                     kServiceTransitionTimeoutMs)) {
+        return false;
+      }
+    }
+  }
+
+  if (!StartServiceW(service.get(), 0, nullptr) &&
+      GetLastError() != ERROR_SERVICE_ALREADY_RUNNING) {
+    return false;
+  }
+  return WaitForNativeServiceState(service.get(), SERVICE_RUNNING,
+                                   kServiceTransitionTimeoutMs);
+}
+
 bool CopyTooltip(NOTIFYICONDATAW& data, std::wstring_view tooltip) noexcept {
   if (tooltip.size() >= std::size(data.szTip)) {
     return false;
@@ -287,6 +391,9 @@ void ShowTrayMenu(HWND window, ServiceTrayState state) {
   AppendMenuW(menu, MF_STRING | MF_DISABLED | MF_GRAYED, kStatusCommand,
               status.c_str());
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kRestartServiceCommand,
+              L"Restart execution service (fail-closed)");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, kExitCommand, L"Exit status monitor");
 
   POINT point{};
@@ -338,6 +445,35 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wparam,
         case kOpenCommand:
           OpenQuantara();
           return 0;
+        case kRestartServiceCommand: {
+          const int confirmation = MessageBoxW(
+              window,
+              L"Restart the Quantara execution service?\n\nThe service will "
+              L"start fail-closed. Restarting never restores entry authority; "
+              L"fresh reconciliation is required before any future entry "
+              L"authority can be considered.",
+              L"Restart Quantara execution service",
+              MB_OKCANCEL | MB_ICONWARNING | MB_DEFBUTTON2);
+          if (confirmation != IDOK) {
+            return 0;
+          }
+          const bool restarted = RestartExecutionService();
+          state = QueryServiceState();
+          UpdateTray(window, state);
+          MessageBoxW(
+              window,
+              restarted
+                  ? L"The execution service restarted. Quantara remains "
+                    L"fail-closed until fresh reconciliation establishes a "
+                    L"safe state."
+                  : L"The execution service could not be restarted. No "
+                    L"authority was restored. Check service permissions and "
+                    L"status before taking further action.",
+              restarted ? L"Quantara service restarted"
+                        : L"Quantara service restart failed",
+              MB_OK | (restarted ? MB_ICONINFORMATION : MB_ICONERROR));
+          return 0;
+        }
         case kExitCommand:
           DestroyWindow(window);
           return 0;
