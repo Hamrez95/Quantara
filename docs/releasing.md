@@ -1,11 +1,13 @@
 # Releasing Quantara
 
-The canonical release source is `dev`. A release is cloud-first: open **Actions → Release Quantara → Run workflow**, choose a patch/minor/major bump and beta/stable channel, then add optional notes. The workflow validates `dev`, quality gates, Android identity and signing before it creates `quantara-vX.Y.Z` and a GitHub Release. A failed build creates neither tag nor release.
+The canonical release source is `main`. Product changes enter through `dev`, pass the required repository, Flutter, Android-upgrade and Windows checks, and are synchronized into `main` through a reviewed pull request before publication.
 
-`MAJOR.MINOR.PATCH` is semantic versioning. Beta versions are immutable (`-beta.1`, then `-beta.2`); stable artifacts are never replaced—make a new patch release instead.
+A release is cloud-first: open **Actions → Release Quantara → Run workflow** on `main`, choose a patch/minor/major bump and beta/stable channel, select the staged-rollout percentage, and add optional notes. The workflow requires a successful Flutter client CI run for the exact current `main` commit before it publishes anything.
 
-Local validation is `./scripts/release.ps1`. It uses the same dependency-free version calculator as Actions, checks a clean `dev` worktree and deliberately delegates publishing to GitHub Actions. Local artifact builds remain available through `./scripts/build-release.ps1`.
+`MAJOR.MINOR.PATCH` is semantic versioning. Beta versions are immutable (`-beta.1`, then the next calculated beta); stable artifacts are never replaced. Make a new release instead of overwriting a tag or artifact.
 
-Android requires the existing permanent Quantara signing identity. Actions expects only these secret names: `QUANTARA_ANDROID_KEYSTORE_BASE64`, `QUANTARA_ANDROID_KEYSTORE_PASSWORD`, `QUANTARA_ANDROID_KEY_ALIAS`, `QUANTARA_ANDROID_KEY_PASSWORD`. Never commit a keystore or password. Keep an encrypted offline backup of the original key; GitHub Secrets are not a backup. Missing signing material blocks release rather than producing an update-incompatible APK.
+The workflow validates formatting, analysis and tests; Android package/signing identity; monotonically increasing build number; previous-release identity continuity; checksums; and the machine-readable update manifest. A failed build creates no published release. Android APK/AAB and the PWA archive are always produced. A Windows x64 installer is included only when explicitly requested and its protected signing configuration passes.
 
-Current supported release artifacts are Android APK/AAB and the GitHub Pages PWA. Windows/iOS are not released by this workflow. APK/AAB checksums are published in `SHA256SUMS.txt`.
+Android uses the permanent Quantara signing identity. Actions expects these secrets: `QUANTARA_ANDROID_KEYSTORE_BASE64`, `QUANTARA_ANDROID_KEYSTORE_PASSWORD`, `QUANTARA_ANDROID_KEY_ALIAS`, and `QUANTARA_ANDROID_KEY_PASSWORD`. Never commit a keystore or password. Keep an encrypted offline backup of the original key; GitHub Secrets are not a backup. Missing signing material blocks the release rather than producing an update-incompatible APK.
+
+Local validation is `./scripts/release.ps1`. Local artifact builds remain available through `./scripts/build-release.ps1`, but canonical publication is performed only by GitHub Actions from certified `main`.
