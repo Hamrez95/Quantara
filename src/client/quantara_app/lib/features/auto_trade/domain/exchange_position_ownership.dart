@@ -127,6 +127,7 @@ abstract final class ExchangePositionOwnershipClassifier {
         expectedTakeProfitCount: verifiedRecovery.contains(id) ? 1 : 3,
       );
       if (managed != null &&
+          (positionIdCounts[id] ?? 0) == 1 &&
           managed.symbol.trim().toUpperCase() == symbol &&
           managed.initialQuantity > 0) {
         assessments.add(
