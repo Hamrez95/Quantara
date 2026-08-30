@@ -28,38 +28,42 @@ jobs:
           source = Path('src/client/quantara_app/lib/features/auto_trade/application/local_live_trade_service.dart')
           text = source.read_text(encoding='utf-8')
 
-          anchor = """          final quantityTolerance = math
-              .pow(10, -rules.quantityPrecision)
-              .toDouble();
-          final protectedPositionId = position.positionId;
-          """
-          replacement = """          final quantityTolerance = math
-              .pow(10, -rules.quantityPrecision)
-              .toDouble();
-          final priceTolerance =
-              math.pow(10, -rules.pricePrecision).toDouble() / 2;
-          final protectedPositionId = position.positionId;
-          """
+          anchor = (
+              '          final quantityTolerance = math\n'
+              '              .pow(10, -rules.quantityPrecision)\n'
+              '              .toDouble();\n'
+              '          final protectedPositionId = position.positionId;\n'
+          )
+          replacement = (
+              '          final quantityTolerance = math\n'
+              '              .pow(10, -rules.quantityPrecision)\n'
+              '              .toDouble();\n'
+              '          final priceTolerance =\n'
+              '              math.pow(10, -rules.pricePrecision).toDouble() / 2;\n'
+              '          final protectedPositionId = position.positionId;\n'
+          )
           if text.count(anchor) != 1:
               raise SystemExit(f'expected exactly one entry tolerance anchor, found {text.count(anchor)}')
           text = text.replace(anchor, replacement, 1)
 
-          call = """                  expectedPositionId: protectedPositionId,
-                  stopLossPrice: item.stopLossPrice,
-                  stopLossQuantity: item.stopLossQuantity,
-                  remainingQuantity: quantity,
-                  quantityTolerance: quantityTolerance,
-                ),
-          """
-          bound_call = """                  expectedPositionId: protectedPositionId,
-                  stopLossPrice: item.stopLossPrice,
-                  stopLossQuantity: item.stopLossQuantity,
-                  remainingQuantity: quantity,
-                  quantityTolerance: quantityTolerance,
-                  expectedStopLossPrice: stopLoss,
-                  priceTolerance: priceTolerance,
-                ),
-          """
+          call = (
+              '                  expectedPositionId: protectedPositionId,\n'
+              '                  stopLossPrice: item.stopLossPrice,\n'
+              '                  stopLossQuantity: item.stopLossQuantity,\n'
+              '                  remainingQuantity: quantity,\n'
+              '                  quantityTolerance: quantityTolerance,\n'
+              '                ),\n'
+          )
+          bound_call = (
+              '                  expectedPositionId: protectedPositionId,\n'
+              '                  stopLossPrice: item.stopLossPrice,\n'
+              '                  stopLossQuantity: item.stopLossQuantity,\n'
+              '                  remainingQuantity: quantity,\n'
+              '                  quantityTolerance: quantityTolerance,\n'
+              '                  expectedStopLossPrice: stopLoss,\n'
+              '                  priceTolerance: priceTolerance,\n'
+              '                ),\n'
+          )
           if text.count(call) != 2:
               raise SystemExit(f'expected exactly two entry stop confirmation calls, found {text.count(call)}')
           text = text.replace(call, bound_call)
