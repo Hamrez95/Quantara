@@ -65,7 +65,8 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
     final persian = Localizations.localeOf(context).languageCode == 'fa';
     final controller = TextEditingController();
     final managementClient =
-        widget.managementClient ?? createPlatformWindowsServiceManagementClient();
+        widget.managementClient ??
+        createPlatformWindowsServiceManagementClient();
     var confirmed = false;
     var busy = false;
     String? errorMessage;
@@ -136,9 +137,7 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
 
               return AlertDialog(
                 title: Text(
-                  persian
-                      ? 'بستن پوزیشن موجود'
-                      : 'Close existing position',
+                  persian ? 'بستن پوزیشن موجود' : 'Close existing position',
                 ),
                 content: SizedBox(
                   width: 420,
