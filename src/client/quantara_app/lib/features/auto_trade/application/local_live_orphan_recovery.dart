@@ -141,6 +141,15 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
       return blocked('Entry fill price does not match the open position.');
     }
 
+    if (protection.any(
+      (item) =>
+          item.positionId.trim() == positionId &&
+          item.symbol.trim().toUpperCase() != symbol,
+    )) {
+      return blocked(
+        'Protection exchange identity is inconsistent with the open position.',
+      );
+    }
     final matchingProtection = protection
         .where(
           (item) =>
