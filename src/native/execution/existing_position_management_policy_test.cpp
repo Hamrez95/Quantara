@@ -165,8 +165,8 @@ int main() {
       AuthorizeExistingPositionMutation(
           managed, verified_position,
           SafeMutation(ExistingPositionMutationKind::kTightenStop)),
-      true, "tightenStopAuthorized",
-      "Verified management-only authority must permit stop tightening.");
+      false, "stopPriceEvidenceRequired",
+      "Stop tightening must fail closed until current/new stop prices and side are explicit policy evidence.");
 
   auto wrong_identity =
       SafeMutation(ExistingPositionMutationKind::kReduceOnlyClose);
