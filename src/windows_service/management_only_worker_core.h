@@ -24,13 +24,13 @@ class WindowsManagementOnlyWorkerCore final {
     coordinator_.MarkLifecycleBoundary(boundary);
   }
 
-  // Requires the complete read-only exchange snapshot (positions + pending
-  // orders) together with whatever durable Quantara evidence is actually
-  // available. Positions without matching durable evidence are deliberately
-  // classified as external/unmanaged rather than aborting the reconciliation
-  // cycle. Current stop/TP protection is recomputed inside this boundary;
-  // callers cannot grant management-only authority by pre-populating protection
-  // flags in durable evidence.
+  // Requires the complete read-only exchange snapshot (positions + generic
+  // pending orders + dedicated TP/SL orders) together with whatever durable
+  // Quantara evidence is actually available. Positions without matching durable
+  // evidence are deliberately classified as external/unmanaged rather than
+  // aborting the reconciliation cycle. Current stop/TP protection is recomputed
+  // inside this boundary; callers cannot grant management-only authority by
+  // pre-populating protection flags in durable evidence.
   [[nodiscard]] std::optional<ManagementOnlyRecoverySnapshot>
   ReconcileFreshExchangeTruth(
       const BitunixExchangeTruthSnapshot& truth,
@@ -78,7 +78,7 @@ class WindowsManagementOnlyWorkerCore final {
 
       evidence_used[matched_index] = true;
       const auto current = ApplyCurrentExchangeProtectionEvidence(
-          position, *matched, truth.pending_orders);
+          position, *matched, truth.pending_orders, truth.pending_tpsl_orders);
       if (!current.has_value()) {
         coordinator_.RequireFreshReconciliation("exchangeEvidenceJoinFailed");
         return coordinator_.snapshot();
