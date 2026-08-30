@@ -27,6 +27,7 @@ abstract final class RemainingTargetProtectionPolicy {
     }
     final comparisonTolerance = quantityTolerance / 2;
     final pending = pendingProtection.toList(growable: false);
+    final activeOrderIds = <String>{};
     for (var index = 0; index < 3; index++) {
       final id = targetOrderIds[index].trim();
       final planned = targetQuantities[index];
@@ -42,7 +43,7 @@ abstract final class RemainingTargetProtectionPolicy {
         if (id.isNotEmpty || filled > comparisonTolerance) return false;
         continue;
       }
-      if (id.isEmpty) return false;
+      if (id.isEmpty || !activeOrderIds.add(id)) return false;
       final remaining = (planned - filled).clamp(0, planned).toDouble();
       if (remaining <= comparisonTolerance) continue;
       final confirmed = pending.any(
