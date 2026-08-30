@@ -81,12 +81,25 @@ abstract final class LocalLiveOrphanRecoveryPolicy {
     if (pnl == null) {
       return blocked('Position fill history is unavailable.');
     }
+    if (pnl.positionId.trim() != positionId ||
+        pnl.symbol.trim().toUpperCase() != symbol) {
+      return blocked(
+        'Position PnL exchange identity does not match the open position.',
+      );
+    }
     final explicitFills = pnl.fills
         .where((fill) => fill.positionId.trim() == positionId)
         .toList(growable: false);
     if (explicitFills.isEmpty ||
         explicitFills.any((fill) => fill.tradeId.trim().isEmpty)) {
       return blocked('Explicit exchange fill identity is incomplete.');
+    }
+    if (explicitFills.any(
+      (fill) => fill.symbol.trim().toUpperCase() != symbol,
+    )) {
+      return blocked(
+        'Position fill exchange identity does not match the open position.',
+      );
     }
     if (explicitFills.any((fill) => fill.reduceOnly)) {
       return blocked(
