@@ -65,35 +65,38 @@ void main() {
     expect(result.single.orderId, 'tp-1');
   });
 
-  test('position-scoped protection rejects stale mismatched identity', () async {
-    final api = client((request) async {
-      return http.Response(
-        jsonEncode({
-          'code': 0,
-          'msg': 'Success',
-          'data': {
-            'orderList': [protection(positionId: 'position-stale')],
-          },
-        }),
-        200,
-      );
-    });
+  test(
+    'position-scoped protection rejects stale mismatched identity',
+    () async {
+      final api = client((request) async {
+        return http.Response(
+          jsonEncode({
+            'code': 0,
+            'msg': 'Success',
+            'data': {
+              'orderList': [protection(positionId: 'position-stale')],
+            },
+          }),
+          200,
+        );
+      });
 
-    await expectLater(
-      api.fetchPendingProtection(
-        credentials,
-        symbol: 'BTCUSDT',
-        positionId: 'position-1',
-      ),
-      throwsA(
-        isA<LocalLiveTradeSafeException>().having(
-          (error) => error.message,
-          'message',
-          contains('identity did not match'),
+      await expectLater(
+        api.fetchPendingProtection(
+          credentials,
+          symbol: 'BTCUSDT',
+          positionId: 'position-1',
         ),
-      ),
-    );
-  });
+        throwsA(
+          isA<LocalLiveTradeSafeException>().having(
+            (error) => error.message,
+            'message',
+            contains('identity did not match'),
+          ),
+        ),
+      );
+    },
+  );
 
   test('position-scoped protection rejects blank requested identity', () async {
     final api = client((request) async {
