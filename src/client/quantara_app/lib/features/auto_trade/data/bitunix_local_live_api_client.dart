@@ -450,9 +450,15 @@ final class BitunixLocalLiveApiClient {
     String? symbol,
     String? positionId,
   }) async {
+    final expectedPositionId = positionId?.trim();
+    if (positionId != null && expectedPositionId!.isEmpty) {
+      throw const LocalLiveTradeSafeException(
+        'Protection position identity was missing.',
+      );
+    }
     final query = <String, String>{'limit': '100'};
     if (symbol != null) query['symbol'] = symbol;
-    if (positionId != null) query['positionId'] = positionId;
+    if (expectedPositionId != null) query['positionId'] = expectedPositionId;
     final response = await _signedGet(
       '/api/v1/futures/tpsl/get_pending_orders',
       query,
@@ -462,7 +468,7 @@ final class BitunixLocalLiveApiClient {
     final list = data is Map<String, Object?>
         ? _mapList(data['orderList'])
         : _mapList(data);
-    return list
+    final protections = list
         .map(
           (item) => BitunixPendingProtection(
             orderId: _string(item['id'], fallback: _string(item['orderId'])),
@@ -475,6 +481,15 @@ final class BitunixLocalLiveApiClient {
           ),
         )
         .toList(growable: false);
+    if (expectedPositionId != null &&
+        protections.any(
+          (item) => item.positionId.trim() != expectedPositionId,
+        )) {
+      throw const LocalLiveTradeSafeException(
+        'Bitunix protection identity did not match the requested position.',
+      );
+    }
+    return protections;
   }
 
   Future<BitunixOrderDetail> fetchOrderDetail({
