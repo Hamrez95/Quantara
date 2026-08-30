@@ -125,10 +125,14 @@ ExistingPositionMutationDecision AuthorizeExistingPositionMutation(
     case ExistingPositionMutationKind::kReduceOnlyClose:
       return MutationDecision(true, "reduceOnlyCloseAuthorized");
     case ExistingPositionMutationKind::kTightenStop:
-      if (request.widens_stop) {
-        return MutationDecision(false, "stopWideningForbidden");
-      }
-      return MutationDecision(true, "tightenStopAuthorized");
+      // The current shared contract carries no current/new stop prices or side,
+      // so it cannot independently prove that a requested stop change reduces
+      // risk. A caller-provided `widens_stop=false` flag is not sufficient
+      // evidence for a financial safety decision. Keep stop mutation disabled
+      // until explicit exchange-derived price evidence is represented here.
+      return MutationDecision(
+          false, request.widens_stop ? "stopWideningForbidden"
+                                     : "stopPriceEvidenceRequired");
     case ExistingPositionMutationKind::kUnsupported:
       return MutationDecision(false, "unsupportedManagementMutation");
   }
