@@ -84,4 +84,28 @@ void main() {
       );
     },
   );
+
+  test('rejects duplicate active target order identities', () {
+    expect(
+      RemainingTargetProtectionPolicy.allRemainingTargetsProtected(
+        targetOrderIds: const ['tp-shared', 'tp-shared', 'tp-3'],
+        targetQuantities: quantities,
+        filledQuantities: const [0, 0, 0],
+        pendingProtection: const [
+          PendingTargetProtectionEvidence(
+            orderId: 'tp-shared',
+            triggerPrice: 110,
+            quantity: 0.75,
+          ),
+          PendingTargetProtectionEvidence(
+            orderId: 'tp-3',
+            triggerPrice: 130,
+            quantity: 0.05,
+          ),
+        ],
+        quantityTolerance: 0.000001,
+      ),
+      isFalse,
+    );
+  });
 }
