@@ -1,8 +1,17 @@
+#include <cstdint>
 #include <iostream>
 #include <string>
+#include <vector>
 
+#include "ipc_request_protocol.h"
 #include "ipc_response_protocol.h"
 #include "service_shutdown_guard.h"
+
+namespace {
+std::vector<std::uint8_t> Frame(const std::string& text) {
+  return std::vector<std::uint8_t>(text.begin(), text.end());
+}
+}  // namespace
 
 int wmain() {
   using quantara::CredentialReadiness;
@@ -158,6 +167,28 @@ int wmain() {
           .has_value()) {
     std::wcerr << L"Unsafe request id was accepted for JSON encoding.\n";
     return 1;
+  }
+
+  const auto close = quantara::DecodeCanonicalManagementOnlyRequest(Frame(
+      "{\"protocolVersion\":1,\"requestId\":\"close-1\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"123456789\"}}"));
+  if (!close.has_value() || close->request_id != "close-1" ||
+      close->position_id != "123456789" ||
+      close->kind != quantara::ManagementOnlyRequestKind::kCloseExistingPosition) {
+    std::wcerr << L"Canonical management-only close request was not decoded.\n";
+    return 1;
+  }
+
+  const std::string unsafe_frames[] = {
+      "{\"protocolVersion\":1,\"requestId\":\"close-2\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"abc\"}}",
+      "{\"protocolVersion\":1,\"requestId\":\"close-3\",\"kind\":\"openPosition\",\"payload\":{\"positionId\":\"123\"}}",
+      "{\"protocolVersion\":1,\"requestId\":\"close-4\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"123\",\"leverage\":100}}",
+      "{\"protocolVersion\":1,\"requestId\":\"unsafe\\\"id\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"123\"}}",
+  };
+  for (const auto& unsafe : unsafe_frames) {
+    if (quantara::DecodeCanonicalManagementOnlyRequest(Frame(unsafe)).has_value()) {
+      std::wcerr << L"Unsafe or non-canonical management IPC frame was accepted.\n";
+      return 1;
+    }
   }
 
   std::wcout << L"Quantara Windows read-only response self-test passed.\n";
