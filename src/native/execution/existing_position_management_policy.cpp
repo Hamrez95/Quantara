@@ -29,6 +29,10 @@ bool IsPositiveFinite(double value) noexcept {
   return std::isfinite(value) && value > 0.0;
 }
 
+bool IsSupportedStopTriggerType(std::string_view value) noexcept {
+  return value == "LAST_PRICE" || value == "MARK_PRICE";
+}
+
 bool IsStrictlyTighterStop(const ExistingExchangePositionFacts& position,
                            double new_stop_price) noexcept {
   if (!IsPositiveFinite(position.current_stop_price) ||
@@ -157,6 +161,13 @@ ExistingPositionMutationDecision AuthorizeExistingPositionMutation(
           !IsPositiveFinite(position.current_stop_price) ||
           !IsPositiveFinite(request.new_stop_price)) {
         return MutationDecision(false, "stopPriceEvidenceRequired");
+      }
+      if (!IsSupportedStopTriggerType(position.current_stop_trigger_type) ||
+          !IsSupportedStopTriggerType(request.stop_trigger_type)) {
+        return MutationDecision(false, "stopTriggerEvidenceRequired");
+      }
+      if (request.stop_trigger_type != position.current_stop_trigger_type) {
+        return MutationDecision(false, "stopTriggerMismatch");
       }
       if (!IsStrictlyTighterStop(position, request.new_stop_price)) {
         return MutationDecision(false, "stopNotTighter");
