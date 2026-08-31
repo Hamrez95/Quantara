@@ -28,12 +28,19 @@ std::filesystem::path TestRoot() {
 std::optional<quantara::BitunixManagementOnlyHttpsResponse> AckTransport(
     const quantara::BitunixManagementOnlyHttpEnvelope& envelope,
     const quantara::BitunixManagementOnlyHttpsLimits&) noexcept {
-  if (envelope.method != "POST" ||
-      envelope.resource != "/api/v1/futures/trade/flash_close_position" ||
-      envelope.body != R"json({"positionId":"12345"})json") {
-    return std::nullopt;
-  }
-  return quantara::BitunixManagementOnlyHttpsResponse{200, R"json({"code":0})json"};
+  if (envelope.method != "POST") return std::nullopt;
+
+  const bool valid_close =
+      envelope.resource == "/api/v1/futures/trade/flash_close_position" &&
+      envelope.body == R"json({"positionId":"12345"})json";
+  const bool valid_tighten =
+      envelope.resource == "/api/v1/futures/tpsl/position/modify_order" &&
+      envelope.body ==
+          R"json({"symbol":"BTCUSDT","positionId":"12345","slPrice":"65000","slStopType":"MARK_PRICE"})json";
+  if (!valid_close && !valid_tighten) return std::nullopt;
+
+  return quantara::BitunixManagementOnlyHttpsResponse{
+      200, R"json({"code":0})json"};
 }
 
 std::optional<quantara::BitunixManagementOnlyHttpsResponse> AmbiguousTransport(
@@ -46,8 +53,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> EmptyTpSlTruth(
     const quantara::BitunixReadOnlyHttpEnvelope& envelope) noexcept {
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[]})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":[]})json"};
   }
   return std::nullopt;
 }
@@ -57,13 +64,13 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> ClosedTruthTransport(
     const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
   if (envelope.resource.find("/position/get_pending_positions") !=
       std::string::npos) {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[]})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":[]})json"};
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
   return EmptyTpSlTruth(envelope);
 }
@@ -78,8 +85,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StillOpenTruthTransport(
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
   return EmptyTpSlTruth(envelope);
 }
@@ -89,8 +96,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StaleOrderTruthTransport(
     const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
   if (envelope.resource.find("/position/get_pending_positions") !=
       std::string::npos) {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[]})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":[]})json"};
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
@@ -110,8 +117,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> TightenedStopTruthTranspor
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
@@ -142,8 +149,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> WrongStopTruthTransport(
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
@@ -163,8 +170,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> DuplicateStopTruthTranspor
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
@@ -255,14 +262,13 @@ int main() {
     const auto tighten_request = TightenStopRequest();
     quantara::BitunixManagementOnlyExchangePort tightened(
         root, AckTransport, TightenedStopTruthTransport);
+    ok &= Expect(tightened.SubmitMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::kAcknowledged,
+                 "Allowlisted stop tightening must use the atomic Bitunix position TP/SL modify endpoint.");
     ok &= Expect(tightened.ConfirmMutation(tighten_request) ==
                      quantara::ExistingPositionMutationConfirmation::
                          kConfirmedByFreshExchangeTruth,
                  "Stop tightening must be confirmed only when the same live position has the requested exchange SL and trigger semantics.");
-    ok &= Expect(tightened.SubmitMutation(tighten_request) ==
-                     quantara::ExistingPositionMutationSubmitOutcome::
-                         kDefinitelyNotSubmitted,
-                 "Confirmation support must not silently grant stop-tightening submission authority.");
 
     quantara::BitunixManagementOnlyExchangePort wrong_trigger(
         root, AckTransport, WrongTriggerTruthTransport);
@@ -287,6 +293,10 @@ int main() {
 
     auto invalid_stop = tighten_request;
     invalid_stop.new_stop_price = 0.0;
+    ok &= Expect(tightened.SubmitMutation(invalid_stop) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::
+                         kDefinitelyNotSubmitted,
+                 "Invalid stop price must fail before mutation transport.");
     ok &= Expect(tightened.ConfirmMutation(invalid_stop) ==
                      quantara::ExistingPositionMutationConfirmation::
                          kExchangeTruthUnavailable,
@@ -294,6 +304,10 @@ int main() {
 
     auto missing_trigger = tighten_request;
     missing_trigger.stop_trigger_type = {};
+    ok &= Expect(tightened.SubmitMutation(missing_trigger) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::
+                         kDefinitelyNotSubmitted,
+                 "Missing stop trigger semantics must fail before mutation transport.");
     ok &= Expect(tightened.ConfirmMutation(missing_trigger) ==
                      quantara::ExistingPositionMutationConfirmation::
                          kExchangeTruthUnavailable,
@@ -305,6 +319,13 @@ int main() {
                      quantara::ExistingPositionMutationSubmitOutcome::
                          kDefinitelyNotSubmitted,
                  "Unsafe mutation must be rejected before network submission.");
+
+    auto widening = tighten_request;
+    widening.widens_stop = true;
+    ok &= Expect(tightened.SubmitMutation(widening) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::
+                         kDefinitelyNotSubmitted,
+                 "Stop widening must remain impossible at the Bitunix request boundary.");
 
     quantara::BitunixManagementOnlyExchangePort missing_mutation_transport(
         root, nullptr, ClosedTruthTransport);
