@@ -40,18 +40,9 @@ final class SupervisorSetupValidation {
       failures.add(SupervisorSetupFailure.missingServerUrl);
     } else {
       final parsed = Uri.tryParse(rawUrl);
-      final hasSafeShape = parsed != null &&
-          parsed.hasScheme &&
-          parsed.host.isNotEmpty &&
-          parsed.userInfo.isEmpty &&
-          parsed.query.isEmpty &&
-          parsed.fragment.isEmpty;
-
-      if (!hasSafeShape) {
+      if (!_hasSafeUrlShape(parsed)) {
         failures.add(SupervisorSetupFailure.invalidServerUrl);
-      } else if (releaseBuild && parsed.scheme.toLowerCase() != 'https') {
-        failures.add(SupervisorSetupFailure.insecureServerUrl);
-      } else if (!releaseBuild && !_isAllowedDevelopmentScheme(parsed)) {
+      } else if (!_isAllowedScheme(parsed!, releaseBuild: releaseBuild)) {
         failures.add(SupervisorSetupFailure.insecureServerUrl);
       } else {
         origin = Uri(
@@ -75,19 +66,27 @@ final class SupervisorSetupValidation {
     );
   }
 
-  static bool _isAllowedDevelopmentScheme(Uri uri) {
+  static bool _hasSafeUrlShape(Uri? uri) {
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return false;
+    }
+    if (uri.userInfo.isNotEmpty || uri.query.isNotEmpty) {
+      return false;
+    }
+    return uri.fragment.isEmpty;
+  }
+
+  static bool _isAllowedScheme(Uri uri, {required bool releaseBuild}) {
     final scheme = uri.scheme.toLowerCase();
     if (scheme == 'https') {
       return true;
     }
-    if (scheme != 'http') {
+    if (releaseBuild || scheme != 'http') {
       return false;
     }
 
     final host = uri.host.toLowerCase();
-    return host == 'localhost' ||
-        host == '127.0.0.1' ||
-        host == '::1';
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
   }
 
   static bool _isSafeTokenShape(String token) {
@@ -112,11 +111,11 @@ final class SupervisorConnectionSnapshot {
     this.diagnosticCode,
   });
 
-  const SupervisorConnectionSnapshot.notConfigured()
-      : status = SupervisorConnectionStatus.notConfigured,
-        serverOrigin = null,
-        lastSuccessfulHealthCheckAt = null,
-        diagnosticCode = null;
+  factory SupervisorConnectionSnapshot.notConfigured() {
+    return const SupervisorConnectionSnapshot(
+      status: SupervisorConnectionStatus.notConfigured,
+    );
+  }
 
   final SupervisorConnectionStatus status;
   final Uri? serverOrigin;
