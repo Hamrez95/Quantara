@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -28,7 +29,9 @@ struct ExistingExchangePositionFacts final {
   // current stop, trigger semantics, or position side from caller intent.
   ExistingPositionSide side = ExistingPositionSide::kUnknown;
   double current_stop_price = 0.0;
-  std::string_view current_stop_trigger_type;
+  // Own this small value because reconciliation facts can outlive the joined
+  // current-cycle evidence object from which the exchange trigger was copied.
+  std::string current_stop_trigger_type;
 };
 
 enum class ExistingPositionClassification {
