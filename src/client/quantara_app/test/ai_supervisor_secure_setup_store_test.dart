@@ -50,17 +50,20 @@ void main() {
 
       expect(setup, isNotNull);
       expect(setup!.serverOrigin, Uri.parse('https://supervisor.example.com'));
-      expect(setup.toString(), isNot(contains('abcdefghijklmnopqrstuvwxyz123456')));
+      expect(
+        setup.toString(),
+        isNot(contains('abcdefghijklmnopqrstuvwxyz123456')),
+      );
     });
 
     test('invalid or incomplete stored setup fails closed', () async {
       final secureStore = _FakeSecureStore();
       final store = SupervisorSecureSetupStore(secureStore: secureStore);
 
-      secureStore.values['quantara.supervisor.server_origin'] =
-          'http://supervisor.example.com';
-      secureStore.values['quantara.supervisor.control_token'] =
-          'abcdefghijklmnopqrstuvwxyz123456';
+      secureStore.values.addAll({
+        'quantara.supervisor.server_origin': 'http://supervisor.example.com',
+        'quantara.supervisor.control_token': 'abcdefghijklmnopqrstuvwxyz123456',
+      });
 
       expect(await store.load(releaseBuild: true), isNull);
 
