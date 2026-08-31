@@ -35,7 +35,7 @@ void main() {
 
 Future<void> _verifyExplicitRefreshAfterActivePoll({
   required Future<bool> Function(AutoTradeController controller)
-  explicitRefresh,
+      explicitRefresh,
 }) async {
   var now = DateTime.utc(2026, 8, 31, 10);
   var accountRequests = 0;
