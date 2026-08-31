@@ -82,6 +82,7 @@ final class SupervisorSecureSetupStore {
       return validation;
     }
 
+    await clear();
     await _secureStore.write(_serverOriginKey, origin.toString());
     await _secureStore.write(_controlTokenKey, controlToken.trim());
     return validation;
