@@ -34,10 +34,9 @@ final class SupervisorHealthProbeResult {
 final class SupervisorHealthClient {
   SupervisorHealthClient({
     http.Client? client,
-    Duration timeout = const Duration(seconds: 5),
+    this._timeout = const Duration(seconds: 5),
     DateTime Function()? now,
   }) : _client = client ?? http.Client(),
-       _timeout = timeout,
        _now = now ?? DateTime.now;
 
   static const statusPath = '/api/v1/supervisor/status';
