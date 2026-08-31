@@ -100,6 +100,69 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StaleOrderTruthTransport(
   return EmptyTpSlTruth(envelope);
 }
 
+std::optional<quantara::BitunixHttpsReadOnlyResponse> TightenedStopTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
+  if (envelope.resource.find("/position/get_pending_positions") !=
+      std::string::npos) {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"positionId":"12345","symbol":"BTCUSDT","qty":"0.001","side":"LONG","marginMode":"ISOLATION","positionMode":"ONE_WAY","leverage":5}]})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"65000.000000","tpQty":"0.001","slQty":"0.001"}]})json"};
+  }
+  return std::nullopt;
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> WrongStopTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
+  if (envelope.resource.find("/position/get_pending_positions") !=
+      std::string::npos) {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"positionId":"12345","symbol":"BTCUSDT","qty":"0.001","side":"LONG","marginMode":"ISOLATION","positionMode":"ONE_WAY","leverage":5}]})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"64000","tpQty":"0.001","slQty":"0.001"}]})json"};
+  }
+  return std::nullopt;
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> DuplicateStopTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
+  if (envelope.resource.find("/position/get_pending_positions") !=
+      std::string::npos) {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"positionId":"12345","symbol":"BTCUSDT","qty":"0.001","side":"LONG","marginMode":"ISOLATION","positionMode":"ONE_WAY","leverage":5}]})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slQty":"0.001"},{"id":"sl-2","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slQty":"0.001"}]})json"};
+  }
+  return std::nullopt;
+}
+
 quantara::ExistingPositionMutationRequest CloseRequest() {
   return quantara::ExistingPositionMutationRequest{
       .kind = quantara::ExistingPositionMutationKind::kReduceOnlyClose,
@@ -109,6 +172,19 @@ quantara::ExistingPositionMutationRequest CloseRequest() {
       .increases_exposure = false,
       .changes_margin_mode = false,
       .widens_stop = false,
+  };
+}
+
+quantara::ExistingPositionMutationRequest TightenStopRequest() {
+  return quantara::ExistingPositionMutationRequest{
+      .kind = quantara::ExistingPositionMutationKind::kTightenStop,
+      .position_id = "12345",
+      .symbol = "BTCUSDT",
+      .reduce_only = true,
+      .increases_exposure = false,
+      .changes_margin_mode = false,
+      .widens_stop = false,
+      .new_stop_price = 65000.0,
   };
 }
 
@@ -163,6 +239,39 @@ int main() {
                      quantara::ExistingPositionMutationConfirmation::
                          kConfirmedByFreshExchangeTruth,
                  "Ambiguous submit may complete only when fresh exchange truth proves closure.");
+
+    const auto tighten_request = TightenStopRequest();
+    quantara::BitunixManagementOnlyExchangePort tightened(
+        root, AckTransport, TightenedStopTruthTransport);
+    ok &= Expect(tightened.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kConfirmedByFreshExchangeTruth,
+                 "Stop tightening must be confirmed only when the same live position has the requested exchange SL.");
+    ok &= Expect(tightened.SubmitMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::
+                         kDefinitelyNotSubmitted,
+                 "Confirmation support must not silently grant stop-tightening submission authority.");
+
+    quantara::BitunixManagementOnlyExchangePort wrong_stop(
+        root, AckTransport, WrongStopTruthTransport);
+    ok &= Expect(wrong_stop.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kNotConfirmedByFreshExchangeTruth,
+                 "A stale or wrong exchange SL must not confirm stop tightening.");
+
+    quantara::BitunixManagementOnlyExchangePort duplicate_stop(
+        root, AckTransport, DuplicateStopTruthTransport);
+    ok &= Expect(duplicate_stop.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kNotConfirmedByFreshExchangeTruth,
+                 "Ambiguous duplicate exchange SL evidence must remain fail-closed.");
+
+    auto invalid_stop = tighten_request;
+    invalid_stop.new_stop_price = 0.0;
+    ok &= Expect(tightened.ConfirmMutation(invalid_stop) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kExchangeTruthUnavailable,
+                 "Invalid expected stop evidence must fail before exchange confirmation.");
 
     auto unsafe = request;
     unsafe.increases_exposure = true;
