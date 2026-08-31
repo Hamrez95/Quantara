@@ -34,7 +34,9 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets('unavailable flat account stays recovery-oriented', (tester) async {
+  testWidgets('unavailable flat account stays recovery-oriented', (
+    tester,
+  ) async {
     final state = PrivateAccountReconciliationState.unavailable(
       at: DateTime.utc(2026, 8, 31, 12),
     );
@@ -59,7 +61,10 @@ void main() {
 
       await _pumpBanner(tester, state: state);
 
-      expect(find.textContaining('Private account truth is unavailable'), findsOne);
+      expect(
+        find.textContaining('Private account truth is unavailable'),
+        findsOne,
+      );
       expect(find.textContaining('confirmed open positions'), findsOne);
       expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
     },
@@ -137,7 +142,9 @@ void main() {
     expect(find.byIcon(Icons.sync_rounded), findsNothing);
   });
 
-  testWidgets('fresh non-flat truth renders no warning banner', (tester) async {
+  testWidgets('fresh non-flat truth renders no warning banner', (
+    tester,
+  ) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
 
     await _pumpBanner(
