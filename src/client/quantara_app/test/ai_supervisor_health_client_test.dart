@@ -10,7 +10,7 @@ void main() {
   final origin = Uri.parse('https://supervisor.example.com');
   final checkedAt = DateTime.utc(2026, 9, 1, 0, 30);
 
-  test('health probe uses only the read-only status GET contract', () async {
+  test('probes only the read-only status contract', () async {
     late http.Request captured;
     final client = MockClient((request) async {
       captured = request;
@@ -39,7 +39,7 @@ void main() {
     expect(result.toString(), isNot(contains(token)));
   });
 
-  test('reachable server can truthfully report Supervisor disabled', () async {
+  test('reports a disabled Supervisor truthfully', () async {
     final client = MockClient(
       (_) async => http.Response(
         '{"enabled":false,"model":"gpt-5","readOnly":true,'
@@ -56,39 +56,34 @@ void main() {
     expect(result.diagnosticCode, 'supervisor_not_enabled');
   });
 
-  test('rejected control token is sanitized unauthorized state', () async {
-    final client = MockClient(
-      (_) async => http.Response('secret details', 401),
-    );
+  test('sanitizes rejected control token state', () async {
+    final client = MockClient((_) async => http.Response('', 401));
     final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
     final result = await probe.check(serverOrigin: origin, controlToken: token);
 
     expect(result.status, SupervisorHealthTransportStatus.unauthorized);
     expect(result.diagnosticCode, 'control_token_rejected');
-    expect(result.toString(), isNot(contains('secret details')));
+    expect(result.toString(), isNot(contains(token)));
   });
 
-  test(
-    'mutation-capable status contract fails closed as incompatible',
-    () async {
-      final client = MockClient(
-        (_) async => http.Response(
-          '{"enabled":true,"model":"gpt-5","readOnly":true,'
-          '"liveTradingMutation":true,"credentialExposure":false}',
-          200,
-        ),
-      );
-      final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+  test('rejects mutation-capable status contract', () async {
+    final client = MockClient(
+      (_) async => http.Response(
+        '{"enabled":true,"model":"gpt-5","readOnly":true,'
+        '"liveTradingMutation":true,"credentialExposure":false}',
+        200,
+      ),
+    );
+    final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
-      final result = await probe.check(serverOrigin: origin, controlToken: token);
+    final result = await probe.check(serverOrigin: origin, controlToken: token);
 
-      expect(result.status, SupervisorHealthTransportStatus.incompatibleServer);
-      expect(result.diagnosticCode, 'incompatible_status_contract');
-    },
-  );
+    expect(result.status, SupervisorHealthTransportStatus.incompatibleServer);
+    expect(result.diagnosticCode, 'incompatible_status_contract');
+  });
 
-  test('malformed status response never retains raw body', () async {
+  test('does not retain malformed status body', () async {
     final client = MockClient((_) async => http.Response('token=$token', 200));
     final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
@@ -99,7 +94,7 @@ void main() {
     expect(result.toString(), isNot(contains(token)));
   });
 
-  test('timeout fails closed without blind retry', () async {
+  test('times out without blind retry', () async {
     var calls = 0;
     final client = MockClient((_) async {
       calls++;
@@ -119,7 +114,7 @@ void main() {
     expect(calls, 1);
   });
 
-  test('missing status endpoint is incompatible server', () async {
+  test('marks missing status endpoint incompatible', () async {
     final client = MockClient((_) async => http.Response('', 404));
     final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
