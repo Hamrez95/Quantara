@@ -3,13 +3,23 @@ import 'supervisor_health_client.dart';
 import 'supervisor_secure_setup_store.dart';
 
 final class SupervisorConnectionHealthCoordinator {
-  SupervisorConnectionHealthCoordinator({
+  factory SupervisorConnectionHealthCoordinator({
     required SupervisorSecureSetupStore setupStore,
     required SupervisorHealthClient healthClient,
     required bool releaseBuild,
-  }) : _setupStore = setupStore,
-       _healthClient = healthClient,
-       _releaseBuild = releaseBuild;
+  }) {
+    return SupervisorConnectionHealthCoordinator._(
+      setupStore,
+      healthClient,
+      releaseBuild,
+    );
+  }
+
+  SupervisorConnectionHealthCoordinator._(
+    this._setupStore,
+    this._healthClient,
+    this._releaseBuild,
+  );
 
   final SupervisorSecureSetupStore _setupStore;
   final SupervisorHealthClient _healthClient;
