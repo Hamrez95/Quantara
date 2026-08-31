@@ -57,12 +57,30 @@ void main() {
     expect(snapshot.diagnosticCode, isNull);
   });
 
-  test('maps rejected tokens to revoked without exposing the token', () async {
+  test('maps expired tokens without exposing the token', () async {
     final store = await _configuredStore(origin: origin, token: token);
     final coordinator = SupervisorConnectionHealthCoordinator(
       setupStore: store,
       healthClient: SupervisorHealthClient(
-        client: MockClient((_) async => http.Response('', 401)),
+        client: MockClient((_) async => http.Response('token=$token', 401)),
+        now: () => firstCheck,
+      ),
+      releaseBuild: true,
+    );
+
+    final snapshot = await coordinator.checkNow();
+
+    expect(snapshot.status, SupervisorConnectionStatus.expired);
+    expect(snapshot.diagnosticCode, 'control_token_expired');
+    expect(snapshot.toString(), isNot(contains(token)));
+  });
+
+  test('maps revoked tokens without exposing the token', () async {
+    final store = await _configuredStore(origin: origin, token: token);
+    final coordinator = SupervisorConnectionHealthCoordinator(
+      setupStore: store,
+      healthClient: SupervisorHealthClient(
+        client: MockClient((_) async => http.Response('token=$token', 403)),
         now: () => firstCheck,
       ),
       releaseBuild: true,
@@ -71,7 +89,7 @@ void main() {
     final snapshot = await coordinator.checkNow();
 
     expect(snapshot.status, SupervisorConnectionStatus.revoked);
-    expect(snapshot.diagnosticCode, 'control_token_rejected');
+    expect(snapshot.diagnosticCode, 'control_token_revoked');
     expect(snapshot.toString(), isNot(contains(token)));
   });
 
