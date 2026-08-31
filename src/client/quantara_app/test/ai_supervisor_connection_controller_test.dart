@@ -13,46 +13,61 @@ void main() {
   const token = 'device-bound-control-token-123456789';
   const serverUrl = 'https://supervisor.example.com';
 
-  test('initialize stays not configured and does not probe without setup', () async {
-    var calls = 0;
-    final harness = _Harness((_) async {
-      calls++;
-      return _healthy();
-    });
+  test(
+    'initialize stays not configured and does not probe without setup',
+    () async {
+      var calls = 0;
+      final harness = _Harness((_) async {
+        calls++;
+        return _healthy();
+      });
 
-    await harness.controller.initialize();
+      await harness.controller.initialize();
 
-    expect(harness.controller.snapshot.status, SupervisorConnectionStatus.notConfigured);
-    expect(calls, 0);
-  });
+      expect(
+        harness.controller.snapshot.status,
+        SupervisorConnectionStatus.notConfigured,
+      );
+      expect(calls, 0);
+    },
+  );
 
-  test('save emits connecting before connected and never exposes token', () async {
-    final response = Completer<http.Response>();
-    final harness = _Harness((_) => response.future);
-    final statuses = <SupervisorConnectionStatus>[];
-    harness.controller.addListener(
-      () => statuses.add(harness.controller.snapshot.status),
-    );
+  test(
+    'save emits connecting before connected and never exposes token',
+    () async {
+      final response = Completer<http.Response>();
+      final harness = _Harness((_) => response.future);
+      final statuses = <SupervisorConnectionStatus>[];
+      harness.controller.addListener(
+        () => statuses.add(harness.controller.snapshot.status),
+      );
 
-    final future = harness.controller.saveAndCheck(
-      serverUrl: serverUrl,
-      controlToken: token,
-    );
-    await Future<void>.delayed(Duration.zero);
+      final future = harness.controller.saveAndCheck(
+        serverUrl: serverUrl,
+        controlToken: token,
+      );
+      await Future<void>.delayed(Duration.zero);
 
-    expect(harness.controller.snapshot.status, SupervisorConnectionStatus.connecting);
-    expect(harness.controller.snapshot.serverOrigin.toString(), serverUrl);
-    expect(harness.controller.snapshot.toString(), isNot(contains(token)));
+      expect(
+        harness.controller.snapshot.status,
+        SupervisorConnectionStatus.connecting,
+      );
+      expect(harness.controller.snapshot.serverOrigin.toString(), serverUrl);
+      expect(harness.controller.snapshot.toString(), isNot(contains(token)));
 
-    response.complete(_healthy());
-    final validation = await future;
+      response.complete(_healthy());
+      final validation = await future;
 
-    expect(validation.isValid, isTrue);
-    expect(statuses, containsAllInOrder(<SupervisorConnectionStatus>[
-      SupervisorConnectionStatus.connecting,
-      SupervisorConnectionStatus.connected,
-    ]));
-  });
+      expect(validation.isValid, isTrue);
+      expect(
+        statuses,
+        containsAllInOrder(<SupervisorConnectionStatus>[
+          SupervisorConnectionStatus.connecting,
+          SupervisorConnectionStatus.connected,
+        ]),
+      );
+    },
+  );
 
   test('invalid setup remains fail closed and never probes', () async {
     var calls = 0;
@@ -67,8 +82,14 @@ void main() {
     );
 
     expect(validation.isValid, isFalse);
-    expect(validation.failures, contains(SupervisorSetupFailure.insecureServerUrl));
-    expect(harness.controller.snapshot.status, SupervisorConnectionStatus.notConfigured);
+    expect(
+      validation.failures,
+      contains(SupervisorSetupFailure.insecureServerUrl),
+    );
+    expect(
+      harness.controller.snapshot.status,
+      SupervisorConnectionStatus.notConfigured,
+    );
     expect(calls, 0);
   });
 
@@ -81,13 +102,19 @@ void main() {
       controlToken: token,
     );
     await Future<void>.delayed(Duration.zero);
-    expect(harness.controller.snapshot.status, SupervisorConnectionStatus.connecting);
+    expect(
+      harness.controller.snapshot.status,
+      SupervisorConnectionStatus.connecting,
+    );
 
     await harness.controller.clear();
     response.complete(_healthy());
     await saveFuture;
 
-    expect(harness.controller.snapshot.status, SupervisorConnectionStatus.notConfigured);
+    expect(
+      harness.controller.snapshot.status,
+      SupervisorConnectionStatus.notConfigured,
+    );
     expect(await harness.store.readControlToken(), isNull);
   });
 }
