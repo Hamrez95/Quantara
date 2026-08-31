@@ -5,26 +5,18 @@ import 'package:quantara_app/features/auto_trade/domain/private_account_reconcil
 import 'package:quantara_app/features/auto_trade/presentation/private_account_reconciliation_banner.dart';
 
 void main() {
-  testWidgets(
-    'stale flat account does not claim existing-position management',
-    (tester) async {
-      final state = _staleState(openPositionCount: 0);
+  testWidgets('stale flat recovery', (tester) async {
+    final state = _staleState(openPositionCount: 0);
 
-      await _pumpBanner(tester, state: state);
+    await _pumpBanner(tester, state: state);
 
-      expect(
-        find.textContaining('Account information needs refresh'),
-        findsOne,
-      );
-      expect(find.textContaining('No open position is known'), findsOne);
-      expect(find.textContaining('existing-position management'), findsNothing);
-      expect(find.byIcon(Icons.sync_rounded), findsOne);
-    },
-  );
+    expect(find.textContaining('Account information needs refresh'), findsOne);
+    expect(find.textContaining('No open position is known'), findsOne);
+    expect(find.textContaining('existing-position management'), findsNothing);
+    expect(find.byIcon(Icons.sync_rounded), findsOne);
+  });
 
-  testWidgets('stale non-flat account keeps risk-reducing management wording', (
-    tester,
-  ) async {
+  testWidgets('stale non-flat severity', (tester) async {
     final state = _staleState(openPositionCount: 1);
 
     await _pumpBanner(tester, state: state);
@@ -34,30 +26,75 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets(
-    'divergent state stays high severity even when snapshot is flat',
-    (tester) async {
-      final syncedAt = DateTime.utc(2026, 8, 31, 12);
-      final state =
-          PrivateAccountReconciliationState.fresh(
-            snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
-            cycleId: 'cycle-divergent',
-            completedAt: syncedAt,
-          ).observeLocalLiveOpenPositions(
-            openPositionCount: 1,
-            observedAt: syncedAt.add(const Duration(seconds: 1)),
-          );
+  testWidgets('unavailable flat recovery', (tester) async {
+    final state = PrivateAccountReconciliationState.unavailable(
+      at: DateTime.utc(2026, 8, 31, 12),
+    );
 
-      await _pumpBanner(tester, state: state);
+    await _pumpBanner(tester, state: state);
 
-      expect(find.textContaining('disagrees with Local Live'), findsOne);
-      expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
-    },
-  );
+    expect(find.textContaining('Account information needs refresh'), findsOne);
+    expect(find.textContaining('No open position is known'), findsOne);
+    expect(find.byIcon(Icons.sync_rounded), findsOne);
+  });
 
-  testWidgets('Persian flat-account copy is truthful and recovery-oriented', (
-    tester,
-  ) async {
+  testWidgets('unavailable non-flat severity', (tester) async {
+    final observedAt = DateTime.utc(2026, 8, 31, 12, 1);
+    final unavailable = PrivateAccountReconciliationState.unavailable(
+      at: observedAt,
+    );
+    final state = unavailable.observeLocalLiveOpenPositions(
+      openPositionCount: 1,
+      observedAt: observedAt,
+    );
+
+    await _pumpBanner(tester, state: state);
+
+    expect(
+      find.textContaining('Private account truth is unavailable'),
+      findsOne,
+    );
+    expect(find.textContaining('confirmed open positions'), findsOne);
+    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+  });
+
+  testWidgets('divergent flat severity', (tester) async {
+    final syncedAt = DateTime.utc(2026, 8, 31, 12);
+    final fresh = PrivateAccountReconciliationState.fresh(
+      snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
+      cycleId: 'cycle-divergent',
+      completedAt: syncedAt,
+    );
+    final state = fresh.observeLocalLiveOpenPositions(
+      openPositionCount: 1,
+      observedAt: syncedAt.add(const Duration(seconds: 1)),
+    );
+
+    await _pumpBanner(tester, state: state);
+
+    expect(find.textContaining('disagrees with Local Live'), findsOne);
+    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+  });
+
+  testWidgets('divergent non-flat severity', (tester) async {
+    final syncedAt = DateTime.utc(2026, 8, 31, 12);
+    final fresh = PrivateAccountReconciliationState.fresh(
+      snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 1),
+      cycleId: 'cycle-divergent-non-flat',
+      completedAt: syncedAt,
+    );
+    final state = fresh.observeLocalLiveOpenPositions(
+      openPositionCount: 2,
+      observedAt: syncedAt.add(const Duration(seconds: 1)),
+    );
+
+    await _pumpBanner(tester, state: state);
+
+    expect(find.textContaining('disagrees with Local Live'), findsOne);
+    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+  });
+
+  testWidgets('Persian flat recovery', (tester) async {
     final state = _staleState(
       openPositionCount: 0,
     ).markRefreshing(DateTime.utc(2026, 8, 31, 12, 2));
@@ -72,14 +109,30 @@ void main() {
     expect(find.textContaining('در حال تازه‌سازی'), findsOne);
   });
 
-  testWidgets('fresh truth renders no warning banner', (tester) async {
+  testWidgets('fresh flat hidden', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
 
     await _pumpBanner(
       tester,
       state: PrivateAccountReconciliationState.fresh(
         snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
-        cycleId: 'fresh-cycle',
+        cycleId: 'fresh-cycle-flat',
+        completedAt: syncedAt,
+      ),
+    );
+
+    expect(find.byIcon(Icons.sync_problem_rounded), findsNothing);
+    expect(find.byIcon(Icons.sync_rounded), findsNothing);
+  });
+
+  testWidgets('fresh non-flat hidden', (tester) async {
+    final syncedAt = DateTime.utc(2026, 8, 31, 12);
+
+    await _pumpBanner(
+      tester,
+      state: PrivateAccountReconciliationState.fresh(
+        snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 1),
+        cycleId: 'fresh-cycle-non-flat',
         completedAt: syncedAt,
       ),
     );
