@@ -13,7 +13,7 @@ abstract interface class SupervisorSecureKeyValueStore {
 final class FlutterSupervisorSecureKeyValueStore
     implements SupervisorSecureKeyValueStore {
   FlutterSupervisorSecureKeyValueStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 
@@ -37,7 +37,7 @@ final class SupervisorStoredSetup {
 
 final class SupervisorSecureSetupStore {
   SupervisorSecureSetupStore({SupervisorSecureKeyValueStore? secureStore})
-      : _secureStore = secureStore ?? FlutterSupervisorSecureKeyValueStore();
+    : _secureStore = secureStore ?? FlutterSupervisorSecureKeyValueStore();
 
   static const _serverOriginKey = 'quantara.supervisor.server_origin';
   static const _controlTokenKey = 'quantara.supervisor.control_token';
