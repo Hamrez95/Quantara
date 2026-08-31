@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/ai_supervisor/application/supervisor_secure_setup_store.dart';
 import 'package:quantara_app/features/ai_supervisor/domain/supervisor_connection.dart';
@@ -120,6 +122,42 @@ void main() {
       expect(await store.load(releaseBuild: true), isNull);
     });
 
+    test('save queued after clear cannot be erased by stale clear', () async {
+      final secureStore = _FakeSecureStore();
+      final store = SupervisorSecureSetupStore(secureStore: secureStore);
+      await store.save(
+        serverUrl: 'https://old-supervisor.example.com',
+        controlToken: 'old-control-token-abcdefghijklmnopqrstuvwxyz',
+        releaseBuild: true,
+      );
+
+      final deleteGate = Completer<void>();
+      secureStore.blockNextDeleteWith(deleteGate.future);
+
+      final clearFuture = store.clear();
+      await Future<void>.delayed(Duration.zero);
+      final saveFuture = store.save(
+        serverUrl: 'https://new-supervisor.example.com',
+        controlToken: 'new-control-token-abcdefghijklmnopqrstuvwxyz',
+        releaseBuild: true,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      deleteGate.complete();
+      await clearFuture;
+      final validation = await saveFuture;
+
+      expect(validation.isValid, isTrue);
+      expect(
+        (await store.load(releaseBuild: true))?.serverOrigin,
+        Uri.parse('https://new-supervisor.example.com'),
+      );
+      expect(
+        await store.readControlToken(),
+        'new-control-token-abcdefghijklmnopqrstuvwxyz',
+      );
+    });
+
     test('development HTTP remains loopback-only across reload', () async {
       final secureStore = _FakeSecureStore();
       final store = SupervisorSecureSetupStore(secureStore: secureStore);
@@ -151,9 +189,19 @@ void main() {
 final class _FakeSecureStore implements SupervisorSecureKeyValueStore {
   final Map<String, String> values = <String, String>{};
   String? failWriteKey;
+  Future<void>? _nextDeleteGate;
+
+  void blockNextDeleteWith(Future<void> gate) {
+    _nextDeleteGate = gate;
+  }
 
   @override
   Future<void> delete(String key) async {
+    final gate = _nextDeleteGate;
+    _nextDeleteGate = null;
+    if (gate != null) {
+      await gate;
+    }
     values.remove(key);
   }
 
