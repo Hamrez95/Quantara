@@ -236,7 +236,7 @@ jobs:
           apksigner="$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           "$apkanalyzer" manifest application-id "$apk" | grep -Fxq com.quantara.quantara_app
           "$apksigner" verify --verbose "$apk"
-          signer="$($apksigner verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          signer="$($apksigner verify --print-certs "$apk" | awk -F': ' 'tolower($0) ~ /certificate sha-256 digest:/ { print $NF; exit }')"
           test -n "$signer"
           test -s "$pwa"
           echo "android_sha256=$(sha256sum "$apk" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
