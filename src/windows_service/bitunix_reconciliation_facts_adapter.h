@@ -5,6 +5,8 @@
 #include "../native/execution/existing_position_management_policy.h"
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <cctype>
 #include <cstddef>
 #include <optional>
@@ -15,7 +17,7 @@
 namespace quantara {
 
 // Evidence that cannot be inferred safely from a pending-position response.
-// Callers must populate protection flags only from the current exchange
+// Callers must populate protection facts only from the current exchange
 // reconciliation cycle and ownership/reconstruction flags only from durable
 // Quantara state. Defaults deliberately fail closed.
 struct DurableReconciliationEvidence final {
@@ -27,6 +29,11 @@ struct DurableReconciliationEvidence final {
   bool has_conflicting_order_fill_or_history = true;
   bool has_durable_reconstruction = false;
   bool is_already_managed = false;
+  // Current-cycle exchange stop facts. ApplyCurrentExchangeProtectionEvidence
+  // replaces these on every reconciliation; durable callers must not supply or
+  // rely on cached values for mutation authorization.
+  double current_stop_price = 0.0;
+  std::string current_stop_trigger_type;
   // Durable Quantara state must provide how many live reduce-only TP orders are
   // expected for this reconstructed position. Zero means unknown and can never
   // satisfy the complete-ladder gate.
@@ -80,6 +87,24 @@ struct DecimalAmount final {
   } catch (...) {
     return std::nullopt;
   }
+}
+
+[[nodiscard]] inline std::optional<double> ParsePositiveFinitePrice(
+    std::string_view value) noexcept {
+  if (value.empty() || value.size() > 512) return std::nullopt;
+  double parsed = 0.0;
+  const auto result =
+      std::from_chars(value.data(), value.data() + value.size(), parsed);
+  if (result.ec != std::errc{} || result.ptr != value.data() + value.size() ||
+      !std::isfinite(parsed) || parsed <= 0.0) {
+    return std::nullopt;
+  }
+  return parsed;
+}
+
+[[nodiscard]] inline bool IsSupportedStopTriggerType(
+    std::string_view value) noexcept {
+  return value == "LAST_PRICE" || value == "MARK_PRICE";
 }
 
 [[nodiscard]] inline std::string ScaledInteger(const DecimalAmount& amount,
@@ -165,15 +190,17 @@ inline void TrimLeadingZeros(std::string& value) noexcept {
 
 }  // namespace bitunix_reconciliation_quantity_detail
 
-// Replaces only the current-cycle protection flags using complete generic
+// Replaces only the current-cycle protection facts using complete generic
 // pending-order truth plus the dedicated TP/SL quantity snapshot. Durable
 // ownership/reconstruction facts are preserved exactly.
 //
 // Management authority requires one exchange-native stop whose quantity equals
 // the entire current position and an explicit expected TP count whose quantities
-// sum exactly to that same position quantity. Quantity math uses decimal strings,
-// never binary floating point. Ambiguous identity, duplicate TP/SL ids, malformed
-// quantities, incomplete stop rows, or non-reduce-only generic orders fail closed.
+// sum exactly to that same position quantity. Every TP must also carry a positive
+// finite trigger price and an explicitly supported trigger semantic. Quantity
+// math uses decimal strings, never binary floating point. Ambiguous identity,
+// duplicate TP/SL ids, malformed quantities/prices, incomplete rows, unsupported
+// trigger semantics, or non-reduce-only generic orders fail closed.
 [[nodiscard]] inline std::optional<DurableReconciliationEvidence>
 ApplyCurrentExchangeProtectionEvidence(
     const BitunixPendingPosition& position,
@@ -194,6 +221,8 @@ ApplyCurrentExchangeProtectionEvidence(
   auto joined = durable;
   joined.has_complete_exchange_stop = false;
   joined.has_complete_exchange_take_profit_ladder = false;
+  joined.current_stop_price = 0.0;
+  joined.current_stop_trigger_type.clear();
 
   // Generic pending orders remain useful as conflict evidence. Protection
   // completeness itself is sourced from the dedicated TP/SL endpoint because
@@ -213,6 +242,9 @@ ApplyCurrentExchangeProtectionEvidence(
 
   std::size_t stop_count = 0;
   std::size_t take_profit_count = 0;
+  bool stop_candidate_valid = false;
+  double stop_candidate_price = 0.0;
+  std::string stop_candidate_trigger_type;
   std::vector<std::string_view> take_profit_quantities;
   take_profit_quantities.reserve(pending_tpsl_orders.size());
 
@@ -246,9 +278,21 @@ ApplyCurrentExchangeProtectionEvidence(
       joined.has_conflicting_order_fill_or_history = true;
     } else if (has_stop_price) {
       ++stop_count;
-      if (!bitunix_reconciliation_quantity_detail::DecimalEquals(
-              order.stop_loss_quantity, position.quantity)) {
+      const auto parsed_price =
+          bitunix_reconciliation_quantity_detail::ParsePositiveFinitePrice(
+              order.stop_loss_price);
+      const bool full_quantity =
+          bitunix_reconciliation_quantity_detail::DecimalEquals(
+              order.stop_loss_quantity, position.quantity);
+      const bool valid_trigger =
+          bitunix_reconciliation_quantity_detail::IsSupportedStopTriggerType(
+              order.stop_loss_stop_type);
+      if (!parsed_price.has_value() || !full_quantity || !valid_trigger) {
         joined.has_conflicting_order_fill_or_history = true;
+      } else {
+        stop_candidate_valid = true;
+        stop_candidate_price = *parsed_price;
+        stop_candidate_trigger_type = order.stop_loss_stop_type;
       }
     }
 
@@ -258,9 +302,18 @@ ApplyCurrentExchangeProtectionEvidence(
       joined.has_conflicting_order_fill_or_history = true;
     } else if (has_tp_price) {
       ++take_profit_count;
-      if (!bitunix_reconciliation_quantity_detail::ParsePositiveDecimal(
-               order.take_profit_quantity)
-               .has_value()) {
+      const bool valid_price =
+          bitunix_reconciliation_quantity_detail::ParsePositiveFinitePrice(
+              order.take_profit_price)
+              .has_value();
+      const bool valid_quantity =
+          bitunix_reconciliation_quantity_detail::ParsePositiveDecimal(
+              order.take_profit_quantity)
+              .has_value();
+      const bool valid_trigger =
+          bitunix_reconciliation_quantity_detail::IsSupportedStopTriggerType(
+              order.take_profit_stop_type);
+      if (!valid_price || !valid_quantity || !valid_trigger) {
         joined.has_conflicting_order_fill_or_history = true;
       } else {
         take_profit_quantities.push_back(order.take_profit_quantity);
@@ -268,16 +321,11 @@ ApplyCurrentExchangeProtectionEvidence(
     }
   }
 
-  joined.has_complete_exchange_stop =
-      stop_count == 1 &&
-      std::none_of(pending_tpsl_orders.begin(), pending_tpsl_orders.end(),
-                   [&](const BitunixPendingTpSlOrder& order) {
-                     return order.position_id == position.position_id &&
-                            order.symbol == position.symbol &&
-                            !order.stop_loss_price.empty() &&
-                            !bitunix_reconciliation_quantity_detail::DecimalEquals(
-                                order.stop_loss_quantity, position.quantity);
-                   });
+  joined.has_complete_exchange_stop = stop_count == 1 && stop_candidate_valid;
+  if (joined.has_complete_exchange_stop) {
+    joined.current_stop_price = stop_candidate_price;
+    joined.current_stop_trigger_type = std::move(stop_candidate_trigger_type);
+  }
 
   joined.has_complete_exchange_take_profit_ladder =
       joined.expected_take_profit_order_count > 0 &&
@@ -291,8 +339,9 @@ ApplyCurrentExchangeProtectionEvidence(
 
 // Joins parsed Bitunix position truth with explicit durable/current-cycle
 // evidence. Identity mismatches or missing exchange identity fail closed.
-// The returned string_views borrow from `position`, so the caller must keep the
-// parsed position alive while consuming the facts.
+// The returned identity string_views borrow from `position`, so the caller must
+// keep the parsed position alive while consuming the facts. Current stop trigger
+// evidence is copied and owned by the facts object.
 [[nodiscard]] inline std::optional<ExistingExchangePositionFacts>
 BuildExistingExchangePositionFacts(
     const BitunixPendingPosition& position,
@@ -318,6 +367,15 @@ BuildExistingExchangePositionFacts(
       evidence.has_conflicting_order_fill_or_history;
   facts.has_durable_reconstruction = evidence.has_durable_reconstruction;
   facts.is_already_managed = evidence.is_already_managed;
+  if (position.side == "LONG") {
+    facts.side = ExistingPositionSide::kLong;
+  } else if (position.side == "SHORT") {
+    facts.side = ExistingPositionSide::kShort;
+  }
+  if (evidence.has_complete_exchange_stop) {
+    facts.current_stop_price = evidence.current_stop_price;
+    facts.current_stop_trigger_type = evidence.current_stop_trigger_type;
+  }
   return facts;
 }
 

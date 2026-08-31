@@ -30,6 +30,12 @@ quantara::BitunixManagementOnlyHttpRequest SafeClose() {
       "{\"positionId\":\"123456789\"}"};
 }
 
+quantara::BitunixManagementOnlyHttpRequest SafeTighten() {
+  return quantara::BitunixManagementOnlyHttpRequest{
+      "POST", "/api/v1/futures/tpsl/position/modify_order",
+      "{\"symbol\":\"BTCUSDT\",\"positionId\":\"123456789\",\"slPrice\":\"65000\",\"slStopType\":\"MARK_PRICE\"}"};
+}
+
 }  // namespace
 
 int main() {
@@ -42,11 +48,18 @@ int main() {
   std::filesystem::remove_all(root, ignored);
 
   const auto close = SafeClose();
+  const auto tighten = SafeTighten();
   ok &= Expect(
       !quantara::BuildBitunixManagementOnlyHttpEnvelope(
            root, close, "00112233445566778899aabbccddeeff", "1767225600123")
            .has_value(),
       "Missing protected credentials must fail closed before transport.");
+  ok &= Expect(
+      !quantara::BuildBitunixManagementOnlyHttpEnvelope(
+           root, tighten, "00112233445566778899aabbccddeeff",
+           "1767225600123")
+           .has_value(),
+      "Missing protected credentials must also block stop tightening.");
 
   try {
     quantara::CredentialVault vault(root);
@@ -100,6 +113,34 @@ int main() {
           "Duplicate authorization headers must fail closed.");
     }
 
+    const auto tighten_envelope =
+        quantara::BuildBitunixManagementOnlyHttpEnvelope(
+            root, tighten, "00112233445566778899aabbccddeeff",
+            "1767225600123");
+    ok &= Expect(
+        tighten_envelope.has_value(),
+        "Canonical atomic stop tightening must produce an authenticated envelope.");
+    if (tighten_envelope.has_value()) {
+      ok &= Expect(
+          tighten_envelope->host == "fapi.bitunix.com" &&
+              tighten_envelope->method == "POST" &&
+              tighten_envelope->resource ==
+                  "/api/v1/futures/tpsl/position/modify_order" &&
+              tighten_envelope->body == tighten.body,
+          "Stop-tightening envelope must remain pinned to the atomic TP/SL modify endpoint and canonical body.");
+
+      auto widened_shape = tighten_envelope->body;
+      widened_shape.insert(widened_shape.size() - 1, ",\"qty\":\"1\"");
+      ok &= Expect(
+          !quantara::ExecuteBitunixManagementOnlyHttps(
+               quantara::BitunixManagementOnlyHttpEnvelope{
+                   tighten_envelope->host, tighten_envelope->method,
+                   tighten_envelope->resource, widened_shape,
+                   tighten_envelope->headers})
+               .has_value(),
+          "Transport must reject extra fields on the atomic stop-tightening body.");
+    }
+
     auto wrong_method = close;
     wrong_method.method = "GET";
     ok &= Expect(
@@ -126,6 +167,26 @@ int main() {
              "1767225600123")
              .has_value(),
         "Builder must reject non-decimal or escaped position identifiers.");
+
+    auto unsafe_tighten = tighten;
+    unsafe_tighten.body =
+        "{\"symbol\":\"BTCUSDT\",\"positionId\":\"123456789\",\"slPrice\":\"65000\",\"slStopType\":\"INDEX_PRICE\"}";
+    ok &= Expect(
+        !quantara::BuildBitunixManagementOnlyHttpEnvelope(
+             root, unsafe_tighten, "00112233445566778899aabbccddeeff",
+             "1767225600123")
+             .has_value(),
+        "Unknown stop trigger semantics must fail closed before network transport.");
+
+    auto non_positive_tighten = tighten;
+    non_positive_tighten.body =
+        "{\"symbol\":\"BTCUSDT\",\"positionId\":\"123456789\",\"slPrice\":\"0\",\"slStopType\":\"MARK_PRICE\"}";
+    ok &= Expect(
+        !quantara::BuildBitunixManagementOnlyHttpEnvelope(
+             root, non_positive_tighten,
+             "00112233445566778899aabbccddeeff", "1767225600123")
+             .has_value(),
+        "Non-positive stop prices must fail closed before network transport.");
 
     ok &= Expect(
         !quantara::BuildBitunixManagementOnlyHttpEnvelope(

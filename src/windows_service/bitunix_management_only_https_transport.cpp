@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
+#include <cmath>
 #include <cctype>
 #include <limits>
 #include <string_view>
@@ -16,6 +18,8 @@ namespace {
 constexpr std::string_view kHost = "fapi.bitunix.com";
 constexpr std::string_view kClosePath =
     "/api/v1/futures/trade/flash_close_position";
+constexpr std::string_view kTightenStopPath =
+    "/api/v1/futures/tpsl/position/modify_order";
 constexpr std::array<std::string_view, 5> kRequiredHeaders{
     "api-key", "nonce", "timestamp", "sign", "Content-Type"};
 constexpr std::size_t kMaxHeaderValueLength = 256;
@@ -57,6 +61,29 @@ bool IsSha256Hex(std::string_view value) noexcept {
          std::all_of(value.begin(), value.end(), [](unsigned char c) {
            return IsHex(c);
          });
+}
+
+bool IsSafeSymbol(std::string_view value) noexcept {
+  return !value.empty() && value.size() <= 32 &&
+         std::all_of(value.begin(), value.end(), [](unsigned char c) {
+           return std::isalnum(c) != 0 || c == '_' || c == '-';
+         });
+}
+
+bool IsDecimalPositionId(std::string_view value) noexcept {
+  return !value.empty() && value.size() <= 128 &&
+         std::all_of(value.begin(), value.end(), [](unsigned char c) {
+           return std::isdigit(c) != 0;
+         });
+}
+
+bool IsPositiveFinitePrice(std::string_view value) noexcept {
+  if (value.empty() || value.size() > 64) return false;
+  double parsed_value = 0.0;
+  const auto parsed =
+      std::from_chars(value.data(), value.data() + value.size(), parsed_value);
+  return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size() &&
+         std::isfinite(parsed_value) && parsed_value > 0.0;
 }
 
 std::optional<std::string_view> HeaderValue(
@@ -102,15 +129,54 @@ bool IsValidCloseBody(std::string_view body) noexcept {
   }
   const auto id = body.substr(kPrefix.size(),
                               body.size() - kPrefix.size() - kSuffix.size());
-  return !id.empty() &&
-         std::all_of(id.begin(), id.end(), [](unsigned char c) {
-           return std::isdigit(c) != 0;
-         });
+  return IsDecimalPositionId(id);
+}
+
+bool IsValidTightenStopBody(std::string_view body) noexcept {
+  if (body.empty() || body.size() > kMaxRequestBodyBytes) return false;
+
+  constexpr std::string_view kPrefix = "{\"symbol\":\"";
+  constexpr std::string_view kPositionMarker = "\",\"positionId\":\"";
+  constexpr std::string_view kPriceMarker = "\",\"slPrice\":\"";
+  constexpr std::string_view kTriggerMarker = "\",\"slStopType\":\"";
+  constexpr std::string_view kSuffix = "\"}";
+  if (!body.starts_with(kPrefix) || !body.ends_with(kSuffix)) return false;
+
+  const auto symbol_end = body.find(kPositionMarker, kPrefix.size());
+  if (symbol_end == std::string_view::npos) return false;
+  const auto symbol = body.substr(kPrefix.size(), symbol_end - kPrefix.size());
+
+  const auto position_start = symbol_end + kPositionMarker.size();
+  const auto position_end = body.find(kPriceMarker, position_start);
+  if (position_end == std::string_view::npos) return false;
+  const auto position_id =
+      body.substr(position_start, position_end - position_start);
+
+  const auto price_start = position_end + kPriceMarker.size();
+  const auto price_end = body.find(kTriggerMarker, price_start);
+  if (price_end == std::string_view::npos) return false;
+  const auto stop_price = body.substr(price_start, price_end - price_start);
+
+  const auto trigger_start = price_end + kTriggerMarker.size();
+  if (body.size() < trigger_start + kSuffix.size()) return false;
+  const auto trigger_size = body.size() - trigger_start - kSuffix.size();
+  const auto trigger_type = body.substr(trigger_start, trigger_size);
+
+  return IsSafeSymbol(symbol) && IsDecimalPositionId(position_id) &&
+         IsPositiveFinitePrice(stop_price) &&
+         (trigger_type == "LAST_PRICE" || trigger_type == "MARK_PRICE");
+}
+
+bool IsAllowlistedManagementRequest(std::string_view path,
+                                    std::string_view body) noexcept {
+  if (path == kClosePath) return IsValidCloseBody(body);
+  if (path == kTightenStopPath) return IsValidTightenStopBody(body);
+  return false;
 }
 
 bool ValidateEnvelope(const BitunixManagementOnlyHttpEnvelope& envelope) noexcept {
   return envelope.host == kHost && envelope.method == "POST" &&
-         envelope.resource == kClosePath && IsValidCloseBody(envelope.body) &&
+         IsAllowlistedManagementRequest(envelope.resource, envelope.body) &&
          HasExactRequiredHeaders(envelope.headers);
 }
 
@@ -160,7 +226,7 @@ BuildBitunixManagementOnlyHttpEnvelope(
     std::string_view timestamp) noexcept {
   try {
     if (credential_root.empty() || request.method != "POST" ||
-        request.path != kClosePath || !IsValidCloseBody(request.body) ||
+        !IsAllowlistedManagementRequest(request.path, request.body) ||
         nonce.empty() || timestamp.empty()) {
       return std::nullopt;
     }

@@ -1,6 +1,8 @@
 #include "bitunix_management_only_reconciliation.h"
+#include "bitunix_reconciliation_facts_adapter.h"
 #include "management_only_worker_core.h"
 
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -9,12 +11,14 @@ namespace {
 
 quantara::BitunixPendingPosition Position(std::string id,
                                          std::string symbol = "BTCUSDT",
-                                         std::string quantity = "1.000") {
+                                         std::string quantity = "1.000",
+                                         std::string side = "LONG") {
   quantara::BitunixPendingPosition position{};
   position.position_id = std::move(id);
   position.symbol = std::move(symbol);
   position.quantity = std::move(quantity);
   position.margin_mode = "ISOLATION";
+  position.side = std::move(side);
   return position;
 }
 
@@ -22,7 +26,8 @@ quantara::BitunixPendingTpSlOrder TpSlOrder(std::string id,
                                            std::string position_id,
                                            std::string symbol,
                                            std::string stop_quantity,
-                                           std::string tp_quantity) {
+                                           std::string tp_quantity,
+                                           std::string stop_type = "MARK_PRICE") {
   quantara::BitunixPendingTpSlOrder order{};
   order.order_id = std::move(id);
   order.position_id = std::move(position_id);
@@ -30,10 +35,12 @@ quantara::BitunixPendingTpSlOrder TpSlOrder(std::string id,
   if (!stop_quantity.empty()) {
     order.stop_loss_price = "60000";
     order.stop_loss_quantity = std::move(stop_quantity);
+    order.stop_loss_stop_type = std::move(stop_type);
   }
   if (!tp_quantity.empty()) {
     order.take_profit_price = "70000";
     order.take_profit_quantity = std::move(tp_quantity);
+    order.take_profit_stop_type = "MARK_PRICE";
   }
   return order;
 }
@@ -70,6 +77,106 @@ bool VerifiedPositionGrantsManagementOnly() {
              quantara::ManagementOnlyRecoveryMode::kManageExistingOnly &&
          coordinator.CanManageExistingPositions() &&
          !coordinator.CanOpenNewEntry() && snapshot.blocks_new_entries;
+}
+
+bool CurrentStopFactsComeOnlyFromFreshTruth() {
+  const auto position = Position("p-1", "BTCUSDT", "1", "SHORT");
+  auto durable = Durable("p-1");
+  // Stale/caller-supplied values must be overwritten by current exchange truth.
+  durable.current_stop_price = 123.0;
+  durable.current_stop_trigger_type = "LAST_PRICE";
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  auto stop = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1.000", "1");
+  stop.stop_loss_price = "70123.5";
+  stop.stop_loss_stop_type = "MARK_PRICE";
+
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {stop});
+  if (!joined.has_value() || !joined->has_complete_exchange_stop ||
+      std::abs(joined->current_stop_price - 70123.5) > 1e-9 ||
+      joined->current_stop_trigger_type != "MARK_PRICE") {
+    return false;
+  }
+  const auto facts =
+      quantara::BuildExistingExchangePositionFacts(position, *joined);
+  return facts.has_value() &&
+         facts->side == quantara::ExistingPositionSide::kShort &&
+         std::abs(facts->current_stop_price - 70123.5) < 1e-9 &&
+         facts->current_stop_trigger_type == "MARK_PRICE";
+}
+
+bool InvalidStopTriggerFailsClosed() {
+  const auto position = Position("p-1");
+  auto durable = Durable("p-1");
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  auto stop = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1", "1");
+  stop.stop_loss_stop_type = "INDEX_PRICE";
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {stop});
+  return joined.has_value() && !joined->has_complete_exchange_stop &&
+         joined->current_stop_price == 0.0 &&
+         joined->current_stop_trigger_type.empty() &&
+         joined->has_conflicting_order_fill_or_history;
+}
+
+bool InvalidStopPriceFailsClosed() {
+  const auto position = Position("p-1");
+  auto durable = Durable("p-1");
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  auto stop = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1", "1");
+  stop.stop_loss_price = "nan";
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {stop});
+  return joined.has_value() && !joined->has_complete_exchange_stop &&
+         joined->current_stop_price == 0.0 &&
+         joined->current_stop_trigger_type.empty() &&
+         joined->has_conflicting_order_fill_or_history;
+}
+
+bool InvalidTakeProfitPriceFailsClosed() {
+  const auto position = Position("p-1");
+  auto durable = Durable("p-1");
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  auto protection = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1", "1");
+  protection.take_profit_price = "nan";
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {protection});
+  return joined.has_value() && joined->has_complete_exchange_stop &&
+         !joined->has_complete_exchange_take_profit_ladder &&
+         joined->has_conflicting_order_fill_or_history;
+}
+
+bool InvalidTakeProfitTriggerFailsClosed() {
+  const auto position = Position("p-1");
+  auto durable = Durable("p-1");
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  auto protection = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1", "1");
+  protection.take_profit_stop_type = "INDEX_PRICE";
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {protection});
+  return joined.has_value() && joined->has_complete_exchange_stop &&
+         !joined->has_complete_exchange_take_profit_ladder &&
+         joined->has_conflicting_order_fill_or_history;
+}
+
+bool UnknownSideNeverInvented() {
+  const auto position = Position("p-1", "BTCUSDT", "1", "BOTH");
+  auto durable = Durable("p-1");
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  const auto stop = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1", "1");
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {stop});
+  if (!joined.has_value()) return false;
+  const auto facts =
+      quantara::BuildExistingExchangePositionFacts(position, *joined);
+  return facts.has_value() &&
+         facts->side == quantara::ExistingPositionSide::kUnknown;
 }
 
 bool SplitTakeProfitCoverageGrantsManagementOnly() {
@@ -206,6 +313,10 @@ bool MissingTakeProfitNeverGrantsManagement() {
 
 int main() {
   if (!VerifiedPositionGrantsManagementOnly() ||
+      !CurrentStopFactsComeOnlyFromFreshTruth() ||
+      !InvalidStopTriggerFailsClosed() || !InvalidStopPriceFailsClosed() ||
+      !InvalidTakeProfitPriceFailsClosed() ||
+      !InvalidTakeProfitTriggerFailsClosed() || !UnknownSideNeverInvented() ||
       !SplitTakeProfitCoverageGrantsManagementOnly() ||
       !PartialStopCoverageNeverGrantsManagement() ||
       !PartialTakeProfitCoverageNeverGrantsManagement() ||

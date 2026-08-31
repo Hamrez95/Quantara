@@ -1,8 +1,11 @@
 #include <windows.h>
 #include <winsvc.h>
 
+#include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -86,12 +89,41 @@ std::string NarrowPositionId(std::wstring_view position_id) {
   return result;
 }
 
+std::optional<std::string> CanonicalPositiveFinitePrice(
+    std::wstring_view price) noexcept {
+  if (price.empty() || price.size() > 64) return std::nullopt;
+  std::string value;
+  value.reserve(price.size());
+  for (const wchar_t ch : price) {
+    if (ch < 0x21 || ch > 0x7e) return std::nullopt;
+    value.push_back(static_cast<char>(ch));
+  }
+  double parsed = 0.0;
+  const auto result =
+      std::from_chars(value.data(), value.data() + value.size(), parsed);
+  if (result.ec != std::errc{} || result.ptr != value.data() + value.size() ||
+      !std::isfinite(parsed) || parsed <= 0.0) {
+    return std::nullopt;
+  }
+  return value;
+}
+
 std::string BuildCloseExistingPositionRequest(std::string_view request_id,
                                               std::string_view position_id) {
   return "{\"protocolVersion\":1,\"requestId\":\"" +
          std::string(request_id) +
          "\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"" +
          std::string(position_id) + "\"}}";
+}
+
+std::string BuildTightenExistingStopRequest(std::string_view request_id,
+                                            std::string_view position_id,
+                                            std::string_view new_stop_price) {
+  return "{\"protocolVersion\":1,\"requestId\":\"" +
+         std::string(request_id) +
+         "\",\"kind\":\"tightenExistingStop\",\"payload\":{\"positionId\":\"" +
+         std::string(position_id) + "\",\"newStopPrice\":\"" +
+         std::string(new_stop_price) + "\"}}";
 }
 
 bool IsCanonicalManagementResult(std::string_view response,
@@ -314,11 +346,7 @@ int RunReadOnlyQuery(bool credential_readiness) {
   return 0;
 }
 
-int RunCloseExistingPosition(std::wstring_view position_id) {
-  if (!IsCanonicalPositionId(position_id)) {
-    std::cerr << "Position ID must contain 1-64 decimal digits and must not be zero.\n";
-    return 64;
-  }
+int RunManagementRequest(std::string_view request, std::string_view request_id) {
   if (!WaitNamedPipeW(kStatusPipeName, kIoTimeoutMs)) {
     std::cerr << "Quantara Windows service status/control pipe is unavailable.\n";
     return 2;
@@ -336,9 +364,6 @@ int RunCloseExistingPosition(std::wstring_view position_id) {
     return 5;
   }
 
-  const std::string request_id = BuildRequestId();
-  const std::string request = BuildCloseExistingPositionRequest(
-      request_id, NarrowPositionId(position_id));
   std::string response;
   DWORD exchange_error = ERROR_SUCCESS;
   if (!ExchangeStatusFrame(pipe.get(), request, response, exchange_error)) {
@@ -357,6 +382,35 @@ int RunCloseExistingPosition(std::wstring_view position_id) {
   return completed ? 0 : 8;
 }
 
+int RunCloseExistingPosition(std::wstring_view position_id) {
+  if (!IsCanonicalPositionId(position_id)) {
+    std::cerr << "Position ID must contain 1-64 decimal digits and must not be zero.\n";
+    return 64;
+  }
+  const std::string request_id = BuildRequestId();
+  return RunManagementRequest(
+      BuildCloseExistingPositionRequest(request_id, NarrowPositionId(position_id)),
+      request_id);
+}
+
+int RunTightenExistingStop(std::wstring_view position_id,
+                           std::wstring_view new_stop_price) {
+  if (!IsCanonicalPositionId(position_id)) {
+    std::cerr << "Position ID must contain 1-64 decimal digits and must not be zero.\n";
+    return 64;
+  }
+  const auto price = CanonicalPositiveFinitePrice(new_stop_price);
+  if (!price.has_value()) {
+    std::cerr << "New stop price must be a positive finite numeric value.\n";
+    return 64;
+  }
+  const std::string request_id = BuildRequestId();
+  return RunManagementRequest(
+      BuildTightenExistingStopRequest(request_id, NarrowPositionId(position_id),
+                                      *price),
+      request_id);
+}
+
 int RunSelfTest() {
   const std::string status_request = BuildStatusRequest("self-test.1");
   const std::string expected_status_request =
@@ -372,6 +426,12 @@ int RunSelfTest() {
   const std::string expected_close_request =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.3\","
       "\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"123456789\"}}";
+  const std::string tighten_request =
+      BuildTightenExistingStopRequest("self-test.4", "123456789", "65000.5");
+  const std::string expected_tighten_request =
+      "{\"protocolVersion\":1,\"requestId\":\"self-test.4\","
+      "\"kind\":\"tightenExistingStop\",\"payload\":{\"positionId\":\"123456789\","
+      "\"newStopPrice\":\"65000.5\"}}";
   const std::string valid_status_response =
       "{\"protocolVersion\":1,\"requestId\":\"self-test.1\","
       "\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":"
@@ -419,15 +479,23 @@ int RunSelfTest() {
   completed = false;
   const bool unsafe_valid = IsCanonicalManagementResult(
       unsafe_management_response, "self-test.3", completed);
+  const auto valid_price = CanonicalPositiveFinitePrice(L"65000.5");
 
   if (status_request != expected_status_request ||
       readiness_request != expected_readiness_request ||
       close_request != expected_close_request ||
+      tighten_request != expected_tighten_request ||
       status_request.size() > kMaxFrameBytes ||
       readiness_request.size() > kMaxFrameBytes ||
       close_request.size() > kMaxFrameBytes ||
+      tighten_request.size() > kMaxFrameBytes ||
       !IsCanonicalPositionId(L"123456789") || IsCanonicalPositionId(L"0") ||
-      IsCanonicalPositionId(L"12x") ||
+      IsCanonicalPositionId(L"12x") || !valid_price.has_value() ||
+      *valid_price != "65000.5" ||
+      CanonicalPositiveFinitePrice(L"0").has_value() ||
+      CanonicalPositiveFinitePrice(L"nan").has_value() ||
+      CanonicalPositiveFinitePrice(L"inf").has_value() ||
+      CanonicalPositiveFinitePrice(L"65000.5 extra").has_value() ||
       !IsCanonicalStatusResponse(valid_status_response, "self-test.1") ||
       !IsCanonicalStatusResponse(valid_management_status_response,
                                  "self-test.1") ||
@@ -463,7 +531,12 @@ int wmain(int argc, wchar_t* argv[]) {
       std::wstring_view(argv[1]) == L"--close-existing-position") {
     return RunCloseExistingPosition(argv[2]);
   }
+  if (argc == 4 &&
+      std::wstring_view(argv[1]) == L"--tighten-existing-stop") {
+    return RunTightenExistingStop(argv[2], argv[3]);
+  }
   std::cerr << "Usage: quantara_windows_service_client.exe "
-               "--status|--credential-readiness|--close-existing-position <positionId>\n";
+               "--status|--credential-readiness|--close-existing-position <positionId>|"
+               "--tighten-existing-stop <positionId> <newStopPrice>\n";
   return 64;
 }

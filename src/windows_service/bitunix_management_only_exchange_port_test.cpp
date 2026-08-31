@@ -28,12 +28,19 @@ std::filesystem::path TestRoot() {
 std::optional<quantara::BitunixManagementOnlyHttpsResponse> AckTransport(
     const quantara::BitunixManagementOnlyHttpEnvelope& envelope,
     const quantara::BitunixManagementOnlyHttpsLimits&) noexcept {
-  if (envelope.method != "POST" ||
-      envelope.resource != "/api/v1/futures/trade/flash_close_position" ||
-      envelope.body != R"json({"positionId":"12345"})json") {
-    return std::nullopt;
-  }
-  return quantara::BitunixManagementOnlyHttpsResponse{200, R"json({"code":0})json"};
+  if (envelope.method != "POST") return std::nullopt;
+
+  const bool valid_close =
+      envelope.resource == "/api/v1/futures/trade/flash_close_position" &&
+      envelope.body == R"json({"positionId":"12345"})json";
+  const bool valid_tighten =
+      envelope.resource == "/api/v1/futures/tpsl/position/modify_order" &&
+      envelope.body ==
+          R"json({"symbol":"BTCUSDT","positionId":"12345","slPrice":"65000","slStopType":"MARK_PRICE"})json";
+  if (!valid_close && !valid_tighten) return std::nullopt;
+
+  return quantara::BitunixManagementOnlyHttpsResponse{
+      200, R"json({"code":0})json"};
 }
 
 std::optional<quantara::BitunixManagementOnlyHttpsResponse> AmbiguousTransport(
@@ -46,8 +53,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> EmptyTpSlTruth(
     const quantara::BitunixReadOnlyHttpEnvelope& envelope) noexcept {
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[]})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":[]})json"};
   }
   return std::nullopt;
 }
@@ -57,13 +64,13 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> ClosedTruthTransport(
     const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
   if (envelope.resource.find("/position/get_pending_positions") !=
       std::string::npos) {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[]})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":[]})json"};
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
   return EmptyTpSlTruth(envelope);
 }
@@ -78,8 +85,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StillOpenTruthTransport(
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
   }
   return EmptyTpSlTruth(envelope);
 }
@@ -89,8 +96,8 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StaleOrderTruthTransport(
     const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
   if (envelope.resource.find("/position/get_pending_positions") !=
       std::string::npos) {
-    return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[]})json"};
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":[]})json"};
   }
   if (envelope.resource ==
       "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
@@ -98,6 +105,80 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> StaleOrderTruthTransport(
         R"json({"code":0,"data":{"orderList":[{"orderId":"sl-1","positionId":"12345","symbol":"BTCUSDT","status":"NEW","reduceOnly":true,"slPrice":"60000"}],"total":1}})json"};
   }
   return EmptyTpSlTruth(envelope);
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> TightenedStopTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
+  if (envelope.resource.find("/position/get_pending_positions") !=
+      std::string::npos) {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"positionId":"12345","symbol":"BTCUSDT","qty":"0.001","side":"LONG","marginMode":"ISOLATION","positionMode":"ONE_WAY","leverage":5}]})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"65000.000000","slStopType":"MARK_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
+  }
+  return std::nullopt;
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> WrongTriggerTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits& limits) noexcept {
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"65000.000000","slStopType":"LAST_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
+  }
+  return TightenedStopTruthTransport(envelope, limits);
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> WrongStopTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
+  if (envelope.resource.find("/position/get_pending_positions") !=
+      std::string::npos) {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"positionId":"12345","symbol":"BTCUSDT","qty":"0.001","side":"LONG","marginMode":"ISOLATION","positionMode":"ONE_WAY","leverage":5}]})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"64000","slStopType":"MARK_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
+  }
+  return std::nullopt;
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> DuplicateStopTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits&) noexcept {
+  if (envelope.resource.find("/position/get_pending_positions") !=
+      std::string::npos) {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"positionId":"12345","symbol":"BTCUSDT","qty":"0.001","side":"LONG","marginMode":"ISOLATION","positionMode":"ONE_WAY","leverage":5}]})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/trade/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200, R"json({"code":0,"data":{"orderList":[],"total":0}})json"};
+  }
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slStopType":"MARK_PRICE","slQty":"0.001"},{"id":"sl-2","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slStopType":"MARK_PRICE","slQty":"0.001"}]})json"};
+  }
+  return std::nullopt;
 }
 
 quantara::ExistingPositionMutationRequest CloseRequest() {
@@ -109,6 +190,20 @@ quantara::ExistingPositionMutationRequest CloseRequest() {
       .increases_exposure = false,
       .changes_margin_mode = false,
       .widens_stop = false,
+  };
+}
+
+quantara::ExistingPositionMutationRequest TightenStopRequest() {
+  return quantara::ExistingPositionMutationRequest{
+      .kind = quantara::ExistingPositionMutationKind::kTightenStop,
+      .position_id = "12345",
+      .symbol = "BTCUSDT",
+      .reduce_only = true,
+      .increases_exposure = false,
+      .changes_margin_mode = false,
+      .widens_stop = false,
+      .new_stop_price = 65000.0,
+      .stop_trigger_type = "MARK_PRICE",
   };
 }
 
@@ -164,12 +259,73 @@ int main() {
                          kConfirmedByFreshExchangeTruth,
                  "Ambiguous submit may complete only when fresh exchange truth proves closure.");
 
+    const auto tighten_request = TightenStopRequest();
+    quantara::BitunixManagementOnlyExchangePort tightened(
+        root, AckTransport, TightenedStopTruthTransport);
+    ok &= Expect(tightened.SubmitMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::kAcknowledged,
+                 "Allowlisted stop tightening must use the atomic Bitunix position TP/SL modify endpoint.");
+    ok &= Expect(tightened.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kConfirmedByFreshExchangeTruth,
+                 "Stop tightening must be confirmed only when the same live position has the requested exchange SL and trigger semantics.");
+
+    quantara::BitunixManagementOnlyExchangePort wrong_trigger(
+        root, AckTransport, WrongTriggerTruthTransport);
+    ok &= Expect(wrong_trigger.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kNotConfirmedByFreshExchangeTruth,
+                 "A trigger-type drift must not confirm stop tightening even when price matches.");
+
+    quantara::BitunixManagementOnlyExchangePort wrong_stop(
+        root, AckTransport, WrongStopTruthTransport);
+    ok &= Expect(wrong_stop.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kNotConfirmedByFreshExchangeTruth,
+                 "A stale or wrong exchange SL must not confirm stop tightening.");
+
+    quantara::BitunixManagementOnlyExchangePort duplicate_stop(
+        root, AckTransport, DuplicateStopTruthTransport);
+    ok &= Expect(duplicate_stop.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kNotConfirmedByFreshExchangeTruth,
+                 "Ambiguous duplicate exchange SL evidence must remain fail-closed.");
+
+    auto invalid_stop = tighten_request;
+    invalid_stop.new_stop_price = 0.0;
+    ok &= Expect(tightened.SubmitMutation(invalid_stop) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::
+                         kDefinitelyNotSubmitted,
+                 "Invalid stop price must fail before mutation transport.");
+    ok &= Expect(tightened.ConfirmMutation(invalid_stop) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kExchangeTruthUnavailable,
+                 "Invalid expected stop evidence must fail before exchange confirmation.");
+
+    auto missing_trigger = tighten_request;
+    missing_trigger.stop_trigger_type = {};
+    ok &= Expect(tightened.SubmitMutation(missing_trigger) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::
+                         kDefinitelyNotSubmitted,
+                 "Missing stop trigger semantics must fail before mutation transport.");
+    ok &= Expect(tightened.ConfirmMutation(missing_trigger) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kExchangeTruthUnavailable,
+                 "Missing requested trigger semantics must fail before exchange confirmation.");
+
     auto unsafe = request;
     unsafe.increases_exposure = true;
     ok &= Expect(confirmed.SubmitMutation(unsafe) ==
                      quantara::ExistingPositionMutationSubmitOutcome::
                          kDefinitelyNotSubmitted,
                  "Unsafe mutation must be rejected before network submission.");
+
+    auto widening = tighten_request;
+    widening.widens_stop = true;
+    ok &= Expect(tightened.SubmitMutation(widening) ==
+                     quantara::ExistingPositionMutationSubmitOutcome::
+                         kDefinitelyNotSubmitted,
+                 "Stop widening must remain impossible at the Bitunix request boundary.");
 
     quantara::BitunixManagementOnlyExchangePort missing_mutation_transport(
         root, nullptr, ClosedTruthTransport);

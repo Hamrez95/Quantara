@@ -3,6 +3,7 @@
 #include <ShlObj.h>
 #include <windows.h>
 
+#include <cmath>
 #include <cctype>
 #include <filesystem>
 #include <optional>
@@ -34,6 +35,21 @@ namespace management_only_runtime_detail {
   return position_id != "0";
 }
 
+[[nodiscard]] inline bool IsSupportedRequest(
+    const ManagementOnlyRequest& request) noexcept {
+  if (request.request_id.empty() ||
+      !IsCanonicalPositionId(request.position_id)) {
+    return false;
+  }
+  switch (request.kind) {
+    case ManagementOnlyRequestKind::kCloseExistingPosition:
+      return request.new_stop_price == 0.0;
+    case ManagementOnlyRequestKind::kTightenExistingStop:
+      return std::isfinite(request.new_stop_price) && request.new_stop_price > 0.0;
+  }
+  return false;
+}
+
 [[nodiscard]] inline std::optional<std::filesystem::path>
 ProgramDataCredentialRoot() noexcept {
   PWSTR raw_path = nullptr;
@@ -52,21 +68,19 @@ ProgramDataCredentialRoot() noexcept {
 
 }  // namespace management_only_runtime_detail
 
-// Production Windows management-only IPC handler. It is intentionally limited
-// to the one request kind that the IPC protocol can represent: full reduce-only
-// close of an already-verified existing Quantara position. Every invocation
-// starts from fresh Bitunix positions/orders truth plus service-owned durable
-// ownership evidence, re-evaluates the whole portfolio, passes through the
-// shared mutation policy immediately before submission, and requires fresh
-// exchange confirmation afterward. It exposes no new-entry, leverage, margin,
-// transfer, generic-order, stop-widening, or retry authority.
+// Production Windows management-only IPC handler. It can only perform a full
+// reduce-only close or tighten the stop of an already-verified existing Quantara
+// position. Every invocation starts from fresh Bitunix positions/orders truth
+// plus service-owned durable ownership evidence, re-evaluates the whole
+// portfolio, passes through the shared mutation policy immediately before
+// submission, and requires fresh exchange confirmation afterward. Tighten-stop
+// preserves the exchange-derived current trigger semantic; the IPC caller cannot
+// choose or guess it. No new-entry, leverage, margin, transfer, generic-order,
+// stop-widening, or retry authority is exposed.
 [[nodiscard]] inline ExistingPositionMutationExecutionResult
 ExecuteWindowsManagementOnlyRequest(
     const ManagementOnlyRequest& request) noexcept {
-  if (request.kind != ManagementOnlyRequestKind::kCloseExistingPosition ||
-      request.request_id.empty() ||
-      !management_only_runtime_detail::IsCanonicalPositionId(
-          request.position_id)) {
+  if (!management_only_runtime_detail::IsSupportedRequest(request)) {
     return management_only_runtime_detail::Fail("invalidManagementRequest");
   }
 
@@ -153,13 +167,23 @@ ExecuteWindowsManagementOnlyRequest(
   };
 
   ExistingPositionMutationRequest mutation{};
-  mutation.kind = ExistingPositionMutationKind::kReduceOnlyClose;
   mutation.position_id = target_facts->position_id;
   mutation.symbol = target_facts->symbol;
   mutation.reduce_only = true;
   mutation.increases_exposure = false;
   mutation.changes_margin_mode = false;
   mutation.widens_stop = false;
+
+  switch (request.kind) {
+    case ManagementOnlyRequestKind::kCloseExistingPosition:
+      mutation.kind = ExistingPositionMutationKind::kReduceOnlyClose;
+      break;
+    case ManagementOnlyRequestKind::kTightenExistingStop:
+      mutation.kind = ExistingPositionMutationKind::kTightenStop;
+      mutation.new_stop_price = request.new_stop_price;
+      mutation.stop_trigger_type = target_facts->current_stop_trigger_type;
+      break;
+  }
 
   BitunixManagementOnlyExchangePort exchange(*credential_root);
   return ExecuteExistingPositionMutation(portfolio_decision, *target_facts,

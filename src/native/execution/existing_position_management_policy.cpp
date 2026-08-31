@@ -1,5 +1,7 @@
 #include "existing_position_management_policy.h"
 
+#include <cmath>
+
 namespace quantara {
 namespace {
 
@@ -21,6 +23,33 @@ bool HasIdentity(const ExistingExchangePositionFacts& facts) noexcept {
 bool HasVerifiedProtection(const ExistingExchangePositionFacts& facts) noexcept {
   return facts.has_complete_exchange_stop &&
          facts.has_complete_exchange_take_profit_ladder;
+}
+
+bool IsPositiveFinite(double value) noexcept {
+  return std::isfinite(value) && value > 0.0;
+}
+
+bool IsSupportedStopTriggerType(std::string_view value) noexcept {
+  return value == "LAST_PRICE" || value == "MARK_PRICE";
+}
+
+bool IsStrictlyTighterStop(const ExistingExchangePositionFacts& position,
+                           double new_stop_price) noexcept {
+  if (!IsPositiveFinite(position.current_stop_price) ||
+      !IsPositiveFinite(new_stop_price)) {
+    return false;
+  }
+
+  switch (position.side) {
+    case ExistingPositionSide::kLong:
+      return new_stop_price > position.current_stop_price;
+    case ExistingPositionSide::kShort:
+      return new_stop_price < position.current_stop_price;
+    case ExistingPositionSide::kUnknown:
+      return false;
+  }
+
+  return false;
 }
 
 }  // namespace
@@ -125,14 +154,25 @@ ExistingPositionMutationDecision AuthorizeExistingPositionMutation(
     case ExistingPositionMutationKind::kReduceOnlyClose:
       return MutationDecision(true, "reduceOnlyCloseAuthorized");
     case ExistingPositionMutationKind::kTightenStop:
-      // The current shared contract carries no current/new stop prices or side,
-      // so it cannot independently prove that a requested stop change reduces
-      // risk. A caller-provided `widens_stop=false` flag is not sufficient
-      // evidence for a financial safety decision. Keep stop mutation disabled
-      // until explicit exchange-derived price evidence is represented here.
-      return MutationDecision(
-          false, request.widens_stop ? "stopWideningForbidden"
-                                     : "stopPriceEvidenceRequired");
+      if (request.widens_stop) {
+        return MutationDecision(false, "stopWideningForbidden");
+      }
+      if (position.side == ExistingPositionSide::kUnknown ||
+          !IsPositiveFinite(position.current_stop_price) ||
+          !IsPositiveFinite(request.new_stop_price)) {
+        return MutationDecision(false, "stopPriceEvidenceRequired");
+      }
+      if (!IsSupportedStopTriggerType(position.current_stop_trigger_type) ||
+          !IsSupportedStopTriggerType(request.stop_trigger_type)) {
+        return MutationDecision(false, "stopTriggerEvidenceRequired");
+      }
+      if (request.stop_trigger_type != position.current_stop_trigger_type) {
+        return MutationDecision(false, "stopTriggerMismatch");
+      }
+      if (!IsStrictlyTighterStop(position, request.new_stop_price)) {
+        return MutationDecision(false, "stopNotTighter");
+      }
+      return MutationDecision(true, "tightenStopAuthorized");
     case ExistingPositionMutationKind::kUnsupported:
       return MutationDecision(false, "unsupportedManagementMutation");
   }

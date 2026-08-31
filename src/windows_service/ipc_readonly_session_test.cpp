@@ -12,19 +12,47 @@
 
 namespace {
 
-quantara::ExistingPositionMutationExecutionResult HandleClose(
+quantara::ExistingPositionMutationExecutionResult HandleManagement(
     const quantara::ManagementOnlyRequest& request) noexcept {
-  if (request.kind !=
-          quantara::ManagementOnlyRequestKind::kCloseExistingPosition ||
-      request.position_id != "123456789") {
+  if (request.position_id != "123456789") {
     return {false, false, false, "unexpectedRequest"};
   }
-  return {true, true, true, "confirmedByFreshExchangeTruth"};
+  if (request.kind ==
+          quantara::ManagementOnlyRequestKind::kCloseExistingPosition &&
+      request.new_stop_price == 0.0) {
+    return {true, true, true, "confirmedByFreshExchangeTruth"};
+  }
+  if (request.kind ==
+          quantara::ManagementOnlyRequestKind::kTightenExistingStop &&
+      request.new_stop_price == 65000.5) {
+    return {true, true, true, "confirmedByFreshExchangeTruth"};
+  }
+  return {false, false, false, "unexpectedRequest"};
+}
+
+std::vector<std::uint8_t> Bytes(const std::string& value) {
+  return std::vector<std::uint8_t>(value.begin(), value.end());
 }
 
 }  // namespace
 
 int wmain() {
+  const std::string invalid_zero_stop =
+      "{\"protocolVersion\":1,\"requestId\":\"tighten-invalid-1\",\"kind\":\"tightenExistingStop\",\"payload\":{\"positionId\":\"123456789\",\"newStopPrice\":\"0\"}}";
+  const std::string invalid_nan_stop =
+      "{\"protocolVersion\":1,\"requestId\":\"tighten-invalid-2\",\"kind\":\"tightenExistingStop\",\"payload\":{\"positionId\":\"123456789\",\"newStopPrice\":\"nan\"}}";
+  const std::string caller_selected_trigger =
+      "{\"protocolVersion\":1,\"requestId\":\"tighten-invalid-3\",\"kind\":\"tightenExistingStop\",\"payload\":{\"positionId\":\"123456789\",\"newStopPrice\":\"65000.5\",\"slStopType\":\"LAST_PRICE\"}}";
+  if (quantara::DecodeCanonicalManagementOnlyRequest(Bytes(invalid_zero_stop))
+          .has_value() ||
+      quantara::DecodeCanonicalManagementOnlyRequest(Bytes(invalid_nan_stop))
+          .has_value() ||
+      quantara::DecodeCanonicalManagementOnlyRequest(Bytes(caller_selected_trigger))
+          .has_value()) {
+    std::wcerr << L"Unsafe tighten-stop IPC frame was accepted.\n";
+    return 1;
+  }
+
   const std::wstring pipe_name =
       L"\\\\.\\pipe\\QuantaraExecutionService.session-self-test." +
       std::to_wstring(GetCurrentProcessId());
@@ -38,10 +66,14 @@ int wmain() {
       "{\"protocolVersion\":1,\"requestId\":\"status-roundtrip-1\",\"kind\":\"statusRequest\",\"payload\":{}}";
   const std::string expected =
       "{\"protocolVersion\":1,\"requestId\":\"status-roundtrip-1\",\"kind\":\"statusSnapshot\",\"payload\":{\"serviceState\":\"disarmed\",\"entryAuthority\":false}}";
-  const std::string management_request =
+  const std::string close_request =
       "{\"protocolVersion\":1,\"requestId\":\"close-roundtrip-1\",\"kind\":\"closeExistingPosition\",\"payload\":{\"positionId\":\"123456789\"}}";
-  const std::string management_expected =
+  const std::string close_expected =
       "{\"protocolVersion\":1,\"requestId\":\"close-roundtrip-1\",\"kind\":\"managementResult\",\"payload\":{\"completed\":true,\"submissionAttempted\":true,\"exchangeTruthReconciled\":true}}";
+  const std::string tighten_request =
+      "{\"protocolVersion\":1,\"requestId\":\"tighten-roundtrip-1\",\"kind\":\"tightenExistingStop\",\"payload\":{\"positionId\":\"123456789\",\"newStopPrice\":\"65000.5\"}}";
+  const std::string tighten_expected =
+      "{\"protocolVersion\":1,\"requestId\":\"tighten-roundtrip-1\",\"kind\":\"managementResult\",\"payload\":{\"completed\":true,\"submissionAttempted\":true,\"exchangeTruthReconciled\":true}}";
 
   std::atomic<bool> client_ok{false};
   std::thread client([&]() {
@@ -80,9 +112,11 @@ int wmain() {
     };
 
     const bool read_only_ok = round_trip(request, expected);
-    const bool management_ok =
-        read_only_ok && round_trip(management_request, management_expected);
-    client_ok.store(management_ok, std::memory_order_relaxed);
+    const bool close_ok =
+        read_only_ok && round_trip(close_request, close_expected);
+    const bool tighten_ok =
+        close_ok && round_trip(tighten_request, tighten_expected);
+    client_ok.store(tighten_ok, std::memory_order_relaxed);
     CloseHandle(handle);
   });
 
@@ -96,21 +130,27 @@ int wmain() {
       connection_ok && quantara::ProcessAuthenticatedFrame(
                            pipe, quantara::ServiceSafetyState::kDisarmed,
                            quantara::CredentialReadiness::kReady, replay_guard,
-                           HandleClose);
-  const bool management_server_ok =
+                           HandleManagement);
+  const bool close_server_ok =
       read_only_server_ok && quantara::ProcessAuthenticatedFrame(
                                  pipe,
                                  quantara::ServiceSafetyState::kManageExistingOnly,
                                  quantara::CredentialReadiness::kReady,
-                                 replay_guard, HandleClose);
+                                 replay_guard, HandleManagement);
+  const bool tighten_server_ok =
+      close_server_ok && quantara::ProcessAuthenticatedFrame(
+                             pipe,
+                             quantara::ServiceSafetyState::kManageExistingOnly,
+                             quantara::CredentialReadiness::kReady, replay_guard,
+                             HandleManagement);
 
   FlushFileBuffers(pipe);
   DisconnectNamedPipe(pipe);
   CloseHandle(pipe);
   client.join();
 
-  if (!read_only_server_ok || !management_server_ok ||
-      !client_ok.load(std::memory_order_relaxed) || replay_guard.size() != 2) {
+  if (!read_only_server_ok || !close_server_ok || !tighten_server_ok ||
+      !client_ok.load(std::memory_order_relaxed) || replay_guard.size() != 3) {
     std::wcerr << L"Authenticated IPC session round trip failed.\n";
     return 1;
   }
