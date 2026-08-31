@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../domain/supervisor_connection.dart';
@@ -43,8 +45,15 @@ final class SupervisorSecureSetupStore {
   static const _controlTokenKey = 'quantara.supervisor.control_token';
 
   final SupervisorSecureKeyValueStore _secureStore;
+  Future<void> _operationTail = Future<void>.value();
 
-  Future<SupervisorStoredSetup?> load({required bool releaseBuild}) async {
+  Future<SupervisorStoredSetup?> load({required bool releaseBuild}) {
+    return _runExclusive(() => _loadUnlocked(releaseBuild: releaseBuild));
+  }
+
+  Future<SupervisorStoredSetup?> _loadUnlocked({
+    required bool releaseBuild,
+  }) async {
     final rawOrigin = await _secureStore.read(_serverOriginKey);
     final token = await _secureStore.read(_controlTokenKey);
     if (rawOrigin == null ||
@@ -71,33 +80,51 @@ final class SupervisorSecureSetupStore {
     required String serverUrl,
     required String controlToken,
     required bool releaseBuild,
-  }) async {
-    final validation = SupervisorSetupValidation.validate(
-      serverUrl: serverUrl,
-      controlToken: controlToken,
-      releaseBuild: releaseBuild,
-    );
-    final origin = validation.serverOrigin;
-    if (!validation.isValid || origin == null) {
+  }) {
+    return _runExclusive(() async {
+      final validation = SupervisorSetupValidation.validate(
+        serverUrl: serverUrl,
+        controlToken: controlToken,
+        releaseBuild: releaseBuild,
+      );
+      final origin = validation.serverOrigin;
+      if (!validation.isValid || origin == null) {
+        return validation;
+      }
+
+      await _clearUnlocked();
+      await _secureStore.write(_serverOriginKey, origin.toString());
+      await _secureStore.write(_controlTokenKey, controlToken.trim());
       return validation;
-    }
-
-    await clear();
-    await _secureStore.write(_serverOriginKey, origin.toString());
-    await _secureStore.write(_controlTokenKey, controlToken.trim());
-    return validation;
+    });
   }
 
-  Future<String?> readControlToken() async {
-    final token = await _secureStore.read(_controlTokenKey);
-    if (token == null || token.isEmpty) {
-      return null;
-    }
-    return token;
+  Future<String?> readControlToken() {
+    return _runExclusive(() async {
+      final token = await _secureStore.read(_controlTokenKey);
+      if (token == null || token.isEmpty) {
+        return null;
+      }
+      return token;
+    });
   }
 
-  Future<void> clear() async {
+  Future<void> clear() => _runExclusive(_clearUnlocked);
+
+  Future<void> _clearUnlocked() async {
     await _secureStore.delete(_serverOriginKey);
     await _secureStore.delete(_controlTokenKey);
+  }
+
+  Future<T> _runExclusive<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _operationTail = _operationTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
   }
 }
