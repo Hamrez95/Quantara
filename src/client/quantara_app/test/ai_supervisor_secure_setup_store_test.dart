@@ -43,7 +43,7 @@ void main() {
         releaseBuild: true,
       );
 
-      final setup = await store.load();
+      final setup = await store.load(releaseBuild: true);
 
       expect(setup, isNotNull);
       expect(setup!.serverOrigin, Uri.parse('https://supervisor.example.com'));
@@ -59,10 +59,10 @@ void main() {
       secureStore.values['quantara.supervisor.control_token'] =
           'abcdefghijklmnopqrstuvwxyz123456';
 
-      expect(await store.load(), isNull);
+      expect(await store.load(releaseBuild: true), isNull);
 
       secureStore.values.remove('quantara.supervisor.control_token');
-      expect(await store.load(), isNull);
+      expect(await store.load(releaseBuild: true), isNull);
     });
 
     test('clear removes both protected setup values', () async {
@@ -77,19 +77,20 @@ void main() {
       await store.clear();
 
       expect(secureStore.values, isEmpty);
-      expect(await store.load(), isNull);
+      expect(await store.load(releaseBuild: true), isNull);
     });
 
-    test('development HTTP remains loopback-only', () async {
-      final store = SupervisorSecureSetupStore(
-        secureStore: _FakeSecureStore(),
-      );
+    test('development HTTP remains loopback-only across reload', () async {
+      final secureStore = _FakeSecureStore();
+      final store = SupervisorSecureSetupStore(secureStore: secureStore);
 
       final loopback = await store.save(
         serverUrl: 'http://127.0.0.1:8787',
         controlToken: 'abcdefghijklmnopqrstuvwxyz123456',
         releaseBuild: false,
       );
+      final reloaded = await store.load(releaseBuild: false);
+      final releaseReload = await store.load(releaseBuild: true);
       final remote = await store.save(
         serverUrl: 'http://192.168.1.50:8787',
         controlToken: 'abcdefghijklmnopqrstuvwxyz123456',
@@ -97,6 +98,8 @@ void main() {
       );
 
       expect(loopback.isValid, isTrue);
+      expect(reloaded?.serverOrigin, Uri.parse('http://127.0.0.1:8787'));
+      expect(releaseReload, isNull);
       expect(
         remote.failures,
         contains(SupervisorSetupFailure.insecureServerUrl),
