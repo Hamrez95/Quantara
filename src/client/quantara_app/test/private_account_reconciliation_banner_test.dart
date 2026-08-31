@@ -5,63 +5,67 @@ import 'package:quantara_app/features/auto_trade/domain/private_account_reconcil
 import 'package:quantara_app/features/auto_trade/presentation/private_account_reconciliation_banner.dart';
 
 void main() {
-  testWidgets('stale flat account does not claim existing-position management', (
-    tester,
-  ) async {
-    final state = _staleState(openPositionCount: 0);
+  testWidgets(
+    'stale flat account does not claim existing-position management',
+    (tester) async {
+      final state = _staleState(openPositionCount: 0);
 
-    await _pumpBanner(tester, state: state);
+      await _pumpBanner(tester, state: state);
 
-    expect(find.textContaining('Account information needs refresh'), findsOne);
-    expect(find.textContaining('No open position is known'), findsOne);
-    expect(find.textContaining('existing-position management'), findsNothing);
-    expect(find.byIcon(Icons.sync_rounded), findsOne);
-  });
+      expect(find.textContaining('Account information needs refresh'), findsOne);
+      expect(find.textContaining('No open position is known'), findsOne);
+      expect(find.textContaining('existing-position management'), findsNothing);
+      expect(find.byIcon(Icons.sync_rounded), findsOne);
+    },
+  );
 
-  testWidgets('stale non-flat account keeps risk-reducing management wording', (
-    tester,
-  ) async {
-    final state = _staleState(openPositionCount: 1);
+  testWidgets(
+    'stale non-flat account keeps risk-reducing management wording',
+    (tester) async {
+      final state = _staleState(openPositionCount: 1);
 
-    await _pumpBanner(tester, state: state);
+      await _pumpBanner(tester, state: state);
 
-    expect(find.textContaining('Private account truth is stale'), findsOne);
-    expect(find.textContaining('confirmed open positions'), findsOne);
-    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
-  });
+      expect(find.textContaining('Private account truth is stale'), findsOne);
+      expect(find.textContaining('confirmed open positions'), findsOne);
+      expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+    },
+  );
 
-  testWidgets('divergent state stays high severity even when snapshot is flat', (
-    tester,
-  ) async {
-    final syncedAt = DateTime.utc(2026, 8, 31, 12);
-    final state = PrivateAccountReconciliationState.fresh(
-      snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
-      cycleId: 'cycle-divergent',
-      completedAt: syncedAt,
-    ).observeLocalLiveOpenPositions(
-      openPositionCount: 1,
-      observedAt: syncedAt.add(const Duration(seconds: 1)),
-    );
+  testWidgets(
+    'divergent state stays high severity even when snapshot is flat',
+    (tester) async {
+      final syncedAt = DateTime.utc(2026, 8, 31, 12);
+      final state = PrivateAccountReconciliationState.fresh(
+        snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
+        cycleId: 'cycle-divergent',
+        completedAt: syncedAt,
+      ).observeLocalLiveOpenPositions(
+        openPositionCount: 1,
+        observedAt: syncedAt.add(const Duration(seconds: 1)),
+      );
 
-    await _pumpBanner(tester, state: state);
+      await _pumpBanner(tester, state: state);
 
-    expect(find.textContaining('disagrees with Local Live'), findsOne);
-    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
-  });
+      expect(find.textContaining('disagrees with Local Live'), findsOne);
+      expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+    },
+  );
 
-  testWidgets('Persian flat-account copy is truthful and recovery-oriented', (
-    tester,
-  ) async {
-    final state = _staleState(openPositionCount: 0).markRefreshing(
-      DateTime.utc(2026, 8, 31, 12, 2),
-    );
+  testWidgets(
+    'Persian flat-account copy is truthful and recovery-oriented',
+    (tester) async {
+      final state = _staleState(openPositionCount: 0).markRefreshing(
+        DateTime.utc(2026, 8, 31, 12, 2),
+      );
 
-    await _pumpBanner(tester, state: state, persian: true);
+      await _pumpBanner(tester, state: state, persian: true);
 
-    expect(find.textContaining('اطلاعات حساب نیاز به تازه‌سازی دارد'), findsOne);
-    expect(find.textContaining('هیچ پوزیشن بازی'), findsOne);
-    expect(find.textContaining('در حال تازه‌سازی'), findsOne);
-  });
+      expect(find.textContaining('اطلاعات حساب نیاز به تازه‌سازی دارد'), findsOne);
+      expect(find.textContaining('هیچ پوزیشن بازی'), findsOne);
+      expect(find.textContaining('در حال تازه‌سازی'), findsOne);
+    },
+  );
 
   testWidgets('fresh truth renders no warning banner', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
