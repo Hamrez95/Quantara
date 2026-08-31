@@ -32,12 +32,19 @@ final class SupervisorHealthProbeResult {
 }
 
 final class SupervisorHealthClient {
-  SupervisorHealthClient({
+  factory SupervisorHealthClient({
     http.Client? client,
-    this._timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 5),
     DateTime Function()? now,
-  }) : _client = client ?? http.Client(),
-       _now = now ?? DateTime.now;
+  }) {
+    return SupervisorHealthClient._(
+      client ?? http.Client(),
+      timeout,
+      now ?? DateTime.now,
+    );
+  }
+
+  SupervisorHealthClient._(this._client, this._timeout, this._now);
 
   static const statusPath = '/api/v1/supervisor/status';
   static const controlTokenHeader = 'X-Quantara-Supervisor-Token';
