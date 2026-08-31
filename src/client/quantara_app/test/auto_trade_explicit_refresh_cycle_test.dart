@@ -10,33 +10,24 @@ import 'package:quantara_app/features/auto_trade/data/secure_auto_trade_credenti
 import 'package:quantara_app/features/auto_trade/domain/auto_trade_models.dart';
 import 'package:quantara_app/features/auto_trade/domain/private_account_reconciliation.dart';
 
-typedef _ExplicitRefresh = Future<bool> Function(AutoTradeController controller);
-
 void main() {
   test(
     'manual refresh queues its own REST cycle when active polling is in flight',
     () async {
-      await _verifyExplicitRefreshAfterActivePoll(
-        explicitRefresh: (controller) => controller.refresh(),
-      );
+      await _verifyExplicitRefreshAfterActivePoll(appResume: false);
     },
   );
 
   test(
     'app resume queues its own REST cycle when active polling is in flight',
     () async {
-      await _verifyExplicitRefreshAfterActivePoll(
-        explicitRefresh: (controller) => controller.reconcile(
-          reason: PrivateAccountRefreshReason.appResume,
-          force: true,
-        ),
-      );
+      await _verifyExplicitRefreshAfterActivePoll(appResume: true);
     },
   );
 }
 
 Future<void> _verifyExplicitRefreshAfterActivePoll({
-  required _ExplicitRefresh explicitRefresh,
+  required bool appResume,
 }) async {
   var now = DateTime.utc(2026, 8, 31, 10);
   var accountRequests = 0;
@@ -78,16 +69,23 @@ Future<void> _verifyExplicitRefreshAfterActivePoll({
   );
   await secondAccountRequestStarted.future;
 
-  final explicit = explicitRefresh(controller);
+  late final Future<bool> explicitRefresh;
+  if (appResume) {
+    explicitRefresh = controller.reconcile(
+      reason: PrivateAccountRefreshReason.appResume,
+      force: true,
+    );
+  } else {
+    explicitRefresh = controller.refresh();
+  }
   releaseSecondAccountRequest.complete();
 
   expect(await activePoll, isTrue);
-  expect(await explicit, isTrue);
+  expect(await explicitRefresh, isTrue);
   expect(
     accountRequests,
     3,
-    reason:
-        'The explicit refresh must not be swallowed by the in-flight poll.',
+    reason: 'Explicit refresh must run after the active poll.',
   );
   expect(controller.snapshot?.positions, isEmpty);
   expect(
