@@ -20,6 +20,10 @@ bool IsSafeIdentityToken(std::string_view value, std::size_t max_size) noexcept 
          });
 }
 
+bool IsSupportedStopTriggerType(std::string_view value) noexcept {
+  return value == "LAST_PRICE" || value == "MARK_PRICE";
+}
+
 bool IsSafeConfirmationRequest(
     const ExistingPositionMutationRequest& request) noexcept {
   if (!request.reduce_only || request.increases_exposure ||
@@ -33,7 +37,8 @@ bool IsSafeConfirmationRequest(
     case ExistingPositionMutationKind::kReduceOnlyClose:
       return BuildBitunixManagementOnlyRequest(request).has_value();
     case ExistingPositionMutationKind::kTightenStop:
-      return std::isfinite(request.new_stop_price) && request.new_stop_price > 0.0;
+      return std::isfinite(request.new_stop_price) && request.new_stop_price > 0.0 &&
+             IsSupportedStopTriggerType(request.stop_trigger_type);
     case ExistingPositionMutationKind::kUnsupported:
       return false;
   }
@@ -122,9 +127,9 @@ ExistingPositionMutationConfirmation ConfirmTightenedStop(
       continue;
     }
     ++stop_orders;
-    expected_stop_observed =
-        expected_stop_observed || PriceMatches(order.stop_loss_price,
-                                                request.new_stop_price);
+    expected_stop_observed = expected_stop_observed ||
+        (PriceMatches(order.stop_loss_price, request.new_stop_price) &&
+         order.stop_loss_stop_type == request.stop_trigger_type);
   }
 
   if (stop_orders != 1 || !expected_stop_observed) {
