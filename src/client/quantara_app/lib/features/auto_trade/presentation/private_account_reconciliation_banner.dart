@@ -20,7 +20,10 @@ final class PrivateAccountReconciliationBanner extends StatelessWidget {
 
     final snapshotOpenCount = state.snapshot?.positions.length;
     final localLiveOpenCount = state.localLiveOpenPositionCount;
-    final confirmedOpenCount = switch ((snapshotOpenCount, localLiveOpenCount)) {
+    final confirmedOpenCount = switch ((
+      snapshotOpenCount,
+      localLiveOpenCount,
+    )) {
       (final int snapshotCount, final int localCount)
           when snapshotCount > 0 || localCount > 0 =>
         snapshotCount > localCount ? snapshotCount : localCount,
