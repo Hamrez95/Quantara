@@ -136,6 +136,34 @@ bool InvalidStopPriceFailsClosed() {
          joined->has_conflicting_order_fill_or_history;
 }
 
+bool InvalidTakeProfitPriceFailsClosed() {
+  const auto position = Position("p-1");
+  auto durable = Durable("p-1");
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  auto protection = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1", "1");
+  protection.take_profit_price = "nan";
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {protection});
+  return joined.has_value() && joined->has_complete_exchange_stop &&
+         !joined->has_complete_exchange_take_profit_ladder &&
+         joined->has_conflicting_order_fill_or_history;
+}
+
+bool InvalidTakeProfitTriggerFailsClosed() {
+  const auto position = Position("p-1");
+  auto durable = Durable("p-1");
+  quantara::BitunixPendingOrdersSnapshot pending_orders{};
+  pending_orders.total = 0;
+  auto protection = TpSlOrder("protect-1", "p-1", "BTCUSDT", "1", "1");
+  protection.take_profit_stop_type = "INDEX_PRICE";
+  const auto joined = quantara::ApplyCurrentExchangeProtectionEvidence(
+      position, durable, pending_orders, {protection});
+  return joined.has_value() && joined->has_complete_exchange_stop &&
+         !joined->has_complete_exchange_take_profit_ladder &&
+         joined->has_conflicting_order_fill_or_history;
+}
+
 bool UnknownSideNeverInvented() {
   const auto position = Position("p-1", "BTCUSDT", "1", "BOTH");
   auto durable = Durable("p-1");
@@ -287,7 +315,8 @@ int main() {
   if (!VerifiedPositionGrantsManagementOnly() ||
       !CurrentStopFactsComeOnlyFromFreshTruth() ||
       !InvalidStopTriggerFailsClosed() || !InvalidStopPriceFailsClosed() ||
-      !UnknownSideNeverInvented() ||
+      !InvalidTakeProfitPriceFailsClosed() ||
+      !InvalidTakeProfitTriggerFailsClosed() || !UnknownSideNeverInvented() ||
       !SplitTakeProfitCoverageGrantsManagementOnly() ||
       !PartialStopCoverageNeverGrantsManagement() ||
       !PartialTakeProfitCoverageNeverGrantsManagement() ||
