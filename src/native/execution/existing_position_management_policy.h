@@ -5,6 +5,12 @@
 
 namespace quantara {
 
+enum class ExistingPositionSide {
+  kUnknown,
+  kLong,
+  kShort,
+};
+
 // Facts must be fetched from the exchange during the current reconciliation
 // cycle. Cached/local state is deliberately not an input to this boundary.
 struct ExistingExchangePositionFacts final {
@@ -17,6 +23,11 @@ struct ExistingExchangePositionFacts final {
   bool has_conflicting_order_fill_or_history = true;
   bool has_durable_reconstruction = false;
   bool is_already_managed = false;
+  // Exchange-derived stop evidence is deliberately carried separately from the
+  // local mutation request. A stop-tightening decision must never infer either
+  // the current stop or the position side from caller intent.
+  ExistingPositionSide side = ExistingPositionSide::kUnknown;
+  double current_stop_price = 0.0;
 };
 
 enum class ExistingPositionClassification {
@@ -57,6 +68,9 @@ struct ExistingPositionMutationRequest final {
   bool increases_exposure = true;
   bool changes_margin_mode = true;
   bool widens_stop = true;
+  // Explicit requested stop. It is meaningful only for kTightenStop and must be
+  // proven safer than exchange-derived current_stop_price for the verified side.
+  double new_stop_price = 0.0;
 };
 
 struct ExistingPositionMutationDecision final {
