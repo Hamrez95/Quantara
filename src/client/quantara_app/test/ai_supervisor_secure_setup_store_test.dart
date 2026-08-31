@@ -4,35 +4,38 @@ import 'package:quantara_app/features/ai_supervisor/domain/supervisor_connection
 
 void main() {
   group('SupervisorSecureSetupStore', () {
-    test('stores only normalized HTTPS origin plus token in secure storage', () async {
-      final secureStore = _FakeSecureStore();
-      final store = SupervisorSecureSetupStore(secureStore: secureStore);
+    test(
+      'stores only normalized HTTPS origin plus token in secure storage',
+      () async {
+        final secureStore = _FakeSecureStore();
+        final store = SupervisorSecureSetupStore(secureStore: secureStore);
 
-      final result = await store.save(
-        serverUrl: 'https://supervisor.example.com:8443/path?ignored=no',
-        controlToken: 'abcdefghijklmnopqrstuvwxyz123456',
-        releaseBuild: true,
-      );
+        final result = await store.save(
+          serverUrl: 'https://supervisor.example.com:8443/path?ignored=no',
+          controlToken: 'abcdefghijklmnopqrstuvwxyz123456',
+          releaseBuild: true,
+        );
 
-      expect(result.isValid, isFalse);
-      expect(secureStore.values, isEmpty);
+        expect(result.isValid, isFalse);
+        expect(secureStore.values, isEmpty);
 
-      final validResult = await store.save(
-        serverUrl: 'https://supervisor.example.com:8443',
-        controlToken: 'abcdefghijklmnopqrstuvwxyz123456',
-        releaseBuild: true,
-      );
+        final validResult = await store.save(
+          serverUrl: 'https://supervisor.example.com:8443',
+          controlToken: 'abcdefghijklmnopqrstuvwxyz123456',
+          releaseBuild: true,
+        );
 
-      expect(validResult.isValid, isTrue);
-      expect(
-        secureStore.values.values,
-        contains('https://supervisor.example.com:8443'),
-      );
-      expect(
-        secureStore.values.values,
-        contains('abcdefghijklmnopqrstuvwxyz123456'),
-      );
-    });
+        expect(validResult.isValid, isTrue);
+        expect(
+          secureStore.values.values,
+          contains('https://supervisor.example.com:8443'),
+        );
+        expect(
+          secureStore.values.values,
+          contains('abcdefghijklmnopqrstuvwxyz123456'),
+        );
+      },
+    );
 
     test('load exposes origin but never returns the control token', () async {
       final secureStore = _FakeSecureStore();
