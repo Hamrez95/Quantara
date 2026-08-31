@@ -62,9 +62,7 @@ void main() {
     final coordinator = SupervisorConnectionHealthCoordinator(
       setupStore: store,
       healthClient: SupervisorHealthClient(
-        client: MockClient(
-          (_) async => http.Response('token=$token', 401),
-        ),
+        client: MockClient((_) async => http.Response('token=$token', 401)),
         now: () => firstCheck,
       ),
       releaseBuild: true,
@@ -82,9 +80,7 @@ void main() {
     final coordinator = SupervisorConnectionHealthCoordinator(
       setupStore: store,
       healthClient: SupervisorHealthClient(
-        client: MockClient(
-          (_) async => http.Response('token=$token', 403),
-        ),
+        client: MockClient((_) async => http.Response('token=$token', 403)),
         now: () => firstCheck,
       ),
       releaseBuild: true,
