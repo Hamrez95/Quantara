@@ -71,6 +71,37 @@ void main() {
       expect(await store.load(releaseBuild: true), isNull);
     });
 
+    test('interrupted replacement cannot pair a new origin with an old token', () async {
+      final secureStore = _FakeSecureStore();
+      final store = SupervisorSecureSetupStore(secureStore: secureStore);
+      await store.save(
+        serverUrl: 'https://old-supervisor.example.com',
+        controlToken: 'old-control-token-abcdefghijklmnopqrstuvwxyz',
+        releaseBuild: true,
+      );
+
+      secureStore.failWriteKey = 'quantara.supervisor.control_token';
+
+      await expectLater(
+        store.save(
+          serverUrl: 'https://new-supervisor.example.com',
+          controlToken: 'new-control-token-abcdefghijklmnopqrstuvwxyz',
+          releaseBuild: true,
+        ),
+        throwsStateError,
+      );
+
+      expect(await store.load(releaseBuild: true), isNull);
+      expect(
+        secureStore.values['quantara.supervisor.server_origin'],
+        'https://new-supervisor.example.com',
+      );
+      expect(
+        secureStore.values.containsKey('quantara.supervisor.control_token'),
+        isFalse,
+      );
+    });
+
     test('clear removes both protected setup values', () async {
       final secureStore = _FakeSecureStore();
       final store = SupervisorSecureSetupStore(secureStore: secureStore);
@@ -116,6 +147,7 @@ void main() {
 
 final class _FakeSecureStore implements SupervisorSecureKeyValueStore {
   final Map<String, String> values = <String, String>{};
+  String? failWriteKey;
 
   @override
   Future<void> delete(String key) async {
@@ -127,6 +159,9 @@ final class _FakeSecureStore implements SupervisorSecureKeyValueStore {
 
   @override
   Future<void> write(String key, String value) async {
+    if (key == failWriteKey) {
+      throw StateError('simulated secure-storage write failure');
+    }
     values[key] = value;
   }
 }
