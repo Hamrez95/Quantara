@@ -66,7 +66,9 @@ final class PrivateAccountReconciliationBanner extends StatelessWidget {
     final border = severe
         ? colors.error.withValues(alpha: 0.42)
         : colors.tertiary.withValues(alpha: 0.42);
-    final foreground = severe ? colors.onErrorContainer : colors.onTertiaryContainer;
+    final foreground = severe
+        ? colors.onErrorContainer
+        : colors.onTertiaryContainer;
     final iconColor = severe ? colors.error : colors.tertiary;
 
     return Semantics(
