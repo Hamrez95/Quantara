@@ -5,7 +5,8 @@ import 'package:http/http.dart' as http;
 
 enum SupervisorHealthTransportStatus {
   reachable,
-  unauthorized,
+  tokenExpired,
+  tokenRevoked,
   serverUnreachable,
   incompatibleServer,
 }
@@ -69,11 +70,22 @@ final class SupervisorHealthClient {
           .get(uri, headers: {controlTokenHeader: controlToken})
           .timeout(_timeout);
 
-      if (response.statusCode == 401 || response.statusCode == 403) {
+      // Supervisor status contract: 401 means a previously issued token has
+      // expired; 403 means it has been explicitly revoked/denied. Keep these
+      // states separate so the UI can tell the user the truthful recovery path.
+      // Never parse or retain an authentication error body here.
+      if (response.statusCode == 401) {
         return SupervisorHealthProbeResult(
-          status: SupervisorHealthTransportStatus.unauthorized,
+          status: SupervisorHealthTransportStatus.tokenExpired,
           checkedAt: checkedAt,
-          diagnosticCode: 'control_token_rejected',
+          diagnosticCode: 'control_token_expired',
+        );
+      }
+      if (response.statusCode == 403) {
+        return SupervisorHealthProbeResult(
+          status: SupervisorHealthTransportStatus.tokenRevoked,
+          checkedAt: checkedAt,
+          diagnosticCode: 'control_token_revoked',
         );
       }
       if (response.statusCode == 404) {

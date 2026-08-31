@@ -56,14 +56,25 @@ void main() {
     expect(result.diagnosticCode, 'supervisor_not_enabled');
   });
 
-  test('sanitizes rejected control token state', () async {
-    final client = MockClient((_) async => http.Response('', 401));
+  test('maps 401 to expired token', () async {
+    final client = MockClient((_) async => http.Response('token=$token', 401));
     final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
     final result = await probe.check(serverOrigin: origin, controlToken: token);
 
-    expect(result.status, SupervisorHealthTransportStatus.unauthorized);
-    expect(result.diagnosticCode, 'control_token_rejected');
+    expect(result.status, SupervisorHealthTransportStatus.tokenExpired);
+    expect(result.diagnosticCode, 'control_token_expired');
+    expect(result.toString(), isNot(contains(token)));
+  });
+
+  test('maps 403 to revoked token', () async {
+    final client = MockClient((_) async => http.Response('token=$token', 403));
+    final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+
+    final result = await probe.check(serverOrigin: origin, controlToken: token);
+
+    expect(result.status, SupervisorHealthTransportStatus.tokenRevoked);
+    expect(result.diagnosticCode, 'control_token_revoked');
     expect(result.toString(), isNot(contains(token)));
   });
 
