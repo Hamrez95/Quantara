@@ -57,7 +57,9 @@ void main() {
   });
 
   test('rejected control token is sanitized unauthorized state', () async {
-    final client = MockClient((_) async => http.Response('secret details', 401));
+    final client = MockClient(
+      (_) async => http.Response('secret details', 401),
+    );
     final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
     final result = await probe.check(serverOrigin: origin, controlToken: token);
@@ -67,21 +69,24 @@ void main() {
     expect(result.toString(), isNot(contains('secret details')));
   });
 
-  test('mutation-capable status contract fails closed as incompatible', () async {
-    final client = MockClient(
-      (_) async => http.Response(
-        '{"enabled":true,"model":"gpt-5","readOnly":true,'
-        '"liveTradingMutation":true,"credentialExposure":false}',
-        200,
-      ),
-    );
-    final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+  test(
+    'mutation-capable status contract fails closed as incompatible',
+    () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          '{"enabled":true,"model":"gpt-5","readOnly":true,'
+          '"liveTradingMutation":true,"credentialExposure":false}',
+          200,
+        ),
+      );
+      final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
-    final result = await probe.check(serverOrigin: origin, controlToken: token);
+      final result = await probe.check(serverOrigin: origin, controlToken: token);
 
-    expect(result.status, SupervisorHealthTransportStatus.incompatibleServer);
-    expect(result.diagnosticCode, 'incompatible_status_contract');
-  });
+      expect(result.status, SupervisorHealthTransportStatus.incompatibleServer);
+      expect(result.diagnosticCode, 'incompatible_status_contract');
+    },
+  );
 
   test('malformed status response never retains raw body', () async {
     final client = MockClient((_) async => http.Response('token=$token', 200));
