@@ -5,26 +5,18 @@ import 'package:quantara_app/features/auto_trade/domain/private_account_reconcil
 import 'package:quantara_app/features/auto_trade/presentation/private_account_reconciliation_banner.dart';
 
 void main() {
-  testWidgets(
-    'stale flat account does not claim existing-position management',
-    (tester) async {
-      final state = _staleState(openPositionCount: 0);
+  testWidgets('stale flat account uses recovery wording', (tester) async {
+    final state = _staleState(openPositionCount: 0);
 
-      await _pumpBanner(tester, state: state);
+    await _pumpBanner(tester, state: state);
 
-      expect(
-        find.textContaining('Account information needs refresh'),
-        findsOne,
-      );
-      expect(find.textContaining('No open position is known'), findsOne);
-      expect(find.textContaining('existing-position management'), findsNothing);
-      expect(find.byIcon(Icons.sync_rounded), findsOne);
-    },
-  );
+    expect(find.textContaining('Account information needs refresh'), findsOne);
+    expect(find.textContaining('No open position is known'), findsOne);
+    expect(find.textContaining('existing-position management'), findsNothing);
+    expect(find.byIcon(Icons.sync_rounded), findsOne);
+  });
 
-  testWidgets('stale non-flat account keeps risk-reducing management wording', (
-    tester,
-  ) async {
+  testWidgets('stale non-flat account keeps high severity', (tester) async {
     final state = _staleState(openPositionCount: 1);
 
     await _pumpBanner(tester, state: state);
@@ -34,9 +26,7 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets('unavailable flat account stays recovery-oriented', (
-    tester,
-  ) async {
+  testWidgets('unavailable flat account stays recovery-oriented', (tester) async {
     final state = PrivateAccountReconciliationState.unavailable(
       at: DateTime.utc(2026, 8, 31, 12),
     );
@@ -48,60 +38,37 @@ void main() {
     expect(find.byIcon(Icons.sync_rounded), findsOne);
   });
 
-  testWidgets(
-    'unavailable account with Local Live position keeps high severity',
-    (tester) async {
-      final observedAt = DateTime.utc(2026, 8, 31, 12, 1);
-      final state = PrivateAccountReconciliationState.unavailable(
-        at: observedAt,
-      ).observeLocalLiveOpenPositions(
-        openPositionCount: 1,
-        observedAt: observedAt,
-      );
+  testWidgets('unavailable non-flat account keeps high severity', (tester) async {
+    final observedAt = DateTime.utc(2026, 8, 31, 12, 1);
+    final unavailable = PrivateAccountReconciliationState.unavailable(
+      at: observedAt,
+    );
+    final state = unavailable.observeLocalLiveOpenPositions(
+      openPositionCount: 1,
+      observedAt: observedAt,
+    );
 
-      await _pumpBanner(tester, state: state);
+    await _pumpBanner(tester, state: state);
 
-      expect(
-        find.textContaining('Private account truth is unavailable'),
-        findsOne,
-      );
-      expect(find.textContaining('confirmed open positions'), findsOne);
-      expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
-    },
-  );
+    expect(
+      find.textContaining('Private account truth is unavailable'),
+      findsOne,
+    );
+    expect(find.textContaining('confirmed open positions'), findsOne);
+    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+  });
 
-  testWidgets(
-    'divergent state stays high severity even when snapshot is flat',
-    (tester) async {
-      final syncedAt = DateTime.utc(2026, 8, 31, 12);
-      final state =
-          PrivateAccountReconciliationState.fresh(
-            snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
-            cycleId: 'cycle-divergent',
-            completedAt: syncedAt,
-          ).observeLocalLiveOpenPositions(
-            openPositionCount: 1,
-            observedAt: syncedAt.add(const Duration(seconds: 1)),
-          );
-
-      await _pumpBanner(tester, state: state);
-
-      expect(find.textContaining('disagrees with Local Live'), findsOne);
-      expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
-    },
-  );
-
-  testWidgets('divergent non-flat state stays high severity', (tester) async {
+  testWidgets('divergent flat snapshot stays high severity', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
-    final state =
-        PrivateAccountReconciliationState.fresh(
-          snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 1),
-          cycleId: 'cycle-divergent-non-flat',
-          completedAt: syncedAt,
-        ).observeLocalLiveOpenPositions(
-          openPositionCount: 2,
-          observedAt: syncedAt.add(const Duration(seconds: 1)),
-        );
+    final fresh = PrivateAccountReconciliationState.fresh(
+      snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
+      cycleId: 'cycle-divergent',
+      completedAt: syncedAt,
+    );
+    final state = fresh.observeLocalLiveOpenPositions(
+      openPositionCount: 1,
+      observedAt: syncedAt.add(const Duration(seconds: 1)),
+    );
 
     await _pumpBanner(tester, state: state);
 
@@ -109,9 +76,25 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets('Persian flat-account copy is truthful and recovery-oriented', (
-    tester,
-  ) async {
+  testWidgets('divergent non-flat state stays high severity', (tester) async {
+    final syncedAt = DateTime.utc(2026, 8, 31, 12);
+    final fresh = PrivateAccountReconciliationState.fresh(
+      snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 1),
+      cycleId: 'cycle-divergent-non-flat',
+      completedAt: syncedAt,
+    );
+    final state = fresh.observeLocalLiveOpenPositions(
+      openPositionCount: 2,
+      observedAt: syncedAt.add(const Duration(seconds: 1)),
+    );
+
+    await _pumpBanner(tester, state: state);
+
+    expect(find.textContaining('disagrees with Local Live'), findsOne);
+    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+  });
+
+  testWidgets('Persian flat-account copy stays recovery-oriented', (tester) async {
     final state = _staleState(
       openPositionCount: 0,
     ).markRefreshing(DateTime.utc(2026, 8, 31, 12, 2));
@@ -142,9 +125,7 @@ void main() {
     expect(find.byIcon(Icons.sync_rounded), findsNothing);
   });
 
-  testWidgets('fresh non-flat truth renders no warning banner', (
-    tester,
-  ) async {
+  testWidgets('fresh non-flat truth renders no warning banner', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
 
     await _pumpBanner(
