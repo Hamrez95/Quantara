@@ -56,39 +56,27 @@ void main() {
     expect(result.diagnosticCode, 'supervisor_not_enabled');
   });
 
-  test(
-    'maps 401 to an expired control token without retaining its body',
-    () async {
-      final client = MockClient((_) async => http.Response('token=$token', 401));
-      final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+  test('maps 401 to expired token', () async {
+    final client = MockClient((_) async => http.Response('token=$token', 401));
+    final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
-      final result = await probe.check(
-        serverOrigin: origin,
-        controlToken: token,
-      );
+    final result = await probe.check(serverOrigin: origin, controlToken: token);
 
-      expect(result.status, SupervisorHealthTransportStatus.tokenExpired);
-      expect(result.diagnosticCode, 'control_token_expired');
-      expect(result.toString(), isNot(contains(token)));
-    },
-  );
+    expect(result.status, SupervisorHealthTransportStatus.tokenExpired);
+    expect(result.diagnosticCode, 'control_token_expired');
+    expect(result.toString(), isNot(contains(token)));
+  });
 
-  test(
-    'maps 403 to a revoked control token without retaining its body',
-    () async {
-      final client = MockClient((_) async => http.Response('token=$token', 403));
-      final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+  test('maps 403 to revoked token', () async {
+    final client = MockClient((_) async => http.Response('token=$token', 403));
+    final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
-      final result = await probe.check(
-        serverOrigin: origin,
-        controlToken: token,
-      );
+    final result = await probe.check(serverOrigin: origin, controlToken: token);
 
-      expect(result.status, SupervisorHealthTransportStatus.tokenRevoked);
-      expect(result.diagnosticCode, 'control_token_revoked');
-      expect(result.toString(), isNot(contains(token)));
-    },
-  );
+    expect(result.status, SupervisorHealthTransportStatus.tokenRevoked);
+    expect(result.diagnosticCode, 'control_token_revoked');
+    expect(result.toString(), isNot(contains(token)));
+  });
 
   test('rejects mutation-capable status contract', () async {
     final client = MockClient(
