@@ -19,6 +19,11 @@ struct BitunixPendingTpSlOrder final {
   std::string stop_loss_price;
   std::string take_profit_quantity;
   std::string stop_loss_quantity;
+  // Preserve Bitunix trigger semantics from fresh exchange truth so a later
+  // management mutation never has to guess whether protection triggers from
+  // LAST_PRICE or MARK_PRICE.
+  std::string take_profit_stop_type;
+  std::string stop_loss_stop_type;
 };
 
 namespace bitunix_pending_tpsl_detail {
@@ -228,6 +233,10 @@ inline bool ReadToken(JsonReader& reader, std::string& target,
   return true;
 }
 
+inline bool IsStopType(std::string_view value) noexcept {
+  return value == "LAST_PRICE" || value == "MARK_PRICE";
+}
+
 inline bool ParseOrder(JsonReader& reader, BitunixPendingTpSlOrder& out) noexcept {
   if (!reader.Consume('{')) return false;
   bool has_id = false;
@@ -237,6 +246,8 @@ inline bool ParseOrder(JsonReader& reader, BitunixPendingTpSlOrder& out) noexcep
   bool has_sl_price = false;
   bool has_tp_qty = false;
   bool has_sl_qty = false;
+  bool has_tp_stop_type = false;
+  bool has_sl_stop_type = false;
   if (reader.Consume('}')) return false;
 
   while (true) {
@@ -263,6 +274,18 @@ inline bool ParseOrder(JsonReader& reader, BitunixPendingTpSlOrder& out) noexcep
     } else if (*key == "slQty") {
       if (has_sl_qty || !ReadToken(reader, out.stop_loss_quantity, 64, true)) return false;
       has_sl_qty = true;
+    } else if (*key == "tpStopType") {
+      if (has_tp_stop_type || !ReadToken(reader, out.take_profit_stop_type, 16) ||
+          !IsStopType(out.take_profit_stop_type)) {
+        return false;
+      }
+      has_tp_stop_type = true;
+    } else if (*key == "slStopType") {
+      if (has_sl_stop_type || !ReadToken(reader, out.stop_loss_stop_type, 16) ||
+          !IsStopType(out.stop_loss_stop_type)) {
+        return false;
+      }
+      has_sl_stop_type = true;
     } else if (!reader.SkipValue()) {
       return false;
     }
@@ -277,6 +300,12 @@ inline bool ParseOrder(JsonReader& reader, BitunixPendingTpSlOrder& out) noexcep
   const bool has_sl_leg = has_sl_price && has_sl_qty &&
                           !out.stop_loss_price.empty() &&
                           !out.stop_loss_quantity.empty();
+  // Trigger type is optional for backward-compatible parsing of historical
+  // fixtures, but when the exchange reports one it is validated and preserved.
+  // Any future mutation boundary must require an explicit preserved type rather
+  // than defaulting or guessing.
+  (void)has_tp_stop_type;
+  (void)has_sl_stop_type;
   return has_tp_leg || has_sl_leg;
 }
 
@@ -297,8 +326,9 @@ inline bool ParseArray(JsonReader& reader,
 }  // namespace bitunix_pending_tpsl_detail
 
 // Parses only Bitunix's authenticated pending TP/SL endpoint response. The
-// result preserves exchange-reported TP/SL quantities because management
-// authority must never infer full protection from price presence alone.
+// result preserves exchange-reported TP/SL quantities and trigger types because
+// management authority must never infer protection semantics from price presence
+// alone.
 [[nodiscard]] inline std::optional<std::vector<BitunixPendingTpSlOrder>>
 ParseBitunixPendingTpSlOrdersResponse(std::string_view body) noexcept {
   using namespace bitunix_pending_tpsl_detail;
