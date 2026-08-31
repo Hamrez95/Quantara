@@ -34,6 +34,37 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
+  testWidgets('unavailable flat account stays recovery-oriented', (tester) async {
+    final state = PrivateAccountReconciliationState.unavailable(
+      at: DateTime.utc(2026, 8, 31, 12),
+    );
+
+    await _pumpBanner(tester, state: state);
+
+    expect(find.textContaining('Account information needs refresh'), findsOne);
+    expect(find.textContaining('No open position is known'), findsOne);
+    expect(find.byIcon(Icons.sync_rounded), findsOne);
+  });
+
+  testWidgets(
+    'unavailable account with Local Live position keeps high severity',
+    (tester) async {
+      final observedAt = DateTime.utc(2026, 8, 31, 12, 1);
+      final state = PrivateAccountReconciliationState.unavailable(
+        at: observedAt,
+      ).observeLocalLiveOpenPositions(
+        openPositionCount: 1,
+        observedAt: observedAt,
+      );
+
+      await _pumpBanner(tester, state: state);
+
+      expect(find.textContaining('Private account truth is unavailable'), findsOne);
+      expect(find.textContaining('confirmed open positions'), findsOne);
+      expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+    },
+  );
+
   testWidgets(
     'divergent state stays high severity even when snapshot is flat',
     (tester) async {
@@ -55,6 +86,24 @@ void main() {
     },
   );
 
+  testWidgets('divergent non-flat state stays high severity', (tester) async {
+    final syncedAt = DateTime.utc(2026, 8, 31, 12);
+    final state =
+        PrivateAccountReconciliationState.fresh(
+          snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 1),
+          cycleId: 'cycle-divergent-non-flat',
+          completedAt: syncedAt,
+        ).observeLocalLiveOpenPositions(
+          openPositionCount: 2,
+          observedAt: syncedAt.add(const Duration(seconds: 1)),
+        );
+
+    await _pumpBanner(tester, state: state);
+
+    expect(find.textContaining('disagrees with Local Live'), findsOne);
+    expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
+  });
+
   testWidgets('Persian flat-account copy is truthful and recovery-oriented', (
     tester,
   ) async {
@@ -72,14 +121,30 @@ void main() {
     expect(find.textContaining('در حال تازه‌سازی'), findsOne);
   });
 
-  testWidgets('fresh truth renders no warning banner', (tester) async {
+  testWidgets('fresh flat truth renders no warning banner', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
 
     await _pumpBanner(
       tester,
       state: PrivateAccountReconciliationState.fresh(
         snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
-        cycleId: 'fresh-cycle',
+        cycleId: 'fresh-cycle-flat',
+        completedAt: syncedAt,
+      ),
+    );
+
+    expect(find.byIcon(Icons.sync_problem_rounded), findsNothing);
+    expect(find.byIcon(Icons.sync_rounded), findsNothing);
+  });
+
+  testWidgets('fresh non-flat truth renders no warning banner', (tester) async {
+    final syncedAt = DateTime.utc(2026, 8, 31, 12);
+
+    await _pumpBanner(
+      tester,
+      state: PrivateAccountReconciliationState.fresh(
+        snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 1),
+        cycleId: 'fresh-cycle-non-flat',
         completedAt: syncedAt,
       ),
     );
