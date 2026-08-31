@@ -71,6 +71,10 @@ struct ExistingPositionMutationRequest final {
   // Explicit requested stop. It is meaningful only for kTightenStop and must be
   // proven safer than exchange-derived current_stop_price for the verified side.
   double new_stop_price = 0.0;
+  // Exact exchange trigger semantics for the requested stop. Platform adapters
+  // must preserve this from fresh Exchange truth; callers may not guess a
+  // default. Bitunix currently permits only LAST_PRICE or MARK_PRICE.
+  std::string_view stop_trigger_type;
 };
 
 struct ExistingPositionMutationDecision final {

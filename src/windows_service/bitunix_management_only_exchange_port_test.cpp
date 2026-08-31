@@ -116,9 +116,20 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> TightenedStopTruthTranspor
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
     return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"65000.000000","tpQty":"0.001","slQty":"0.001"}]})json"};
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"65000.000000","slStopType":"MARK_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
   }
   return std::nullopt;
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> WrongTriggerTruthTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits& limits) noexcept {
+  if (envelope.resource ==
+      "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
+    return quantara::BitunixHttpsReadOnlyResponse{200,
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"65000.000000","slStopType":"LAST_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
+  }
+  return TightenedStopTruthTransport(envelope, limits);
 }
 
 std::optional<quantara::BitunixHttpsReadOnlyResponse> WrongStopTruthTransport(
@@ -137,7 +148,7 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> WrongStopTruthTransport(
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
     return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"64000","tpQty":"0.001","slQty":"0.001"}]})json"};
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"64000","slStopType":"MARK_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
   }
   return std::nullopt;
 }
@@ -158,7 +169,7 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> DuplicateStopTruthTranspor
   if (envelope.resource ==
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
     return quantara::BitunixHttpsReadOnlyResponse{200,
-        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slQty":"0.001"},{"id":"sl-2","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slQty":"0.001"}]})json"};
+        R"json({"code":0,"data":[{"id":"sl-1","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slStopType":"MARK_PRICE","slQty":"0.001"},{"id":"sl-2","positionId":"12345","symbol":"BTCUSDT","slPrice":"65000","slStopType":"MARK_PRICE","slQty":"0.001"}]})json"};
   }
   return std::nullopt;
 }
@@ -185,6 +196,7 @@ quantara::ExistingPositionMutationRequest TightenStopRequest() {
       .changes_margin_mode = false,
       .widens_stop = false,
       .new_stop_price = 65000.0,
+      .stop_trigger_type = "MARK_PRICE",
   };
 }
 
@@ -246,11 +258,18 @@ int main() {
     ok &= Expect(tightened.ConfirmMutation(tighten_request) ==
                      quantara::ExistingPositionMutationConfirmation::
                          kConfirmedByFreshExchangeTruth,
-                 "Stop tightening must be confirmed only when the same live position has the requested exchange SL.");
+                 "Stop tightening must be confirmed only when the same live position has the requested exchange SL and trigger semantics.");
     ok &= Expect(tightened.SubmitMutation(tighten_request) ==
                      quantara::ExistingPositionMutationSubmitOutcome::
                          kDefinitelyNotSubmitted,
                  "Confirmation support must not silently grant stop-tightening submission authority.");
+
+    quantara::BitunixManagementOnlyExchangePort wrong_trigger(
+        root, AckTransport, WrongTriggerTruthTransport);
+    ok &= Expect(wrong_trigger.ConfirmMutation(tighten_request) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kNotConfirmedByFreshExchangeTruth,
+                 "A trigger-type drift must not confirm stop tightening even when price matches.");
 
     quantara::BitunixManagementOnlyExchangePort wrong_stop(
         root, AckTransport, WrongStopTruthTransport);
@@ -272,6 +291,13 @@ int main() {
                      quantara::ExistingPositionMutationConfirmation::
                          kExchangeTruthUnavailable,
                  "Invalid expected stop evidence must fail before exchange confirmation.");
+
+    auto missing_trigger = tighten_request;
+    missing_trigger.stop_trigger_type = {};
+    ok &= Expect(tightened.ConfirmMutation(missing_trigger) ==
+                     quantara::ExistingPositionMutationConfirmation::
+                         kExchangeTruthUnavailable,
+                 "Missing requested trigger semantics must fail before exchange confirmation.");
 
     auto unsafe = request;
     unsafe.increases_exposure = true;
