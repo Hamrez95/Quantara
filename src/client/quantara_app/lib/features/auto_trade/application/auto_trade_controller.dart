@@ -208,10 +208,11 @@ final class AutoTradeController extends ChangeNotifier {
   static bool _requiresIndependentRefreshCycle(
     PrivateAccountRefreshReason reason, {
     required bool force,
-  }) =>
-      force &&
-      (reason == PrivateAccountRefreshReason.manual ||
-          reason == PrivateAccountRefreshReason.appResume);
+  }) {
+    if (!force) return false;
+    return reason == PrivateAccountRefreshReason.manual ||
+        reason == PrivateAccountRefreshReason.appResume;
+  }
 
   Future<bool> _performSync(
     BitunixApiCredentials credentials, {
