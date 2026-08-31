@@ -10,6 +10,8 @@ import 'package:quantara_app/features/auto_trade/data/secure_auto_trade_credenti
 import 'package:quantara_app/features/auto_trade/domain/auto_trade_models.dart';
 import 'package:quantara_app/features/auto_trade/domain/private_account_reconciliation.dart';
 
+typedef _ExplicitRefresh = Future<bool> Function(AutoTradeController controller);
+
 void main() {
   test(
     'manual refresh queues its own REST cycle when active polling is in flight',
@@ -34,8 +36,7 @@ void main() {
 }
 
 Future<void> _verifyExplicitRefreshAfterActivePoll({
-  required Future<bool> Function(AutoTradeController controller)
-      explicitRefresh,
+  required _ExplicitRefresh explicitRefresh,
 }) async {
   var now = DateTime.utc(2026, 8, 31, 10);
   var accountRequests = 0;
