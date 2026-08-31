@@ -3,9 +3,8 @@ import 'package:quantara_app/features/ai_supervisor/domain/supervisor_connection
 
 void main() {
   group('SupervisorSetupValidation', () {
-    test('accepts HTTPS origin and does not retain the control token', () {
+    test('accepts HTTPS origin without retaining token', () {
       const token = 'device-bound-control-token-123456789';
-
       final result = SupervisorSetupValidation.validate(
         serverUrl: 'https://supervisor.example.com/path',
         controlToken: token,
@@ -17,7 +16,7 @@ void main() {
       expect(result.toString(), isNot(contains(token)));
     });
 
-    test('release build rejects non-HTTPS server', () {
+    test('release rejects non-HTTPS server', () {
       final result = SupervisorSetupValidation.validate(
         serverUrl: 'http://supervisor.example.com',
         controlToken: 'device-bound-control-token-123456789',
@@ -25,13 +24,10 @@ void main() {
       );
 
       expect(result.isValid, isFalse);
-      expect(
-        result.failures,
-        contains(SupervisorSetupFailure.insecureServerUrl),
-      );
+      expect(result.failures, contains(SupervisorSetupFailure.insecureServerUrl));
     });
 
-    test('development allows HTTP loopback only', () {
+    test('development HTTP is loopback-only', () {
       final loopback = SupervisorSetupValidation.validate(
         serverUrl: 'http://127.0.0.1:8080',
         controlToken: 'device-bound-control-token-123456789',
@@ -46,13 +42,10 @@ void main() {
       expect(loopback.isValid, isTrue);
       expect(loopback.serverOrigin, Uri.parse('http://127.0.0.1:8080'));
       expect(remote.isValid, isFalse);
-      expect(
-        remote.failures,
-        contains(SupervisorSetupFailure.insecureServerUrl),
-      );
+      expect(remote.failures, contains(SupervisorSetupFailure.insecureServerUrl));
     });
 
-    test('rejects credentials embedded in URL', () {
+    test('rejects URL credentials', () {
       final result = SupervisorSetupValidation.validate(
         serverUrl: 'https://user:secret@supervisor.example.com',
         controlToken: 'device-bound-control-token-123456789',
@@ -60,45 +53,36 @@ void main() {
       );
 
       expect(result.isValid, isFalse);
-      expect(
-        result.failures,
-        contains(SupervisorSetupFailure.invalidServerUrl),
-      );
+      expect(result.failures, contains(SupervisorSetupFailure.invalidServerUrl));
     });
 
-    test('rejects blank or unsafe token shapes', () {
+    test('rejects blank and unsafe tokens', () {
       final missing = SupervisorSetupValidation.validate(
         serverUrl: 'https://supervisor.example.com',
         controlToken: '   ',
         releaseBuild: true,
       );
-      final whitespace = SupervisorSetupValidation.validate(
+      final unsafe = SupervisorSetupValidation.validate(
         serverUrl: 'https://supervisor.example.com',
         controlToken: 'device-bound-token with-space-123456789',
         releaseBuild: true,
       );
 
-      expect(
-        missing.failures,
-        contains(SupervisorSetupFailure.missingControlToken),
-      );
-      expect(
-        whitespace.failures,
-        contains(SupervisorSetupFailure.invalidControlToken),
-      );
+      expect(missing.failures, contains(SupervisorSetupFailure.missingControlToken));
+      expect(unsafe.failures, contains(SupervisorSetupFailure.invalidControlToken));
     });
   });
 
   group('SupervisorConnectionSnapshot', () {
-    test('not configured is explicit and unhealthy', () {
-      const snapshot = SupervisorConnectionSnapshot.notConfigured();
+    test('not configured is unhealthy', () {
+      final snapshot = SupervisorConnectionSnapshot.notConfigured();
 
       expect(snapshot.status, SupervisorConnectionStatus.notConfigured);
       expect(snapshot.serverOrigin, isNull);
       expect(snapshot.isHealthy, isFalse);
     });
 
-    test('connected state records only sanitized origin and UTC health time', () {
+    test('connected state records UTC health time', () {
       final configured = SupervisorConnectionSnapshot(
         status: SupervisorConnectionStatus.connecting,
         serverOrigin: Uri.parse('https://supervisor.example.com'),
@@ -116,7 +100,7 @@ void main() {
       expect(connected.diagnosticCode, isNull);
     });
 
-    test('cannot claim connected health without configured origin', () {
+    test('connected health requires configured origin', () {
       const snapshot = SupervisorConnectionSnapshot(
         status: SupervisorConnectionStatus.connecting,
       );
