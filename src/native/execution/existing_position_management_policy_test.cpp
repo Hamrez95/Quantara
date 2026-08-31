@@ -173,12 +173,45 @@ int main() {
   auto long_position = verified_position;
   long_position.side = ExistingPositionSide::kLong;
   long_position.current_stop_price = 60000.0;
+  long_position.current_stop_trigger_type = "MARK_PRICE";
   auto long_tighten = SafeMutation(ExistingPositionMutationKind::kTightenStop);
   long_tighten.new_stop_price = 60500.0;
+  long_tighten.stop_trigger_type = "MARK_PRICE";
   ok &= ExpectMutation(
       AuthorizeExistingPositionMutation(managed, long_position, long_tighten),
       true, "tightenStopAuthorized",
-      "Long stop must be authorized only when the explicit new price is above the fresh exchange stop.");
+      "Long stop must be authorized only when price and trigger match fresh exchange evidence.");
+
+  auto missing_exchange_trigger = long_position;
+  missing_exchange_trigger.current_stop_trigger_type = {};
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, missing_exchange_trigger,
+                                        long_tighten),
+      false, "stopTriggerEvidenceRequired",
+      "Missing current exchange trigger semantics must fail closed.");
+
+  auto missing_requested_trigger = long_tighten;
+  missing_requested_trigger.stop_trigger_type = {};
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, long_position,
+                                        missing_requested_trigger),
+      false, "stopTriggerEvidenceRequired",
+      "Callers may not guess or omit stop trigger semantics.");
+
+  auto trigger_drift = long_tighten;
+  trigger_drift.stop_trigger_type = "LAST_PRICE";
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, long_position, trigger_drift),
+      false, "stopTriggerMismatch",
+      "Stop tightening must not silently change the exchange trigger semantic.");
+
+  auto unsupported_exchange_trigger = long_position;
+  unsupported_exchange_trigger.current_stop_trigger_type = "INDEX_PRICE";
+  ok &= ExpectMutation(
+      AuthorizeExistingPositionMutation(managed, unsupported_exchange_trigger,
+                                        long_tighten),
+      false, "stopTriggerEvidenceRequired",
+      "Unsupported exchange trigger evidence must fail closed.");
 
   auto long_not_tighter = long_tighten;
   long_not_tighter.new_stop_price = 59500.0;
@@ -190,12 +223,14 @@ int main() {
   auto short_position = verified_position;
   short_position.side = ExistingPositionSide::kShort;
   short_position.current_stop_price = 70000.0;
+  short_position.current_stop_trigger_type = "LAST_PRICE";
   auto short_tighten = SafeMutation(ExistingPositionMutationKind::kTightenStop);
   short_tighten.new_stop_price = 69500.0;
+  short_tighten.stop_trigger_type = "LAST_PRICE";
   ok &= ExpectMutation(
       AuthorizeExistingPositionMutation(managed, short_position, short_tighten),
       true, "tightenStopAuthorized",
-      "Short stop must be authorized only when the explicit new price is below the fresh exchange stop.");
+      "Short stop must be authorized only when price and trigger match fresh exchange evidence.");
 
   auto equal_stop = short_tighten;
   equal_stop.new_stop_price = short_position.current_stop_price;

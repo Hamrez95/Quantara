@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -24,10 +25,13 @@ struct ExistingExchangePositionFacts final {
   bool has_durable_reconstruction = false;
   bool is_already_managed = false;
   // Exchange-derived stop evidence is deliberately carried separately from the
-  // local mutation request. A stop-tightening decision must never infer either
-  // the current stop or the position side from caller intent.
+  // local mutation request. A stop-tightening decision must never infer the
+  // current stop, trigger semantics, or position side from caller intent.
   ExistingPositionSide side = ExistingPositionSide::kUnknown;
   double current_stop_price = 0.0;
+  // Own this small value because reconciliation facts can outlive the joined
+  // current-cycle evidence object from which the exchange trigger was copied.
+  std::string current_stop_trigger_type;
 };
 
 enum class ExistingPositionClassification {
