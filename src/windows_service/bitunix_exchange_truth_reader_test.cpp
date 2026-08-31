@@ -59,9 +59,20 @@ std::optional<quantara::BitunixHttpsReadOnlyResponse> GoodTransport(
       "/api/v1/futures/tpsl/get_pending_orders?limit=100&skip=0") {
     return quantara::BitunixHttpsReadOnlyResponse{
         200,
-        R"json({"code":0,"data":[{"id":"tpsl-1","positionId":"pos-1","symbol":"BTCUSDT","tpPrice":"70000","slPrice":"60000","tpQty":"0.001","slQty":"0.001"}]})json"};
+        R"json({"code":0,"data":[{"id":"tpsl-1","positionId":"pos-1","symbol":"BTCUSDT","tpPrice":"70000","tpStopType":"LAST_PRICE","slPrice":"60000","slStopType":"MARK_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
   }
   return std::nullopt;
+}
+
+std::optional<quantara::BitunixHttpsReadOnlyResponse> InvalidStopTypeTransport(
+    const quantara::BitunixReadOnlyHttpEnvelope& envelope,
+    const quantara::BitunixHttpsReadOnlyLimits& limits) noexcept {
+  if (envelope.resource.find("/tpsl/get_pending_orders") != std::string::npos) {
+    return quantara::BitunixHttpsReadOnlyResponse{
+        200,
+        R"json({"code":0,"data":[{"id":"tpsl-1","positionId":"pos-1","symbol":"BTCUSDT","tpPrice":"70000","tpStopType":"LAST_PRICE","slPrice":"60000","slStopType":"INDEX_PRICE","tpQty":"0.001","slQty":"0.001"}]})json"};
+  }
+  return GoodTransport(envelope, limits);
 }
 
 std::optional<quantara::BitunixHttpsReadOnlyResponse> PartialOrdersTransport(
@@ -147,8 +158,18 @@ int main() {
                      snapshot->pending_orders.total == 1 &&
                      snapshot->pending_tpsl_orders.size() == 1 &&
                      snapshot->pending_tpsl_orders[0].stop_loss_quantity ==
-                         "0.001",
-                 "Complete read-only exchange truth must include TP/SL quantity truth atomically.");
+                         "0.001" &&
+                     snapshot->pending_tpsl_orders[0].take_profit_stop_type ==
+                         "LAST_PRICE" &&
+                     snapshot->pending_tpsl_orders[0].stop_loss_stop_type ==
+                         "MARK_PRICE",
+                 "Complete read-only exchange truth must preserve TP/SL quantity and trigger-type truth atomically.");
+
+    ok &= Expect(!quantara::ReadBitunixExchangeTruth(
+                      root, positions_auth, orders_auth, tpsl_auth,
+                      InvalidStopTypeTransport)
+                      .has_value(),
+                 "Unsupported exchange TP/SL trigger types must fail closed.");
 
     if (generated_positions_auth.has_value() && generated_orders_auth.has_value() &&
         generated_tpsl_auth.has_value()) {
