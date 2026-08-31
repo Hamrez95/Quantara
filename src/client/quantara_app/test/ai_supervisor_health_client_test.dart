@@ -59,9 +59,7 @@ void main() {
   test(
     'maps 401 to an expired control token without retaining its body',
     () async {
-      final client = MockClient(
-        (_) async => http.Response('token=$token', 401),
-      );
+      final client = MockClient((_) async => http.Response('token=$token', 401));
       final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
       final result = await probe.check(
@@ -78,9 +76,7 @@ void main() {
   test(
     'maps 403 to a revoked control token without retaining its body',
     () async {
-      final client = MockClient(
-        (_) async => http.Response('token=$token', 403),
-      );
+      final client = MockClient((_) async => http.Response('token=$token', 403));
       final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
       final result = await probe.check(
