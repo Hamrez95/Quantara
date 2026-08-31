@@ -196,10 +196,11 @@ inline void TrimLeadingZeros(std::string& value) noexcept {
 //
 // Management authority requires one exchange-native stop whose quantity equals
 // the entire current position and an explicit expected TP count whose quantities
-// sum exactly to that same position quantity. Quantity math uses decimal strings,
-// never binary floating point. Ambiguous identity, duplicate TP/SL ids, malformed
-// quantities, incomplete stop rows, unsupported trigger semantics, or
-// non-reduce-only generic orders fail closed.
+// sum exactly to that same position quantity. Every TP must also carry a positive
+// finite trigger price and an explicitly supported trigger semantic. Quantity
+// math uses decimal strings, never binary floating point. Ambiguous identity,
+// duplicate TP/SL ids, malformed quantities/prices, incomplete rows, unsupported
+// trigger semantics, or non-reduce-only generic orders fail closed.
 [[nodiscard]] inline std::optional<DurableReconciliationEvidence>
 ApplyCurrentExchangeProtectionEvidence(
     const BitunixPendingPosition& position,
@@ -301,9 +302,18 @@ ApplyCurrentExchangeProtectionEvidence(
       joined.has_conflicting_order_fill_or_history = true;
     } else if (has_tp_price) {
       ++take_profit_count;
-      if (!bitunix_reconciliation_quantity_detail::ParsePositiveDecimal(
-               order.take_profit_quantity)
-               .has_value()) {
+      const bool valid_price =
+          bitunix_reconciliation_quantity_detail::ParsePositiveFinitePrice(
+              order.take_profit_price)
+              .has_value();
+      const bool valid_quantity =
+          bitunix_reconciliation_quantity_detail::ParsePositiveDecimal(
+              order.take_profit_quantity)
+              .has_value();
+      const bool valid_trigger =
+          bitunix_reconciliation_quantity_detail::IsSupportedStopTriggerType(
+              order.take_profit_stop_type);
+      if (!valid_price || !valid_quantity || !valid_trigger) {
         joined.has_conflicting_order_fill_or_history = true;
       } else {
         take_profit_quantities.push_back(order.take_profit_quantity);
