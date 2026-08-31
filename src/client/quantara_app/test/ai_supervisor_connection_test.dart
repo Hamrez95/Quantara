@@ -24,7 +24,10 @@ void main() {
       );
 
       expect(result.isValid, isFalse);
-      expect(result.failures, contains(SupervisorSetupFailure.insecureServerUrl));
+      expect(
+        result.failures,
+        contains(SupervisorSetupFailure.insecureServerUrl),
+      );
     });
 
     test('development HTTP is loopback-only', () {
@@ -42,7 +45,10 @@ void main() {
       expect(loopback.isValid, isTrue);
       expect(loopback.serverOrigin, Uri.parse('http://127.0.0.1:8080'));
       expect(remote.isValid, isFalse);
-      expect(remote.failures, contains(SupervisorSetupFailure.insecureServerUrl));
+      expect(
+        remote.failures,
+        contains(SupervisorSetupFailure.insecureServerUrl),
+      );
     });
 
     test('rejects URL credentials', () {
@@ -53,7 +59,10 @@ void main() {
       );
 
       expect(result.isValid, isFalse);
-      expect(result.failures, contains(SupervisorSetupFailure.invalidServerUrl));
+      expect(
+        result.failures,
+        contains(SupervisorSetupFailure.invalidServerUrl),
+      );
     });
 
     test('rejects blank and unsafe tokens', () {
@@ -68,8 +77,14 @@ void main() {
         releaseBuild: true,
       );
 
-      expect(missing.failures, contains(SupervisorSetupFailure.missingControlToken));
-      expect(unsafe.failures, contains(SupervisorSetupFailure.invalidControlToken));
+      expect(
+        missing.failures,
+        contains(SupervisorSetupFailure.missingControlToken),
+      );
+      expect(
+        unsafe.failures,
+        contains(SupervisorSetupFailure.invalidControlToken),
+      );
     });
   });
 
