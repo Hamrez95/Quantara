@@ -25,20 +25,24 @@ struct ReadOnlyRequest final {
 
 enum class ManagementOnlyRequestKind {
   kCloseExistingPosition,
+  kTightenExistingStop,
 };
 
 struct ManagementOnlyRequest final {
   std::string request_id;
   ManagementOnlyRequestKind kind;
   std::string position_id;
+  double new_stop_price = 0.0;
 };
 
 std::optional<ReadOnlyRequest> DecodeCanonicalReadOnlyRequest(
     std::span<const std::uint8_t> frame) noexcept;
 
 // Decodes the deliberately narrow mutation surface exposed by the Windows
-// service. Only a full close of one already-verified existing position can be
-// represented. Generic order payloads, entry instructions, leverage/margin
+// service. It can represent only a full close or a tighter stop request for one
+// already-verified existing position. The stop trigger semantic is deliberately
+// absent: production must preserve it from fresh exchange truth rather than let
+// an IPC caller select or guess it. Generic orders, entries, leverage/margin
 // changes and stop widening have no representation here.
 std::optional<ManagementOnlyRequest> DecodeCanonicalManagementOnlyRequest(
     std::span<const std::uint8_t> frame) noexcept;
