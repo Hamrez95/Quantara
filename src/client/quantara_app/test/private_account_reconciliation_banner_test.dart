@@ -5,7 +5,7 @@ import 'package:quantara_app/features/auto_trade/domain/private_account_reconcil
 import 'package:quantara_app/features/auto_trade/presentation/private_account_reconciliation_banner.dart';
 
 void main() {
-  testWidgets('stale flat account uses recovery wording', (tester) async {
+  testWidgets('stale flat recovery', (tester) async {
     final state = _staleState(openPositionCount: 0);
 
     await _pumpBanner(tester, state: state);
@@ -16,7 +16,7 @@ void main() {
     expect(find.byIcon(Icons.sync_rounded), findsOne);
   });
 
-  testWidgets('stale non-flat account keeps high severity', (tester) async {
+  testWidgets('stale non-flat severity', (tester) async {
     final state = _staleState(openPositionCount: 1);
 
     await _pumpBanner(tester, state: state);
@@ -26,7 +26,7 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets('unavailable flat account stays recovery-oriented', (tester) async {
+  testWidgets('unavailable flat recovery', (tester) async {
     final state = PrivateAccountReconciliationState.unavailable(
       at: DateTime.utc(2026, 8, 31, 12),
     );
@@ -38,7 +38,7 @@ void main() {
     expect(find.byIcon(Icons.sync_rounded), findsOne);
   });
 
-  testWidgets('unavailable non-flat account keeps high severity', (tester) async {
+  testWidgets('unavailable non-flat severity', (tester) async {
     final observedAt = DateTime.utc(2026, 8, 31, 12, 1);
     final unavailable = PrivateAccountReconciliationState.unavailable(
       at: observedAt,
@@ -58,7 +58,7 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets('divergent flat snapshot stays high severity', (tester) async {
+  testWidgets('divergent flat severity', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
     final fresh = PrivateAccountReconciliationState.fresh(
       snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 0),
@@ -76,7 +76,7 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets('divergent non-flat state stays high severity', (tester) async {
+  testWidgets('divergent non-flat severity', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
     final fresh = PrivateAccountReconciliationState.fresh(
       snapshot: _snapshot(syncedAt: syncedAt, openPositionCount: 1),
@@ -94,7 +94,7 @@ void main() {
     expect(find.byIcon(Icons.sync_problem_rounded), findsOne);
   });
 
-  testWidgets('Persian flat-account copy stays recovery-oriented', (tester) async {
+  testWidgets('Persian flat recovery', (tester) async {
     final state = _staleState(
       openPositionCount: 0,
     ).markRefreshing(DateTime.utc(2026, 8, 31, 12, 2));
@@ -109,7 +109,7 @@ void main() {
     expect(find.textContaining('در حال تازه‌سازی'), findsOne);
   });
 
-  testWidgets('fresh flat truth renders no warning banner', (tester) async {
+  testWidgets('fresh flat hidden', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
 
     await _pumpBanner(
@@ -125,7 +125,7 @@ void main() {
     expect(find.byIcon(Icons.sync_rounded), findsNothing);
   });
 
-  testWidgets('fresh non-flat truth renders no warning banner', (tester) async {
+  testWidgets('fresh non-flat hidden', (tester) async {
     final syncedAt = DateTime.utc(2026, 8, 31, 12);
 
     await _pumpBanner(
