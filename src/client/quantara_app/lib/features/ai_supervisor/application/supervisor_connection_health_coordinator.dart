@@ -59,7 +59,14 @@ final class SupervisorConnectionHealthCoordinator {
           serverOrigin: setup.serverOrigin,
           lastSuccessfulHealthCheckAt: _lastSuccessfulHealthCheckAt,
         );
-      case SupervisorHealthTransportStatus.unauthorized:
+      case SupervisorHealthTransportStatus.tokenExpired:
+        return SupervisorConnectionSnapshot(
+          status: SupervisorConnectionStatus.expired,
+          serverOrigin: setup.serverOrigin,
+          lastSuccessfulHealthCheckAt: _lastSuccessfulHealthCheckAt,
+          diagnosticCode: result.diagnosticCode,
+        );
+      case SupervisorHealthTransportStatus.tokenRevoked:
         return SupervisorConnectionSnapshot(
           status: SupervisorConnectionStatus.revoked,
           serverOrigin: setup.serverOrigin,
