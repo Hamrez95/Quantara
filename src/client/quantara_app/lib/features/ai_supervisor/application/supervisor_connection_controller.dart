@@ -5,13 +5,21 @@ import 'supervisor_connection_health_coordinator.dart';
 import 'supervisor_secure_setup_store.dart';
 
 final class SupervisorConnectionController extends ChangeNotifier {
-  SupervisorConnectionController({
+  factory SupervisorConnectionController({
     required SupervisorSecureSetupStore setupStore,
     required SupervisorConnectionHealthCoordinator healthCoordinator,
     required bool releaseBuild,
-  }) : _setupStore = setupStore,
-       _healthCoordinator = healthCoordinator,
-       _releaseBuild = releaseBuild;
+  }) => SupervisorConnectionController._(
+    setupStore,
+    healthCoordinator,
+    releaseBuild,
+  );
+
+  SupervisorConnectionController._(
+    this._setupStore,
+    this._healthCoordinator,
+    this._releaseBuild,
+  );
 
   final SupervisorSecureSetupStore _setupStore;
   final SupervisorConnectionHealthCoordinator _healthCoordinator;
