@@ -165,7 +165,19 @@ final class AutoTradeController extends ChangeNotifier {
     required bool force,
   }) async {
     final existing = _inFlightSync;
-    if (existing != null) return existing;
+    if (existing != null) {
+      if (_requiresIndependentRefreshCycle(reason, force: force)) {
+        await existing;
+        if (_disposed) return false;
+        return _sync(
+          credentials,
+          persist: persist,
+          reason: reason,
+          force: true,
+        );
+      }
+      return existing;
+    }
 
     final now = _utcNow().toUtc();
     if (!force && reason == PrivateAccountRefreshReason.activePolling) {
@@ -192,6 +204,14 @@ final class AutoTradeController extends ChangeNotifier {
       if (identical(_inFlightSync, operation)) _inFlightSync = null;
     }
   }
+
+  static bool _requiresIndependentRefreshCycle(
+    PrivateAccountRefreshReason reason, {
+    required bool force,
+  }) =>
+      force &&
+      (reason == PrivateAccountRefreshReason.manual ||
+          reason == PrivateAccountRefreshReason.appResume);
 
   Future<bool> _performSync(
     BitunixApiCredentials credentials, {
