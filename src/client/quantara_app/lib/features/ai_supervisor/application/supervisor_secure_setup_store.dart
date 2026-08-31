@@ -44,7 +44,7 @@ final class SupervisorSecureSetupStore {
 
   final SupervisorSecureKeyValueStore _secureStore;
 
-  Future<SupervisorStoredSetup?> load() async {
+  Future<SupervisorStoredSetup?> load({required bool releaseBuild}) async {
     final rawOrigin = await _secureStore.read(_serverOriginKey);
     final token = await _secureStore.read(_controlTokenKey);
     if (rawOrigin == null || rawOrigin.isEmpty || token == null || token.isEmpty) {
@@ -54,7 +54,7 @@ final class SupervisorSecureSetupStore {
     final validation = SupervisorSetupValidation.validate(
       serverUrl: rawOrigin,
       controlToken: token,
-      releaseBuild: true,
+      releaseBuild: releaseBuild,
     );
     final origin = validation.serverOrigin;
     if (!validation.isValid || origin == null) {
