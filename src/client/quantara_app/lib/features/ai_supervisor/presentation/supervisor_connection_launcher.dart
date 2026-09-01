@@ -107,9 +107,7 @@ final class _SupervisorProvisioningInfo extends StatelessWidget {
       decoration: BoxDecoration(
         color: QuantaraColors.cyan.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: QuantaraColors.cyan.withValues(alpha: 0.24),
-        ),
+        border: Border.all(color: QuantaraColors.cyan.withValues(alpha: 0.24)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -173,18 +171,16 @@ Color _statusColor(SupervisorConnectionStatus status) => switch (status) {
   SupervisorConnectionStatus.incompatibleServer => QuantaraColors.danger,
 };
 
-String _tooltip(
-  SupervisorConnectionStatus status, {
-  required bool persian,
-}) => switch (status) {
-  SupervisorConnectionStatus.connected =>
-    persian ? 'ChatGPT Supervisor متصل' : 'ChatGPT Supervisor connected',
-  SupervisorConnectionStatus.connecting =>
-    persian ? 'در حال بررسی Supervisor' : 'Checking Supervisor',
-  SupervisorConnectionStatus.notConfigured => persian
-      ? 'تنظیم ChatGPT Supervisor'
-      : 'Configure ChatGPT Supervisor',
-  _ => persian
-      ? 'بررسی اتصال ChatGPT Supervisor'
-      : 'Check ChatGPT Supervisor connection',
-};
+String _tooltip(SupervisorConnectionStatus status, {required bool persian}) =>
+    switch (status) {
+      SupervisorConnectionStatus.connected =>
+        persian ? 'ChatGPT Supervisor متصل' : 'ChatGPT Supervisor connected',
+      SupervisorConnectionStatus.connecting =>
+        persian ? 'در حال بررسی Supervisor' : 'Checking Supervisor',
+      SupervisorConnectionStatus.notConfigured =>
+        persian ? 'تنظیم ChatGPT Supervisor' : 'Configure ChatGPT Supervisor',
+      _ =>
+        persian
+            ? 'بررسی اتصال ChatGPT Supervisor'
+            : 'Check ChatGPT Supervisor connection',
+    };

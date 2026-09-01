@@ -51,9 +51,7 @@ void main() {
     expect(find.textContaining('فقط خواندنی'), findsNothing);
     expect(find.text('تنظیم اتصال'), findsNothing);
 
-    final launcher = find.byKey(
-      const ValueKey('supervisor-compact-launcher'),
-    );
+    final launcher = find.byKey(const ValueKey('supervisor-compact-launcher'));
     expect(launcher, findsOneWidget);
     expect(tester.getSize(launcher), const Size(48, 48));
 
