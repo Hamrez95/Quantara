@@ -1,0 +1,29 @@
+name: Temporary Dart format diagnostic
+
+on:
+  push:
+    branches:
+      - 'feat/446-readonly-supervisor-session'
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+      - name: Print exact Dart formatter diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format lib/features/ai_supervisor/domain/supervisor_read_only_session.dart
+          git diff -- lib/features/ai_supervisor/domain/supervisor_read_only_session.dart
+          test -z "$(git status --short -- lib/features/ai_supervisor/domain/supervisor_read_only_session.dart)"
