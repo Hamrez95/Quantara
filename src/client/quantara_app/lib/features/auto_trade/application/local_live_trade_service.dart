@@ -225,11 +225,9 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         // Without this subscription, a successful bounded REST verification
         // could wait for the next foreground-service repeat before clearing a
         // stale `privateAccountState` block.
-        _privateTruthSubscription = privateTruth.projections.listen(
-          (_) {
-            if (!_destroyed) unawaited(_runCycle());
-          },
-        );
+        _privateTruthSubscription = privateTruth.projections.listen((_) {
+          if (!_destroyed) unawaited(_runCycle());
+        });
         await privateTruth.start(_credentials!);
         unawaited(_refreshColdPnl());
         _userRequestedEntries = message['entriesEnabled'] == true;
