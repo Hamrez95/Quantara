@@ -21,9 +21,7 @@ class SupervisorConnectionLauncher extends StatelessWidget {
         final presentation = _presentation(controller.snapshot.status, fa: fa);
         return Semantics(
           button: true,
-          label:
-              '${fa ? 'ChatGPT Supervisor' : 'ChatGPT Supervisor'}. '
-              '${presentation.label}',
+          label: 'ChatGPT Supervisor. ${presentation.label}',
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
             child: Material(
