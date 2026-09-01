@@ -1,4 +1,9 @@
-enum SupervisorSessionStatus { inactive, active, expired, stopped }
+enum SupervisorSessionStatus {
+  inactive,
+  active,
+  expired,
+  stopped,
+}
 
 /// The only diagnostic fields allowed to cross the Supervisor gateway.
 ///
