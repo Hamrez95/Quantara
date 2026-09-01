@@ -132,13 +132,14 @@ public sealed class ResearchEventClustererTests
                 true)]);
         Assert.True(registry.IsCreated);
 
+        var retrievalTime = eventAt - TimeSpan.FromHours(1);
         var envelope = ResearchEvidenceEnvelopeFactory.Create(
             $"evidence-{id}",
             registry.Snapshot,
             "official-fixture",
             providerItemId,
-            RetrievedAt,
-            RetrievedAt - TimeSpan.FromMinutes(1),
+            retrievalTime,
+            retrievalTime - TimeSpan.FromMinutes(1),
             eventAt,
             new string('d', 64),
             new string(normalizedHashCharacter, 64),
