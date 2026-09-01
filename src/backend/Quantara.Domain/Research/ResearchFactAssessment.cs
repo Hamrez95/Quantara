@@ -18,7 +18,7 @@ public sealed record ResearchFactObservation(
     double Confidence)
 {
     public ResearchExecutionAuthority ExecutionAuthority =>
-        ResearchExecutionAuthority.None;
+        Evidence.ExecutionAuthority;
 }
 
 public sealed record ResearchFactAssessment(
