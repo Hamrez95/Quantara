@@ -116,8 +116,9 @@ final class SupervisorSupportSessionClient {
         return false;
       }
       final remoteExpiry = DateTime.tryParse(decoded['expiresAtUtc'] as String);
-      if (remoteExpiry == null || !remoteExpiry.isAfter(observedAt))
+      if (remoteExpiry == null || !remoteExpiry.isAfter(observedAt)) {
         return false;
+      }
 
       _activeSessionToken = sessionToken;
       return true;
