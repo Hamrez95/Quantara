@@ -21,7 +21,8 @@ class SupervisorConnectionLauncher extends StatelessWidget {
         final presentation = _presentation(controller.snapshot.status, fa: fa);
         return Semantics(
           button: true,
-          label: '${fa ? 'ChatGPT Supervisor' : 'ChatGPT Supervisor'}. '
+          label:
+              '${fa ? 'ChatGPT Supervisor' : 'ChatGPT Supervisor'}. '
               '${presentation.label}',
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
@@ -120,10 +121,12 @@ class SupervisorConnectionLauncher extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                 child: Text(
-                  fa ? 'اتصال اختیاری Supervisor' : 'Optional Supervisor connection',
-                  style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  fa
+                      ? 'اتصال اختیاری Supervisor'
+                      : 'Optional Supervisor connection',
+                  style: Theme.of(
+                    sheetContext,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               Container(
@@ -132,10 +135,9 @@ class SupervisorConnectionLauncher extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(sheetContext)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(alpha: 0.6),
+                  color: Theme.of(
+                    sheetContext,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(

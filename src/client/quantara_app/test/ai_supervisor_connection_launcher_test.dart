@@ -51,10 +51,7 @@ void main() {
     expect(launcher, findsOneWidget);
     expect(tester.getSize(launcher).height, lessThanOrEqualTo(72));
     expect(find.text('Not configured · optional'), findsOneWidget);
-    expect(
-      find.textContaining('Analysis and diagnostics only:'),
-      findsNothing,
-    );
+    expect(find.textContaining('Analysis and diagnostics only:'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('supervisor-open-details')));
     await tester.pumpAndSettle();
@@ -63,10 +60,7 @@ void main() {
       find.byKey(const ValueKey('supervisor-setup-explanation')),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('QUANTARA_CONTROL_TOKEN'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('QUANTARA_CONTROL_TOKEN'), findsOneWidget);
     expect(find.textContaining('not an OpenAI API key'), findsOneWidget);
     expect(find.text('Configure'), findsOneWidget);
   });
