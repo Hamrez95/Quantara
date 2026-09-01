@@ -10,6 +10,7 @@ SEMVER = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
     r"(?:-(beta|rc)\.(0|[1-9]\d*))?$"
 )
+_STAGE_ORDER = {"beta": 0, "rc": 1, None: 2}
 
 
 def parse(value: str) -> tuple[int, int, int, str | None, int | None]:
@@ -24,6 +25,17 @@ def parse(value: str) -> tuple[int, int, int, str | None, int | None]:
         stage,
         int(sequence) if sequence is not None else None,
     )
+
+
+def version_key(value: str) -> tuple[int, int, int, int, int]:
+    major, minor, patch, stage, sequence = parse(value)
+    return major, minor, patch, _STAGE_ORDER[stage], sequence or 0
+
+
+def newest_version(values: list[str]) -> str:
+    if not values:
+        raise ValueError("At least one semantic version is required.")
+    return max(values, key=version_key)
 
 
 def next_version(previous: str, release_type: str, channel: str) -> str:
@@ -57,6 +69,12 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--previous", required=True)
     parser.add_argument(
+        "--published",
+        action="append",
+        default=[],
+        help="Existing release or tag version that must be included in the version floor.",
+    )
+    parser.add_argument(
         "--release-type",
         choices=("promote", "patch", "minor", "major"),
         required=True,
@@ -65,10 +83,12 @@ def main() -> int:
     parser.add_argument("--prefix", default="quantara-v")
     args = parser.parse_args()
     try:
-        version = next_version(args.previous, args.release_type, args.channel)
+        base_version = newest_version([args.previous, *args.published])
+        version = next_version(base_version, args.release_type, args.channel)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
+    print(f"base_version={base_version}")
     print(f"version={version}")
     print(f"tag={args.prefix}{version}")
     return 0

@@ -43,6 +43,13 @@ def require_monotonic_build(candidate: int, asset_names: list[str]) -> int:
     return previous
 
 
+def next_monotonic_build(candidate: int, asset_names: list[str]) -> tuple[int, int]:
+    if candidate < 1:
+        raise ValueError("Candidate Android build number must be positive.")
+    previous = max(published_android_builds(asset_names), default=0)
+    return max(candidate, previous + 1), previous
+
+
 def parse_revoked_builds(value: str, *, candidate_build: int) -> list[int]:
     """Parse an explicit emergency revocation list for forward recovery."""
 
@@ -214,6 +221,9 @@ def _parser() -> argparse.ArgumentParser:
     guard = subcommands.add_parser("guard-build")
     guard.add_argument("--candidate", type=int, required=True)
 
+    next_build = subcommands.add_parser("next-build")
+    next_build.add_argument("--candidate", type=int, required=True)
+
     identity_guard = subcommands.add_parser("guard-identity")
     identity_guard.add_argument("--previous-manifest", required=True)
     identity_guard.add_argument("--android-package-id", required=True)
@@ -245,11 +255,15 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = _parser().parse_args()
     try:
+        asset_names = [line for line in sys.stdin.read().splitlines() if line.strip()]
         if args.command == "guard-build":
-            previous = require_monotonic_build(
-                args.candidate,
-                [line for line in sys.stdin.read().splitlines() if line.strip()],
-            )
+            previous = require_monotonic_build(args.candidate, asset_names)
+            print(f"previous_build={previous}")
+            return 0
+
+        if args.command == "next-build":
+            build_number, previous = next_monotonic_build(args.candidate, asset_names)
+            print(f"build_number={build_number}")
             print(f"previous_build={previous}")
             return 0
 
