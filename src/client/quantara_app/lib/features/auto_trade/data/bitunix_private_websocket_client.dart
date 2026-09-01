@@ -91,6 +91,7 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
     this.staleAfter = const Duration(seconds: 12),
     this.baseReconnectDelay = const Duration(seconds: 1),
     this.maximumReconnectDelay = const Duration(seconds: 15),
+    this.handshakeAckTimeout = const Duration(seconds: 2),
   }) : _connector = connector ?? connectBitunixPrivateWebSocket,
        _delay = delay ?? Future<void>.delayed,
        _clock = clock ?? (() => DateTime.now().toUtc()),
@@ -105,6 +106,13 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   final Duration baseReconnectDelay;
   final Duration maximumReconnectDelay;
 
+  /// Bitunix's official private-WebSocket examples send login and subscribe
+  /// frames without waiting for control acknowledgements. Keep a short grace
+  /// period for explicit rejections, then advance the transport handshake.
+  /// Entry admission still remains fail-closed behind fresh REST verification
+  /// in [PrivateTruthCoordinator].
+  final Duration handshakeAckTimeout;
+
   final StreamController<PrivateTruthEvent> _events =
       StreamController<PrivateTruthEvent>.broadcast(sync: true);
   final StreamController<PrivateWsClientStatus> _status =
@@ -113,9 +121,11 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   PrivateWsTransport? _transport;
   StreamSubscription<Object?>? _subscription;
   Timer? _heartbeat;
+  Timer? _handshakeTimer;
   BitunixApiCredentials? _credentials;
   DateTime? _lastInboundAtUtc;
   DateTime? _lastSentAtUtc;
+  PrivateWsClientState _state = PrivateWsClientState.stopped;
   bool _running = false;
   bool _connecting = false;
   bool _disposed = false;
@@ -149,6 +159,8 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   Future<void> stop() async {
     _running = false;
     _generation++;
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
     _heartbeat?.cancel();
     _heartbeat = null;
     await _subscription?.cancel();
@@ -206,6 +218,7 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
         ),
         generation,
       );
+      _scheduleHandshakeFallback(generation);
       _startHeartbeat(generation);
     } on Object {
       await _handleDisconnect(generation, 'connect_failed');
@@ -228,8 +241,11 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
         await _handleDisconnect(generation, 'authentication_rejected');
         return;
       }
-      _emitStatus(PrivateWsClientState.subscribing);
-      await _send(BitunixPrivateWsProtocol.subscriptionFrame(), generation);
+      if (_state == PrivateWsClientState.authenticating) {
+        _handshakeTimer?.cancel();
+        _handshakeTimer = null;
+        await _subscribe(generation);
+      }
       return;
     }
     if (op == 'subscribe') {
@@ -237,11 +253,13 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
         await _handleDisconnect(generation, 'subscription_rejected');
         return;
       }
-      _reconnectAttempt = 0;
-      _emitStatus(PrivateWsClientState.active);
+      if (_state == PrivateWsClientState.subscribing) {
+        _markActive(generation);
+      }
       return;
     }
-    if (op == 'pong' || decoded.containsKey('pong')) return;
+    // Bitunix examples treat an inbound op=ping as the heartbeat response.
+    if (op == 'pong' || op == 'ping' || decoded.containsKey('pong')) return;
 
     final event = BitunixPrivateWsProtocol.parsePush(
       decoded: decoded,
@@ -253,6 +271,40 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
     } else if (event == null) {
       _droppedOrMalformedEvents++;
     }
+  }
+
+  Future<void> _subscribe(int generation) async {
+    if (!_running || generation != _generation) return;
+    _emitStatus(PrivateWsClientState.subscribing);
+    await _send(BitunixPrivateWsProtocol.subscriptionFrame(), generation);
+    if (!_running || generation != _generation) return;
+    _scheduleHandshakeFallback(generation);
+  }
+
+  void _scheduleHandshakeFallback(int generation) {
+    _handshakeTimer?.cancel();
+    _handshakeTimer = Timer(handshakeAckTimeout, () {
+      unawaited(_advanceHandshakeWithoutAck(generation));
+    });
+  }
+
+  Future<void> _advanceHandshakeWithoutAck(int generation) async {
+    if (!_running || generation != _generation || _disposed) return;
+    if (_state == PrivateWsClientState.authenticating) {
+      await _subscribe(generation);
+      return;
+    }
+    if (_state == PrivateWsClientState.subscribing) {
+      _markActive(generation);
+    }
+  }
+
+  void _markActive(int generation) {
+    if (!_running || generation != _generation) return;
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
+    _reconnectAttempt = 0;
+    _emitStatus(PrivateWsClientState.active);
   }
 
   void _startHeartbeat(int generation) {
@@ -296,6 +348,8 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
 
   Future<void> _handleDisconnect(int generation, String reason) async {
     if (generation != _generation) return;
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
     _heartbeat?.cancel();
     _heartbeat = null;
     await _subscription?.cancel();
@@ -318,6 +372,7 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   }
 
   void _emitStatus(PrivateWsClientState state, {String reason = ''}) {
+    _state = state;
     if (_status.isClosed) return;
     _status.add(
       PrivateWsClientStatus(
@@ -353,7 +408,7 @@ final class BitunixPrivateWebSocketClient implements PrivateTruthStreamClient {
   static String _secureNonce() {
     final random = Random.secure();
     return List<int>.generate(
-      24,
+      16,
       (_) => random.nextInt(256),
     ).map((value) => value.toRadixString(16).padLeft(2, '0')).join();
   }

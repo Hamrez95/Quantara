@@ -301,4 +301,58 @@ void main() {
       await coordinator.dispose();
     },
   );
+
+  test(
+    'flat account propagates fresh REST truth after missing control acknowledgements',
+    () async {
+      final transport = _CoordinatorTransport();
+      var restFetches = 0;
+      final projections = <PrivateTruthProjection>[];
+      final socket = BitunixPrivateWebSocketClient(
+        connector: (_) async => transport,
+        delay: (_) async {},
+        clock: () => now,
+        nonceFactory: () => 'nonce',
+        heartbeatInterval: const Duration(hours: 1),
+        staleAfter: const Duration(hours: 2),
+        handshakeAckTimeout: Duration.zero,
+      );
+      final coordinator = PrivateTruthCoordinator(
+        socket,
+        (_) async {
+          restFetches++;
+          return AutoTradeAccountSnapshot(
+            marginCoin: 'USDT',
+            available: 450,
+            frozen: 0,
+            positionMargin: 0,
+            crossUnrealizedPnl: 0,
+            isolatedUnrealizedPnl: 0,
+            positionMode: 'ONE_WAY',
+            positions: const [],
+            orders: const [],
+            protectionOrders: const [],
+            syncedAt: now,
+          );
+        },
+        clock: () => now,
+        restVerificationInterval: const Duration(hours: 1),
+      );
+      final subscription = coordinator.projections.listen(projections.add);
+
+      await coordinator.start(credentials);
+      await _flush(5);
+
+      expect(restFetches, 1);
+      expect(transport.sent, hasLength(2));
+      expect(coordinator.current.health, PrivateTruthHealth.fresh);
+      expect(coordinator.current.lagReason, PrivateTruthLagReason.none);
+      expect(coordinator.current.restVerifiedAtUtc, now);
+      expect(coordinator.canAdmitNewEntries, isTrue);
+      expect(projections.last.canAdmitNewEntries, isTrue);
+
+      await subscription.cancel();
+      await coordinator.dispose();
+    },
+  );
 }
