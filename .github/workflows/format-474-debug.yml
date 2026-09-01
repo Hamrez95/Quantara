@@ -1,0 +1,30 @@
+name: Format 474 debug
+
+on:
+  push:
+    branches:
+      - fix/474-supervisor-setup-ux
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Print formatter diff
+        shell: bash
+        run: |
+          cd src/client/quantara_app
+          dart format \
+            lib/features/ai_supervisor/presentation/supervisor_connection_launcher.dart \
+            test/ai_supervisor_connection_launcher_test.dart
+          git diff -- \
+            lib/features/ai_supervisor/presentation/supervisor_connection_launcher.dart \
+            test/ai_supervisor_connection_launcher_test.dart
