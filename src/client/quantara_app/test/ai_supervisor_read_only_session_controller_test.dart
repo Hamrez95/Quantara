@@ -56,6 +56,34 @@ void main() {
     );
   });
 
+  test('invalid restart preserves the current active session', () {
+    final startedAt = DateTime.utc(2026, 9, 1, 0);
+    final timers = <_FakeTimer>[];
+    final controller = SupervisorReadOnlySessionController(
+      now: () => startedAt,
+      timerFactory: (interval, callback) {
+        final timer = _FakeTimer(callback);
+        timers.add(timer);
+        return timer;
+      },
+    );
+    addTearDown(controller.dispose);
+
+    controller.start(const Duration(minutes: 30));
+    final originalExpiry = controller.expiresAt;
+    final originalTimer = timers.single;
+
+    expect(
+      () => controller.start(const Duration(hours: 2)),
+      throwsArgumentError,
+    );
+
+    expect(controller.status, SupervisorSessionStatus.active);
+    expect(controller.expiresAt, originalExpiry);
+    expect(originalTimer.isActive, isTrue);
+    expect(timers, hasLength(1));
+  });
+
   test('gateway keeps exact allow-list and clear removes session', () {
     final startedAt = DateTime.utc(2026, 9, 1, 0);
     final controller = SupervisorReadOnlySessionController(
