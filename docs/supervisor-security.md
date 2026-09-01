@@ -2,6 +2,14 @@
 
 Quantara Supervisor support is read-only. A successful health check or support session proves connectivity only; it never grants trading execution authority.
 
+## Control token
+
+- `QUANTARA_CONTROL_TOKEN` is the canonical server-side per-device Supervisor control token.
+- Health checks send that token in `X-Quantara-Supervisor-Token`; support-session registration sends the same token in `X-Quantara-Control-Token`.
+- `QUANTARA_SUPERVISOR_TOKEN` remains a health-only migration fallback when `QUANTARA_CONTROL_TOKEN` is absent. New deployments must configure `QUANTARA_CONTROL_TOKEN` so a healthy connection can also register a support session.
+- The app stores the token only in device secure storage and never renders it after save.
+- The control token is never included in support-session evidence or exposed through MCP tools.
+
 ## Session boundary
 
 - A user must explicitly start a session.
