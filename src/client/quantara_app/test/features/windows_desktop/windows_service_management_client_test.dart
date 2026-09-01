@@ -42,6 +42,73 @@ void main() {
     expect(result.exchangeTruthReconciled, isTrue);
   });
 
+  test('accepts only fully reconciled completed stop tightening', () async {
+    String? invokedPositionId;
+    String? invokedPrice;
+    final client = WindowsServiceManagementClient(
+      closeCommand: (positionId) async => throw StateError('not used'),
+      tightenStopCommand: (positionId, newStopPrice) async {
+        invokedPositionId = positionId;
+        invokedPrice = newStopPrice;
+        return response(
+          exitCode: 0,
+          payload: frame(
+            completed: true,
+            submissionAttempted: true,
+            exchangeTruthReconciled: true,
+          ),
+        );
+      },
+    );
+
+    final result = await client.tightenExistingStop(
+      positionId: '123456789',
+      newStopPrice: '65000.5',
+    );
+
+    expect(invokedPositionId, '123456789');
+    expect(invokedPrice, '65000.5');
+    expect(result.completed, isTrue);
+    expect(result.exchangeTruthReconciled, isTrue);
+  });
+
+  test('rejects invalid tighten-stop price before helper invocation', () async {
+    var calls = 0;
+    final client = WindowsServiceManagementClient(
+      closeCommand: (positionId) async => throw StateError('not used'),
+      tightenStopCommand: (positionId, newStopPrice) async {
+        calls += 1;
+        return response(
+          exitCode: 0,
+          payload: frame(
+            completed: true,
+            submissionAttempted: true,
+            exchangeTruthReconciled: true,
+          ),
+        );
+      },
+    );
+
+    for (final price in ['', '0', '-1', 'NaN', 'Infinity', '1e8', '12x']) {
+      await expectLater(
+        client.tightenExistingStop(positionId: '9', newStopPrice: price),
+        throwsA(isA<WindowsServiceManagementException>()),
+      );
+    }
+    expect(calls, 0);
+  });
+
+  test('fails closed when tighten-stop command is unavailable', () async {
+    final client = WindowsServiceManagementClient(
+      closeCommand: (positionId) async => throw StateError('not used'),
+    );
+
+    await expectLater(
+      client.tightenExistingStop(positionId: '9', newStopPrice: '10.5'),
+      throwsA(isA<WindowsServiceManagementException>()),
+    );
+  });
+
   test(
     'preserves canonical failed result without pretending success',
     () async {
