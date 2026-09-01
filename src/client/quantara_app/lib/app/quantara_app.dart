@@ -11,7 +11,7 @@ import '../features/ai_supervisor/application/supervisor_connection_controller.d
 import '../features/ai_supervisor/application/supervisor_connection_health_coordinator.dart';
 import '../features/ai_supervisor/application/supervisor_health_client.dart';
 import '../features/ai_supervisor/application/supervisor_secure_setup_store.dart';
-import '../features/ai_supervisor/presentation/supervisor_connection_panel.dart';
+import '../features/ai_supervisor/presentation/supervisor_connection_launcher.dart';
 import '../features/auto_trade/data/local_live_preferences_store.dart';
 import '../features/owner_alpha/application/owner_alpha_controller.dart';
 import '../features/owner_alpha/data/background_opportunity_scanner.dart';
@@ -386,29 +386,48 @@ class _QuantaraAppState extends State<QuantaraApp> {
             OpportunityDiscoveryCoverageBanner(
               coverage: _opportunityDiscoveryCoverage,
             ),
-            SupervisorConnectionPanel(
-              controller: _supervisorConnectionController,
-            ),
             const WindowsServiceStatusPill(),
             Expanded(
-              child: OwnerAlphaPage(
-                repository: _repository,
-                settingsStore: _settingsStore,
-                opportunityStateStore: _opportunityStateStore,
-                notificationGateway:
-                    widget.notificationGateway ??
-                    const PlatformSetupNotificationGateway(),
-                backgroundScanGateway:
-                    widget.backgroundScanGateway ??
-                    (widget.repository == null
-                        ? const WorkmanagerBackgroundScanGateway()
-                        : const NoopBackgroundScanGateway()),
-                themeMode: _themeMode,
-                locale: _locale,
-                onToggleTheme: _toggleTheme,
-                onLocaleChanged: _setLocale,
-                onOpenPortfolioRisk: () => _showPortfolioRisk(homeContext),
-                realtimeMonitor: _realtimeMarketHost,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final mobile = constraints.maxWidth < 1024;
+                  final extendedDesktopRail = constraints.maxWidth >= 1320;
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: OwnerAlphaPage(
+                          repository: _repository,
+                          settingsStore: _settingsStore,
+                          opportunityStateStore: _opportunityStateStore,
+                          notificationGateway:
+                              widget.notificationGateway ??
+                              const PlatformSetupNotificationGateway(),
+                          backgroundScanGateway:
+                              widget.backgroundScanGateway ??
+                              (widget.repository == null
+                                  ? const WorkmanagerBackgroundScanGateway()
+                                  : const NoopBackgroundScanGateway()),
+                          themeMode: _themeMode,
+                          locale: _locale,
+                          onToggleTheme: _toggleTheme,
+                          onLocaleChanged: _setLocale,
+                          onOpenPortfolioRisk: () =>
+                              _showPortfolioRisk(homeContext),
+                          realtimeMonitor: _realtimeMarketHost,
+                        ),
+                      ),
+                      PositionedDirectional(
+                        start: mobile ? null : (extendedDesktopRail ? 86 : 16),
+                        end: mobile ? 108 : null,
+                        top: mobile ? 8 : null,
+                        bottom: mobile ? null : 18,
+                        child: SupervisorConnectionLauncher(
+                          controller: _supervisorConnectionController,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
