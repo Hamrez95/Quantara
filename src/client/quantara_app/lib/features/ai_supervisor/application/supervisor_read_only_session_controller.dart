@@ -5,10 +5,8 @@ import 'package:flutter/foundation.dart';
 import '../domain/supervisor_read_only_session.dart';
 
 typedef SupervisorNow = DateTime Function();
-typedef SupervisorPeriodicTimerFactory = Timer Function(
-  Duration interval,
-  void Function(Timer timer) callback,
-);
+typedef SupervisorPeriodicTimerFactory =
+    Timer Function(Duration interval, void Function(Timer timer) callback);
 
 final class SupervisorReadOnlySessionController extends ChangeNotifier {
   SupervisorReadOnlySessionController({
@@ -41,10 +39,7 @@ final class SupervisorReadOnlySessionController extends ChangeNotifier {
 
   void start(Duration duration) {
     _ticker?.cancel();
-    _session = SupervisorReadOnlySession(
-      startedAt: _now(),
-      duration: duration,
-    );
+    _session = SupervisorReadOnlySession(startedAt: _now(), duration: duration);
     _ticker = _timerFactory(const Duration(seconds: 1), (_) => refresh());
     notifyListeners();
   }

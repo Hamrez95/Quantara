@@ -49,9 +49,9 @@ void main() {
     expect(controller.status, SupervisorSessionStatus.stopped);
     expect(controller.remaining, Duration.zero);
     expect(
-      () => controller.evidenceForGateway(
-        const <String, Object?>{'platform': 'android'},
-      ),
+      () => controller.evidenceForGateway(const <String, Object?>{
+        'platform': 'android',
+      }),
       throwsStateError,
     );
   });
@@ -72,21 +72,18 @@ void main() {
       'order': 'must-not-cross',
     });
 
-    expect(
-      evidence,
-      const <String, Object?>{
-        'connectionStatus': 'connected',
-        'platform': 'android',
-      },
-    );
+    expect(evidence, const <String, Object?>{
+      'connectionStatus': 'connected',
+      'platform': 'android',
+    });
 
     controller.clear();
     expect(controller.status, SupervisorSessionStatus.inactive);
     expect(controller.remaining, Duration.zero);
     expect(
-      () => controller.evidenceForGateway(
-        const <String, Object?>{'platform': 'android'},
-      ),
+      () => controller.evidenceForGateway(const <String, Object?>{
+        'platform': 'android',
+      }),
       throwsStateError,
     );
   });
