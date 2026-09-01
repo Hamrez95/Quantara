@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Quantara.Api.Supervisor;
 
 namespace Quantara.Domain.Tests;
@@ -65,6 +67,43 @@ public sealed class SupervisorMcpTests
             out _,
             out var secretError));
         Assert.Equal("credential_like_evidence_rejected", secretError);
+    }
+
+    [Fact]
+    public void SupervisorHealthAuthorityUsesCanonicalControlToken()
+    {
+        const string canonicalToken = "canonical-control-token-0123456789abcdef";
+        const string legacyToken = "legacy-supervisor-token-0123456789abcdef";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [SupervisorEndpointAuthority.ControlTokenConfigurationKey] = canonicalToken,
+                [SupervisorEndpointAuthority.LegacySupervisorTokenConfigurationKey] = legacyToken
+            })
+            .Build();
+        var context = new DefaultHttpContext();
+        context.Request.Headers[SupervisorEndpointAuthority.HeaderName] = canonicalToken;
+
+        Assert.True(SupervisorEndpointAuthority.HasAuthority(context, configuration));
+
+        context.Request.Headers[SupervisorEndpointAuthority.HeaderName] = legacyToken;
+        Assert.False(SupervisorEndpointAuthority.HasAuthority(context, configuration));
+    }
+
+    [Fact]
+    public void SupervisorHealthAuthorityKeepsLegacyFallbackWhenControlTokenIsAbsent()
+    {
+        const string legacyToken = "legacy-supervisor-token-0123456789abcdef";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [SupervisorEndpointAuthority.LegacySupervisorTokenConfigurationKey] = legacyToken
+            })
+            .Build();
+        var context = new DefaultHttpContext();
+        context.Request.Headers[SupervisorEndpointAuthority.HeaderName] = legacyToken;
+
+        Assert.True(SupervisorEndpointAuthority.HasAuthority(context, configuration));
     }
 
     [Fact]
