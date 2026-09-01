@@ -37,3 +37,4 @@ jobs:
           git add src/client/quantara_app/lib/features/ai_supervisor/application/supervisor_read_only_session_controller.dart src/client/quantara_app/test/ai_supervisor_read_only_session_controller_test.dart
           git commit -m 'chore(AI): apply session dart formatter'
           git push origin HEAD:feat/446-supervisor-session-controller
+          echo 'formatter applied'
