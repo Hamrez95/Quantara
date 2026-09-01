@@ -50,11 +50,10 @@ Map<String, Object?> sanitizeSupervisorEvidence(
 }
 
 final class SupervisorReadOnlySession {
-  SupervisorReadOnlySession({
+  factory SupervisorReadOnlySession({
     required DateTime startedAt,
     required Duration duration,
-  }) : _startedAt = startedAt.toUtc(),
-       _duration = duration {
+  }) {
     if (duration <= Duration.zero || duration > const Duration(hours: 1)) {
       throw ArgumentError.value(
         duration,
@@ -62,7 +61,11 @@ final class SupervisorReadOnlySession {
         'Supervisor sessions must be greater than zero and at most one hour.',
       );
     }
+
+    return SupervisorReadOnlySession._(startedAt.toUtc(), duration);
   }
+
+  SupervisorReadOnlySession._(this._startedAt, this._duration);
 
   final DateTime _startedAt;
   final Duration _duration;
