@@ -77,16 +77,30 @@ An envelope contains provenance and normalized identity only:
 
 The envelope deliberately contains no full article, book, transcript, prompt instructions from a source, order command, credentials, or exchange tool handle.
 
-## Remaining application work
+## Normalized research item
 
-This slice establishes the trust contract but does not yet provide:
+`ResearchNormalizedItem` binds the provenance envelope to the decision-facing metadata required by the research pipeline without expanding authority:
 
-- PostgreSQL persistence for evidence and registry snapshots;
-- source-specific API connectors;
-- contradiction clustering and revision lineage;
-- freshness scoring by evidence type;
-- prompt-injection content sanitization implementation;
-- an LLM extraction service;
-- strategy promotion or execution authority.
+- explicit severity and horizon;
+- extracted facts, each carrying parser version and fact-level confidence;
+- conservative item confidence equal to the minimum confidence of its bound extracted facts;
+- source URL, retrieval/publication/expiry timestamps, normalized content hash, and affected symbols inherited from the immutable evidence envelope;
+- immutable execution authority `None`.
 
-Those features must preserve this trust chain and add their own issue, tests, audit records, and release gates.
+The factory rejects empty or unbounded fact collections, invalid confidence values, duplicate fact keys, and facts bound to different evidence. This prevents a normalized item from silently mixing provenance or inflating support.
+
+## Downstream research gates already implemented
+
+The current domain pipeline also provides:
+
+- freshness and not-yet-available rejection at fact-consumption time;
+- contradiction rejection rather than silent winner selection;
+- bounded event clustering and duplicate suppression;
+- strict structured-summary schema validation with unknown/tool-call fields rejected and prompt-injection-looking text kept inert;
+- provenance-bound deterministic fundamental scoring with source-tier, confidence, freshness, policy-version and uncertainty gates.
+
+None of these components exposes exchange credentials, trading tools, or mutation authority.
+
+## Future integration work
+
+The trust/domain contract intentionally does not itself provide source-specific network connectors, PostgreSQL persistence, or an LLM invocation service. Any future integration must preserve the same reviewed-source registry, provenance binding, fail-closed research gates, and `ResearchExecutionAuthority.None`, and must add its own tests, audit records, and release gates before production use.
