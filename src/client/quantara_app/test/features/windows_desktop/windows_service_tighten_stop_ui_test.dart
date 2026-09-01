@@ -131,7 +131,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Price must be a positive decimal value.'), findsOneWidget);
+    expect(
+      find.text('Price must be a positive decimal value.'),
+      findsOneWidget,
+    );
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
