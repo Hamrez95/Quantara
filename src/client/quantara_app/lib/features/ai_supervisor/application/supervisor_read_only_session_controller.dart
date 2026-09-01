@@ -38,8 +38,12 @@ final class SupervisorReadOnlySessionController extends ChangeNotifier {
   bool get isActive => status == SupervisorSessionStatus.active;
 
   void start(Duration duration) {
+    final replacement = SupervisorReadOnlySession(
+      startedAt: _now(),
+      duration: duration,
+    );
     _ticker?.cancel();
-    _session = SupervisorReadOnlySession(startedAt: _now(), duration: duration);
+    _session = replacement;
     _ticker = _timerFactory(const Duration(seconds: 1), (_) => refresh());
     notifyListeners();
   }
