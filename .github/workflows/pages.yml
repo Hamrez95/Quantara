@@ -35,6 +35,8 @@ jobs:
     permissions:
       contents: read
       pages: write
+    outputs:
+      pages-configured: ${{ steps.configure-pages.outcome }}
     defaults:
       run:
         working-directory: src/client/quantara_app
@@ -116,20 +118,35 @@ jobs:
           PY
 
       - name: Configure GitHub Pages
+        id: configure-pages
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
+      - name: Explain unavailable Pages deployment
+        if: github.event_name != 'pull_request' && steps.configure-pages.outcome != 'success'
+        run: echo "::warning::GitHub Pages is not enabled or this token cannot enable it. The PWA was built and validated; Pages deployment is skipped until the repository owner enables Pages once."
+
+      - name: Upload validated PWA fallback artifact
+        if: github.event_name != 'pull_request' && steps.configure-pages.outcome != 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantara-pwa-validated-${{ github.sha }}
+          path: src/client/quantara_app/build/web
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload GitHub Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.configure-pages.outcome == 'success'
         uses: actions/upload-pages-artifact@v4
         with:
           path: src/client/quantara_app/build/web
 
   deploy:
     name: Deploy PWA
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && needs.validate-and-build.outputs.pages-configured == 'success'
     needs: validate-and-build
     runs-on: ubuntu-latest
     timeout-minutes: 10
