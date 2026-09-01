@@ -134,6 +134,81 @@ void main() {
     expect(requests, 0);
     expect(find.text('Not configured'), findsOneWidget);
   });
+
+  testWidgets('read-only session requires health and supports explicit stop', (
+    tester,
+  ) async {
+    final setupStore = SupervisorSecureSetupStore(
+      secureStore: _MemorySecureStore(),
+    );
+    final controller = SupervisorConnectionController(
+      setupStore: setupStore,
+      healthCoordinator: SupervisorConnectionHealthCoordinator(
+        setupStore: setupStore,
+        healthClient: SupervisorHealthClient(
+          client: MockClient((request) async => http.Response(
+                '{"enabled":true,"model":"gpt","readOnly":true,'
+                '"liveTradingMutation":false,"credentialExposure":false}',
+                200,
+              )),
+        ),
+        releaseBuild: true,
+      ),
+      releaseBuild: true,
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SupervisorConnectionPanel(controller: controller),
+          ),
+        ),
+      ),
+    );
+
+    final startFinder = find.byKey(
+      const ValueKey('supervisor-session-start'),
+    );
+    expect(tester.widget<OutlinedButton>(startFinder).onPressed, isNull);
+
+    await tester.tap(find.text('Configure'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('supervisor-server-url-field')),
+      'https://supervisor.example.com',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('supervisor-control-token-field')),
+      'test-control-token-1234567890',
+    );
+    await tester.tap(find.text('Save & test'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<OutlinedButton>(startFinder).onPressed, isNotNull);
+    await tester.tap(startFinder);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('supervisor-session-active')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('supervisor-session-remaining')),
+      findsOneWidget,
+    );
+    expect(find.text('Stop / Disconnect'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('supervisor-session-stop')));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('supervisor-session-active')),
+      findsNothing,
+    );
+    expect(find.text('Start another 15 min session'), findsOneWidget);
+  });
 }
 
 final class _MemorySecureStore implements SupervisorSecureKeyValueStore {
