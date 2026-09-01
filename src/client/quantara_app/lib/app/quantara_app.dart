@@ -1,11 +1,17 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/settings/app_preferences.dart';
 import '../core/theme/quantara_theme.dart';
+import '../features/ai_supervisor/application/supervisor_connection_controller.dart';
+import '../features/ai_supervisor/application/supervisor_connection_health_coordinator.dart';
+import '../features/ai_supervisor/application/supervisor_health_client.dart';
+import '../features/ai_supervisor/application/supervisor_secure_setup_store.dart';
+import '../features/ai_supervisor/presentation/supervisor_connection_panel.dart';
 import '../features/auto_trade/data/local_live_preferences_store.dart';
 import '../features/owner_alpha/application/owner_alpha_controller.dart';
 import '../features/owner_alpha/data/background_opportunity_scanner.dart';
@@ -56,6 +62,19 @@ class _QuantaraAppState extends State<QuantaraApp> {
   late ThemeMode _themeMode = widget.initialThemeMode;
   late Locale _locale = widget.initialLocale;
   http.Client? _ownedClient;
+  late final http.Client _supervisorHttpClient = http.Client();
+  late final SupervisorSecureSetupStore _supervisorSetupStore =
+      SupervisorSecureSetupStore();
+  late final SupervisorConnectionController _supervisorConnectionController =
+      SupervisorConnectionController(
+        setupStore: _supervisorSetupStore,
+        healthCoordinator: SupervisorConnectionHealthCoordinator(
+          setupStore: _supervisorSetupStore,
+          healthClient: SupervisorHealthClient(client: _supervisorHttpClient),
+          releaseBuild: kReleaseMode,
+        ),
+        releaseBuild: kReleaseMode,
+      );
   RealtimeMarketHost? _realtimeMarketHost;
   RealtimeMarketHost? _opportunityDiscoveryHost;
   OpportunityDiscoveryCoverageTracker? _opportunityDiscoveryCoverage;
@@ -88,6 +107,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
       _repository = BitunixOwnerAlphaRepository(client: client);
     }
     unawaited(_loadPreferences());
+    unawaited(_supervisorConnectionController.initialize());
     final injectedHost = widget.realtimeMarketHost;
     if (injectedHost != null) {
       _realtimeMarketHost = injectedHost;
@@ -116,6 +136,8 @@ class _QuantaraAppState extends State<QuantaraApp> {
     _opportunityDiscoveryCoverage?.dispose();
     _opportunityDiscoveryHost?.dispose();
     _realtimeMarketHost?.dispose();
+    _supervisorConnectionController.dispose();
+    _supervisorHttpClient.close();
     _ownedClient?.close();
     super.dispose();
   }
@@ -363,6 +385,9 @@ class _QuantaraAppState extends State<QuantaraApp> {
           children: [
             OpportunityDiscoveryCoverageBanner(
               coverage: _opportunityDiscoveryCoverage,
+            ),
+            SupervisorConnectionPanel(
+              controller: _supervisorConnectionController,
             ),
             const WindowsServiceStatusPill(),
             Expanded(
