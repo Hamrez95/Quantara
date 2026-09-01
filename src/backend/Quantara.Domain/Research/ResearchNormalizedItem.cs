@@ -69,7 +69,7 @@ public sealed class ResearchNormalizedItem
     public DateTimeOffset? ExpiresAt => Evidence.ExpiresAt;
 
     public ResearchExecutionAuthority ExecutionAuthority =>
-        ResearchExecutionAuthority.None;
+        Evidence.ExecutionAuthority;
 }
 
 public sealed record ResearchNormalizedItemResult(
