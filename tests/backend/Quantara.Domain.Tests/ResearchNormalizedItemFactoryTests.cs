@@ -59,6 +59,23 @@ public sealed class ResearchNormalizedItemFactoryTests
     }
 
     [Fact]
+    public void RejectsFactWithCollidingIdentityButDifferentProvenanceMetadata()
+    {
+        var evidence = Evidence("a", rawHashSeed: 'a');
+        var altered = Evidence("a", rawHashSeed: 'd');
+
+        var result = ResearchNormalizedItemFactory.Create(
+            evidence,
+            ResearchSeverity.High,
+            ResearchHorizon.ShortTerm,
+            [Fact(altered, "btc.status", "active", 0.8d)]);
+
+        Assert.False(result.IsCreated);
+        Assert.Equal(ResearchNormalizedItemCode.MismatchedEvidence, result.Code);
+        Assert.Null(result.Item);
+    }
+
+    [Fact]
     public void RejectsDuplicateFactKeysInsteadOfInflatingSupport()
     {
         var evidence = Evidence("a");
@@ -133,7 +150,9 @@ public sealed class ResearchNormalizedItemFactoryTests
             confidence);
     }
 
-    private static ResearchEvidenceEnvelope Evidence(string id)
+    private static ResearchEvidenceEnvelope Evidence(
+        string id,
+        char rawHashSeed = 'a')
     {
         var registry = ResearchSourceRegistrySnapshotFactory.Create(
             "1.0.0",
@@ -163,7 +182,7 @@ public sealed class ResearchNormalizedItemFactoryTests
             RetrievedAt,
             RetrievedAt - TimeSpan.FromMinutes(1),
             null,
-            new string('a', 64),
+            new string(rawHashSeed, 64),
             new string(id[0], 64),
             "fact-v1",
             ResearchEvidenceKind.OfficialFact,
