@@ -248,6 +248,22 @@ public sealed class ResearchFundamentalScoreEvaluatorTests
         ResearchAuthorityTier authorityTier,
         DateTimeOffset? expiresAt = null)
     {
+        var sourceClass = authorityTier == ResearchAuthorityTier.CreatorHypothesis
+            ? ResearchSourceClass.EducationalHypothesis
+            : ResearchSourceClass.ResearchEvidence;
+        var decisionRole = authorityTier switch
+        {
+            ResearchAuthorityTier.OfficialPrimary => ResearchDecisionRole.DirectFact,
+            ResearchAuthorityTier.CreatorHypothesis => ResearchDecisionRole.HypothesisOnly,
+            _ => ResearchDecisionRole.FeatureInput
+        };
+        var evidenceKind = decisionRole switch
+        {
+            ResearchDecisionRole.DirectFact => ResearchEvidenceKind.OfficialFact,
+            ResearchDecisionRole.HypothesisOnly => ResearchEvidenceKind.CandidateHypothesis,
+            _ => ResearchEvidenceKind.FeatureObservation
+        };
+
         var registry = ResearchSourceRegistrySnapshotFactory.Create(
             "1.0.0",
             new string('c', 64),
@@ -257,11 +273,11 @@ public sealed class ResearchFundamentalScoreEvaluatorTests
                 $"source-{id}",
                 new Uri($"https://example.com/{id}"),
                 [new Uri("https://example.com/terms")],
-                ResearchSourceClass.ResearchEvidence,
+                sourceClass,
                 authorityTier,
                 ResearchAccessClass.PublicApiWithTerms,
                 ResearchIngestionMode.Api,
-                ResearchDecisionRole.DirectFact,
+                decisionRole,
                 ResearchCommercialUseStatus.ApprovedSubjectToTerms,
                 true,
                 false,
@@ -279,7 +295,7 @@ public sealed class ResearchFundamentalScoreEvaluatorTests
             new string('a', 64),
             new string('b', 64),
             "fact-v1",
-            ResearchEvidenceKind.OfficialFact,
+            evidenceKind,
             [new Symbol("BTCUSDT")],
             expiresAt: expiresAt ?? RetrievedAt + TimeSpan.FromHours(6));
         Assert.True(envelope.IsCreated);
