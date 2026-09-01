@@ -1,4 +1,4 @@
-name: Temporary Dart format diff
+name: Temporary Dart formatter
 
 on:
   push:
@@ -6,19 +6,22 @@ on:
       - feat/360-windows-tighten-stop-flutter
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  format-diff:
+  format:
+    if: github.event.head_commit.message != 'chore: apply canonical dart formatting'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: feat/360-windows-tighten-stop-flutter
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
           channel: stable
           cache: true
-      - name: Print canonical formatter diff
+      - name: Apply canonical formatter output
         working-directory: src/client/quantara_app
         shell: bash
         run: |
@@ -26,8 +29,14 @@ jobs:
             lib/features/windows_desktop/data/platform_windows_service_management_command.dart \
             lib/features/windows_desktop/presentation/windows_service_status_pill.dart \
             test/features/windows_desktop/windows_service_tighten_stop_ui_test.dart
-          git diff -- \
-            lib/features/windows_desktop/application/windows_service_management_client.dart \
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add lib/features/windows_desktop/application/windows_service_management_client.dart \
             lib/features/windows_desktop/data/platform_windows_service_management_command.dart \
             lib/features/windows_desktop/presentation/windows_service_status_pill.dart \
             test/features/windows_desktop/windows_service_tighten_stop_ui_test.dart
+          git commit -m 'chore: apply canonical dart formatting'
+          git push origin HEAD:feat/360-windows-tighten-stop-flutter
