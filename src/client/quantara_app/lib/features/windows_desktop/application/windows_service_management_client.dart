@@ -100,7 +100,9 @@ final class WindowsServiceManagementClient {
   }
 
   void _validatePositivePrice(String price) {
-    if (price.isEmpty || price.length > 64 || !_positiveDecimalPattern.hasMatch(price)) {
+    if (price.isEmpty ||
+        price.length > 64 ||
+        !_positiveDecimalPattern.hasMatch(price)) {
       throw const WindowsServiceManagementException(
         'Windows stop price must be a positive finite decimal value.',
       );
