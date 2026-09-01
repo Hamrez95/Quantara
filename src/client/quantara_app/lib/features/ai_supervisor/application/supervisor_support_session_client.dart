@@ -65,8 +65,9 @@ final class SupervisorSupportSessionClient {
     final attributes = <String, String>{
       'connectionStatus': connection.status.name,
       if (connection.lastSuccessfulHealthCheckAt != null)
-        'lastSuccessfulHealthCheckAt':
-            connection.lastSuccessfulHealthCheckAt!.toUtc().toIso8601String(),
+        'lastSuccessfulHealthCheckAt': connection.lastSuccessfulHealthCheckAt!
+            .toUtc()
+            .toIso8601String(),
       if (connection.diagnosticCode != null)
         'diagnosticCode': connection.diagnosticCode!,
     };
@@ -90,7 +91,8 @@ final class SupervisorSupportSessionClient {
               'scope': 'diagnostics.read',
               'evidence': [
                 {
-                  'evidenceId': 'client-connection-${observedAt.microsecondsSinceEpoch}',
+                  'evidenceId':
+                      'client-connection-${observedAt.microsecondsSinceEpoch}',
                   'domain': 'app',
                   'kind': 'supervisor_connection',
                   'observedAtUtc': observedAt.toIso8601String(),
@@ -114,7 +116,8 @@ final class SupervisorSupportSessionClient {
         return false;
       }
       final remoteExpiry = DateTime.tryParse(decoded['expiresAtUtc'] as String);
-      if (remoteExpiry == null || !remoteExpiry.isAfter(observedAt)) return false;
+      if (remoteExpiry == null || !remoteExpiry.isAfter(observedAt))
+        return false;
 
       _activeSessionToken = sessionToken;
       return true;
@@ -127,9 +130,7 @@ final class SupervisorSupportSessionClient {
     }
   }
 
-  Future<void> stop({
-    required SupervisorConnectionSnapshot connection,
-  }) async {
+  Future<void> stop({required SupervisorConnectionSnapshot connection}) async {
     final token = _activeSessionToken;
     _activeSessionToken = null;
     final origin = connection.serverOrigin;

@@ -15,7 +15,8 @@ final class SupervisorConnectionController extends ChangeNotifier {
     setupStore,
     healthCoordinator,
     releaseBuild,
-    supportSessionClient ?? SupervisorSupportSessionClient(setupStore: setupStore),
+    supportSessionClient ??
+        SupervisorSupportSessionClient(setupStore: setupStore),
   );
 
   SupervisorConnectionController._(

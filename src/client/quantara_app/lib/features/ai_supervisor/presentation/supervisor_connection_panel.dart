@@ -154,7 +154,8 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
-                      if (snapshot.status == SupervisorConnectionStatus.connected ||
+                      if (snapshot.status ==
+                              SupervisorConnectionStatus.connected ||
                           _sessionController.isActive) ...[
                         const SizedBox(height: 10),
                         _buildSessionControls(context, fa: fa),
@@ -307,14 +308,17 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
 
   Future<void> _startSession() async {
     if (_sessionBusy ||
-        widget.controller.snapshot.status != SupervisorConnectionStatus.connected) {
+        widget.controller.snapshot.status !=
+            SupervisorConnectionStatus.connected) {
       return;
     }
     setState(() {
       _sessionBusy = true;
       _sessionError = null;
     });
-    final started = await widget.controller.startSupportSession(_sessionDuration);
+    final started = await widget.controller.startSupportSession(
+      _sessionDuration,
+    );
     if (!mounted) return;
     if (started) {
       _sessionController.start(_sessionDuration);
@@ -430,10 +434,11 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                             saving = true;
                             validationMessage = null;
                           });
-                          final validation = await widget.controller.saveAndCheck(
-                            serverUrl: urlController.text,
-                            controlToken: tokenController.text,
-                          );
+                          final validation = await widget.controller
+                              .saveAndCheck(
+                                serverUrl: urlController.text,
+                                controlToken: tokenController.text,
+                              );
                           if (!dialogContext.mounted) return;
                           if (!validation.isValid) {
                             setDialogState(() {
