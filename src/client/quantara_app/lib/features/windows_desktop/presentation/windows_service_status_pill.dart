@@ -271,8 +271,9 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
                 RegExp(r'^[0-9]{1,64}$').hasMatch(positionId) &&
                 positionId != '0';
             final validPrice =
-                RegExp(r'^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$')
-                    .hasMatch(stopPrice) &&
+                RegExp(
+                  r'^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$',
+                ).hasMatch(stopPrice) &&
                 (double.tryParse(stopPrice)?.isFinite ?? false) &&
                 (double.tryParse(stopPrice) ?? 0) > 0;
             final canSubmit =
