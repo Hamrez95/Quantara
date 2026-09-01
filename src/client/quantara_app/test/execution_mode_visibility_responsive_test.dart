@@ -33,7 +33,10 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(Icons.smart_toy_outlined).first);
+        // The Supervisor connection surface also uses an AI glyph. The
+        // execution-mode affordance lives in the owner-alpha content and is
+        // the last matching navigation/action icon in this composed shell.
+        await tester.tap(find.byIcon(Icons.smart_toy_outlined).last);
         await tester.pumpAndSettle();
 
         expect(find.text(testCase.modeLabel), findsOneWidget);
