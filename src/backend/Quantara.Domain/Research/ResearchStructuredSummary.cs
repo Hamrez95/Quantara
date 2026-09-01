@@ -24,7 +24,9 @@ public sealed record ResearchStructuredSummary(
     IReadOnlyList<ResearchStructuredClaim> Claims)
 {
     public ResearchExecutionAuthority ExecutionAuthority =>
-        Claims[0].Evidence[0].ExecutionAuthority;
+        Claims.Count > 0 && Claims[0].Evidence.Count > 0
+            ? Claims[0].Evidence[0].ExecutionAuthority
+            : ResearchExecutionAuthority.None;
 }
 
 public sealed record ResearchStructuredSummaryResult(
@@ -34,6 +36,7 @@ public sealed record ResearchStructuredSummaryResult(
 
 public static class ResearchStructuredSummaryParser
 {
+    private const string SupportedSchemaVersion = "summary-v1";
     private const int MaxJsonLength = 65536;
     private const int MaxClaims = 64;
     private const int MaxEvidencePerClaim = 16;
@@ -103,6 +106,10 @@ public static class ResearchStructuredSummaryParser
             if (root.ValueKind != JsonValueKind.Object
                 || !HasOnlyProperties(root, AllowedRootProperties)
                 || !TryReadText(root, "schemaVersion", 64, out var schemaVersion)
+                || !string.Equals(
+                    schemaVersion,
+                    SupportedSchemaVersion,
+                    StringComparison.Ordinal)
                 || !TryReadText(root, "modelVersion", 128, out var modelVersion)
                 || !TryReadText(root, "promptVersion", 128, out var promptVersion)
                 || !root.TryGetProperty("claims", out var claimsElement)
