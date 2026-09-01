@@ -49,7 +49,8 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
 
   void _enforceConnectionBoundSession() {
     if (_sessionController.isActive &&
-        widget.controller.snapshot.status != SupervisorConnectionStatus.connected) {
+        widget.controller.snapshot.status !=
+            SupervisorConnectionStatus.connected) {
       _sessionController.stop();
     }
   }
@@ -183,7 +184,8 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                                   snapshot.status ==
                                       SupervisorConnectionStatus.connecting
                                   ? null
-                                  : () => unawaited(widget.controller.checkNow()),
+                                  : () =>
+                                        unawaited(widget.controller.checkNow()),
                               icon:
                                   snapshot.status ==
                                       SupervisorConnectionStatus.connecting
@@ -234,9 +236,7 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
     if (active) {
       return Semantics(
         container: true,
-        label: fa
-            ? 'جلسه فقط خواندنی فعال است'
-            : 'Read-only session is active',
+        label: fa ? 'جلسه فقط خواندنی فعال است' : 'Read-only session is active',
         child: Container(
           key: const ValueKey('supervisor-session-active'),
           width: double.infinity,
@@ -252,10 +252,12 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                fa ? 'جلسه تحلیل فقط‌خواندنی فعال است' : 'Read-only analysis session active',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
+                fa
+                    ? 'جلسه تحلیل فقط‌خواندنی فعال است'
+                    : 'Read-only analysis session active',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 4),
               Text(
@@ -276,7 +278,8 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
       );
     }
 
-    final previousEnded = status == SupervisorSessionStatus.expired ||
+    final previousEnded =
+        status == SupervisorSessionStatus.expired ||
         status == SupervisorSessionStatus.stopped;
     return Wrap(
       spacing: 8,
@@ -291,8 +294,12 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
           icon: const Icon(Icons.timer_outlined),
           label: Text(
             previousEnded
-                ? (fa ? 'شروع دوباره جلسه ۱۵ دقیقه‌ای' : 'Start another 15 min session')
-                : (fa ? 'شروع جلسه ۱۵ دقیقه‌ای' : 'Start 15 min read-only session'),
+                ? (fa
+                      ? 'شروع دوباره جلسه ۱۵ دقیقه‌ای'
+                      : 'Start another 15 min session')
+                : (fa
+                      ? 'شروع جلسه ۱۵ دقیقه‌ای'
+                      : 'Start 15 min read-only session'),
           ),
         ),
         Text(
@@ -402,10 +409,11 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                             saving = true;
                             validationMessage = null;
                           });
-                          final validation = await widget.controller.saveAndCheck(
-                            serverUrl: urlController.text,
-                            controlToken: tokenController.text,
-                          );
+                          final validation = await widget.controller
+                              .saveAndCheck(
+                                serverUrl: urlController.text,
+                                controlToken: tokenController.text,
+                              );
                           if (!dialogContext.mounted) return;
                           if (!validation.isValid) {
                             setDialogState(() {

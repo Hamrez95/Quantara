@@ -146,11 +146,13 @@ void main() {
       healthCoordinator: SupervisorConnectionHealthCoordinator(
         setupStore: setupStore,
         healthClient: SupervisorHealthClient(
-          client: MockClient((request) async => http.Response(
-                '{"enabled":true,"model":"gpt","readOnly":true,'
-                '"liveTradingMutation":false,"credentialExposure":false}',
-                200,
-              )),
+          client: MockClient(
+            (request) async => http.Response(
+              '{"enabled":true,"model":"gpt","readOnly":true,'
+              '"liveTradingMutation":false,"credentialExposure":false}',
+              200,
+            ),
+          ),
         ),
         releaseBuild: true,
       ),
@@ -169,9 +171,7 @@ void main() {
       ),
     );
 
-    final startFinder = find.byKey(
-      const ValueKey('supervisor-session-start'),
-    );
+    final startFinder = find.byKey(const ValueKey('supervisor-session-start'));
     expect(tester.widget<OutlinedButton>(startFinder).onPressed, isNull);
 
     await tester.tap(find.text('Configure'));
