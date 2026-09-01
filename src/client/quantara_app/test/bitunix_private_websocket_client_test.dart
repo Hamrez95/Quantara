@@ -102,6 +102,47 @@ void main() {
     await eventSub.cancel();
   });
 
+  test(
+    'flat account advances handshake without Bitunix control acknowledgements',
+    () async {
+      final transport = _FakeTransport();
+      final statuses = <PrivateWsClientStatus>[];
+      final client = BitunixPrivateWebSocketClient(
+        connector: (_) async => transport,
+        delay: (_) async {},
+        clock: () => DateTime.utc(2026, 9, 1, 13, 53),
+        nonceFactory: () => 'nonce',
+        heartbeatInterval: const Duration(hours: 1),
+        staleAfter: const Duration(hours: 2),
+        handshakeAckTimeout: Duration.zero,
+      );
+      final statusSub = client.statuses.listen(statuses.add);
+
+      await client.start(credentials);
+      await _flush();
+      await _flush();
+
+      expect(transport.sent, hasLength(2));
+      expect(
+        (jsonDecode(transport.sent[0] as String) as Map<String, Object?>)['op'],
+        'login',
+      );
+      expect(
+        (jsonDecode(transport.sent[1] as String) as Map<String, Object?>)['op'],
+        'subscribe',
+      );
+      expect(statuses.last.state, PrivateWsClientState.active);
+      expect(client.droppedOrMalformedEvents, 0);
+
+      transport.emit(<String, Object?>{'op': 'ping', 'ping': 1788270780});
+      await _flush();
+      expect(client.droppedOrMalformedEvents, 0);
+
+      await client.dispose();
+      await statusSub.cancel();
+    },
+  );
+
   test('reconnects with bounded backoff and re-authenticates', () async {
     final first = _FakeTransport();
     final second = _FakeTransport();

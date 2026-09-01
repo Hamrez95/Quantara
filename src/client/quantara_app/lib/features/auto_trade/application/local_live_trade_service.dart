@@ -99,6 +99,7 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   final LocalLiveJournalObserver _journalObserver = LocalLiveJournalObserver();
   LocalLivePortfolioExecutionGuard? _portfolioGuard;
   PrivateTruthCoordinator? _privateTruth;
+  StreamSubscription<PrivateTruthProjection>? _privateTruthSubscription;
   http.Client? _coldHttpClient;
   BitunixLocalLiveApiClient? _coldExchange;
   TradingPnlProjection? _coldPnlProjection;
@@ -151,6 +152,8 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _destroyed = true;
+    await _privateTruthSubscription?.cancel();
+    _privateTruthSubscription = null;
     await _privateTruth?.dispose();
     _privateTruth = null;
     _httpClient?.close();
@@ -210,12 +213,21 @@ final class QuantaraLocalLiveTaskHandler extends TaskHandler {
         _coldHttpClient?.close();
         _coldHttpClient = http.Client();
         _coldExchange = BitunixLocalLiveApiClient(client: _coldHttpClient!);
+        await _privateTruthSubscription?.cancel();
+        _privateTruthSubscription = null;
         await _privateTruth?.dispose();
         final privateTruth = PrivateTruthCoordinator(
           BitunixPrivateWebSocketClient(),
           (value) => _exchange!.fetchCurrentAccountSnapshot(value),
         );
         _privateTruth = privateTruth;
+        // A fresh private-truth projection is the execution-layer wake-up.
+        // Without this subscription, a successful bounded REST verification
+        // could wait for the next foreground-service repeat before clearing a
+        // stale `privateAccountState` block.
+        _privateTruthSubscription = privateTruth.projections.listen((_) {
+          if (!_destroyed) unawaited(_runCycle());
+        });
         await privateTruth.start(_credentials!);
         unawaited(_refreshColdPnl());
         _userRequestedEntries = message['entriesEnabled'] == true;
