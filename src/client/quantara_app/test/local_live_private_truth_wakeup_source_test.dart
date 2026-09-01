@@ -10,12 +10,12 @@ void main() {
         'lib/features/auto_trade/application/local_live_trade_service.dart',
       ).readAsStringSync();
 
-      expect(source, contains('_privateTruthProjectionSubscription'));
+      expect(source, contains('_privateTruthSubscription'));
       expect(source, contains('privateTruth.projections.listen'));
       expect(source, contains('unawaited(_runCycle())'));
       expect(
         source,
-        contains('await _privateTruthProjectionSubscription?.cancel()'),
+        contains('await _privateTruthSubscription?.cancel()'),
       );
     },
   );
