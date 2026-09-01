@@ -27,13 +27,34 @@ public enum ResearchNormalizedItemCode
     DuplicateFact
 }
 
-public sealed record ResearchNormalizedItem(
-    ResearchEvidenceEnvelope Evidence,
-    ResearchSeverity Severity,
-    ResearchHorizon Horizon,
-    double Confidence,
-    IReadOnlyList<ResearchFactObservation> ExtractedFacts)
+public sealed class ResearchNormalizedItem
 {
+    private readonly IReadOnlyList<ResearchFactObservation> _extractedFacts;
+
+    internal ResearchNormalizedItem(
+        ResearchEvidenceEnvelope evidence,
+        ResearchSeverity severity,
+        ResearchHorizon horizon,
+        double confidence,
+        IReadOnlyList<ResearchFactObservation> extractedFacts)
+    {
+        Evidence = evidence;
+        Severity = severity;
+        Horizon = horizon;
+        Confidence = confidence;
+        _extractedFacts = Array.AsReadOnly(extractedFacts.ToArray());
+    }
+
+    public ResearchEvidenceEnvelope Evidence { get; }
+
+    public ResearchSeverity Severity { get; }
+
+    public ResearchHorizon Horizon { get; }
+
+    public double Confidence { get; }
+
+    public IReadOnlyList<ResearchFactObservation> ExtractedFacts => _extractedFacts;
+
     public Uri SourceUrl => Evidence.Source.CanonicalUri;
 
     public DateTimeOffset RetrievedAt => Evidence.RetrievedAt;
@@ -113,7 +134,7 @@ public static class ResearchNormalizedItemFactory
                 severity,
                 horizon,
                 confidence,
-                Array.AsReadOnly(facts)));
+                facts));
     }
 
     private static bool IsValidFact(ResearchFactObservation fact)
