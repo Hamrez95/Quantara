@@ -186,7 +186,7 @@ public static class ResearchStructuredSummaryParser
 
     private static bool HasOnlyProperties(
         JsonElement element,
-        IReadOnlySet<string> allowedProperties)
+        HashSet<string> allowedProperties)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var property in element.EnumerateObject())
