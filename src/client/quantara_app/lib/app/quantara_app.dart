@@ -11,7 +11,7 @@ import '../features/ai_supervisor/application/supervisor_connection_controller.d
 import '../features/ai_supervisor/application/supervisor_connection_health_coordinator.dart';
 import '../features/ai_supervisor/application/supervisor_health_client.dart';
 import '../features/ai_supervisor/application/supervisor_secure_setup_store.dart';
-import '../features/ai_supervisor/presentation/supervisor_connection_panel.dart';
+import '../features/ai_supervisor/presentation/supervisor_connection_launcher.dart';
 import '../features/auto_trade/data/local_live_preferences_store.dart';
 import '../features/owner_alpha/application/owner_alpha_controller.dart';
 import '../features/owner_alpha/data/background_opportunity_scanner.dart';
@@ -386,7 +386,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
             OpportunityDiscoveryCoverageBanner(
               coverage: _opportunityDiscoveryCoverage,
             ),
-            SupervisorConnectionPanel(
+            SupervisorConnectionLauncher(
               controller: _supervisorConnectionController,
             ),
             const WindowsServiceStatusPill(),
