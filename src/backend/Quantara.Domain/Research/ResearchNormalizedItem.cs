@@ -154,12 +154,26 @@ public static class ResearchNormalizedItemFactory
         ResearchEvidenceEnvelope actual)
     {
         return string.Equals(expected.EvidenceId, actual.EvidenceId, StringComparison.Ordinal)
+            && string.Equals(expected.RegistryVersion, actual.RegistryVersion, StringComparison.Ordinal)
             && string.Equals(expected.RegistrySha256, actual.RegistrySha256, StringComparison.Ordinal)
+            && string.Equals(expected.Source.SourceId, actual.Source.SourceId, StringComparison.Ordinal)
+            && expected.Source.CanonicalUri == actual.Source.CanonicalUri
+            && string.Equals(expected.ProviderItemId, actual.ProviderItemId, StringComparison.Ordinal)
+            && expected.RetrievedAt == actual.RetrievedAt
+            && expected.PublishedAt == actual.PublishedAt
+            && expected.EventAt == actual.EventAt
+            && string.Equals(expected.RawSha256, actual.RawSha256, StringComparison.Ordinal)
             && string.Equals(expected.NormalizedSha256, actual.NormalizedSha256, StringComparison.Ordinal)
+            && string.Equals(expected.SchemaVersion, actual.SchemaVersion, StringComparison.Ordinal)
+            && expected.Kind == actual.Kind
+            && expected.ExpiresAt == actual.ExpiresAt
             && string.Equals(
-                expected.Source.SourceId,
-                actual.Source.SourceId,
-                StringComparison.Ordinal);
+                expected.ExtractionModelVersion,
+                actual.ExtractionModelVersion,
+                StringComparison.Ordinal)
+            && string.Equals(expected.PromptVersion, actual.PromptVersion, StringComparison.Ordinal)
+            && expected.ExecutionAuthority == actual.ExecutionAuthority
+            && expected.AffectedSymbols.SequenceEqual(actual.AffectedSymbols);
     }
 
     private static ResearchNormalizedItemResult Rejected(
