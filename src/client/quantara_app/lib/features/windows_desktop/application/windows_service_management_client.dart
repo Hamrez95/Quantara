@@ -16,6 +16,11 @@ final class WindowsServiceManagementCommandResult {
 
 typedef WindowsServiceCloseExistingPositionCommand =
     Future<WindowsServiceManagementCommandResult> Function(String positionId);
+typedef WindowsServiceTightenExistingStopCommand =
+    Future<WindowsServiceManagementCommandResult> Function(
+      String positionId,
+      String newStopPrice,
+    );
 
 final class WindowsServiceManagementException implements Exception {
   const WindowsServiceManagementException(this.message);
@@ -40,35 +45,82 @@ final class WindowsServiceManagementResult {
 
 /// Narrow Flutter boundary for the Windows management-only worker.
 ///
-/// This client can express exactly one mutation: closing one verified existing
-/// position by canonical exchange position id. The packaged native helper
-/// authenticates the service process before it emits a response. This layer
-/// validates input and the canonical management result again and deliberately
-/// exposes no entry, leverage, margin, transfer, generic-order, or stop-widening
-/// surface.
+/// This client can express only two mutations for a verified existing position:
+/// full reduce-only close, or a stop-price tightening request. The native helper
+/// and service re-verify fresh exchange truth and ownership before mutation.
+/// This layer deliberately exposes no entry, leverage, margin, transfer,
+/// generic-order, stop-widening, or caller-selected stop-trigger surface.
 final class WindowsServiceManagementClient {
   factory WindowsServiceManagementClient({
     required WindowsServiceCloseExistingPositionCommand closeCommand,
-  }) => WindowsServiceManagementClient._(closeCommand);
+    WindowsServiceTightenExistingStopCommand? tightenStopCommand,
+  }) => WindowsServiceManagementClient._(closeCommand, tightenStopCommand);
 
-  const WindowsServiceManagementClient._(this._closeCommand);
+  const WindowsServiceManagementClient._(
+    this._closeCommand,
+    this._tightenStopCommand,
+  );
 
   final WindowsServiceCloseExistingPositionCommand _closeCommand;
+  final WindowsServiceTightenExistingStopCommand? _tightenStopCommand;
 
   static final RegExp _positionIdPattern = RegExp(r'^[0-9]{1,64}$');
+  static final RegExp _positiveDecimalPattern = RegExp(
+    r'^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$',
+  );
 
   Future<WindowsServiceManagementResult> closeExistingPosition(
     String positionId,
   ) async {
+    _validatePositionId(positionId);
+    return _execute(() => _closeCommand(positionId));
+  }
+
+  Future<WindowsServiceManagementResult> tightenExistingStop({
+    required String positionId,
+    required String newStopPrice,
+  }) async {
+    _validatePositionId(positionId);
+    _validatePositivePrice(newStopPrice);
+    final command = _tightenStopCommand;
+    if (command == null) {
+      throw const WindowsServiceManagementException(
+        'Windows stop tightening is unavailable on this client.',
+      );
+    }
+    return _execute(() => command(positionId, newStopPrice));
+  }
+
+  void _validatePositionId(String positionId) {
     if (!_positionIdPattern.hasMatch(positionId) || positionId == '0') {
       throw const WindowsServiceManagementException(
         'Windows position id must contain 1-64 decimal digits and must not be zero.',
       );
     }
+  }
 
+  void _validatePositivePrice(String price) {
+    if (price.isEmpty ||
+        price.length > 64 ||
+        !_positiveDecimalPattern.hasMatch(price)) {
+      throw const WindowsServiceManagementException(
+        'Windows stop price must be a positive finite decimal value.',
+      );
+    }
+    final parsed = double.tryParse(price);
+    if (parsed == null || !parsed.isFinite || parsed <= 0) {
+      throw const WindowsServiceManagementException(
+        'Windows stop price must be a positive finite decimal value.',
+      );
+    }
+  }
+
+  Future<WindowsServiceManagementResult> _execute(
+    Future<WindowsServiceManagementCommandResult> Function() command,
+  ) async {
     late WindowsServiceManagementCommandResult result;
     try {
-      result = await _closeCommand(positionId);
+      result = await command();
     } on WindowsServiceManagementException {
       rethrow;
     } on Object catch (error) {
@@ -77,9 +129,6 @@ final class WindowsServiceManagementClient {
       );
     }
 
-    // The native helper returns 8 only for a canonical, validated management
-    // result whose completed flag is false. Any other non-zero exit code means
-    // no response is trusted by Flutter.
     if (result.exitCode != 0 && result.exitCode != 8) {
       throw WindowsServiceManagementException(
         'Windows management command failed with exit code ${result.exitCode}.',

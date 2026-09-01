@@ -6,3 +6,11 @@ createWindowsServiceCloseExistingPositionCommand() {
     'Windows service management is unavailable on this platform.',
   );
 }
+
+WindowsServiceTightenExistingStopCommand
+createWindowsServiceTightenExistingStopCommand() {
+  return (positionId, newStopPrice) async =>
+      throw const WindowsServiceManagementException(
+        'Windows service management is unavailable on this platform.',
+      );
+}

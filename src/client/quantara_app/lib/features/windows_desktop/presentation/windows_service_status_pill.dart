@@ -70,6 +70,7 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
     var confirmed = false;
     var busy = false;
     String? errorMessage;
+    var openTightenStop = false;
 
     await showDialog<void>(
       context: context,
@@ -154,7 +155,7 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
                         enabled: !busy,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
-                          labelText: persian ? 'Position ID' : 'Position ID',
+                          labelText: 'Position ID',
                           helperText: persian
                               ? 'شناسه عددی پوزیشن در صرافی'
                               : 'Numeric exchange position identifier',
@@ -208,6 +209,17 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
                 TextButton(
                   onPressed: busy
                       ? null
+                      : () {
+                          openTightenStop = true;
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: Text(
+                    persian ? 'سفت‌تر کردن حد ضرر' : 'Tighten stop instead',
+                  ),
+                ),
+                TextButton(
+                  onPressed: busy
+                      ? null
                       : () => Navigator.of(dialogContext).pop(),
                   child: Text(persian ? 'انصراف' : 'Cancel'),
                 ),
@@ -224,6 +236,212 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
                     busy
                         ? (persian ? 'در حال تأیید…' : 'Confirming…')
                         : (persian ? 'بستن پوزیشن' : 'Close position'),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (openTightenStop && mounted) {
+      await _showTightenExistingStopDialog();
+    }
+  }
+
+  Future<void> _showTightenExistingStopDialog() async {
+    final persian = Localizations.localeOf(context).languageCode == 'fa';
+    final managementClient =
+        widget.managementClient ??
+        createPlatformWindowsServiceManagementClient();
+    var positionId = '';
+    var stopPrice = '';
+    var confirmed = false;
+    var busy = false;
+    String? errorMessage;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final validPositionId =
+                RegExp(r'^[0-9]{1,64}$').hasMatch(positionId) &&
+                positionId != '0';
+            final validPrice =
+                RegExp(
+                  r'^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$',
+                ).hasMatch(stopPrice) &&
+                (double.tryParse(stopPrice)?.isFinite ?? false) &&
+                (double.tryParse(stopPrice) ?? 0) > 0;
+            final canSubmit =
+                validPositionId && validPrice && confirmed && !busy;
+
+            Future<void> submit() async {
+              if (!canSubmit) {
+                return;
+              }
+              setDialogState(() {
+                busy = true;
+                errorMessage = null;
+              });
+              try {
+                final result = await managementClient.tightenExistingStop(
+                  positionId: positionId,
+                  newStopPrice: stopPrice,
+                );
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                if (!result.completed) {
+                  setDialogState(() {
+                    busy = false;
+                    errorMessage = persian
+                        ? 'تغییر حد ضرر تأیید نشد. پیش از تلاش دوباره، وضعیت صرافی را تطبیق دهید.'
+                        : 'Stop tightening was not confirmed. Reconcile exchange state before retrying.';
+                  });
+                  return;
+                }
+                Navigator.of(dialogContext).pop();
+                if (!mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      persian
+                          ? 'حد ضرر جدید با وضعیت تازه صرافی تأیید شد.'
+                          : 'The tighter stop was confirmed by fresh exchange state.',
+                    ),
+                  ),
+                );
+                _retry();
+              } on WindowsServiceManagementException {
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                setDialogState(() {
+                  busy = false;
+                  errorMessage = persian
+                      ? 'نتیجه تغییر حد ضرر قابل تأیید نیست. پیش از تلاش دوباره، وضعیت صرافی را تطبیق دهید.'
+                      : 'The stop-change outcome is not verified. Reconcile exchange state before retrying.';
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text(
+                persian ? 'سفت‌تر کردن حد ضرر' : 'Tighten existing stop',
+              ),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        persian
+                            ? 'Quantara فقط تغییر حد ضرری را ارسال می‌کند که با حقیقت تازه صرافی، مالکیت پوزیشن و قانون عدم گسترش ریسک دوباره تأیید شود.'
+                            : 'Quantara submits only a stop change re-verified against fresh exchange truth, durable ownership and the no-stop-widening policy.',
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        enabled: !busy,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Position ID',
+                          errorText: positionId.isEmpty || validPositionId
+                              ? null
+                              : (persian
+                                    ? 'شناسه باید ۱ تا ۶۴ رقم و غیرصفر باشد.'
+                                    : 'ID must be 1-64 decimal digits and non-zero.'),
+                        ),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            positionId = value.trim();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        enabled: !busy,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: persian ? 'حد ضرر جدید' : 'New stop price',
+                          helperText: persian
+                              ? 'فقط عدد اعشاری مثبت؛ سرویس مستقل بررسی می‌کند که حد ضرر واقعاً سفت‌تر باشد.'
+                              : 'Positive decimal only; the service independently proves the stop is actually tighter.',
+                          errorText: stopPrice.isEmpty || validPrice
+                              ? null
+                              : (persian
+                                    ? 'قیمت باید یک عدد اعشاری مثبت باشد.'
+                                    : 'Price must be a positive decimal value.'),
+                        ),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            stopPrice = value.trim();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: confirmed,
+                        onChanged: busy
+                            ? null
+                            : (value) {
+                                setDialogState(() {
+                                  confirmed = value ?? false;
+                                });
+                              },
+                        title: Text(
+                          persian
+                              ? 'تأیید می‌کنم فقط حد ضرر همین پوزیشن موجود سفت‌تر شود.'
+                              : 'I confirm that only this existing position stop may be tightened.',
+                        ),
+                        subtitle: Text(
+                          persian
+                              ? 'گسترش حد ضرر، ورود جدید و تکرار خودکار مجاز نیست.'
+                              : 'Stop widening, new entry and automatic retry remain forbidden.',
+                        ),
+                      ),
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          errorMessage!,
+                          style: TextStyle(color: QuantaraColors.danger),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: busy
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: Text(persian ? 'انصراف' : 'Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: canSubmit ? submit : null,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.trending_up_rounded),
+                  label: Text(
+                    busy
+                        ? (persian ? 'در حال تأیید…' : 'Confirming…')
+                        : (persian ? 'سفت‌تر کردن حد ضرر' : 'Tighten stop'),
                   ),
                 ),
               ],
@@ -280,8 +498,8 @@ class _WindowsServiceStatusPillState extends State<WindowsServiceStatusPill> {
         return Tooltip(
           message: managementEnabled
               ? (persian
-                    ? '${presentation.detail} برای بستن یک پوزیشن موجود کلیک کنید. اختیار ورود جدید: غیرفعال.'
-                    : '${presentation.detail} Click to close a verified existing position. New-entry authority: disabled.')
+                    ? '${presentation.detail} برای مدیریت محدود یک پوزیشن موجود کلیک کنید. اختیار ورود جدید: غیرفعال.'
+                    : '${presentation.detail} Click for bounded existing-position controls. New-entry authority: disabled.')
               : (persian
                     ? '${presentation.detail} اختیار ورود جدید: غیرفعال.'
                     : '${presentation.detail} New-entry authority: disabled.'),
