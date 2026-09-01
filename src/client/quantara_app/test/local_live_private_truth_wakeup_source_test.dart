@@ -13,10 +13,7 @@ void main() {
       expect(source, contains('_privateTruthSubscription'));
       expect(source, contains('privateTruth.projections.listen'));
       expect(source, contains('unawaited(_runCycle())'));
-      expect(
-        source,
-        contains('await _privateTruthSubscription?.cancel()'),
-      );
+      expect(source, contains('await _privateTruthSubscription?.cancel()'));
     },
   );
 }
