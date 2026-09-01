@@ -1,9 +1,4 @@
-enum SupervisorSessionStatus {
-  inactive,
-  active,
-  expired,
-  stopped,
-}
+enum SupervisorSessionStatus { inactive, active, expired, stopped }
 
 /// The only diagnostic fields allowed to cross the Supervisor gateway.
 ///
@@ -36,9 +31,7 @@ const Set<String> supervisorDiagnosticDenyList = <String>{
   'autoTrade',
 };
 
-Map<String, Object?> sanitizeSupervisorEvidence(
-  Map<String, Object?> evidence,
-) {
+Map<String, Object?> sanitizeSupervisorEvidence(Map<String, Object?> evidence) {
   final sanitized = <String, Object?>{};
   for (final entry in evidence.entries) {
     if (!supervisorDiagnosticAllowList.contains(entry.key) ||
