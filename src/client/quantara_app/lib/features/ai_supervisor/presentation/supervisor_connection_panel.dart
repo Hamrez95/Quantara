@@ -5,20 +5,62 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../application/supervisor_connection_controller.dart';
+import '../application/supervisor_read_only_session_controller.dart';
 import '../domain/supervisor_connection.dart';
+import '../domain/supervisor_read_only_session.dart';
 
-class SupervisorConnectionPanel extends StatelessWidget {
+class SupervisorConnectionPanel extends StatefulWidget {
   const SupervisorConnectionPanel({required this.controller, super.key});
 
   final SupervisorConnectionController controller;
 
   @override
+  State<SupervisorConnectionPanel> createState() =>
+      _SupervisorConnectionPanelState();
+}
+
+class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
+  static const _sessionDuration = Duration(minutes: 15);
+
+  late final SupervisorReadOnlySessionController _sessionController =
+      SupervisorReadOnlySessionController();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_enforceConnectionBoundSession);
+  }
+
+  @override
+  void didUpdateWidget(covariant SupervisorConnectionPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.removeListener(_enforceConnectionBoundSession);
+    widget.controller.addListener(_enforceConnectionBoundSession);
+    _enforceConnectionBoundSession();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_enforceConnectionBoundSession);
+    _sessionController.dispose();
+    super.dispose();
+  }
+
+  void _enforceConnectionBoundSession() {
+    if (_sessionController.isActive &&
+        widget.controller.snapshot.status != SupervisorConnectionStatus.connected) {
+      _sessionController.stop();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: Listenable.merge([widget.controller, _sessionController]),
       builder: (context, _) {
         final fa = Directionality.of(context) == TextDirection.rtl;
-        final snapshot = controller.snapshot;
+        final snapshot = widget.controller.snapshot;
         final presentation = _presentation(snapshot.status, fa: fa);
         return Semantics(
           container: true,
@@ -26,7 +68,7 @@ class SupervisorConnectionPanel extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 320),
+              constraints: const BoxConstraints(maxHeight: 380),
               child: SingleChildScrollView(
                 child: SectionCard(
                   accentColor: presentation.color,
@@ -114,6 +156,8 @@ class SupervisorConnectionPanel extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 10),
+                      _buildSessionControls(context, snapshot.status, fa: fa),
+                      const SizedBox(height: 10),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -139,7 +183,7 @@ class SupervisorConnectionPanel extends StatelessWidget {
                                   snapshot.status ==
                                       SupervisorConnectionStatus.connecting
                                   ? null
-                                  : () => unawaited(controller.checkNow()),
+                                  : () => unawaited(widget.controller.checkNow()),
                               icon:
                                   snapshot.status ==
                                       SupervisorConnectionStatus.connecting
@@ -178,12 +222,106 @@ class SupervisorConnectionPanel extends StatelessWidget {
     );
   }
 
+  Widget _buildSessionControls(
+    BuildContext context,
+    SupervisorConnectionStatus connectionStatus, {
+    required bool fa,
+  }) {
+    final status = _sessionController.status;
+    final healthy = connectionStatus == SupervisorConnectionStatus.connected;
+    final active = status == SupervisorSessionStatus.active;
+
+    if (active) {
+      return Semantics(
+        container: true,
+        label: fa
+            ? 'جلسه فقط خواندنی فعال است'
+            : 'Read-only session is active',
+        child: Container(
+          key: const ValueKey('supervisor-session-active'),
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: QuantaraColors.success.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: QuantaraColors.success.withValues(alpha: 0.28),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                fa ? 'جلسه تحلیل فقط‌خواندنی فعال است' : 'Read-only analysis session active',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${fa ? 'زمان باقی‌مانده' : 'Remaining'}: ${_formatRemaining(_sessionController.remaining)}',
+                key: const ValueKey('supervisor-session-remaining'),
+                textDirection: TextDirection.ltr,
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonalIcon(
+                key: const ValueKey('supervisor-session-stop'),
+                onPressed: _sessionController.stop,
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: Text(fa ? 'قطع جلسه' : 'Stop / Disconnect'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final previousEnded = status == SupervisorSessionStatus.expired ||
+        status == SupervisorSessionStatus.stopped;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          key: const ValueKey('supervisor-session-start'),
+          onPressed: healthy
+              ? () => _sessionController.start(_sessionDuration)
+              : null,
+          icon: const Icon(Icons.timer_outlined),
+          label: Text(
+            previousEnded
+                ? (fa ? 'شروع دوباره جلسه ۱۵ دقیقه‌ای' : 'Start another 15 min session')
+                : (fa ? 'شروع جلسه ۱۵ دقیقه‌ای' : 'Start 15 min read-only session'),
+          ),
+        ),
+        Text(
+          healthy
+              ? (fa
+                    ? 'شروع جلسه فقط با اقدام صریح شما انجام می‌شود.'
+                    : 'The session starts only after your explicit action.')
+              : (fa
+                    ? 'برای شروع جلسه، ابتدا اتصال سالم Supervisor لازم است.'
+                    : 'A healthy Supervisor connection is required before a session can start.'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  static String _formatRemaining(Duration value) {
+    final totalSeconds = value.inSeconds.clamp(0, 3600);
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _showSetupDialog(
     BuildContext context, {
     required bool fa,
   }) async {
     final urlController = TextEditingController(
-      text: controller.snapshot.serverOrigin?.toString() ?? '',
+      text: widget.controller.snapshot.serverOrigin?.toString() ?? '',
     );
     final tokenController = TextEditingController();
     try {
@@ -264,7 +402,7 @@ class SupervisorConnectionPanel extends StatelessWidget {
                             saving = true;
                             validationMessage = null;
                           });
-                          final validation = await controller.saveAndCheck(
+                          final validation = await widget.controller.saveAndCheck(
                             serverUrl: urlController.text,
                             controlToken: tokenController.text,
                           );
@@ -324,7 +462,8 @@ class SupervisorConnectionPanel extends StatelessWidget {
       ),
     );
     if (remove == true) {
-      await controller.clear();
+      _sessionController.stop();
+      await widget.controller.clear();
     }
   }
 
