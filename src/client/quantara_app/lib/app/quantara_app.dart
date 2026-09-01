@@ -417,9 +417,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
                         ),
                       ),
                       PositionedDirectional(
-                        start: mobile
-                            ? null
-                            : (extendedDesktopRail ? 86 : 16),
+                        start: mobile ? null : (extendedDesktopRail ? 86 : 16),
                         end: mobile ? 108 : null,
                         top: mobile ? 8 : null,
                         bottom: mobile ? null : 18,
