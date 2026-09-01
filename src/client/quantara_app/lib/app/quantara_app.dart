@@ -391,6 +391,7 @@ class _QuantaraAppState extends State<QuantaraApp> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final mobile = constraints.maxWidth < 1024;
+                  final extendedDesktopRail = constraints.maxWidth >= 1320;
                   return Stack(
                     children: [
                       Positioned.fill(
@@ -416,8 +417,12 @@ class _QuantaraAppState extends State<QuantaraApp> {
                         ),
                       ),
                       PositionedDirectional(
-                        end: 14,
-                        bottom: mobile ? 88 : 18,
+                        start: mobile
+                            ? null
+                            : (extendedDesktopRail ? 86 : 16),
+                        end: mobile ? 108 : null,
+                        top: mobile ? 8 : null,
+                        bottom: mobile ? null : 18,
                         child: SupervisorConnectionLauncher(
                           controller: _supervisorConnectionController,
                         ),
