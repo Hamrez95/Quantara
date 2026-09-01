@@ -1,3 +1,4 @@
+using System.Globalization;
 using Quantara.Domain.Research;
 using Quantara.Domain.Trading;
 
@@ -104,7 +105,7 @@ public sealed class ResearchNormalizedItemFactoryTests
             .Select(index => Fact(
                 evidence,
                 $"fact.{index}",
-                index.ToString(),
+                index.ToString(CultureInfo.InvariantCulture),
                 0.8d))
             .ToArray();
 
