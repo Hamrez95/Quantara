@@ -6,5 +6,7 @@ import 'platform_windows_service_management_command_stub.dart'
 WindowsServiceManagementClient createPlatformWindowsServiceManagementClient() {
   return WindowsServiceManagementClient(
     closeCommand: platform.createWindowsServiceCloseExistingPositionCommand(),
+    tightenStopCommand: platform
+        .createWindowsServiceTightenExistingStopCommand(),
   );
 }

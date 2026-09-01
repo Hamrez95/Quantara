@@ -11,11 +11,23 @@ const _maxDiagnosticBytes = 8 * 1024;
 
 WindowsServiceCloseExistingPositionCommand
 createWindowsServiceCloseExistingPositionCommand() {
-  return _runWindowsServiceCloseExistingPositionCommand;
+  return (positionId) => _runWindowsServiceManagementCommand([
+    '--close-existing-position',
+    positionId,
+  ]);
+}
+
+WindowsServiceTightenExistingStopCommand
+createWindowsServiceTightenExistingStopCommand() {
+  return (positionId, newStopPrice) => _runWindowsServiceManagementCommand([
+    '--tighten-existing-stop',
+    positionId,
+    newStopPrice,
+  ]);
 }
 
 Future<WindowsServiceManagementCommandResult>
-_runWindowsServiceCloseExistingPositionCommand(String positionId) async {
+_runWindowsServiceManagementCommand(List<String> arguments) async {
   if (!Platform.isWindows) {
     throw const WindowsServiceManagementException(
       'Windows service management is unavailable on this platform.',
@@ -38,7 +50,7 @@ _runWindowsServiceCloseExistingPositionCommand(String positionId) async {
   try {
     process = await Process.start(
       executable,
-      ['--close-existing-position', positionId],
+      arguments,
       runInShell: false,
       mode: ProcessStartMode.normal,
     );
