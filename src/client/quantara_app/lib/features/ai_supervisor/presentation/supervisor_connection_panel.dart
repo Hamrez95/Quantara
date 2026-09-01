@@ -24,6 +24,8 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
 
   late final SupervisorReadOnlySessionController _sessionController =
       SupervisorReadOnlySessionController();
+  bool _sessionBusy = false;
+  String? _sessionError;
 
   @override
   void initState() {
@@ -52,6 +54,7 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
         widget.controller.snapshot.status !=
             SupervisorConnectionStatus.connected) {
       _sessionController.stop();
+      unawaited(widget.controller.stopSupportSession());
     }
   }
 
@@ -111,25 +114,20 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Align(
-                        alignment: fa
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: StatusPill(
-                          label: presentation.title,
-                          color: presentation.color,
-                          icon: presentation.icon,
-                        ),
+                      StatusPill(
+                        label: presentation.title,
+                        color: presentation.color,
+                        icon: presentation.icon,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
                         fa
-                            ? 'این اتصال فقط برای تحلیل و عیب‌یابی محدود است. کلید/Secret صرافی، سفارش، SL/TP، اهرم، انتقال وجه و اختیار اجرای معامله به ChatGPT داده نمی‌شود.'
-                            : 'This connection is limited to analysis and diagnostics. Exchange credentials, orders, SL/TP, leverage, funds transfers, and trading execution authority are never granted to ChatGPT.',
+                            ? 'فقط تحلیل و عیب‌یابی: اعتبار صرافی، سفارش، SL/TP، اهرم، انتقال وجه و اختیار اجرای معامله هرگز در دسترس ChatGPT نیست.'
+                            : 'Analysis and diagnostics only: exchange credentials, orders, SL/TP, leverage, funds transfers, and trading authority are never exposed to ChatGPT.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       if (snapshot.serverOrigin != null) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           snapshot.serverOrigin!.host,
                           key: const ValueKey('supervisor-server-origin'),
@@ -156,63 +154,13 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
+                      if (snapshot.status == SupervisorConnectionStatus.connected ||
+                          _sessionController.isActive) ...[
+                        const SizedBox(height: 10),
+                        _buildSessionControls(context, fa: fa),
+                      ],
                       const SizedBox(height: 10),
-                      _buildSessionControls(context, snapshot.status, fa: fa),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton.icon(
-                            onPressed:
-                                snapshot.status ==
-                                    SupervisorConnectionStatus.connecting
-                                ? null
-                                : () => _showSetupDialog(context, fa: fa),
-                            icon: const Icon(Icons.settings_outlined),
-                            label: Text(
-                              snapshot.status ==
-                                      SupervisorConnectionStatus.notConfigured
-                                  ? (fa ? 'تنظیم اتصال' : 'Configure')
-                                  : (fa ? 'ویرایش اتصال' : 'Update setup'),
-                            ),
-                          ),
-                          if (snapshot.status !=
-                              SupervisorConnectionStatus.notConfigured)
-                            OutlinedButton.icon(
-                              onPressed:
-                                  snapshot.status ==
-                                      SupervisorConnectionStatus.connecting
-                                  ? null
-                                  : () =>
-                                        unawaited(widget.controller.checkNow()),
-                              icon:
-                                  snapshot.status ==
-                                      SupervisorConnectionStatus.connecting
-                                  ? const SizedBox.square(
-                                      dimension: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(
-                                      Icons.health_and_safety_outlined,
-                                    ),
-                              label: Text(fa ? 'تست سلامت' : 'Check health'),
-                            ),
-                          if (snapshot.status !=
-                              SupervisorConnectionStatus.notConfigured)
-                            TextButton.icon(
-                              onPressed:
-                                  snapshot.status ==
-                                      SupervisorConnectionStatus.connecting
-                                  ? null
-                                  : () => _confirmRemove(context, fa: fa),
-                              icon: const Icon(Icons.link_off_rounded),
-                              label: Text(fa ? 'حذف اتصال' : 'Remove'),
-                            ),
-                        ],
-                      ),
+                      _buildConnectionActions(context, snapshot, fa: fa),
                     ],
                   ),
                 ),
@@ -224,74 +172,63 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
     );
   }
 
-  Widget _buildSessionControls(
-    BuildContext context,
-    SupervisorConnectionStatus connectionStatus, {
-    required bool fa,
-  }) {
-    final status = _sessionController.status;
-    final healthy = connectionStatus == SupervisorConnectionStatus.connected;
-    final active = status == SupervisorSessionStatus.active;
-
-    if (active) {
-      return Semantics(
-        container: true,
-        label: fa ? 'جلسه فقط خواندنی فعال است' : 'Read-only session is active',
-        child: Container(
-          key: const ValueKey('supervisor-session-active'),
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: QuantaraColors.success.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: QuantaraColors.success.withValues(alpha: 0.28),
+  Widget _buildSessionControls(BuildContext context, {required bool fa}) {
+    if (_sessionController.status == SupervisorSessionStatus.active) {
+      return Container(
+        key: const ValueKey('supervisor-session-active'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: QuantaraColors.success.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: QuantaraColors.success.withValues(alpha: 0.28),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              fa
+                  ? 'جلسه فقط‌خواندنی فعال است'
+                  : 'Read-only analysis session active',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                fa
-                    ? 'جلسه تحلیل فقط‌خواندنی فعال است'
-                    : 'Read-only analysis session active',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${fa ? 'زمان باقی‌مانده' : 'Remaining'}: ${_formatRemaining(_sessionController.remaining)}',
-                key: const ValueKey('supervisor-session-remaining'),
-                textDirection: TextDirection.ltr,
-              ),
-              const SizedBox(height: 8),
-              FilledButton.tonalIcon(
-                key: const ValueKey('supervisor-session-stop'),
-                onPressed: _sessionController.stop,
-                icon: const Icon(Icons.stop_circle_outlined),
-                label: Text(fa ? 'قطع جلسه' : 'Stop / Disconnect'),
-              ),
-            ],
-          ),
+            const SizedBox(height: 4),
+            Text(
+              '${fa ? 'زمان باقی‌مانده' : 'Remaining'}: ${_formatRemaining(_sessionController.remaining)}',
+              key: const ValueKey('supervisor-session-remaining'),
+              textDirection: TextDirection.ltr,
+            ),
+            const SizedBox(height: 6),
+            FilledButton.tonalIcon(
+              key: const ValueKey('supervisor-session-stop'),
+              onPressed: _sessionBusy ? null : _stopSession,
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: Text(fa ? 'قطع جلسه' : 'Stop / Disconnect'),
+            ),
+          ],
         ),
       );
     }
 
     final previousEnded =
-        status == SupervisorSessionStatus.expired ||
-        status == SupervisorSessionStatus.stopped;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
+        _sessionController.status == SupervisorSessionStatus.expired ||
+        _sessionController.status == SupervisorSessionStatus.stopped;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         OutlinedButton.icon(
           key: const ValueKey('supervisor-session-start'),
-          onPressed: healthy
-              ? () => _sessionController.start(_sessionDuration)
-              : null,
-          icon: const Icon(Icons.timer_outlined),
+          onPressed: _sessionBusy ? null : _startSession,
+          icon: _sessionBusy
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.timer_outlined),
           label: Text(
             previousEnded
                 ? (fa
@@ -302,18 +239,102 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                       : 'Start 15 min read-only session'),
           ),
         ),
+        const SizedBox(height: 4),
         Text(
-          healthy
-              ? (fa
-                    ? 'شروع جلسه فقط با اقدام صریح شما انجام می‌شود.'
-                    : 'The session starts only after your explicit action.')
-              : (fa
-                    ? 'برای شروع جلسه، ابتدا اتصال سالم Supervisor لازم است.'
-                    : 'A healthy Supervisor connection is required before a session can start.'),
+          fa
+              ? 'شروع فقط با اقدام صریح شماست و یک session واقعی diagnostics.read روی سرور ثبت می‌شود.'
+              : 'Starts only on explicit action and registers a real diagnostics.read session on the server.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (_sessionError != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            fa
+                ? 'شروع جلسه ناموفق بود؛ سلامت سرور و تنظیمات را بررسی کن.'
+                : 'Session start failed; verify server health and setup.',
+            key: const ValueKey('supervisor-session-error'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
       ],
     );
+  }
+
+  Widget _buildConnectionActions(
+    BuildContext context,
+    SupervisorConnectionSnapshot snapshot, {
+    required bool fa,
+  }) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.icon(
+          onPressed: snapshot.status == SupervisorConnectionStatus.connecting
+              ? null
+              : () => _showSetupDialog(context, fa: fa),
+          icon: const Icon(Icons.settings_outlined),
+          label: Text(
+            snapshot.status == SupervisorConnectionStatus.notConfigured
+                ? (fa ? 'تنظیم اتصال' : 'Configure')
+                : (fa ? 'ویرایش اتصال' : 'Update setup'),
+          ),
+        ),
+        if (snapshot.status != SupervisorConnectionStatus.notConfigured)
+          OutlinedButton.icon(
+            onPressed: snapshot.status == SupervisorConnectionStatus.connecting
+                ? null
+                : () => unawaited(widget.controller.checkNow()),
+            icon: snapshot.status == SupervisorConnectionStatus.connecting
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.health_and_safety_outlined),
+            label: Text(fa ? 'تست سلامت' : 'Check health'),
+          ),
+        if (snapshot.status != SupervisorConnectionStatus.notConfigured)
+          TextButton.icon(
+            onPressed: snapshot.status == SupervisorConnectionStatus.connecting
+                ? null
+                : () => _confirmRemove(context, fa: fa),
+            icon: const Icon(Icons.link_off_rounded),
+            label: Text(fa ? 'حذف اتصال' : 'Remove'),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _startSession() async {
+    if (_sessionBusy ||
+        widget.controller.snapshot.status != SupervisorConnectionStatus.connected) {
+      return;
+    }
+    setState(() {
+      _sessionBusy = true;
+      _sessionError = null;
+    });
+    final started = await widget.controller.startSupportSession(_sessionDuration);
+    if (!mounted) return;
+    if (started) {
+      _sessionController.start(_sessionDuration);
+    }
+    setState(() {
+      _sessionBusy = false;
+      _sessionError = started ? null : 'support_session_start_failed';
+    });
+  }
+
+  Future<void> _stopSession() async {
+    if (_sessionBusy) return;
+    setState(() => _sessionBusy = true);
+    _sessionController.stop();
+    await widget.controller.stopSupportSession();
+    if (!mounted) return;
+    setState(() {
+      _sessionBusy = false;
+      _sessionError = null;
+    });
   }
 
   static String _formatRemaining(Duration value) {
@@ -409,11 +430,10 @@ class _SupervisorConnectionPanelState extends State<SupervisorConnectionPanel> {
                             saving = true;
                             validationMessage = null;
                           });
-                          final validation = await widget.controller
-                              .saveAndCheck(
-                                serverUrl: urlController.text,
-                                controlToken: tokenController.text,
-                              );
+                          final validation = await widget.controller.saveAndCheck(
+                            serverUrl: urlController.text,
+                            controlToken: tokenController.text,
+                          );
                           if (!dialogContext.mounted) return;
                           if (!validation.isValid) {
                             setDialogState(() {
