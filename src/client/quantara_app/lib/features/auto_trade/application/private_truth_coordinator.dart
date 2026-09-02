@@ -14,6 +14,24 @@ typedef PrivateTruthRestFetcher =
     );
 typedef PrivateTruthClock = DateTime Function();
 
+final class PrivateTruthRefreshResult {
+  const PrivateTruthRefreshResult({
+    required this.attempted,
+    required this.joinedInFlight,
+    required this.freshForEntry,
+    required this.reconciliationCycleId,
+    required this.completedAtUtc,
+    required this.resultCode,
+  });
+
+  final bool attempted;
+  final bool joinedInFlight;
+  final bool freshForEntry;
+  final int reconciliationCycleId;
+  final DateTime? completedAtUtc;
+  final String resultCode;
+}
+
 abstract final class PrivateTruthFillMatchPolicy {
   static String? _expectedPositionSide(String orderSide) {
     return switch (orderSide.trim().toUpperCase()) {
@@ -111,14 +129,21 @@ final class PrivateTruthCoordinator {
   Timer? _verificationTimer;
   bool _running = false;
   bool _socketActive = false;
-  bool _verifying = false;
+  Future<void>? _verificationInFlight;
   bool _disposed = false;
   int _verificationGeneration = 0;
+  int _lastVerificationCompletedGeneration = 0;
+  DateTime? _lastVerificationCompletedAtUtc;
+  String _lastVerificationResultCode = 'notRun';
 
   Stream<PrivateTruthProjection> get projections => _projections.stream;
   PrivateTruthProjection get current => _projection;
   AutoTradeAccountSnapshot? get latestRestSnapshot => _latestRestSnapshot;
   bool get isRunning => _running;
+  int get reconciliationCycleId => _lastVerificationCompletedGeneration;
+  DateTime? get reconciliationCompletedAtUtc =>
+      _lastVerificationCompletedAtUtc;
+  String get reconciliationResultCode => _lastVerificationResultCode;
 
   PrivateOrderExecutionObservation? orderExecutionObservation(String orderId) =>
       _orderExecutionTracker.observationFor(orderId);
@@ -259,6 +284,40 @@ final class PrivateTruthCoordinator {
     }
   }
 
+  Future<PrivateTruthRefreshResult> refreshForEntryAdmission() async {
+    final wasInFlight = _verificationInFlight != null;
+    final generationBefore = _verificationGeneration;
+    if (!_running) {
+      return PrivateTruthRefreshResult(
+        attempted: false,
+        joinedInFlight: false,
+        freshForEntry: false,
+        reconciliationCycleId: _lastVerificationCompletedGeneration,
+        completedAtUtc: _lastVerificationCompletedAtUtc,
+        resultCode: 'notRunning',
+      );
+    }
+    if (!_socketActive) {
+      return PrivateTruthRefreshResult(
+        attempted: false,
+        joinedInFlight: false,
+        freshForEntry: false,
+        reconciliationCycleId: _lastVerificationCompletedGeneration,
+        completedAtUtc: _lastVerificationCompletedAtUtc,
+        resultCode: 'socketInactive',
+      );
+    }
+    await _verifyRest();
+    return PrivateTruthRefreshResult(
+      attempted: wasInFlight || _verificationGeneration > generationBefore,
+      joinedInFlight: wasInFlight,
+      freshForEntry: canAdmitNewEntries,
+      reconciliationCycleId: _lastVerificationCompletedGeneration,
+      completedAtUtc: _lastVerificationCompletedAtUtc,
+      resultCode: _lastVerificationResultCode,
+    );
+  }
+
   Future<PrivateTruthFillConfirmation?> waitForFullFill({
     required String orderId,
     required String clientId,
@@ -288,10 +347,30 @@ final class PrivateTruthCoordinator {
   }
 
   Future<void> _verifyRest() async {
-    if (!_running || !_socketActive || _verifying) return;
+    if (!_running || !_socketActive) return;
+    final existing = _verificationInFlight;
+    if (existing != null) {
+      await existing;
+      return;
+    }
     final credentials = _credentials;
     if (credentials == null) return;
-    _verifying = true;
+    final completer = Completer<void>();
+    final inFlight = completer.future;
+    _verificationInFlight = inFlight;
+    try {
+      await _performRestVerification(credentials);
+    } finally {
+      if (!completer.isCompleted) completer.complete();
+      if (identical(_verificationInFlight, inFlight)) {
+        _verificationInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _performRestVerification(
+    BitunixApiCredentials credentials,
+  ) async {
     final generation = ++_verificationGeneration;
     recordRestRequests(restRequestsPerVerification);
     try {
@@ -301,8 +380,12 @@ final class PrivateTruthCoordinator {
           generation != _verificationGeneration) {
         return;
       }
+      final completedAt = _clock().toUtc();
       _latestRestSnapshot = snapshot;
-      _telemetry.recordReconciled(_clock().toUtc());
+      _lastVerificationCompletedGeneration = generation;
+      _lastVerificationCompletedAtUtc = completedAt;
+      _lastVerificationResultCode = 'fresh';
+      _telemetry.recordReconciled(completedAt);
       _setProjection(
         PrivateTruthReconciler.reconcileRestSnapshot(
           current: _projection,
@@ -311,15 +394,17 @@ final class PrivateTruthCoordinator {
       );
     } on Object {
       if (!_running || generation != _verificationGeneration) return;
+      final completedAt = _clock().toUtc();
+      _lastVerificationCompletedGeneration = generation;
+      _lastVerificationCompletedAtUtc = completedAt;
+      _lastVerificationResultCode = 'failed';
       _setProjection(
         PrivateTruthReducer.markStale(
           current: _projection,
-          nowUtc: _clock().toUtc(),
+          nowUtc: completedAt,
           reason: PrivateTruthLagReason.restVerificationStale,
         ),
       );
-    } finally {
-      if (generation == _verificationGeneration) _verifying = false;
     }
   }
 
