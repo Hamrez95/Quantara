@@ -158,7 +158,8 @@ final class LocalLiveObservabilityEvent {
     );
   }
 
-  static bool _present(String? value) => value != null && value.trim().isNotEmpty;
+  static bool _present(String? value) =>
+      value != null && value.trim().isNotEmpty;
 
   static String? _stringValue(Object? value) {
     final normalized = value?.toString().trim();
@@ -178,14 +179,18 @@ final class LocalLiveObservabilityEvent {
     };
   }
 
-  static Map<String, Object?> _boundedDetails(Map<String, Object?> source) {
+  static Map<String, Object?> _boundedDetails(
+    Map<String, Object?> source, {
+    int depth = 0,
+  }) {
+    if (depth >= 4) return const {'bounded': true};
     final result = <String, Object?>{};
     final entries = source.entries.toList(growable: false)
       ..sort((a, b) => a.key.compareTo(b.key));
     for (final entry in entries) {
       if (result.length >= maximumDetailEntries) break;
       if (_sensitiveKey(entry.key)) continue;
-      result[entry.key] = _boundedValue(entry.value, depth: 0);
+      result[entry.key] = _boundedValue(entry.value, depth: depth + 1);
     }
     return result;
   }
@@ -202,7 +207,7 @@ final class LocalLiveObservabilityEvent {
       final normalized = <String, Object?>{
         for (final entry in value.entries) entry.key.toString(): entry.value,
       };
-      return _boundedDetails(normalized);
+      return _boundedDetails(normalized, depth: depth);
     }
     if (value is Iterable<Object?>) {
       return value
@@ -244,7 +249,7 @@ abstract final class LocalLiveObservabilityExport {
     int maximumEvents = defaultMaximumEvents,
   }) {
     if (maximumEvents <= 0) {
-      throw const ArgumentError.value(
+      throw ArgumentError.value(
         maximumEvents,
         'maximumEvents',
         'must be positive',
@@ -297,7 +302,8 @@ abstract final class LocalLiveObservabilityExport {
     };
   }
 
-  static bool _present(String? value) => value != null && value.trim().isNotEmpty;
+  static bool _present(String? value) =>
+      value != null && value.trim().isNotEmpty;
 
   static void _increment(Map<String, int> target, String key) {
     target[key] = (target[key] ?? 0) + 1;
