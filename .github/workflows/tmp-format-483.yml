@@ -1,0 +1,41 @@
+name: Temporary format #483
+
+on:
+  push:
+    branches:
+      - fix/483-account-truth-coherence
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/483-account-truth-coherence
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Apply canonical Dart formatting and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src/client/quantara_app
+          dart format \
+            lib/features/auto_trade/application/local_live_portfolio_execution_guard.dart \
+            test/local_live_account_truth_coherence_test.dart
+          cd ../../..
+          git rm .github/workflows/tmp-format-483.yml
+          if git diff --quiet && git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/client/quantara_app/lib/features/auto_trade/application/local_live_portfolio_execution_guard.dart
+          git add src/client/quantara_app/test/local_live_account_truth_coherence_test.dart
+          git commit -m "style(#483): apply canonical Dart formatting"
+          git push origin HEAD:fix/483-account-truth-coherence
