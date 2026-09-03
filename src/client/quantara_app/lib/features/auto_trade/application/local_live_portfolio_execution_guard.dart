@@ -6,6 +6,8 @@ import '../domain/auto_trade_models.dart';
 import '../domain/local_live_portfolio_admission.dart';
 import '../domain/local_live_trade_models.dart';
 import '../domain/trading_pnl_projection.dart';
+import 'local_live_account_truth_coherence.dart';
+import 'local_live_admission_telemetry.dart';
 import 'local_live_capital_guardian_monitor.dart';
 import 'local_live_portfolio_risk_runtime.dart';
 
@@ -13,12 +15,19 @@ final class LocalLivePortfolioExecutionGuard {
   LocalLivePortfolioExecutionGuard({
     required double dailyRiskLimit,
     LocalLiveCapitalGuardianMonitor? capitalGuardianMonitor,
+    LocalLiveAdmissionTelemetryCollector? admissionTelemetry,
   }) : _runtime = LocalLivePortfolioRiskRuntime(dailyRiskLimit: dailyRiskLimit),
        _capitalGuardianMonitor =
-           capitalGuardianMonitor ?? LocalLiveCapitalGuardianMonitor();
+           capitalGuardianMonitor ?? LocalLiveCapitalGuardianMonitor(),
+       _admissionTelemetry =
+           admissionTelemetry ?? LocalLiveAdmissionTelemetryCollector();
 
   final LocalLivePortfolioRiskRuntime _runtime;
   final LocalLiveCapitalGuardianMonitor _capitalGuardianMonitor;
+  final LocalLiveAdmissionTelemetryCollector _admissionTelemetry;
+
+  List<LocalLiveAdmissionFreshnessEvent> get admissionFreshnessTelemetry =>
+      _admissionTelemetry.events;
 
   Future<PortfolioReservationOutcome> preview({
     required TradeIdea idea,
@@ -43,10 +52,13 @@ final class LocalLivePortfolioExecutionGuard {
       minimumQuantity: minimumQuantity,
       minimumNotional: minimumNotional,
     );
+    final resolved = _resolveAccount(account: account, now: now);
     final truth = LocalLivePortfolioAdmission.accountTruth(
-      account: account,
+      account: resolved.account,
       observedAt: now,
-      allOpenPositionsProtected: allOpenPositionsProtected,
+      allOpenPositionsProtected:
+          allOpenPositionsProtected &&
+          resolved.account.allOpenPositionsFullyProtected,
     );
     return _runtime.preview(candidate: candidate, account: truth, now: now);
   }
@@ -63,7 +75,7 @@ final class LocalLivePortfolioExecutionGuard {
     required AutoTradeAccountSnapshot account,
     required bool allOpenPositionsProtected,
     required DateTime now,
-  }) {
+  }) async {
     final candidate = LocalLivePortfolioAdmission.candidate(
       idea: idea,
       plannedQuantity: plannedQuantity,
@@ -74,13 +86,59 @@ final class LocalLivePortfolioExecutionGuard {
       minimumQuantity: minimumQuantity,
       minimumNotional: minimumNotional,
     );
+    final resolved = _resolveAccount(account: account, now: now);
     final truth = LocalLivePortfolioAdmission.accountTruth(
-      account: account,
+      account: resolved.account,
       observedAt: now,
-      allOpenPositionsProtected: allOpenPositionsProtected,
+      allOpenPositionsProtected:
+          allOpenPositionsProtected &&
+          resolved.account.allOpenPositionsFullyProtected,
     );
-    return _runtime.reserve(candidate: candidate, account: truth, now: now);
+    final outcome = await _runtime.reserve(
+      candidate: candidate,
+      account: truth,
+      now: now,
+    );
+    final staleRejected =
+        outcome.decision.reason == PortfolioEntryBlockReason.staleAccount;
+    if (resolved.refreshAttempted || staleRejected) {
+      final fallbackAsOf = account.syncedAt.toUtc();
+      final observedAt = now.toUtc();
+      final fallbackAge = observedAt.difference(fallbackAsOf);
+      await _admissionTelemetry.recordFreshnessDecision(
+        eventType: resolved.recoveredFromStaleFallback
+            ? 'stale_account_recovered'
+            : 'stale_account_rejected',
+        timestampUtc: observedAt,
+        idea: idea,
+        accountSnapshotAsOfUtc: fallbackAsOf,
+        reconciliationCompletedAtUtc: resolved.reconciliationCompletedAtUtc,
+        budgetGeneration: resolved.reconciliationGeneration,
+        budgetAsOfUtc: resolved.account.syncedAt,
+        age: fallbackAge,
+        threshold: LocalLivePortfolioAdmission.accountFreshnessWindow,
+        staleReasonCode: resolved.recoveredFromStaleFallback
+            ? 'scan_snapshot_stale_reconciled_truth_fresh'
+            : 'account_truth_outside_freshness_window',
+        refreshAttempt: resolved.refreshAttempted,
+        refreshResult: resolved.refreshResult,
+        finalAdmissionDecision:
+            outcome.decision.allowed && outcome.decision.liveExecutionAllowed
+            ? 'allowed'
+            : 'blocked:${outcome.decision.reason.name}',
+      );
+    }
+    return outcome;
   }
+
+  LocalLiveAccountTruthResolution _resolveAccount({
+    required AutoTradeAccountSnapshot account,
+    required DateTime now,
+  }) => LocalLiveAccountTruthCoherence.resolve(
+    fallback: account,
+    observedAtUtc: now,
+    freshnessWindow: LocalLivePortfolioAdmission.accountFreshnessWindow,
+  );
 
   Future<PortfolioRiskLedger> adoptVerifiedOpenPosition({
     required LocalLiveManagedPosition managed,
@@ -233,16 +291,19 @@ final class LocalLivePortfolioExecutionGuard {
     required bool allOpenPositionsProtected,
     required DateTime now,
   }) async {
+    final resolved = _resolveAccount(account: account, now: now);
     final riskSnapshot = await _runtime.snapshot(
       account: LocalLivePortfolioAdmission.accountTruth(
-        account: account,
+        account: resolved.account,
         observedAt: now,
-        allOpenPositionsProtected: allOpenPositionsProtected,
+        allOpenPositionsProtected:
+            allOpenPositionsProtected &&
+            resolved.account.allOpenPositionsFullyProtected,
       ),
       now: now,
     );
     final guardian = await _capitalGuardianMonitor.refresh(
-      accountEquity: account.estimatedEquity,
+      accountEquity: resolved.account.estimatedEquity,
       now: now,
     );
     return LocalLivePortfolioGuardSnapshot(
