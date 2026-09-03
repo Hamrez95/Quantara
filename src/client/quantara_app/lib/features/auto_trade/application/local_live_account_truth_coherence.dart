@@ -38,7 +38,8 @@ final class LocalLiveAccountTruthResolution {
 /// Only a successfully reconciled, entry-admissible private-truth projection is
 /// published. Reconnect/stale/ambiguous states invalidate the record. The
 /// portfolio layer may therefore refresh a stale scan-time account snapshot
-/// without issuing a second REST read or bypassing the freshness gate.
+/// without issuing a second REST read or bypassing the freshness gate. The
+/// handoff is intentionally process-local and is rebuilt after every restart.
 abstract final class LocalLiveAccountTruthCoherence {
   static LocalLiveAccountTruthRecord? _latest;
 
