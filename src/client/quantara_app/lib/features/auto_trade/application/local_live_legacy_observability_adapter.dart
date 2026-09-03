@@ -51,10 +51,7 @@ abstract final class LocalLiveLegacyObservabilityAdapter {
           safetyReasonCode: _isRejected(type)
               ? 'legacy.audit.$normalizedType'
               : null,
-          details: <String, Object?>{
-            'legacy': true,
-            'message': ?message,
-          },
+          details: <String, Object?>{'legacy': true, 'message': ?message},
         ),
       );
     }
