@@ -1,0 +1,30 @@
+name: Temporary Dart format inspection
+
+on:
+  push:
+    branches:
+      - feat/487-local-live-observability-contract
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Print exact formatter patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format lib/features/auto_trade/application/local_live_legacy_observability_adapter.dart
+          git diff --no-ext-diff -- lib/features/auto_trade/application/local_live_legacy_observability_adapter.dart
