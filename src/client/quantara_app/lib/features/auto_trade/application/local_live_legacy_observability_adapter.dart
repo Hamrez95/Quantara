@@ -35,6 +35,7 @@ abstract final class LocalLiveLegacyObservabilityAdapter {
           DateTime.tryParse(row['at']?.toString() ?? '')?.toUtc() ??
           fallbackTimestampUtc.toUtc();
       final normalizedType = _canonicalToken(type);
+      final message = _optional(row['message']);
       events.add(
         LocalLiveObservabilityEvent(
           timestampUtc: timestamp,
@@ -52,8 +53,7 @@ abstract final class LocalLiveLegacyObservabilityAdapter {
               : null,
           details: <String, Object?>{
             'legacy': true,
-            if (_optional(row['message']) case final message?)
-              'message': message,
+            if (message != null) 'message': message,
           },
         ),
       );
