@@ -94,8 +94,7 @@ void main() {
       at: DateTime.utc(2026, 9, 3),
       name: 'strategy.resolved',
       family: LocalLiveObservabilityFamily.strategy,
-    ).toJson()
-      ..['futureOptionalField'] = 'ignored-by-v1-reader';
+    ).toJson()..['futureOptionalField'] = 'ignored-by-v1-reader';
 
     final restored = LocalLiveObservabilityEvent.fromJson(json);
 
@@ -147,31 +146,32 @@ void main() {
     expect(observed.details['safe'], 'visible');
   });
 
-  test('diagnostic export includes bounded observability and redacts strings', () {
-    final observed = event(
-      at: DateTime.utc(2026, 9, 3),
-      name: 'trade.order.rejected',
-      family: LocalLiveObservabilityFamily.trade,
-      decision: 'rejected',
-      reasonCode: 'exchange.order_rejected',
-      details: const {
-        'exchangeMessage': 'authorization=Bearer token-value',
-      },
-    );
+  test(
+    'diagnostic export includes bounded observability and redacts strings',
+    () {
+      final observed = event(
+        at: DateTime.utc(2026, 9, 3),
+        name: 'trade.order.rejected',
+        family: LocalLiveObservabilityFamily.trade,
+        decision: 'rejected',
+        reasonCode: 'exchange.order_rejected',
+        details: const {'exchangeMessage': 'authorization=Bearer token-value'},
+      );
 
-    final encoded = LocalLiveDiagnosticBundle.encode(
-      generatedAt: DateTime.utc(2026, 9, 3, 11),
-      sections: const {
-        'status': {'state': 'running'},
-      },
-      observabilityEvents: [observed],
-    );
+      final encoded = LocalLiveDiagnosticBundle.encode(
+        generatedAt: DateTime.utc(2026, 9, 3, 11),
+        sections: const {
+          'status': {'state': 'running'},
+        },
+        observabilityEvents: [observed],
+      );
 
-    expect(encoded, contains('localLiveObservability'));
-    expect(encoded, contains('trade.order.rejected'));
-    expect(encoded, contains('exchange.order_rejected'));
-    expect(encoded, isNot(contains('token-value')));
-  });
+      expect(encoded, contains('localLiveObservability'));
+      expect(encoded, contains('trade.order.rejected'));
+      expect(encoded, contains('exchange.order_rejected'));
+      expect(encoded, isNot(contains('token-value')));
+    },
+  );
 
   test('normal diagnostic audit is projected with session and strategy', () {
     final bundle = LocalLiveDiagnosticBundle.build(
