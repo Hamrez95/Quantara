@@ -149,9 +149,7 @@ final class LocalLiveObservabilityEvent {
       reasonCode: _stringValue(json['reasonCode']),
       safetyGate: _stringValue(json['safetyGate']),
       safetyReasonCode: _stringValue(json['safetyReasonCode']),
-      accountFreshnessGeneration: _intValue(
-        json['accountFreshnessGeneration'],
-      ),
+      accountFreshnessGeneration: _intValue(json['accountFreshnessGeneration']),
       reconciliationGeneration: _intValue(json['reconciliationGeneration']),
       budgetGeneration: _intValue(json['budgetGeneration']),
       details: _objectMap(json['details']),
@@ -296,9 +294,7 @@ abstract final class LocalLiveObservabilityExport {
         'byDecision': _sortedCounter(byDecision),
         'byReasonCode': _sortedCounter(byReasonCode),
       },
-      'events': retained
-          .map((event) => event.toJson())
-          .toList(growable: false),
+      'events': retained.map((event) => event.toJson()).toList(growable: false),
     };
   }
 
