@@ -53,7 +53,7 @@ abstract final class LocalLiveLegacyObservabilityAdapter {
               : null,
           details: <String, Object?>{
             'legacy': true,
-            if (message != null) 'message': message,
+            'message': ?message,
           },
         ),
       );
