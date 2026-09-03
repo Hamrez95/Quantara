@@ -112,8 +112,7 @@ final class LocalLivePortfolioExecutionGuard {
         timestampUtc: observedAt,
         idea: idea,
         accountSnapshotAsOfUtc: fallbackAsOf,
-        reconciliationCompletedAtUtc:
-            resolved.reconciliationCompletedAtUtc,
+        reconciliationCompletedAtUtc: resolved.reconciliationCompletedAtUtc,
         budgetGeneration: resolved.reconciliationGeneration,
         budgetAsOfUtc: resolved.account.syncedAt,
         age: fallbackAge,

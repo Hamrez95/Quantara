@@ -49,7 +49,9 @@ void main() {
   tearDown(LocalLiveAccountTruthCoherence.resetForTest);
 
   test('fresh reconciliation replaces stale scan snapshot coherently', () {
-    final staleScanSnapshot = account(now.subtract(const Duration(seconds: 60)));
+    final staleScanSnapshot = account(
+      now.subtract(const Duration(seconds: 60)),
+    );
     final reconciled = account(now.subtract(const Duration(seconds: 5)));
     LocalLiveAccountTruthCoherence.publish(
       LocalLiveAccountTruthRecord(
@@ -78,7 +80,9 @@ void main() {
   });
 
   test('genuinely stale reconciled truth remains fail closed', () {
-    final staleScanSnapshot = account(now.subtract(const Duration(seconds: 70)));
+    final staleScanSnapshot = account(
+      now.subtract(const Duration(seconds: 70)),
+    );
     LocalLiveAccountTruthCoherence.publish(
       LocalLiveAccountTruthRecord(
         account: account(now.subtract(const Duration(seconds: 60))),
@@ -125,43 +129,53 @@ void main() {
     );
 
     expect(LocalLiveAccountTruthCoherence.latest!.reconciliationGeneration, 10);
-    expect(LocalLiveAccountTruthCoherence.latest!.account.syncedAt, newer.syncedAt);
-  });
-
-  test('stale admission telemetry is structured, bounded and secret-free', () async {
-    final collector = LocalLiveAdmissionTelemetryCollector(
-      maximumEvents: 1,
-      sessionIdProvider: () async => 'local-session-test',
+    expect(
+      LocalLiveAccountTruthCoherence.latest!.account.syncedAt,
+      newer.syncedAt,
     );
-
-    for (var i = 0; i < 2; i++) {
-      await collector.recordFreshnessDecision(
-        eventType: i == 0 ? 'stale_account_rejected' : 'stale_account_recovered',
-        timestampUtc: now,
-        idea: idea(),
-        accountSnapshotAsOfUtc: now.subtract(const Duration(seconds: 60)),
-        reconciliationCompletedAtUtc: now.subtract(const Duration(seconds: 2)),
-        budgetGeneration: 11,
-        budgetAsOfUtc: now.subtract(const Duration(seconds: 3)),
-        age: const Duration(seconds: 60),
-        threshold: LocalLivePortfolioAdmission.accountFreshnessWindow,
-        staleReasonCode: 'scan_snapshot_stale_reconciled_truth_fresh',
-        refreshAttempt: true,
-        refreshResult: 'coherent_reconciled_truth_used',
-        finalAdmissionDecision: 'allowed',
-      );
-    }
-
-    expect(collector.events, hasLength(1));
-    final json = collector.events.single.toJson();
-    expect(json['schemaVersion'], 1);
-    expect(json['session'], 'local-session-test');
-    expect(json['candidate'], 'btc-1h-structure-1.1');
-    expect(json['strategyId'], isNotEmpty);
-    expect((json['strategyHash'] as String).length, 64);
-    expect(json['budgetGeneration'], 11);
-    expect(json['thresholdMs'], 45000);
-    expect(json.keys, isNot(contains('apiKey')));
-    expect(json.keys, isNot(contains('secretKey')));
   });
+
+  test(
+    'stale admission telemetry is structured, bounded and secret-free',
+    () async {
+      final collector = LocalLiveAdmissionTelemetryCollector(
+        maximumEvents: 1,
+        sessionIdProvider: () async => 'local-session-test',
+      );
+
+      for (var i = 0; i < 2; i++) {
+        await collector.recordFreshnessDecision(
+          eventType: i == 0
+              ? 'stale_account_rejected'
+              : 'stale_account_recovered',
+          timestampUtc: now,
+          idea: idea(),
+          accountSnapshotAsOfUtc: now.subtract(const Duration(seconds: 60)),
+          reconciliationCompletedAtUtc: now.subtract(
+            const Duration(seconds: 2),
+          ),
+          budgetGeneration: 11,
+          budgetAsOfUtc: now.subtract(const Duration(seconds: 3)),
+          age: const Duration(seconds: 60),
+          threshold: LocalLivePortfolioAdmission.accountFreshnessWindow,
+          staleReasonCode: 'scan_snapshot_stale_reconciled_truth_fresh',
+          refreshAttempt: true,
+          refreshResult: 'coherent_reconciled_truth_used',
+          finalAdmissionDecision: 'allowed',
+        );
+      }
+
+      expect(collector.events, hasLength(1));
+      final json = collector.events.single.toJson();
+      expect(json['schemaVersion'], 1);
+      expect(json['session'], 'local-session-test');
+      expect(json['candidate'], 'btc-1h-structure-1.1');
+      expect(json['strategyId'], isNotEmpty);
+      expect((json['strategyHash'] as String).length, 64);
+      expect(json['budgetGeneration'], 11);
+      expect(json['thresholdMs'], 45000);
+      expect(json.keys, isNot(contains('apiKey')));
+      expect(json.keys, isNot(contains('secretKey')));
+    },
+  );
 }
