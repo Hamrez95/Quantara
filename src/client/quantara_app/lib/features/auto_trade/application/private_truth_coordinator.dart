@@ -2,8 +2,11 @@ import 'dart:async';
 
 import '../data/bitunix_private_websocket_client.dart';
 import '../domain/auto_trade_models.dart';
+import '../domain/local_live_portfolio_admission.dart';
 import '../domain/private_truth_models.dart';
+import 'local_live_account_truth_coherence.dart';
 import 'private_order_execution_tracker.dart';
+import 'private_truth_account_snapshot.dart';
 import 'private_truth_reconciler.dart';
 import 'private_truth_telemetry.dart';
 import 'private_truth_reducer.dart';
@@ -81,8 +84,9 @@ final class PrivateTruthCoordinator {
     this._socketClient,
     this._fetchRestSnapshot, {
     PrivateTruthClock? clock,
-    this.restVerificationInterval = const Duration(seconds: 60),
-    this.maximumRestVerificationAge = const Duration(seconds: 90),
+    this.restVerificationInterval = const Duration(seconds: 30),
+    this.maximumRestVerificationAge =
+        LocalLivePortfolioAdmission.accountFreshnessWindow,
     this.restRequestsPerVerification = 4,
   }) : _clock = clock ?? (() => DateTime.now().toUtc()),
        _projection = PrivateTruthProjection.empty(
@@ -105,6 +109,7 @@ final class PrivateTruthCoordinator {
 
   PrivateTruthProjection _projection;
   AutoTradeAccountSnapshot? _latestRestSnapshot;
+  DateTime? _lastReconciliationCompletedAtUtc;
   BitunixApiCredentials? _credentials;
   StreamSubscription<PrivateTruthEvent>? _eventSubscription;
   StreamSubscription<PrivateWsClientStatus>? _statusSubscription;
@@ -167,6 +172,7 @@ final class PrivateTruthCoordinator {
   Future<void> start(BitunixApiCredentials credentials) async {
     if (_disposed) throw StateError('Private truth coordinator is disposed.');
     if (_running) return;
+    LocalLiveAccountTruthCoherence.invalidate();
     _orderExecutionTracker.clear();
     _credentials = credentials;
     _running = true;
@@ -303,12 +309,12 @@ final class PrivateTruthCoordinator {
       }
       _latestRestSnapshot = snapshot;
       _telemetry.recordReconciled(_clock().toUtc());
-      _setProjection(
-        PrivateTruthReconciler.reconcileRestSnapshot(
-          current: _projection,
-          snapshot: snapshot,
-        ),
+      final reconciled = PrivateTruthReconciler.reconcileRestSnapshot(
+        current: _projection,
+        snapshot: snapshot,
       );
+      _lastReconciliationCompletedAtUtc = _clock().toUtc();
+      _setProjection(reconciled);
     } on Object {
       if (!_running || generation != _verificationGeneration) return;
       _setProjection(
@@ -325,6 +331,31 @@ final class PrivateTruthCoordinator {
 
   void _setProjection(PrivateTruthProjection next) {
     _projection = next;
+    final restBaseline = _latestRestSnapshot;
+    final reconciliationCompletedAt = _lastReconciliationCompletedAtUtc;
+    if (canAdmitNewEntries &&
+        restBaseline != null &&
+        reconciliationCompletedAt != null &&
+        next.reconciliationGeneration > 0) {
+      final view = PrivateTruthAccountSnapshotBuilder.build(
+        projection: next,
+        restBaseline: restBaseline,
+      );
+      if (view.completeForNewEntry) {
+        LocalLiveAccountTruthCoherence.publish(
+          LocalLiveAccountTruthRecord(
+            account: view.snapshot,
+            reconciliationGeneration: next.reconciliationGeneration,
+            reconciliationCompletedAtUtc: reconciliationCompletedAt,
+            publishedAtUtc: _clock().toUtc(),
+          ),
+        );
+      } else {
+        LocalLiveAccountTruthCoherence.invalidate();
+      }
+    } else {
+      LocalLiveAccountTruthCoherence.invalidate();
+    }
     _telemetry.recordEntryGate(
       canAdmit: canAdmitNewEntries,
       atUtc: _clock().toUtc(),
