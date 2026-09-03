@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'local_live_legacy_observability_adapter.dart';
 import 'local_live_observability.dart';
 
 /// Builds a support bundle from non-secret Local Live state.
@@ -18,12 +19,18 @@ abstract final class LocalLiveDiagnosticBundle {
     int observabilityMaximumEvents =
         LocalLiveObservabilityExport.defaultMaximumEvents,
   }) {
-    final boundedEvents = observabilityEvents.toList(growable: false);
+    final combinedEvents = <LocalLiveObservabilityEvent>[
+      ...LocalLiveLegacyObservabilityAdapter.fromDiagnosticSections(
+        sections,
+        fallbackTimestampUtc: generatedAt,
+      ),
+      ...observabilityEvents,
+    ];
     final exportedSections = <String, Object?>{
       ...sections,
-      if (boundedEvents.isNotEmpty)
+      if (combinedEvents.isNotEmpty)
         'localLiveObservability': LocalLiveObservabilityExport.build(
-          boundedEvents,
+          combinedEvents,
           maximumEvents: observabilityMaximumEvents,
         ),
     };
