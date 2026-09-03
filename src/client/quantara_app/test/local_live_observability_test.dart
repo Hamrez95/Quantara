@@ -172,4 +172,58 @@ void main() {
     expect(encoded, contains('exchange.order_rejected'));
     expect(encoded, isNot(contains('token-value')));
   });
+
+  test('normal diagnostic audit is projected with session and strategy', () {
+    final bundle = LocalLiveDiagnosticBundle.build(
+      generatedAt: DateTime.utc(2026, 9, 3, 12),
+      sections: const <String, Object?>{
+        'analysisRuntime': <String, Object?>{
+          'primaryStrategy': 'trendPullback',
+        },
+        'persistedLocalServiceState': <String, Object?>{
+          'sessionId': 'local-session-42',
+        },
+        'auditEvents': <Object?>[
+          <String, Object?>{
+            'at': '2026-09-03T11:59:00.000Z',
+            'type': 'private_state_block',
+            'message': 'authorization=Bearer token-value',
+            'symbol': 'BTCUSDT',
+          },
+        ],
+      },
+    );
+    final sections = bundle['sections']! as Map<String, Object?>;
+    final observability =
+        sections['localLiveObservability']! as Map<String, Object?>;
+    final rows = observability['events']! as List<Object?>;
+    final row = rows.single as Map<String, Object?>;
+
+    expect(row['sessionId'], 'local-session-42');
+    expect(row['strategyId'], 'trendPullback');
+    expect(row['decision'], 'rejected');
+    expect(row['safetyGate'], 'account_truth');
+    expect(row['reasonCode'], 'legacy.audit.private_state_block');
+
+    final encoded = LocalLiveDiagnosticBundle.encode(
+      generatedAt: DateTime.utc(2026, 9, 3, 12),
+      sections: const <String, Object?>{
+        'analysisRuntime': <String, Object?>{
+          'primaryStrategy': 'trendPullback',
+        },
+        'persistedLocalServiceState': <String, Object?>{
+          'sessionId': 'local-session-42',
+        },
+        'auditEvents': <Object?>[
+          <String, Object?>{
+            'at': '2026-09-03T11:59:00.000Z',
+            'type': 'private_state_block',
+            'message': 'authorization=Bearer token-value',
+            'symbol': 'BTCUSDT',
+          },
+        ],
+      },
+    );
+    expect(encoded, isNot(contains('token-value')));
+  });
 }
