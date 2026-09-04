@@ -118,7 +118,9 @@ void main() {
     expect(find.textContaining('structure_zones v1.0.0'), findsWidgets);
   });
 
-  testWidgets('cancel leaves the exact robot binding unchanged', (tester) async {
+  testWidgets('cancel leaves the exact robot binding unchanged', (
+    tester,
+  ) async {
     final strategy = module();
     final snapshot = strategy.snapshot(const <String, Object?>{
       'cadence': 'balanced',
