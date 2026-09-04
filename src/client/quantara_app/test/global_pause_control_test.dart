@@ -10,20 +10,24 @@ void main() {
     VoidCallback? onResume,
     bool pauseFullyWhenFlat = false,
     ValueChanged<bool>? onPauseFullyWhenFlatChanged,
-  }) => MaterialApp(
-    home: Scaffold(
-      body: GlobalPauseControl(
-        mode: mode,
-        persian: false,
-        onPauseRequested: onPause,
-        onResumeRequested: onResume,
-        pauseFullyWhenFlat: pauseFullyWhenFlat,
-        onPauseFullyWhenFlatChanged: onPauseFullyWhenFlatChanged,
+  }) {
+    return MaterialApp(
+      home: Scaffold(
+        body: GlobalPauseControl(
+          mode: mode,
+          persian: false,
+          onPauseRequested: onPause,
+          onResumeRequested: onResume,
+          pauseFullyWhenFlat: pauseFullyWhenFlat,
+          onPauseFullyWhenFlatChanged: onPauseFullyWhenFlatChanged,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
-  testWidgets('running state exposes pause but never an arm action', (tester) async {
+  testWidgets('running state exposes pause but never an arm action', (
+    tester,
+  ) async {
     var pauses = 0;
     await tester.pumpWidget(
       app(
@@ -38,25 +42,28 @@ void main() {
     expect(pauses, 1);
   });
 
-  testWidgets('safe pause explains minimum management and supports flat intent', (
+  testWidgets(
+    'safe pause explains minimum management and supports flat intent',
+    (tester) async {
+      bool? requested;
+      await tester.pumpWidget(
+        app(
+          mode: GlobalPauseRuntimeMode.safePausedManagingExisting,
+          onResume: () {},
+          onPauseFullyWhenFlatChanged: (value) => requested = value,
+        ),
+      );
+
+      expect(find.textContaining('minimum private monitoring'), findsOneWidget);
+      expect(find.text('Pause fully when flat'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('pause-fully-when-flat')));
+      expect(requested, isTrue);
+    },
+  );
+
+  testWidgets('offline pause only delegates explicit resume request', (
     tester,
   ) async {
-    bool? requested;
-    await tester.pumpWidget(
-      app(
-        mode: GlobalPauseRuntimeMode.safePausedManagingExisting,
-        onResume: () {},
-        onPauseFullyWhenFlatChanged: (value) => requested = value,
-      ),
-    );
-
-    expect(find.textContaining('minimum private monitoring'), findsOneWidget);
-    expect(find.text('Pause fully when flat'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('pause-fully-when-flat')));
-    expect(requested, isTrue);
-  });
-
-  testWidgets('offline pause only delegates explicit resume request', (tester) async {
     var resumes = 0;
     await tester.pumpWidget(
       app(
@@ -82,9 +89,7 @@ void main() {
       ),
     );
 
-    final button = tester.widget<FilledButton>(
-      find.byType(FilledButton),
-    );
+    final button = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(button.onPressed, isNull);
     expect(find.text('Validating…'), findsOneWidget);
     expect(resumes, 0);
