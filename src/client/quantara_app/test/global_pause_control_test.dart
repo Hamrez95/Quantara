@@ -58,7 +58,9 @@ void main() {
         ),
       );
 
-      final monitoringText = find.textContaining('minimum private monitoring');
+      final monitoringText = find.textContaining(
+        'minimum private monitoring',
+      );
       final flatSwitch = find.byKey(const ValueKey('pause-fully-when-flat'));
       expect(monitoringText, findsOneWidget);
       expect(find.text('Pause fully when flat'), findsOneWidget);
@@ -81,7 +83,9 @@ void main() {
       final primaryAction = find.byKey(
         const ValueKey('global-pause-primary-action'),
       );
-      final automaticResume = find.textContaining('Resume is never automatic');
+      final automaticResume = find.textContaining(
+        'Resume is never automatic',
+      );
       expect(find.text('Resume'), findsOneWidget);
       expect(automaticResume, findsOneWidget);
       await tester.tap(primaryAction);
