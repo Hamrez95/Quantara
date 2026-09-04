@@ -48,9 +48,7 @@ void main() {
 
   test('resume fails closed when live protection is uncertain', () {
     expect(
-      policy.beginResume(
-        evidence(positions: 1, protectionVerified: false),
-      ),
+      policy.beginResume(evidence(positions: 1, protectionVerified: false)),
       isNull,
     );
   });
