@@ -174,12 +174,15 @@ void main() {
     },
   );
 
-  test('normal diagnostic audit is projected with session and strategy', () {
+  test('normal diagnostic audit includes exact registry strategy snapshot', () {
     final bundle = LocalLiveDiagnosticBundle.build(
       generatedAt: DateTime.utc(2026, 9, 3, 12),
       sections: const <String, Object?>{
         'analysisRuntime': <String, Object?>{
           'primaryStrategy': 'trendPullback',
+          'cadence': 'balanced',
+          'selectedSymbol': 'BTCUSDT',
+          'selectedTimeframe': '15m',
         },
         'persistedLocalServiceState': <String, Object?>{
           'sessionId': 'local-session-42',
@@ -201,7 +204,11 @@ void main() {
     final row = rows.single as Map<String, Object?>;
 
     expect(row['sessionId'], 'local-session-42');
-    expect(row['strategyId'], 'trendPullback');
+    expect(row['strategyId'], 'trend_pullback');
+    expect(row['strategyVersion'], '1.0.0');
+    expect(row['parameterSchemaVersion'], 1);
+    expect(row['snapshotHash'], isNotEmpty);
+    expect(row['managementPolicyVersion'], 'trend-pullback-management/1.0');
     expect(row['decision'], 'rejected');
     expect(row['safetyGate'], 'account_truth');
     expect(row['reasonCode'], 'legacy.audit.private_state_block');
@@ -211,6 +218,9 @@ void main() {
       sections: const <String, Object?>{
         'analysisRuntime': <String, Object?>{
           'primaryStrategy': 'trendPullback',
+          'cadence': 'balanced',
+          'selectedSymbol': 'BTCUSDT',
+          'selectedTimeframe': '15m',
         },
         'persistedLocalServiceState': <String, Object?>{
           'sessionId': 'local-session-42',
