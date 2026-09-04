@@ -130,7 +130,7 @@ void main() {
     final details = <String, Object?>{
       'apiKey': 'top-secret-key',
       'Authorization': 'Bearer top-secret-token',
-      'safe': 'visible',
+      '0safe': 'visible',
       for (var index = 0; index < 40; index++) 'field$index': index,
     };
     final observed = event(
@@ -143,7 +143,8 @@ void main() {
     expect(observed.details.length, lessThanOrEqualTo(32));
     expect(observed.details, isNot(contains('apiKey')));
     expect(observed.details, isNot(contains('Authorization')));
-    expect(observed.details['safe'], 'visible');
+    expect(observed.details['0safe'], 'visible');
+    expect(observed.details, isNot(contains('field9')));
   });
 
   test(
