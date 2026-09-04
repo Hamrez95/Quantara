@@ -111,47 +111,50 @@ void main() {
     );
   });
 
-  test('run carries exact immutable provenance and grants no live authority', () {
-    final parameters = <String, Object?>{'cadence': 'balanced'};
-    final identity = StrategyEvaluationIdentity(
-      strategyId: 'structure_zones',
-      strategyVersion: '1.0.0',
-      implementationVersion: 'professional-strategy/1.0',
-      managementPolicyVersion: 'structure-zones-management/1.0',
-      parameterSchemaVersion: 1,
-      normalizedParameters: parameters,
-      snapshotHash: 'snapshot-123',
-    );
-    parameters['cadence'] = 'fast';
+  test(
+    'run carries exact immutable provenance and grants no live authority',
+    () {
+      final parameters = <String, Object?>{'cadence': 'balanced'};
+      final identity = StrategyEvaluationIdentity(
+        strategyId: 'structure_zones',
+        strategyVersion: '1.0.0',
+        implementationVersion: 'professional-strategy/1.0',
+        managementPolicyVersion: 'structure-zones-management/1.0',
+        parameterSchemaVersion: 1,
+        normalizedParameters: parameters,
+        snapshotHash: 'snapshot-123',
+      );
+      parameters['cadence'] = 'fast';
 
-    final run = StrategyEvaluationRun(
-      runId: 'evaluation-43',
-      setupId: 'setup-43',
-      identity: identity,
-      symbol: 'BTCUSDT',
-      market: 'crypto-perpetual',
-      timeframe: '15m',
-      rangeStartUtc: DateTime.utc(2026, 1, 1),
-      rangeEndUtc: DateTime.utc(2026, 2, 1),
-      createdAtUtc: DateTime.utc(2026, 2, 2),
-      costModel: const StrategyEvaluationCostModel(
-        version: 'bitunix-costs/1',
-        takerFeeBps: 6,
-        slippageBps: 2,
-      ),
-      deterministicSeed: 43,
-      trades: <StrategyEvaluationTrade>[
-        trade(id: 'a', grossPnl: 3, cost: 1, day: 1),
-      ],
-    );
+      final run = StrategyEvaluationRun(
+        runId: 'evaluation-43',
+        setupId: 'setup-43',
+        identity: identity,
+        symbol: 'BTCUSDT',
+        market: 'crypto-perpetual',
+        timeframe: '15m',
+        rangeStartUtc: DateTime.utc(2026, 1, 1),
+        rangeEndUtc: DateTime.utc(2026, 2, 1),
+        createdAtUtc: DateTime.utc(2026, 2, 2),
+        costModel: const StrategyEvaluationCostModel(
+          version: 'bitunix-costs/1',
+          takerFeeBps: 6,
+          slippageBps: 2,
+        ),
+        deterministicSeed: 43,
+        trades: <StrategyEvaluationTrade>[
+          trade(id: 'a', grossPnl: 3, cost: 1, day: 1),
+        ],
+      );
 
-    expect(identity.normalizedParameters['cadence'], 'balanced');
-    expect(
-      () => identity.normalizedParameters['cadence'] = 'mutated',
-      throwsUnsupportedError,
-    );
-    expect(run.toJson()['runId'], 'evaluation-43');
-    expect(run.toJson()['scorecard'], run.scorecard.toJson());
-    expect(run.grantsLocalLiveAuthority, isFalse);
-  });
+      expect(identity.normalizedParameters['cadence'], 'balanced');
+      expect(
+        () => identity.normalizedParameters['cadence'] = 'mutated',
+        throwsUnsupportedError,
+      );
+      expect(run.toJson()['runId'], 'evaluation-43');
+      expect(run.toJson()['scorecard'], run.scorecard.toJson());
+      expect(run.grantsLocalLiveAuthority, isFalse);
+    },
+  );
 }
