@@ -5,8 +5,8 @@ Quantara releases are immutable. Do not mutate or overwrite a published build.
 ## Before promotion
 
 - Keep the previously published release/tag and its manifest available.
-- Confirm the candidate has green repository, Flutter/Android upgrade and Windows build evidence for the exact source SHA.
-- Confirm release notes state known limitations and do not claim profit or live-safety evidence that was not observed.
+- Confirm repository and Flutter/Android evidence certifies the exact promotion source SHA; Windows evidence may certify an unchanged relevant ancestor only when the readiness workflow proves no Windows-relevant path changed.
+- Confirm the versioned stability report and release notes state known limitations and do not claim profit or live-safety evidence that was not observed.
 - Keep Local Live fail-closed: stale/unknown account, reconciliation, protection, strategy identity or pause persistence must block new risk.
 
 ## If a release is unsafe before publication
