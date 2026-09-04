@@ -17,20 +17,25 @@ void main() {
   test('new manifest accepts only its exact immutable strategy snapshot', () {
     final accepted = _idea(snapshotHash: 'snapshot-a');
     final rejected = _idea(snapshotHash: 'snapshot-b');
-    final manifest = _manifest(strategies: [tradingLabStrategyIdentityKey(accepted)]);
+    final manifest = _manifest(
+      strategies: [tradingLabStrategyIdentityKey(accepted)],
+    );
 
     expect(tradingLabManifestAcceptsIdea(manifest, accepted), isTrue);
     expect(tradingLabManifestAcceptsIdea(manifest, rejected), isFalse);
   });
 
-  test('legacy manifest remains readable without inventing registry identity', () {
-    final idea = _idea(snapshotHash: 'snapshot-a');
-    final manifest = _manifest(
-      strategies: [tradingLabLegacyStrategyIdentityKey(idea)],
-    );
+  test(
+    'legacy manifest remains readable without inventing registry identity',
+    () {
+      final idea = _idea(snapshotHash: 'snapshot-a');
+      final manifest = _manifest(
+        strategies: [tradingLabLegacyStrategyIdentityKey(idea)],
+      );
 
-    expect(tradingLabManifestAcceptsIdea(manifest, idea), isTrue);
-  });
+      expect(tradingLabManifestAcceptsIdea(manifest, idea), isTrue);
+    },
+  );
 }
 
 TradeIdea _idea({required String snapshotHash}) => TradeIdea(

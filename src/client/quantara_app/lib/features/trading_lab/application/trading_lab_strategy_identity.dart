@@ -45,7 +45,9 @@ bool tradingLabManifestAcceptsIdea(
   // Historical manifests created before immutable registry attribution stored
   // only the legacy strategy/version pair. Keep them replayable without
   // upgrading their provenance or granting additional execution authority.
-  return manifest.strategies.contains(tradingLabLegacyStrategyIdentityKey(idea));
+  return manifest.strategies.contains(
+    tradingLabLegacyStrategyIdentityKey(idea),
+  );
 }
 
 bool getTradingLabIdeaHasImmutableRegistryIdentity(TradeIdea idea) =>
