@@ -33,6 +33,18 @@ final class GlobalPauseControl extends StatelessWidget {
 
   String _t(String fa, String en) => persian ? fa : en;
 
+  VoidCallback? get _primaryAction {
+    if (_isResuming) return null;
+    if (_isRunning) return onPauseRequested;
+    return onResumeRequested;
+  }
+
+  String get _primaryLabel {
+    if (_isRunning) return _t('توقف سراسری', 'Global Pause');
+    if (_isResuming) return _t('در حال بررسی…', 'Validating…');
+    return _t('ادامه', 'Resume');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -63,19 +75,9 @@ final class GlobalPauseControl extends StatelessWidget {
                   ),
                   FilledButton.icon(
                     key: const ValueKey('global-pause-primary-action'),
-                    onPressed: _isResuming
-                        ? null
-                        : _isRunning
-                        ? onPauseRequested
-                        : onResumeRequested,
+                    onPressed: _primaryAction,
                     icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow),
-                    label: Text(
-                      _isRunning
-                          ? _t('توقف سراسری', 'Global Pause')
-                          : _isResuming
-                          ? _t('در حال بررسی…', 'Validating…')
-                          : _t('ادامه', 'Resume'),
-                    ),
+                    label: Text(_primaryLabel),
                   ),
                 ],
               ),
@@ -89,7 +91,10 @@ final class GlobalPauseControl extends StatelessWidget {
                   value: pauseFullyWhenFlat,
                   onChanged: onPauseFullyWhenFlatChanged,
                   title: Text(
-                    _t('توقف کامل پس از بسته‌شدن پوزیشن‌ها', 'Pause fully when flat'),
+                    _t(
+                      'توقف کامل پس از بسته‌شدن پوزیشن‌ها',
+                      'Pause fully when flat',
+                    ),
                   ),
                   subtitle: Text(
                     _t(
@@ -118,12 +123,18 @@ final class GlobalPauseControl extends StatelessWidget {
 
   String get _statusTitle => switch (mode) {
     GlobalPauseRuntimeMode.running => _t('ربات فعال است', 'Robot is running'),
-    GlobalPauseRuntimeMode.safePausedManagingExisting =>
-      _t('توقف امن — مدیریت پوزیشن‌های موجود', 'Safe Pause — managing existing exposure'),
-    GlobalPauseRuntimeMode.pausedOffline =>
-      _t('توقف کامل — آفلاین', 'Fully paused — offline'),
-    GlobalPauseRuntimeMode.resuming =>
-      _t('در حال اعتبارسنجی ادامه کار', 'Validating resume'),
+    GlobalPauseRuntimeMode.safePausedManagingExisting => _t(
+      'توقف امن — مدیریت پوزیشن‌های موجود',
+      'Safe Pause — managing existing exposure',
+    ),
+    GlobalPauseRuntimeMode.pausedOffline => _t(
+      'توقف کامل — آفلاین',
+      'Fully paused — offline',
+    ),
+    GlobalPauseRuntimeMode.resuming => _t(
+      'در حال اعتبارسنجی ادامه کار',
+      'Validating resume',
+    ),
   };
 
   String get _statusBody => switch (mode) {
