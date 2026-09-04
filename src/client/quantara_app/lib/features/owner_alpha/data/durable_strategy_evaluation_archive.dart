@@ -219,8 +219,9 @@ final class DurableStrategyEvaluationArchive {
 
   Future<Map<String, Object?>?> _loadDecoded() async {
     final raw = await keyValueStore.read(storageKey);
-    if (raw == null || raw.trim().isEmpty)
+    if (raw == null || raw.trim().isEmpty) {
       return <String, Object?>{'schemaVersion': 1, 'records': <Object?>[]};
+    }
     try {
       final value = jsonDecode(raw);
       if (value is! Map<Object?, Object?>) return null;
