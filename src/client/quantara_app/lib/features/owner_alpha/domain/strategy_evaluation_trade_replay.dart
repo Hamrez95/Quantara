@@ -60,7 +60,8 @@ final class StrategyEvaluationTradeReplay {
     required this.timeframe,
     required Iterable<StrategyEvaluationReplayEvent> events,
   }) : events = List<StrategyEvaluationReplayEvent>.unmodifiable(
-         events.toList()..sort((a, b) => a.timestampUtc.compareTo(b.timestampUtc)),
+         events.toList()
+           ..sort((a, b) => a.timestampUtc.compareTo(b.timestampUtc)),
        ) {
     _requireText(evaluationRunId, 'evaluationRunId');
     _requireText(tradeId, 'tradeId');
