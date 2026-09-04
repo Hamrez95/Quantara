@@ -11,6 +11,7 @@ import '../domain/trading_lab_real_account_evidence.dart';
 import 'trading_lab_benchmark.dart';
 import 'trading_lab_paper_broker.dart';
 import 'trading_lab_shadow_evidence.dart';
+import 'trading_lab_storage.dart';
 import 'trading_lab_strategy_identity.dart';
 import 'trading_lab_zip_bundle.dart';
 
@@ -214,6 +215,21 @@ final class TradingLabController extends ChangeNotifier {
     await _store.save(current);
     _history = await _store.loadHistory();
     if (!_disposed) notifyListeners();
+  }
+
+  Future<TradingLabRun> reclaimHeavyEvidence(TradingLabRun target) async {
+    final compacted = TradingLabStorage.compactHeavyEvidence(target);
+    final isCurrent = _run?.manifest.runId == target.manifest.runId;
+    if (isCurrent) {
+      await _store.save(compacted);
+      _run = compacted;
+    } else {
+      await _store.replaceHistory(compacted);
+    }
+    _history = await _store.loadHistory();
+    _error = null;
+    if (!_disposed) notifyListeners();
+    return compacted;
   }
 
   Future<void> consumeLatestMarketSnapshot() async {
