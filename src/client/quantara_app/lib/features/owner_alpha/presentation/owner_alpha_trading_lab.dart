@@ -58,6 +58,39 @@ class _TradingLabViewState extends State<_TradingLabView> {
   }
 
   Future<void> _start() async {
+    final evaluationIdea = widget.controller.defaultEvaluationIdea;
+    if (evaluationIdea == null) {
+      setState(
+        () => _formError = _fa
+            ? 'برای شروع ارزیابی، ابتدا یک ستاپ با Strategy Snapshot معتبر انتخاب کن.'
+            : 'Select a setup with a valid immutable strategy snapshot before starting an evaluation.',
+      );
+      return;
+    }
+    if (widget.controller.run != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(_fa ? 'شروع ارزیابی جدید؟' : 'Start new evaluation?'),
+          content: Text(
+            _fa
+                ? 'ارزیابی قبلی در تاریخچه باقی می‌ماند و یک Run جدید با سرمایه شروع و Strategy Snapshot فعلی ساخته می‌شود.'
+                : 'The previous evaluation stays archived. A new run will use the configured starting capital and the currently selected immutable strategy snapshot.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(_fa ? 'انصراف' : 'Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(_fa ? 'شروع جدید' : 'Start new'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     final equity = double.tryParse(_equity.text.trim());
     final risk = double.tryParse(_risk.text.trim());
     final leverage = int.tryParse(_leverage.text.trim());
@@ -112,6 +145,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
         maxEstimatedCostToRiskPercent: maxCostToRisk,
         scannerIntervalSeconds: scannerInterval,
         executionModel: _executionModel,
+        evaluationIdea: evaluationIdea,
         experimentTag: _experimentTag.text.trim(),
         notes: _notes.text.trim(),
       );
@@ -244,6 +278,7 @@ class _TradingLabViewState extends State<_TradingLabView> {
   }
 
   Widget _buildNewExperiment(TradingLabRun? previous) {
+    final evaluationIdea = widget.controller.defaultEvaluationIdea;
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,6 +294,47 @@ class _TradingLabViewState extends State<_TradingLabView> {
             _fa
                 ? 'سرمایه مجازی را مشخص کن. بازار و Strategy واقعی Quantara خوانده می‌شود، اما این بخش هیچ مسیر ارسال سفارش واقعی ندارد.'
                 : 'Choose virtual capital. Quantara reads the real market/strategy pipeline, but this surface has no real-order execution path.',
+          ),
+          const SizedBox(height: 12),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.secondaryContainer.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: evaluationIdea == null
+                  ? Text(
+                      _fa
+                          ? 'ستاپ قابل ارزیابی با شناسه immutable در Snapshot فعلی پیدا نشد.'
+                          : 'No setup with immutable strategy identity is available in the current snapshot.',
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _fa
+                              ? 'Strategy Snapshot انتخاب‌شده'
+                              : 'Selected strategy snapshot',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${evaluationIdea.symbol} · ${evaluationIdea.timeframe} · ${evaluationIdea.registryStrategyId}@${evaluationIdea.registryStrategyVersion}',
+                          textDirection: TextDirection.ltr,
+                        ),
+                        Text(
+                          'schema ${evaluationIdea.strategyParameterSchemaVersion} · ${evaluationIdea.strategySnapshotHash}',
+                          textDirection: TextDirection.ltr,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+            ),
           ),
           const SizedBox(height: 16),
           LayoutBuilder(
@@ -442,12 +518,12 @@ class _TradingLabViewState extends State<_TradingLabView> {
           ],
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _busy ? null : _start,
+            onPressed: _busy || evaluationIdea == null ? null : _start,
             icon: const Icon(Icons.science_rounded),
             label: Text(
               _fa
-                  ? 'شروع آزمایش با بازار واقعی'
-                  : 'Start real-market experiment',
+                  ? 'شروع ارزیابی این Strategy Snapshot'
+                  : 'Start this strategy snapshot evaluation',
             ),
           ),
         ],

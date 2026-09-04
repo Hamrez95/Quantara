@@ -739,8 +739,8 @@ const _destinations = [
   _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];
-const _mobileDestinationIndexes = [0, 1, 5, 7];
+const _desktopDestinationIndexes = [0, 1, 2, 3, 4, 5, 6, 7];
+const _mobileDestinationIndexes = [0, 1, 4, 5, 7];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
   1 => strings.setups,
