@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import '../data/durable_global_pause_runtime_store.dart';
 import 'global_pause_observability.dart';
 import 'global_pause_runtime_policy.dart';
@@ -103,6 +101,15 @@ final class GlobalPauseRuntimeCoordinator {
           updatedAtUtc: clock().toUtc(),
         );
         await _record(
+          GlobalPauseEventType.entered,
+          previous: previous,
+          next: next,
+          evidence: evidence,
+          reasonCode: next == GlobalPauseRuntimeMode.pausedOffline
+              ? 'flat_full_offline'
+              : 'live_management_required',
+        );
+        await _record(
           next == GlobalPauseRuntimeMode.pausedOffline
               ? GlobalPauseEventType.fullOfflineEntered
               : GlobalPauseEventType.deferredForLiveManagement,
@@ -123,11 +130,19 @@ final class GlobalPauseRuntimeCoordinator {
       pauseFullyWhenFlat: enabled,
       updatedAtUtc: clock().toUtc(),
     );
-    if (enabled) await reconcilePausedExposure();
+    if (!enabled ||
+        _mode != GlobalPauseRuntimeMode.safePausedManagingExisting) {
+      return;
+    }
+    await _reconcilePausedExposureLocked();
   });
 
   Future<void> reconcilePausedExposure() => _serialize(() async {
     _requireInitialized();
+    await _reconcilePausedExposureLocked();
+  });
+
+  Future<void> _reconcilePausedExposureLocked() async {
     if (_mode != GlobalPauseRuntimeMode.safePausedManagingExisting ||
         !_pauseFullyWhenFlat) {
       return;
@@ -150,7 +165,7 @@ final class GlobalPauseRuntimeCoordinator {
       evidence: evidence,
       reasonCode: 'became_flat',
     );
-  });
+  }
 
   /// Explicit resume only. Fresh authoritative reconciliation is obtained
   /// first; any failure leaves the runtime paused. This never arms Guarded Auto.
