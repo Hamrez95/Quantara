@@ -53,9 +53,7 @@ final class ArchivedStrategyEvaluationRun {
     );
   }
 
-  static ArchivedStrategyEvaluationRun? tryFromJson(
-    Map<String, Object?> json,
-  ) {
+  static ArchivedStrategyEvaluationRun? tryFromJson(Map<String, Object?> json) {
     try {
       final payloadValue = json['payload'];
       if (payloadValue is! Map<Object?, Object?>) return null;
@@ -221,10 +219,8 @@ final class DurableStrategyEvaluationArchive {
 
   Future<Map<String, Object?>?> _loadDecoded() async {
     final raw = await keyValueStore.read(storageKey);
-    if (raw == null || raw.trim().isEmpty) return <String, Object?>{
-      'schemaVersion': 1,
-      'records': <Object?>[],
-    };
+    if (raw == null || raw.trim().isEmpty)
+      return <String, Object?>{'schemaVersion': 1, 'records': <Object?>[]};
     try {
       final value = jsonDecode(raw);
       if (value is! Map<Object?, Object?>) return null;
