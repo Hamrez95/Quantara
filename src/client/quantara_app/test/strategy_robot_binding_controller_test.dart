@@ -59,35 +59,38 @@ void main() {
     marketRegime: MarketRegime.range,
   );
 
-  test('Use in Robot persists exact identity but grants no execution state', () async {
-    final strategy = module();
-    final snapshot = strategy.snapshot(const <String, Object?>{
-      'cadence': 'balanced',
-    })!;
-    final memory = _MemoryKeyValueStore();
-    final controller = StrategyRobotBindingController(
-      store: DurableStrategyRobotBindingStore(keyValueStore: memory),
-      registry: StrategyRegistry(<StrategyModule>[strategy]),
-    );
+  test(
+    'Use in Robot persists exact identity but grants no execution state',
+    () async {
+      final strategy = module();
+      final snapshot = strategy.snapshot(const <String, Object?>{
+        'cadence': 'balanced',
+      })!;
+      final memory = _MemoryKeyValueStore();
+      final controller = StrategyRobotBindingController(
+        store: DurableStrategyRobotBindingStore(keyValueStore: memory),
+        registry: StrategyRegistry(<StrategyModule>[strategy]),
+      );
 
-    expect(
-      await controller.useInRobot(
-        evaluationRunId: 'evaluation-43',
-        idea: idea(snapshot),
-      ),
-      isTrue,
-    );
-    expect(controller.hasResolvableBinding, isTrue);
-    expect(controller.binding!.snapshotHash, snapshot.snapshotHash);
+      expect(
+        await controller.useInRobot(
+          evaluationRunId: 'evaluation-43',
+          idea: idea(snapshot),
+        ),
+        isTrue,
+      );
+      expect(controller.hasResolvableBinding, isTrue);
+      expect(controller.binding!.snapshotHash, snapshot.snapshotHash);
 
-    final restarted = StrategyRobotBindingController(
-      store: DurableStrategyRobotBindingStore(keyValueStore: memory),
-      registry: StrategyRegistry(<StrategyModule>[strategy]),
-    );
-    await restarted.initialize();
-    expect(restarted.hasResolvableBinding, isTrue);
-    expect(restarted.binding!.evaluationRunId, 'evaluation-43');
-  });
+      final restarted = StrategyRobotBindingController(
+        store: DurableStrategyRobotBindingStore(keyValueStore: memory),
+        registry: StrategyRegistry(<StrategyModule>[strategy]),
+      );
+      await restarted.initialize();
+      expect(restarted.hasResolvableBinding, isTrue);
+      expect(restarted.binding!.evaluationRunId, 'evaluation-43');
+    },
+  );
 
   test('catalog drift restores evidence but fails closed', () async {
     final evaluated = module();
