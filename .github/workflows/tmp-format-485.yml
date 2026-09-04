@@ -1,0 +1,21 @@
+name: tmp format 485
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/485-strategy-robot-handoff-ui
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+      - run: |
+          dart format lib/features/owner_alpha/presentation/strategy_robot_handoff_card.dart
+          git diff -- lib/features/owner_alpha/presentation/strategy_robot_handoff_card.dart
