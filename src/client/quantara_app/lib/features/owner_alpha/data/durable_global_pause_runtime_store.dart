@@ -77,9 +77,7 @@ final class DurableGlobalPauseRuntimeStore {
         return _failClosedSnapshot();
       }
       final parsedUpdatedAt = DateTime.tryParse(updatedAtUtc)?.toUtc();
-      final persistedMode = GlobalPauseRuntimeMode.values
-          .where((candidate) => candidate.name == rawMode)
-          .firstOrNull;
+      final persistedMode = _parseMode(rawMode);
       if (parsedUpdatedAt == null || persistedMode == null) {
         return _failClosedSnapshot();
       }
@@ -118,6 +116,13 @@ final class DurableGlobalPauseRuntimeStore {
       pauseFullyWhenFlat: true,
       updatedAtUtc: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
+  }
+
+  GlobalPauseRuntimeMode? _parseMode(String rawMode) {
+    for (final candidate in GlobalPauseRuntimeMode.values) {
+      if (candidate.name == rawMode) return candidate;
+    }
+    return null;
   }
 
   Future<void> _enqueue(Future<void> Function() operation) {
