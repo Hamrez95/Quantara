@@ -31,7 +31,52 @@ final class StrategyRobotHandoffCard extends StatelessWidget {
       runtimeState == StrategyRobotBindingRuntimeState.disarmed &&
       !controller.busy;
 
+  String get _candidateSummary {
+    final hash = idea.strategySnapshotHash.trim();
+    final shortHash = hash.length <= 8 ? hash : '${hash.substring(0, 8)}…';
+    return '${idea.registryStrategyId} v${idea.registryStrategyVersion} • '
+        '$shortHash • ${idea.symbol}/${idea.timeframe} • $evaluationRunId';
+  }
+
   Future<void> _useInRobot(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          persian ? 'استفاده از همین نسخه در ربات؟' : 'Use this exact version?',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _candidateSummary,
+              key: const ValueKey('strategy-robot-confirmation-summary'),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              persian
+                  ? 'این کار فقط نسخه ارزیابی‌شده را به تنظیمات ربات متصل می‌کند و ربات را فعال نمی‌کند.'
+                  : 'This only binds the evaluated strategy snapshot to Robot configuration. It does not arm or start execution.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('strategy-robot-cancel-action'),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(persian ? 'انصراف' : 'Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('strategy-robot-confirm-action'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(persian ? 'تأیید اتصال' : 'Confirm binding'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
     final accepted = await controller.useInRobot(
       evaluationRunId: evaluationRunId,
       idea: idea,
