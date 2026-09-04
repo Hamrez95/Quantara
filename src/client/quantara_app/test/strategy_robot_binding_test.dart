@@ -73,7 +73,10 @@ void main() {
     expect(restored, isNotNull);
     expect(restored!.evaluationRunId, 'evaluation-43');
     expect(restored.snapshotHash, snapshot.snapshotHash);
-    expect(restored.resolveExact(StrategyRegistry(<StrategyModule>[strategy])), isNotNull);
+    expect(
+      restored.resolveExact(StrategyRegistry(<StrategyModule>[strategy])),
+      isNotNull,
+    );
   });
 
   test('current-latest cannot silently replace the evaluated version', () {
@@ -105,7 +108,10 @@ void main() {
     persisted['normalizedParameters'] = <String, Object?>{'cadence': 'active'};
 
     final restored = StrategyRobotBinding.tryFromJson(persisted)!;
-    expect(restored.resolveExact(StrategyRegistry(<StrategyModule>[strategy])), isNull);
+    expect(
+      restored.resolveExact(StrategyRegistry(<StrategyModule>[strategy])),
+      isNull,
+    );
   });
 
   test('legacy idea without registry identity cannot arm exact binding', () {
