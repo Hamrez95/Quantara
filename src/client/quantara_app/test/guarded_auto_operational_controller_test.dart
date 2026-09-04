@@ -104,7 +104,8 @@ void main() {
   });
 
   test('corrupt durable state fails closed', () async {
-    final memory = _MemoryStore()..values['quantara.guarded-auto-operational-v1'] = '{bad';
+    final memory = _MemoryStore()
+      ..values['quantara.guarded-auto-operational-v1'] = '{bad';
     final controller = GuardedAutoOperationalController(
       store: DurableGuardedAutoOperationalStore(keyValueStore: memory),
       clock: () => DateTime.utc(2026, 9, 4, 7),
