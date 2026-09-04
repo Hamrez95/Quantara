@@ -4,6 +4,7 @@ import '../../market_analysis/domain/market_chart_models.dart';
 import '../../trading_journal/domain/trading_journal_chart_snapshot.dart';
 import '../domain/owner_alpha_models.dart';
 import 'professional_strategy_engine.dart';
+import 'strategy_registry.dart';
 
 abstract final class TradeIdeaFactory {
   static const assumedRoundTripCostRate = 0.0023;
@@ -18,18 +19,58 @@ abstract final class TradeIdeaFactory {
     AnalysisStrategy strategy = AnalysisStrategy.structureZones,
     SignalCadence cadence = SignalCadence.balanced,
     ProfessionalStrategyContext? professionalContext,
+    StrategyRegistry? strategyRegistry,
+    String? requiredRegistryVersion,
+    Map<String, Object?> strategyParameters = const {},
   }) {
-    final rawIdea = ProfessionalStrategyEngine.create(
-      analysis: analysis,
-      capital: capital,
-      riskPercent: riskPercent,
-      confluence: confluence,
-      languageCode: languageCode,
-      strategy: strategy,
-      cadence: cadence,
-      context: professionalContext,
+    final registry = strategyRegistry ?? StrategyRegistry.shared;
+    final parameters = <String, Object?>{
+      ...strategyParameters,
+      'cadence': cadence.name,
+    };
+    final resolution = registry.resolveForNewRun(
+      selection: strategy,
+      symbol: analysis.symbol,
+      timeframe: analysis.timeframe,
+      parameters: parameters,
+      requiredVersion: requiredRegistryVersion,
     );
-    final idea = _withJournalChartSnapshot(rawIdea, analysis);
+    if (resolution == null) {
+      return _registryBlockedIdea(
+        analysis: analysis,
+        capital: capital,
+        riskPercent: riskPercent,
+        languageCode: languageCode,
+        strategy: strategy,
+        reason: requiredRegistryVersion == null
+            ? 'strategy_registry_unavailable'
+            : 'strategy_registry_version_unavailable',
+      );
+    }
+
+    final rawIdea = resolution.module.evaluate(
+      StrategyEvaluationRequest(
+        analysis: analysis,
+        capital: capital,
+        riskPercent: riskPercent,
+        confluence: confluence,
+        languageCode: languageCode,
+        cadence: cadence,
+        professionalContext: professionalContext,
+      ),
+    );
+    final journalIdea = _withJournalChartSnapshot(rawIdea, analysis);
+    final snapshot = resolution.snapshot;
+    final idea = journalIdea.copyWithRegistryIdentity(
+      registryStrategyId: snapshot.strategyId,
+      registryStrategyVersion: snapshot.strategyVersion,
+      strategyParameterSchemaVersion: snapshot.parameterSchemaVersion,
+      normalizedStrategyParameters: snapshot.normalizedParameters,
+      strategySnapshotHash: snapshot.snapshotHash,
+      managementPolicyVersion: snapshot.managementPolicyVersion,
+      strategyImplementationVersion: snapshot.implementationVersion,
+      strategyLifecycle: snapshot.lifecycle.name,
+    );
     if (!idea.isActionable) return idea;
 
     final requiredMargin = idea.requiredMargin;
@@ -74,12 +115,14 @@ abstract final class TradeIdeaFactory {
     return distance <= math.max(0.008, analysis.volatilityPercent / 100 * 1.4);
   }
 
-  static String strategyVersion(AnalysisStrategy strategy) =>
-      switch (strategy) {
-        AnalysisStrategy.structureZones => 'professional-auto/1.0',
-        AnalysisStrategy.trendPullback => 'trend-pullback/1.0',
-        AnalysisStrategy.momentumContinuation => 'breakout-retest/1.0',
-      };
+  static String strategyVersion(AnalysisStrategy strategy) {
+    for (final module in StrategyRegistry.shared.modules) {
+      if (module.selection == strategy && module.acceptsNewRuns) {
+        return module.strategyVersion;
+      }
+    }
+    return 'unavailable';
+  }
 
   static int confidenceLeverageCap(
     double directionStrength,
@@ -150,6 +193,14 @@ abstract final class TradeIdeaFactory {
       rejectionReason: idea.rejectionReason,
       strategy: idea.strategy,
       strategyVersion: idea.strategyVersion,
+      registryStrategyId: idea.registryStrategyId,
+      registryStrategyVersion: idea.registryStrategyVersion,
+      strategyParameterSchemaVersion: idea.strategyParameterSchemaVersion,
+      normalizedStrategyParameters: idea.normalizedStrategyParameters,
+      strategySnapshotHash: idea.strategySnapshotHash,
+      managementPolicyVersion: idea.managementPolicyVersion,
+      strategyImplementationVersion: idea.strategyImplementationVersion,
+      strategyLifecycle: idea.strategyLifecycle,
       marketRegime: idea.marketRegime,
       indicatorSnapshot: Map.unmodifiable(indicatorSnapshot),
       setupQualityScore: idea.setupQualityScore,
@@ -157,6 +208,54 @@ abstract final class TradeIdeaFactory {
       trigger: idea.trigger,
       contextVersion: idea.contextVersion,
       evidenceBreakdown: idea.evidenceBreakdown,
+    );
+  }
+
+  static TradeIdea _registryBlockedIdea({
+    required TimeframeChartAnalysis analysis,
+    required double capital,
+    required double riskPercent,
+    required String languageCode,
+    required AnalysisStrategy strategy,
+    required String reason,
+  }) {
+    final fa = languageCode != 'en';
+    final summary = fa
+        ? 'نسخه ثبت‌شده استراتژی برای اجرای جدید قابل resolve نیست؛ اجرا متوقف شد.'
+        : 'The registered strategy version cannot be resolved for a new run; execution is blocked.';
+    return TradeIdea(
+      symbol: analysis.symbol,
+      timeframe: analysis.timeframe,
+      direction: TradeDirection.wait,
+      confidencePercent: 0,
+      entryLower: null,
+      entryUpper: null,
+      stopLoss: null,
+      targets: const [],
+      riskReward: null,
+      maximumLoss:
+          capital.isFinite &&
+              capital > 0 &&
+              riskPercent.isFinite &&
+              riskPercent > 0
+          ? capital * riskPercent / 100
+          : 0,
+      positionSize: null,
+      notionalValue: null,
+      recommendedLeverage: null,
+      maximumSafeLeverage: null,
+      requiredMargin: null,
+      estimatedRoundTripCosts: 0,
+      setupId: '${analysis.symbol}|${analysis.timeframe}|registry-blocked',
+      candleClosedAt: analysis.generatedAt.toUtc(),
+      summary: summary,
+      invalidation: fa
+          ? 'فقط پس از resolve شدن نسخه دقیق و snapshot معتبر دوباره ارزیابی شود.'
+          : 'Re-evaluate only after the exact version and a valid snapshot resolve.',
+      reasons: <String>[reason],
+      rejectionReason: SetupRejectionReason.dataUnavailable,
+      strategy: strategy,
+      strategyVersion: 'registry-blocked',
     );
   }
 
@@ -193,6 +292,14 @@ abstract final class TradeIdeaFactory {
     rejectionReason: SetupRejectionReason.insufficientRiskReward,
     strategy: idea.strategy,
     strategyVersion: idea.strategyVersion,
+    registryStrategyId: idea.registryStrategyId,
+    registryStrategyVersion: idea.registryStrategyVersion,
+    strategyParameterSchemaVersion: idea.strategyParameterSchemaVersion,
+    normalizedStrategyParameters: idea.normalizedStrategyParameters,
+    strategySnapshotHash: idea.strategySnapshotHash,
+    managementPolicyVersion: idea.managementPolicyVersion,
+    strategyImplementationVersion: idea.strategyImplementationVersion,
+    strategyLifecycle: idea.strategyLifecycle,
     marketRegime: idea.marketRegime,
     indicatorSnapshot: idea.indicatorSnapshot,
     setupQualityScore: idea.setupQualityScore,

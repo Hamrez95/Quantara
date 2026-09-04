@@ -1,3 +1,5 @@
+import '../../owner_alpha/data/strategy_registry.dart';
+import '../../owner_alpha/domain/owner_alpha_models.dart';
 import 'local_live_observability.dart';
 
 /// Compatibility bridge for the existing user-facing Local Live audit stream.
@@ -19,6 +21,23 @@ abstract final class LocalLiveLegacyObservabilityAdapter {
       sections,
       'analysisRuntime',
       'primaryStrategy',
+    );
+    final cadenceName = _nestedString(sections, 'analysisRuntime', 'cadence');
+    final selectedSymbol = _nestedString(
+      sections,
+      'analysisRuntime',
+      'selectedSymbol',
+    );
+    final selectedTimeframe = _nestedString(
+      sections,
+      'analysisRuntime',
+      'selectedTimeframe',
+    );
+    final registrySnapshot = _registrySnapshot(
+      primaryStrategy: primaryStrategy,
+      cadenceName: cadenceName,
+      symbol: selectedSymbol,
+      timeframe: selectedTimeframe,
     );
     final raw = sections['auditEvents'];
     if (raw is! Iterable<Object?>) return const [];
@@ -42,8 +61,13 @@ abstract final class LocalLiveLegacyObservabilityAdapter {
           eventName: 'legacy.audit.$normalizedType',
           family: _family(type),
           sessionId: sessionId ?? 'local-live-session-unavailable',
-          symbol: _optional(row['symbol']),
-          strategyId: primaryStrategy,
+          symbol: _optional(row['symbol']) ?? selectedSymbol,
+          timeframe: _optional(row['timeframe']) ?? selectedTimeframe,
+          strategyId: registrySnapshot?.strategyId ?? primaryStrategy,
+          strategyVersion: registrySnapshot?.strategyVersion,
+          parameterSchemaVersion: registrySnapshot?.parameterSchemaVersion,
+          snapshotHash: registrySnapshot?.snapshotHash,
+          managementPolicyVersion: registrySnapshot?.managementPolicyVersion,
           executionMode: 'guarded_auto_live',
           decision: _decision(type),
           reasonCode: 'legacy.audit.$normalizedType',
@@ -51,11 +75,48 @@ abstract final class LocalLiveLegacyObservabilityAdapter {
           safetyReasonCode: _isRejected(type)
               ? 'legacy.audit.$normalizedType'
               : null,
-          details: <String, Object?>{'legacy': true, 'message': ?message},
+          details: <String, Object?>{
+            'legacy': true,
+            'message': ?message,
+            'strategyLifecycle': ?registrySnapshot?.lifecycle.name,
+            'strategyImplementationVersion':
+                ?registrySnapshot?.implementationVersion,
+          },
         ),
       );
     }
     return events;
+  }
+
+  static StrategySnapshotIdentity? _registrySnapshot({
+    required String? primaryStrategy,
+    required String? cadenceName,
+    required String? symbol,
+    required String? timeframe,
+  }) {
+    if (primaryStrategy == null || cadenceName == null) return null;
+    AnalysisStrategy? selection;
+    for (final candidate in AnalysisStrategy.values) {
+      if (candidate.name == primaryStrategy) {
+        selection = candidate;
+        break;
+      }
+    }
+    SignalCadence? cadence;
+    for (final candidate in SignalCadence.values) {
+      if (candidate.name == cadenceName) {
+        cadence = candidate;
+        break;
+      }
+    }
+    if (selection == null || cadence == null) return null;
+    final resolution = StrategyRegistry.shared.resolveForNewRun(
+      selection: selection,
+      symbol: symbol ?? 'diagnostic-symbol',
+      timeframe: timeframe ?? '15m',
+      parameters: <String, Object?>{'cadence': cadence.name},
+    );
+    return resolution?.snapshot;
   }
 
   static String? _nestedString(

@@ -1,0 +1,35 @@
+name: Temporary #486 final formatter
+
+on:
+  push:
+    branches:
+      - feat/486-versioned-strategy-registry
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-push:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/486-versioned-strategy-registry
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Restore packages
+        run: flutter pub get
+      - name: Commit canonical formatting
+        run: |
+          dart format lib/features/owner_alpha/data/strategy_registry.dart lib/features/owner_alpha/data/trade_idea_factory.dart lib/features/owner_alpha/domain/owner_alpha_models.dart
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/features/owner_alpha/data/strategy_registry.dart lib/features/owner_alpha/data/trade_idea_factory.dart lib/features/owner_alpha/domain/owner_alpha_models.dart
+          git commit -m "style(owner-alpha): apply canonical Dart formatting" || exit 0
+          git push origin HEAD:feat/486-versioned-strategy-registry
