@@ -4,25 +4,28 @@ import 'package:quantara_app/features/owner_alpha/application/global_pause_obser
 import 'package:quantara_app/features/owner_alpha/application/global_pause_runtime_policy.dart';
 
 void main() {
-  test('full offline reports healthy only when all runtime work is stopped', () {
-    final summary = GlobalPauseDiagnosticsSummary(
-      mode: GlobalPauseRuntimeMode.pausedOffline,
-      activity: const GlobalPauseActivitySnapshot(
-        activeScanners: 0,
-        activeSubscriptions: 0,
-        activeTimers: 0,
-        backgroundServiceActive: false,
-      ),
-      openPositionCount: 0,
-      openOrderCount: 0,
-      protectionVerified: true,
-      reasonCode: 'flat_full_offline',
-    );
+  test(
+    'full offline reports healthy only when all runtime work is stopped',
+    () {
+      final summary = GlobalPauseDiagnosticsSummary(
+        mode: GlobalPauseRuntimeMode.pausedOffline,
+        activity: const GlobalPauseActivitySnapshot(
+          activeScanners: 0,
+          activeSubscriptions: 0,
+          activeTimers: 0,
+          backgroundServiceActive: false,
+        ),
+        openPositionCount: 0,
+        openOrderCount: 0,
+        protectionVerified: true,
+        reasonCode: 'flat_full_offline',
+      );
 
-    expect(summary.fullOfflineQuiesced, isTrue);
-    expect(summary.pauseInvariantSatisfied, isTrue);
-    expect(summary.toJson()['scanningActive'], isFalse);
-  });
+      expect(summary.fullOfflineQuiesced, isTrue);
+      expect(summary.pauseInvariantSatisfied, isTrue);
+      expect(summary.toJson()['scanningActive'], isFalse);
+    },
+  );
 
   test('full offline fails closed when any scanner remains active', () {
     final summary = GlobalPauseDiagnosticsSummary(
