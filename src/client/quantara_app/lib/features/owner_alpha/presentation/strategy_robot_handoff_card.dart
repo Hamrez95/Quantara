@@ -84,9 +84,9 @@ final class StrategyRobotHandoffCard extends StatelessWidget {
               children: [
                 Text(
                   persian ? 'اتصال Setup به Robot' : 'Setup → Robot',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -121,7 +121,9 @@ final class StrategyRobotHandoffCard extends StatelessWidget {
                         key: const ValueKey('clear-robot-binding-action'),
                         onPressed: _canMutate ? () => _clear(context) : null,
                         icon: const Icon(Icons.link_off_rounded),
-                        label: Text(persian ? 'پاک‌کردن اتصال' : 'Clear binding'),
+                        label: Text(
+                          persian ? 'پاک‌کردن اتصال' : 'Clear binding',
+                        ),
                       ),
                   ],
                 ),
