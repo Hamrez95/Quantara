@@ -9,6 +9,7 @@ final class StrategyEvaluationExtendedScorecard {
     required this.breakeven,
     required this.grossProfit,
     required this.grossLoss,
+    required this.totalCosts,
     required this.averageHoldingTime,
     required this.maximumLosingStreak,
   });
@@ -18,6 +19,7 @@ final class StrategyEvaluationExtendedScorecard {
   final int breakeven;
   final double grossProfit;
   final double grossLoss;
+  final double totalCosts;
   final Duration averageHoldingTime;
   final int maximumLosingStreak;
 
@@ -30,6 +32,7 @@ final class StrategyEvaluationExtendedScorecard {
     var breakeven = 0;
     var grossProfit = 0.0;
     var grossLoss = 0.0;
+    var totalCosts = 0.0;
     var holdingMicros = 0;
     var losingStreak = 0;
     var maximumLosingStreak = 0;
@@ -38,13 +41,17 @@ final class StrategyEvaluationExtendedScorecard {
       trade.validate();
       final net = trade.netPnl;
       holdingMicros += trade.duration.inMicroseconds;
+      totalCosts += trade.cost;
+      if (trade.grossPnl > 0) {
+        grossProfit += trade.grossPnl;
+      } else if (trade.grossPnl < 0) {
+        grossLoss += trade.grossPnl.abs();
+      }
       if (net > 0) {
         wins += 1;
-        grossProfit += net;
         losingStreak = 0;
       } else if (net < 0) {
         losses += 1;
-        grossLoss += net.abs();
         losingStreak += 1;
         if (losingStreak > maximumLosingStreak) {
           maximumLosingStreak = losingStreak;
@@ -61,6 +68,7 @@ final class StrategyEvaluationExtendedScorecard {
       breakeven: breakeven,
       grossProfit: grossProfit,
       grossLoss: grossLoss,
+      totalCosts: totalCosts,
       averageHoldingTime: trades.isEmpty
           ? Duration.zero
           : Duration(microseconds: holdingMicros ~/ trades.length),
@@ -74,6 +82,7 @@ final class StrategyEvaluationExtendedScorecard {
     'breakeven': breakeven,
     'grossProfit': grossProfit,
     'grossLoss': grossLoss,
+    'totalCosts': totalCosts,
     'averageHoldingMicros': averageHoldingTime.inMicroseconds,
     'maximumLosingStreak': maximumLosingStreak,
   };
