@@ -133,14 +133,19 @@ final class ArchivedStrategyEvaluationRun {
 ///
 /// Archive mutation is serialized. Reset operations require an explicit token;
 /// there is deliberately no implicit cleanup path that can silently erase
-/// evidence used to explain a strategy decision.
+/// evidence used to explain a strategy decision. Automatic retention is local
+/// only and keeps the newest immutable evidence bounded to [maxRecords].
 final class DurableStrategyEvaluationArchive {
   DurableStrategyEvaluationArchive({
     required this.keyValueStore,
     this.storageKey = 'quantara.strategy-evaluation-archive-v1',
+    this.maxRecords = 100,
   }) {
     if (storageKey.trim().isEmpty) {
       throw ArgumentError.value(storageKey, 'storageKey');
+    }
+    if (maxRecords <= 0) {
+      throw ArgumentError.value(maxRecords, 'maxRecords');
     }
   }
 
@@ -148,6 +153,7 @@ final class DurableStrategyEvaluationArchive {
 
   final StrategyEvaluationArchiveKeyValueStore keyValueStore;
   final String storageKey;
+  final int maxRecords;
   Future<void> _writeTail = Future<void>.value();
 
   Future<List<ArchivedStrategyEvaluationRun>> list() async {
@@ -192,7 +198,7 @@ final class DurableStrategyEvaluationArchive {
         replacement,
         ...current.where((record) => record.runId != replacement.runId),
       ];
-      await _persist(next);
+      await _persist(next.take(maxRecords).toList(growable: false));
     });
   }
 

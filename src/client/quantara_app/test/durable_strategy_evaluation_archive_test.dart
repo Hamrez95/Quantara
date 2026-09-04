@@ -108,6 +108,32 @@ void main() {
     expect(await archive.list(), isEmpty);
   });
 
+  test(
+    'bounded local retention keeps only the newest immutable runs',
+    () async {
+      final memory = _MemoryStore();
+      final archive = DurableStrategyEvaluationArchive(
+        keyValueStore: memory,
+        maxRecords: 2,
+      );
+      await archive.archive(run('oldest', day: 1));
+      await archive.archive(run('middle', day: 2));
+      await archive.archive(run('newest', day: 3));
+
+      final records = await archive.list();
+
+      expect(records.map((record) => record.runId), <String>[
+        'newest',
+        'middle',
+      ]);
+      expect(await archive.find('oldest'), isNull);
+      expect(
+        records.every((record) => !record.grantsLocalLiveAuthority),
+        isTrue,
+      );
+    },
+  );
+
   test('corrupt or provenance-mismatched evidence fails closed', () async {
     final memory = _MemoryStore();
     final archive = DurableStrategyEvaluationArchive(keyValueStore: memory);
