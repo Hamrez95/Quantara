@@ -101,8 +101,32 @@ jobs:
           grep -Fq 'Production/store publication' "docs/releases/${source_version}.md"
           grep -Fq 'forward recovery' docs/release-rollback.md
 
-      - name: Test readiness validator
-        run: python -m unittest tests.scripts.test_release_readiness -v
+      - name: Require passing stability report for compatible runtime
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+)(\+[0-9]+)?[[:space:]]*$/\1/p' src/client/quantara_app/pubspec.yaml)"
+          evidence="docs/releases/${source_version}-stability-evidence.json"
+          test -s "$evidence"
+          evidence_version="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["version"])' "$evidence")"
+          evidence_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["source_sha"])' "$evidence")"
+          test "$evidence_version" = "$source_version"
+          git cat-file -e "${evidence_sha}^{commit}"
+          git merge-base --is-ancestor "$evidence_sha" "$SOURCE_SHA"
+          if ! git diff --quiet "$evidence_sha" "$SOURCE_SHA" -- src infra docker-compose.yml; then
+            echo "Runtime changed after stability evidence SHA ${evidence_sha}; collect new evidence." >&2
+            exit 1
+          fi
+          python scripts/release/stability_report.py "$evidence" --require-passing
+
+      - name: Test readiness and stability validators
+        run: >-
+          python -m unittest
+          tests.scripts.test_release_readiness
+          tests.scripts.test_stability_report
+          -v
 
       - name: Calculate fail-closed quality score
         shell: bash
@@ -123,4 +147,5 @@ jobs:
       - name: State evidence boundary
         run: |
           echo 'This score certifies software/release-engineering evidence only.'
-          echo 'It does not certify physical-device, exchange, profitability, production or store-publication evidence.'
+          echo 'Promotion additionally requires explicit passing stability evidence.'
+          echo 'No CI result alone certifies exchange, profitability, restricted-live, physical-device, production or store-publication readiness.'
