@@ -22,7 +22,6 @@ REQUIRED_GATES = (
     "physical_device_signing",
     "exchange_restricted_live",
 )
-SOFTWARE_ONLY_GATES = frozenset({"software"})
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _VERSION = re.compile(r"^version:\s*([^+\s]+)\+([0-9]+)\s*$")
 
@@ -249,6 +248,8 @@ def render_markdown(payload: dict[str, Any], result: ValidationResult) -> str:
             "",
             "A PASS for automated software evidence does not imply strategy profitability, physical-device behavior, exchange correctness, restricted-live readiness, or publication approval.",
             "Missing evidence remains PENDING; it is never inferred from CI.",
+            "",
+            "The machine-readable source for this report is `docs/releases/current-stability.json`; validate or regenerate it with `scripts/release/stability_report.py`.",
             "",
         ]
     )
