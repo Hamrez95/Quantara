@@ -65,8 +65,8 @@ abstract final class StrategyEvaluationObservability {
     evaluationRunId: evaluationRunId,
     details: <String, Object?>{
       'dataClass': dataClass,
-      if (itemCount != null) 'itemCount': itemCount,
-      if (bytes != null) 'bytes': bytes,
+      'itemCount': ?itemCount,
+      'bytes': ?bytes,
     },
   );
 
@@ -89,8 +89,8 @@ abstract final class StrategyEvaluationObservability {
     reasonCode: failureReason,
     details: <String, Object?>{
       'candleFetchSucceeded': candleFetchSucceeded,
-      if (coveredStartUtc != null) 'coveredStartUtc': coveredStartUtc,
-      if (coveredEndUtc != null) 'coveredEndUtc': coveredEndUtc,
+      'coveredStartUtc': ?coveredStartUtc,
+      'coveredEndUtc': ?coveredEndUtc,
     },
   );
 }
