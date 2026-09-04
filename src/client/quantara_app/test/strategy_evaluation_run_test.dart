@@ -47,10 +47,12 @@ void main() {
   });
 
   test('no losses leaves profit factor undefined rather than infinite', () {
-    final scorecard = StrategyEvaluationScorecard.fromTrades(<StrategyEvaluationTrade>[
-      trade(id: 'a', grossPnl: 3, cost: 1, day: 1),
-      trade(id: 'b', grossPnl: 4, cost: 1, day: 2),
-    ]);
+    final scorecard = StrategyEvaluationScorecard.fromTrades(
+      <StrategyEvaluationTrade>[
+        trade(id: 'a', grossPnl: 3, cost: 1, day: 1),
+        trade(id: 'b', grossPnl: 4, cost: 1, day: 2),
+      ],
+    );
 
     expect(scorecard.profitFactor, isNull);
     expect(scorecard.totalNetPnl, 5);
@@ -62,7 +64,11 @@ void main() {
       (index) => StrategyEvaluationTrade(
         tradeId: 'trade-$index',
         openedAtUtc: DateTime.utc(2026, 1, 1).add(Duration(hours: index * 2)),
-        closedAtUtc: DateTime.utc(2026, 1, 1).add(Duration(hours: index * 2 + 1)),
+        closedAtUtc: DateTime.utc(
+          2026,
+          1,
+          1,
+        ).add(Duration(hours: index * 2 + 1)),
         grossPnl: 1,
         cost: 0.1,
         maximumFavorableExcursion: 1.5,
@@ -71,7 +77,9 @@ void main() {
     );
 
     expect(
-      StrategyEvaluationScorecard.fromTrades(trades.take(29)).insufficientSamples,
+      StrategyEvaluationScorecard.fromTrades(
+        trades.take(29),
+      ).insufficientSamples,
       isTrue,
     );
     expect(
