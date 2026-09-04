@@ -13,10 +13,9 @@ import 'strategy_robot_binding.dart';
 /// against the supplied historical registry.
 final class StrategyRobotBindingController extends ChangeNotifier {
   StrategyRobotBindingController({
-    required DurableStrategyRobotBindingStore store,
-    required StrategyRegistry registry,
-  }) : _store = store,
-       _registry = registry;
+    required this._store,
+    required this._registry,
+  });
 
   final DurableStrategyRobotBindingStore _store;
   final StrategyRegistry _registry;
