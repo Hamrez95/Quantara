@@ -18,7 +18,7 @@ void main() {
     reconciliationHealthy: reconciliationHealthy,
   );
 
-  test('flat pause becomes fully offline and can stop background service', () {
+  test('flat pause is fully offline', () {
     final mode = policy.pause(evidence());
 
     expect(mode, GlobalPauseRuntimeMode.pausedOffline);
@@ -28,7 +28,7 @@ void main() {
     expect(policy.mayStopBackgroundService(mode), isTrue);
   });
 
-  test('live exposure enters safe pause and preserves private management', () {
+  test('exposure preserves private management', () {
     final mode = policy.pause(evidence(positions: 1));
 
     expect(mode, GlobalPauseRuntimeMode.safePausedManagingExisting);
@@ -38,7 +38,7 @@ void main() {
     expect(policy.mayStopBackgroundService(mode), isFalse);
   });
 
-  test('resume fails closed when account truth is stale or unreconciled', () {
+  test('stale account truth blocks resume', () {
     expect(policy.beginResume(evidence(accountFresh: false)), isNull);
     expect(
       policy.beginResume(evidence(reconciliationHealthy: false)),
@@ -46,32 +46,29 @@ void main() {
     );
   });
 
-  test('resume fails closed when live protection is uncertain', () {
+  test('unprotected exposure blocks resume', () {
     expect(
       policy.beginResume(evidence(positions: 1, protectionVerified: false)),
       isNull,
     );
   });
 
-  test(
-    'successful resume requires validation both before and after resume',
-    () {
-      final healthy = evidence(positions: 1);
-      final started = policy.beginResume(healthy);
+  test('resume revalidates before running', () {
+    final healthy = evidence(positions: 1);
+    final started = policy.beginResume(healthy);
 
-      expect(started, GlobalPauseRuntimeMode.resuming);
-      expect(
-        policy.finishResume(current: started!, evidence: healthy),
-        GlobalPauseRuntimeMode.running,
-      );
+    expect(started, GlobalPauseRuntimeMode.resuming);
+    expect(
+      policy.finishResume(current: started!, evidence: healthy),
+      GlobalPauseRuntimeMode.running,
+    );
 
-      expect(
-        policy.finishResume(
-          current: GlobalPauseRuntimeMode.resuming,
-          evidence: evidence(positions: 1, protectionVerified: false),
-        ),
-        GlobalPauseRuntimeMode.safePausedManagingExisting,
-      );
-    },
-  );
+    expect(
+      policy.finishResume(
+        current: GlobalPauseRuntimeMode.resuming,
+        evidence: evidence(positions: 1, protectionVerified: false),
+      ),
+      GlobalPauseRuntimeMode.safePausedManagingExisting,
+    );
+  });
 }
