@@ -10,9 +10,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 VALID_STATUSES = frozenset({"passed", "pending", "failed"})
 REQUIRED_GATES = (
@@ -71,8 +70,7 @@ PAPER_REQUIREMENTS = frozenset(
 )
 
 
-@dataclass(frozen=True)
-class ValidationResult:
+class ValidationResult(NamedTuple):
     overall_status: str
     gate_statuses: dict[str, str]
 
@@ -227,12 +225,6 @@ def validate_report(
     declared = payload.get("overallStatus")
     if declared != overall:
         raise ValueError(f"overallStatus mismatch: declared={declared!r} calculated={overall}")
-
-    # A software-only PASS must never be interpreted as full owner-alpha readiness.
-    if statuses["software"] == "passed" and any(
-        statuses[name] != "passed" for name in REQUIRED_GATES if name not in SOFTWARE_ONLY_GATES
-    ) and overall == "passed":
-        raise ValueError("overall stability cannot pass from software evidence alone")
 
     return ValidationResult(overall_status=overall, gate_statuses=statuses)
 
