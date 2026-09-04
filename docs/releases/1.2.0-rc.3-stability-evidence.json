@@ -1,0 +1,30 @@
+{
+  "version": "1.2.0-rc.3",
+  "source_sha": "7764cf362348d66fa956aeebe154d8198a2f9370",
+  "evidence": {
+    "repository_ci": {
+      "status": "passed",
+      "reason": "Repository validation and backend CI were green for the runtime candidate lineage."
+    },
+    "flutter_android_build_smoke": {
+      "status": "passed",
+      "reason": "Flutter safety/widget tests, Android QA build, and API 34/35/36 emulator cold-start/in-place-upgrade automation were green for the runtime candidate."
+    },
+    "windows_build": {
+      "status": "passed",
+      "reason": "Windows desktop build workflow was green for the runtime candidate."
+    },
+    "simulation_quality": {
+      "status": "pending",
+      "reason": "No repository evidence bundle proves the documented historical-trade thresholds for this candidate."
+    },
+    "paper_forward": {
+      "status": "pending",
+      "reason": "No repository evidence bundle proves the documented 14-day/100-signal paper-forward thresholds for this candidate."
+    },
+    "physical_device": {
+      "status": "pending",
+      "reason": "Physical-device behavior is not inferred from CI or emulator evidence."
+    }
+  }
+}
