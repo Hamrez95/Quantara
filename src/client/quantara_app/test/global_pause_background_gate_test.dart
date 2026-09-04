@@ -35,22 +35,25 @@ void main() {
     expect(allowed, isFalse);
   });
 
-  test('safe pause and interrupted resume both block background scanning', () async {
-    for (final mode in <GlobalPauseRuntimeMode>[
-      GlobalPauseRuntimeMode.safePausedManagingExisting,
-      GlobalPauseRuntimeMode.resuming,
-    ]) {
-      final memory = _MemoryStore();
-      final store = DurableGlobalPauseRuntimeStore(keyValueStore: memory);
-      await store.persist(mode: mode, pauseFullyWhenFlat: true);
+  test(
+    'safe pause and interrupted resume both block background scanning',
+    () async {
+      for (final mode in <GlobalPauseRuntimeMode>[
+        GlobalPauseRuntimeMode.safePausedManagingExisting,
+        GlobalPauseRuntimeMode.resuming,
+      ]) {
+        final memory = _MemoryStore();
+        final store = DurableGlobalPauseRuntimeStore(keyValueStore: memory);
+        await store.persist(mode: mode, pauseFullyWhenFlat: true);
 
-      final allowed = await GlobalPauseBackgroundGate(
-        store: DurableGlobalPauseRuntimeStore(keyValueStore: memory),
-      ).allowsNewScanning();
+        final allowed = await GlobalPauseBackgroundGate(
+          store: DurableGlobalPauseRuntimeStore(keyValueStore: memory),
+        ).allowsNewScanning();
 
-      expect(allowed, isFalse, reason: mode.name);
-    }
-  });
+        expect(allowed, isFalse, reason: mode.name);
+      }
+    },
+  );
 
   test('corrupt durable state fails closed', () async {
     final memory = _MemoryStore()..value = '{broken';
