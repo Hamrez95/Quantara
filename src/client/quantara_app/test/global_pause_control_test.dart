@@ -36,11 +36,12 @@ void main() {
         ),
       );
 
+      final primaryAction = find.byKey(
+        const ValueKey('global-pause-primary-action'),
+      );
       expect(find.text('Global Pause'), findsOneWidget);
       expect(find.textContaining('arm', findRichText: true), findsNothing);
-      await tester.tap(
-        find.byKey(const ValueKey('global-pause-primary-action')),
-      );
+      await tester.tap(primaryAction);
       expect(pauses, 1);
     },
   );
@@ -57,9 +58,11 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('minimum private monitoring'), findsOneWidget);
+      final monitoringText = find.textContaining('minimum private monitoring');
+      final flatSwitch = find.byKey(const ValueKey('pause-fully-when-flat'));
+      expect(monitoringText, findsOneWidget);
       expect(find.text('Pause fully when flat'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('pause-fully-when-flat')));
+      await tester.tap(flatSwitch);
       expect(requested, isTrue);
     },
   );
@@ -75,11 +78,13 @@ void main() {
         ),
       );
 
-      expect(find.text('Resume'), findsOneWidget);
-      expect(find.textContaining('Resume is never automatic'), findsOneWidget);
-      await tester.tap(
-        find.byKey(const ValueKey('global-pause-primary-action')),
+      final primaryAction = find.byKey(
+        const ValueKey('global-pause-primary-action'),
       );
+      final automaticResume = find.textContaining('Resume is never automatic');
+      expect(find.text('Resume'), findsOneWidget);
+      expect(automaticResume, findsOneWidget);
+      await tester.tap(primaryAction);
       expect(resumes, 1);
     },
   );
@@ -95,7 +100,8 @@ void main() {
         ),
       );
 
-      final button = tester.widget<FilledButton>(find.byType(FilledButton));
+      final buttonFinder = find.byType(FilledButton);
+      final button = tester.widget<FilledButton>(buttonFinder);
       expect(button.onPressed, isNull);
       expect(find.text('Validating…'), findsOneWidget);
       expect(resumes, 0);
