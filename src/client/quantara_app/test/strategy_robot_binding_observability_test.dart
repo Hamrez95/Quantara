@@ -51,19 +51,22 @@ void main() {
     expect(event.snapshotHash, 'snapshot-hash');
   });
 
-  test('clear event preserves previous identity without execution authority', () {
-    final event = StrategyRobotBindingObservability.cleared(
-      timestampUtc: DateTime.utc(2026, 9, 4, 3),
-      sessionId: 'session-1',
-      previousBinding: binding(),
-    );
-    final exported = LocalLiveObservabilityExport.build(
-      <LocalLiveObservabilityEvent>[event],
-    );
+  test(
+    'clear event preserves previous identity without execution authority',
+    () {
+      final event = StrategyRobotBindingObservability.cleared(
+        timestampUtc: DateTime.utc(2026, 9, 4, 3),
+        sessionId: 'session-1',
+        previousBinding: binding(),
+      );
+      final exported = LocalLiveObservabilityExport.build(
+        <LocalLiveObservabilityEvent>[event],
+      );
 
-    expect(event.eventName, 'strategy_robot_binding_cleared');
-    expect(event.decision, 'cleared');
-    expect(event.evaluationRunId, 'evaluation-43');
-    expect(exported['events'], hasLength(1));
-  });
+      expect(event.eventName, 'strategy_robot_binding_cleared');
+      expect(event.decision, 'cleared');
+      expect(event.evaluationRunId, 'evaluation-43');
+      expect(exported['events'], hasLength(1));
+    },
+  );
 }
