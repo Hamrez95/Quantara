@@ -50,8 +50,14 @@ void main() {
   test('replay sorts immutable lifecycle facts deterministically', () {
     final value = replay();
 
-    expect(value.events.first.type, StrategyEvaluationReplayEventType.signalDetected);
-    expect(value.events.last.type, StrategyEvaluationReplayEventType.finalClose);
+    expect(
+      value.events.first.type,
+      StrategyEvaluationReplayEventType.signalDetected,
+    );
+    expect(
+      value.events.last.type,
+      StrategyEvaluationReplayEventType.finalClose,
+    );
     expect(value.evaluationRunId, 'run-1');
     expect(value.strategyVersion, '1.2.3');
     expect(value.snapshotHash, 'sha256-snapshot');
@@ -76,10 +82,7 @@ void main() {
       ),
       isFalse,
     );
-    expect(
-      hidden.last.type,
-      StrategyEvaluationReplayEventType.actualFill,
-    );
+    expect(hidden.last.type, StrategyEvaluationReplayEventType.actualFill);
     expect(revealed.length, value.events.length);
   });
 
