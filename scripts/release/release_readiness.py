@@ -19,6 +19,13 @@ WEIGHTS = {
     "rollback_plan": 10,
     "safety_regression": 10,
 }
+MANDATORY = {
+    "repository_integrity",
+    "flutter_android_upgrade",
+    "release_notes",
+    "rollback_plan",
+    "safety_regression",
+}
 MINIMUM_SCORE = 90
 
 
@@ -30,6 +37,11 @@ def calculate_score(evidence: dict[str, bool]) -> int:
 
 
 def validate(evidence: dict[str, bool], minimum_score: int = MINIMUM_SCORE) -> int:
+    missing_mandatory = sorted(key for key in MANDATORY if evidence.get(key) is not True)
+    if missing_mandatory:
+        raise ValueError(
+            "mandatory release evidence is missing: " + ", ".join(missing_mandatory)
+        )
     missing = [key for key in WEIGHTS if evidence.get(key) is not True]
     score = calculate_score(evidence)
     if score < minimum_score:
