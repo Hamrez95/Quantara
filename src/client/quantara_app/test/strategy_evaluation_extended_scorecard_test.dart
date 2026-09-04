@@ -20,13 +20,45 @@ void main() {
   );
 
   test('derives wins losses breakeven gross legs and holding time', () {
-    final scorecard = StrategyEvaluationExtendedScorecard.fromTrades(<StrategyEvaluationTrade>[
-      trade(id: 'w1', startHour: 0, durationHours: 1, grossPnl: 12, cost: 2),
-      trade(id: 'l1', startHour: 2, durationHours: 2, grossPnl: -5, cost: 1),
-      trade(id: 'b1', startHour: 5, durationHours: 3, grossPnl: 1, cost: 1),
-      trade(id: 'l2', startHour: 9, durationHours: 2, grossPnl: -3, cost: 1),
-      trade(id: 'l3', startHour: 12, durationHours: 2, grossPnl: -2, cost: 1),
-    ]);
+    final scorecard = StrategyEvaluationExtendedScorecard.fromTrades(
+      <StrategyEvaluationTrade>[
+        trade(
+          id: 'w1',
+          startHour: 0,
+          durationHours: 1,
+          grossPnl: 12,
+          cost: 2,
+        ),
+        trade(
+          id: 'l1',
+          startHour: 2,
+          durationHours: 2,
+          grossPnl: -5,
+          cost: 1,
+        ),
+        trade(
+          id: 'b1',
+          startHour: 5,
+          durationHours: 3,
+          grossPnl: 1,
+          cost: 1,
+        ),
+        trade(
+          id: 'l2',
+          startHour: 9,
+          durationHours: 2,
+          grossPnl: -3,
+          cost: 1,
+        ),
+        trade(
+          id: 'l3',
+          startHour: 12,
+          durationHours: 2,
+          grossPnl: -2,
+          cost: 1,
+        ),
+      ],
+    );
 
     expect(scorecard.wins, 1);
     expect(scorecard.losses, 3);
@@ -38,7 +70,9 @@ void main() {
   });
 
   test('empty scorecard remains deterministic', () {
-    final scorecard = StrategyEvaluationExtendedScorecard.fromTrades(const <StrategyEvaluationTrade>[]);
+    final scorecard = StrategyEvaluationExtendedScorecard.fromTrades(
+      const <StrategyEvaluationTrade>[],
+    );
 
     expect(scorecard.wins, 0);
     expect(scorecard.losses, 0);
