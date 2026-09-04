@@ -1,0 +1,26 @@
+name: Format 497 exact
+
+on:
+  push:
+    branches:
+      - feat/485-binding-observability
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format and print exact test
+        run: |
+          dart format test/strategy_robot_binding_observability_test.dart
+          echo '---EXACT-FILE-BEGIN---'
+          cat test/strategy_robot_binding_observability_test.dart
+          echo '---EXACT-FILE-END---'
