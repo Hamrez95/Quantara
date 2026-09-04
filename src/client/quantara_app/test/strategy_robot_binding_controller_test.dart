@@ -76,6 +76,7 @@ void main() {
         await controller.useInRobot(
           evaluationRunId: 'evaluation-43',
           idea: idea(snapshot),
+          runtimeState: StrategyRobotBindingRuntimeState.disarmed,
         ),
         isTrue,
       );
@@ -92,6 +93,36 @@ void main() {
     },
   );
 
+  test('running and unknown runtime states reject binding without mutation', () async {
+    final strategy = module();
+    final snapshot = strategy.snapshot(const <String, Object?>{
+      'cadence': 'balanced',
+    })!;
+    final memory = _MemoryKeyValueStore();
+    final store = DurableStrategyRobotBindingStore(keyValueStore: memory);
+    final controller = StrategyRobotBindingController(
+      store: store,
+      registry: StrategyRegistry(<StrategyModule>[strategy]),
+    );
+
+    for (final runtimeState in <StrategyRobotBindingRuntimeState>[
+      StrategyRobotBindingRuntimeState.running,
+      StrategyRobotBindingRuntimeState.unknown,
+    ]) {
+      expect(
+        await controller.useInRobot(
+          evaluationRunId: 'evaluation-43',
+          idea: idea(snapshot),
+          runtimeState: runtimeState,
+        ),
+        isFalse,
+      );
+    }
+
+    expect(controller.binding, isNull);
+    expect(await store.load(), isNull);
+  });
+
   test('catalog drift restores evidence but fails closed', () async {
     final evaluated = module();
     final snapshot = evaluated.snapshot(const <String, Object?>{
@@ -105,6 +136,7 @@ void main() {
     await original.useInRobot(
       evaluationRunId: 'evaluation-43',
       idea: idea(snapshot),
+      runtimeState: StrategyRobotBindingRuntimeState.disarmed,
     );
 
     final restarted = StrategyRobotBindingController(
@@ -118,7 +150,7 @@ void main() {
     expect(restarted.hasResolvableBinding, isFalse);
   });
 
-  test('clear disarms persisted selection across restart', () async {
+  test('clear rejects a running runtime and succeeds only when disarmed', () async {
     final strategy = module();
     final snapshot = strategy.snapshot(const <String, Object?>{
       'cadence': 'balanced',
@@ -131,8 +163,22 @@ void main() {
     await controller.useInRobot(
       evaluationRunId: 'evaluation-43',
       idea: idea(snapshot),
+      runtimeState: StrategyRobotBindingRuntimeState.disarmed,
     );
-    await controller.clear();
+
+    expect(
+      await controller.clear(
+        runtimeState: StrategyRobotBindingRuntimeState.running,
+      ),
+      isFalse,
+    );
+    expect(controller.binding, isNotNull);
+    expect(
+      await controller.clear(
+        runtimeState: StrategyRobotBindingRuntimeState.disarmed,
+      ),
+      isTrue,
+    );
 
     final restarted = StrategyRobotBindingController(
       store: DurableStrategyRobotBindingStore(keyValueStore: memory),
