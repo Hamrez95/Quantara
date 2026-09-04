@@ -1,11 +1,11 @@
 name: tmp 485 format debug
 on:
-  pull_request:
-    branches: [dev]
+  push:
+    branches:
+      - 'feat/485-exact-tested-strategy-binding-v2'
 
 jobs:
   format-debug:
-    if: github.head_ref == 'feat/485-exact-tested-strategy-binding-v2'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
