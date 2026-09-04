@@ -19,7 +19,7 @@ void main() {
     maximumAdverseExcursion: grossPnl < 0 ? grossPnl.abs() : 0,
   );
 
-  test('derives wins losses breakeven gross legs and holding time', () {
+  test('derives scorecard facts from immutable trades', () {
     final scorecard = StrategyEvaluationExtendedScorecard.fromTrades(
       <StrategyEvaluationTrade>[
         trade(id: 'w1', startHour: 0, durationHours: 1, grossPnl: 12, cost: 2),
@@ -33,8 +33,9 @@ void main() {
     expect(scorecard.wins, 1);
     expect(scorecard.losses, 3);
     expect(scorecard.breakeven, 1);
-    expect(scorecard.grossProfit, 10);
-    expect(scorecard.grossLoss, 13);
+    expect(scorecard.grossProfit, 13);
+    expect(scorecard.grossLoss, 10);
+    expect(scorecard.totalCosts, 6);
     expect(scorecard.averageHoldingTime, const Duration(hours: 2));
     expect(scorecard.maximumLosingStreak, 2);
   });
@@ -49,6 +50,7 @@ void main() {
     expect(scorecard.breakeven, 0);
     expect(scorecard.grossProfit, 0);
     expect(scorecard.grossLoss, 0);
+    expect(scorecard.totalCosts, 0);
     expect(scorecard.averageHoldingTime, Duration.zero);
     expect(scorecard.maximumLosingStreak, 0);
   });
