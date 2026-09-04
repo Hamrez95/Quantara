@@ -16,19 +16,24 @@ class ReleaseReadinessTests(unittest.TestCase):
 
     def test_score_below_90_fails_closed(self):
         evidence = {key: True for key in release_readiness.WEIGHTS}
-        evidence["flutter_android_upgrade"] = False
+        evidence["windows_build"] = False
         with self.assertRaisesRegex(ValueError, "below required 90"):
             release_readiness.validate(evidence)
 
-    def test_exact_90_is_accepted(self):
+    def test_exact_90_is_accepted_when_all_mandatory_evidence_exists(self):
         evidence = {key: True for key in release_readiness.WEIGHTS}
-        evidence["safety_regression"] = False
-        self.assertEqual(release_readiness.validate(evidence), 90)
+        evidence["rollback_plan"] = False
+        with self.assertRaisesRegex(ValueError, "mandatory release evidence"):
+            release_readiness.validate(evidence)
 
-    def test_missing_evidence_is_not_treated_as_true(self):
+        evidence = {key: True for key in release_readiness.WEIGHTS}
+        evidence["windows_build"] = False
+        self.assertEqual(release_readiness.calculate_score(evidence), 85)
+
+    def test_missing_mandatory_evidence_is_rejected(self):
         evidence = {key: True for key in release_readiness.WEIGHTS if key != "rollback_plan"}
-        self.assertEqual(release_readiness.calculate_score(evidence), 90)
-        self.assertEqual(release_readiness.validate(evidence), 90)
+        with self.assertRaisesRegex(ValueError, "rollback_plan"):
+            release_readiness.validate(evidence)
 
     def test_unknown_evidence_is_rejected(self):
         evidence = {key: True for key in release_readiness.WEIGHTS}
