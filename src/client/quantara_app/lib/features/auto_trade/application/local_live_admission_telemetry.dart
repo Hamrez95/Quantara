@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../owner_alpha/domain/owner_alpha_models.dart';
+import 'local_live_observability.dart';
 
 const _localLiveSessionStorageKey = 'quantara.local-live.session-id.v1';
 
@@ -78,6 +79,39 @@ final class LocalLiveAdmissionFreshnessEvent {
     'refreshResult': refreshResult,
     'finalAdmissionDecision': finalAdmissionDecision,
   };
+
+  /// Projects the existing freshness evidence into the common Local Live
+  /// observability contract without changing the admission decision itself.
+  LocalLiveObservabilityEvent toObservabilityEvent() {
+    final rejected = finalAdmissionDecision.trim().toLowerCase() != 'accepted';
+    return LocalLiveObservabilityEvent(
+      timestampUtc: timestampUtc,
+      eventName: eventType,
+      family: LocalLiveObservabilityFamily.candidate,
+      sessionId: session,
+      candidateId: candidate,
+      symbol: symbol,
+      timeframe: timeframe,
+      strategyId: strategyId,
+      strategyVersion: strategyVersion,
+      snapshotHash: strategyHash,
+      executionMode: 'guarded_auto_live',
+      decision: finalAdmissionDecision,
+      reasonCode: staleReasonCode,
+      safetyGate: 'account_freshness',
+      safetyReasonCode: rejected ? staleReasonCode : null,
+      budgetGeneration: budgetGeneration,
+      details: <String, Object?>{
+        'accountSnapshotAsOf': accountSnapshotAsOfUtc,
+        'reconciliationCompletedAt': reconciliationCompletedAtUtc,
+        'budgetAsOf': budgetAsOfUtc,
+        'ageMs': age.inMilliseconds,
+        'thresholdMs': threshold.inMilliseconds,
+        'refreshAttempt': refreshAttempt,
+        'refreshResult': refreshResult,
+      },
+    );
+  }
 }
 
 /// Bounded, machine-readable admission telemetry. It intentionally stores only
@@ -95,6 +129,10 @@ final class LocalLiveAdmissionTelemetryCollector {
 
   List<LocalLiveAdmissionFreshnessEvent> get events =>
       List.unmodifiable(_events);
+
+  List<LocalLiveObservabilityEvent> get observabilityEvents => _events
+      .map((event) => event.toObservabilityEvent())
+      .toList(growable: false);
 
   Future<void> recordFreshnessDecision({
     required String eventType,

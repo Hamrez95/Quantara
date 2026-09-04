@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'local_live_legacy_observability_adapter.dart';
+import 'local_live_observability.dart';
+
 /// Builds a support bundle from non-secret Local Live state.
 ///
 /// The sanitizer is deliberately recursive because exchange responses, audit
@@ -12,7 +15,25 @@ abstract final class LocalLiveDiagnosticBundle {
     required DateTime generatedAt,
     required Map<String, Object?> sections,
     Iterable<String> explicitSecretValues = const [],
+    Iterable<LocalLiveObservabilityEvent> observabilityEvents = const [],
+    int observabilityMaximumEvents =
+        LocalLiveObservabilityExport.defaultMaximumEvents,
   }) {
+    final combinedEvents = <LocalLiveObservabilityEvent>[
+      ...LocalLiveLegacyObservabilityAdapter.fromDiagnosticSections(
+        sections,
+        fallbackTimestampUtc: generatedAt,
+      ),
+      ...observabilityEvents,
+    ];
+    final exportedSections = <String, Object?>{
+      ...sections,
+      if (combinedEvents.isNotEmpty)
+        'localLiveObservability': LocalLiveObservabilityExport.build(
+          combinedEvents,
+          maximumEvents: observabilityMaximumEvents,
+        ),
+    };
     final payload = <String, Object?>{
       'schemaVersion': schemaVersion,
       'generatedAt': generatedAt.toUtc().toIso8601String(),
@@ -20,7 +41,7 @@ abstract final class LocalLiveDiagnosticBundle {
       'scope': 'local-live-support',
       'privacy':
           'User-initiated diagnostic export. API credentials and authorization data are excluded.',
-      'sections': sections,
+      'sections': exportedSections,
     };
     return sanitizeMap(payload, explicitSecretValues: explicitSecretValues);
   }
@@ -29,11 +50,16 @@ abstract final class LocalLiveDiagnosticBundle {
     required DateTime generatedAt,
     required Map<String, Object?> sections,
     Iterable<String> explicitSecretValues = const [],
+    Iterable<LocalLiveObservabilityEvent> observabilityEvents = const [],
+    int observabilityMaximumEvents =
+        LocalLiveObservabilityExport.defaultMaximumEvents,
   }) => const JsonEncoder.withIndent('  ').convert(
     build(
       generatedAt: generatedAt,
       sections: sections,
       explicitSecretValues: explicitSecretValues,
+      observabilityEvents: observabilityEvents,
+      observabilityMaximumEvents: observabilityMaximumEvents,
     ),
   );
 
