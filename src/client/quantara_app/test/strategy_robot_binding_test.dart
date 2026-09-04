@@ -60,9 +60,9 @@ void main() {
 
   test('Use in Robot binds exact evaluated snapshot and survives restart', () {
     final strategy = module();
-    final snapshot = strategy.snapshot(
-      const <String, Object?>{'cadence': 'balanced'},
-    )!;
+    final snapshot = strategy.snapshot(const <String, Object?>{
+      'cadence': 'balanced',
+    })!;
     final binding = StrategyRobotBinding.fromEvaluatedIdea(
       evaluationRunId: 'evaluation-43',
       idea: idea(snapshot),
@@ -81,9 +81,9 @@ void main() {
 
   test('current-latest cannot silently replace the evaluated version', () {
     final evaluatedModule = module(version: '1.0.0');
-    final snapshot = evaluatedModule.snapshot(
-      const <String, Object?>{'cadence': 'balanced'},
-    )!;
+    final snapshot = evaluatedModule.snapshot(const <String, Object?>{
+      'cadence': 'balanced',
+    })!;
     final binding = StrategyRobotBinding.fromEvaluatedIdea(
       evaluationRunId: 'evaluation-43',
       idea: idea(snapshot),
@@ -98,9 +98,9 @@ void main() {
 
   test('tampered parameter snapshot fails closed before robot execution', () {
     final strategy = module();
-    final snapshot = strategy.snapshot(
-      const <String, Object?>{'cadence': 'balanced'},
-    )!;
+    final snapshot = strategy.snapshot(const <String, Object?>{
+      'cadence': 'balanced',
+    })!;
     final persisted = StrategyRobotBinding.fromEvaluatedIdea(
       evaluationRunId: 'evaluation-43',
       idea: idea(snapshot),
@@ -115,18 +115,19 @@ void main() {
   });
 
   test('legacy idea without registry identity cannot arm exact binding', () {
-    final legacy = idea(
-      module().snapshot(const <String, Object?>{'cadence': 'balanced'})!,
-    ).copyWithRegistryIdentity(
-      registryStrategyId: '',
-      registryStrategyVersion: '',
-      strategyParameterSchemaVersion: 0,
-      normalizedStrategyParameters: const <String, Object?>{},
-      strategySnapshotHash: '',
-      managementPolicyVersion: '',
-      strategyImplementationVersion: '',
-      strategyLifecycle: '',
-    );
+    final legacy =
+        idea(
+          module().snapshot(const <String, Object?>{'cadence': 'balanced'})!,
+        ).copyWithRegistryIdentity(
+          registryStrategyId: '',
+          registryStrategyVersion: '',
+          strategyParameterSchemaVersion: 0,
+          normalizedStrategyParameters: const <String, Object?>{},
+          strategySnapshotHash: '',
+          managementPolicyVersion: '',
+          strategyImplementationVersion: '',
+          strategyLifecycle: '',
+        );
 
     expect(
       StrategyRobotBinding.fromEvaluatedIdea(
