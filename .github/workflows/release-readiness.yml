@@ -54,7 +54,7 @@ jobs:
           git merge-base --is-ancestor "$software_sha" "$SOURCE_SHA"
           unexpected="$(
             git diff --name-only "$software_sha..$SOURCE_SHA" | \
-              grep -Ev '^(\.github/workflows/release-readiness\.yml|docs/release-rollback\.md|docs/releases/1\.2\.0-rc\.3\.md|docs/releases/1\.2\.0-rc\.3-stability\.md|docs/releases/current-readiness\.json|scripts/release/release_readiness\.py|tests/scripts/test_release_readiness\.py)$' || true
+              grep -Ev '^(\.github/workflows/release-readiness\.yml|docs/release-rollback\.md|docs/releases/1\.2\.0-rc\.3\.md|docs/releases/1\.2\.0-rc\.3-stability\.md|docs/releases/1\.2\.0-rc\.3-owner-alpha-stability\.md|docs/releases/current-readiness\.json|docs/releases/current-stability\.json|scripts/release/release_readiness\.py|scripts/release/stability_report\.py|tests/scripts/test_release_readiness\.py|tests/scripts/test_stability_report\.py)$' || true
           )"
           if [ -n "$unexpected" ]; then
             echo 'Software changed after the readiness candidate SHA:' >&2
@@ -123,8 +123,10 @@ jobs:
           test -n "$source_version"
           test -s "docs/releases/${source_version}.md"
           test -s "docs/releases/${source_version}-stability.md"
+          test -s "docs/releases/${source_version}-owner-alpha-stability.md"
           test -s docs/release-rollback.md
           test -s docs/releases/current-readiness.json
+          test -s docs/releases/current-stability.json
           grep -Fq 'Production/store publication' "docs/releases/${source_version}.md"
           grep -Fq 'Software stability evidence: PASS' "docs/releases/${source_version}-stability.md"
           grep -Fq 'forward recovery' docs/release-rollback.md
@@ -132,12 +134,20 @@ jobs:
             docs/releases/current-readiness.json \
             --minimum-score 90 \
             --root .
+          cp "docs/releases/${source_version}-owner-alpha-stability.md" /tmp/checked-in-stability.md
+          python scripts/release/stability_report.py \
+            docs/releases/current-stability.json \
+            --root . \
+            --write-markdown "docs/releases/${source_version}-owner-alpha-stability.md"
+          diff -u /tmp/checked-in-stability.md "docs/releases/${source_version}-owner-alpha-stability.md"
 
-      - name: Test readiness validator
-        run: python -m unittest tests.scripts.test_release_readiness -v
+      - name: Test release evidence validators
+        run: |
+          python -m unittest tests.scripts.test_release_readiness -v
+          python -m unittest tests.scripts.test_stability_report -v
 
       - name: State evidence boundary
         run: |
-          echo 'This score certifies software/release-engineering evidence only.'
-          echo 'Physical-device/permanent-signing remains pending.'
+          echo 'Software/release-engineering evidence can pass while overall owner-alpha stability remains pending.'
+          echo 'Simulation, paper/shadow, physical-device/signing and exchange evidence are never inferred from CI.'
           echo 'Production/store publication requires explicit owner approval.'
