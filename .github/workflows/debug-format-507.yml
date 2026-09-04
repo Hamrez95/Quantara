@@ -1,0 +1,18 @@
+name: Debug format 507
+on:
+  push:
+    branches: [feat/488-durable-global-pause-runtime]
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+      - name: Format and show diff
+        working-directory: src/client/quantara_app
+        run: |
+          dart format test/durable_global_pause_runtime_store_test.dart
+          git diff -- test/durable_global_pause_runtime_store_test.dart
