@@ -1,0 +1,21 @@
+name: tmp format 488
+on:
+  push:
+    branches: [feat/488-global-pause-control-ui]
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Format and print target
+        working-directory: src/client/quantara_app
+        run: |
+          dart format test/global_pause_control_test.dart
+          echo '---FORMATTED-FILE-BEGIN---'
+          cat test/global_pause_control_test.dart
+          echo '---FORMATTED-FILE-END---'
