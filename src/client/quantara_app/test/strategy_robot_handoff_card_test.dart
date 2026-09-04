@@ -61,7 +61,7 @@ void main() {
     marketRegime: MarketRegime.range,
   );
 
-  testWidgets('Use in Robot persists exact version and only opens setup', (
+  testWidgets('Use in Robot confirms exact version before persisting', (
     tester,
   ) async {
     final strategy = module();
@@ -92,7 +92,23 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey('use-in-robot-action')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(controller.binding, isNull);
+    expect(setupOpens, 0);
+    expect(find.text('Use this exact version?'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('strategy-robot-confirmation-summary')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('structure_zones v1.0.0'), findsOneWidget);
+    expect(find.textContaining('BTCUSDT/15m'), findsOneWidget);
+    expect(find.textContaining('evaluation-43'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('strategy-robot-confirm-action')),
+    );
+    await tester.pumpAndSettle();
 
     expect(setupOpens, 1);
     expect(controller.binding, isNotNull);
@@ -100,6 +116,43 @@ void main() {
     expect(controller.binding!.strategyVersion, '1.0.0');
     expect(controller.binding!.evaluationRunId, 'evaluation-43');
     expect(find.textContaining('structure_zones v1.0.0'), findsWidgets);
+  });
+
+  testWidgets('cancel leaves the exact robot binding unchanged', (tester) async {
+    final strategy = module();
+    final snapshot = strategy.snapshot(const <String, Object?>{
+      'cadence': 'balanced',
+    })!;
+    final controller = StrategyRobotBindingController(
+      store: DurableStrategyRobotBindingStore(
+        keyValueStore: _MemoryKeyValueStore(),
+      ),
+      registry: StrategyRegistry(<StrategyModule>[strategy]),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StrategyRobotHandoffCard(
+            controller: controller,
+            runtimeState: StrategyRobotBindingRuntimeState.disarmed,
+            evaluationRunId: 'evaluation-43',
+            idea: idea(snapshot),
+            persian: false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('use-in-robot-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('strategy-robot-cancel-action')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.binding, isNull);
+    expect(find.text('Use this exact version?'), findsNothing);
   });
 
   testWidgets('running runtime disables handoff and clear mutation', (
