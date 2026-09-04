@@ -44,34 +44,40 @@ void main() {
     );
   }
 
-  test('archives exact immutable evidence and restores it after restart', () async {
-    final memory = _MemoryStore();
-    final archive = DurableStrategyEvaluationArchive(keyValueStore: memory);
-    final original = run('run-1');
+  test(
+    'archives exact immutable evidence and restores it after restart',
+    () async {
+      final memory = _MemoryStore();
+      final archive = DurableStrategyEvaluationArchive(keyValueStore: memory);
+      final original = run('run-1');
 
-    await archive.archive(original);
-    final restarted = DurableStrategyEvaluationArchive(keyValueStore: memory);
-    final restored = await restarted.find('run-1');
+      await archive.archive(original);
+      final restarted = DurableStrategyEvaluationArchive(keyValueStore: memory);
+      final restored = await restarted.find('run-1');
 
-    expect(restored, isNotNull);
-    expect(restored!.strategyId, 'structure_zones');
-    expect(restored.strategyVersion, '1.2.3');
-    expect(restored.payload, original.toJson());
-    expect(restored.grantsLocalLiveAuthority, isFalse);
-  });
+      expect(restored, isNotNull);
+      expect(restored!.strategyId, 'structure_zones');
+      expect(restored.strategyVersion, '1.2.3');
+      expect(restored.payload, original.toJson());
+      expect(restored.grantsLocalLiveAuthority, isFalse);
+    },
+  );
 
-  test('newest evidence is listed first without fabricating missing runs', () async {
-    final archive = DurableStrategyEvaluationArchive(
-      keyValueStore: _MemoryStore(),
-    );
-    await archive.archive(run('older', day: 1));
-    await archive.archive(run('newer', day: 2));
+  test(
+    'newest evidence is listed first without fabricating missing runs',
+    () async {
+      final archive = DurableStrategyEvaluationArchive(
+        keyValueStore: _MemoryStore(),
+      );
+      await archive.archive(run('older', day: 1));
+      await archive.archive(run('newer', day: 2));
 
-    final records = await archive.list();
+      final records = await archive.list();
 
-    expect(records.map((record) => record.runId), <String>['newer', 'older']);
-    expect(await archive.find('missing'), isNull);
-  });
+      expect(records.map((record) => record.runId), <String>['newer', 'older']);
+      expect(await archive.find('missing'), isNull);
+    },
+  );
 
   test('delete and reset require explicit confirmations', () async {
     final memory = _MemoryStore();
@@ -106,7 +112,8 @@ void main() {
     final memory = _MemoryStore();
     final archive = DurableStrategyEvaluationArchive(keyValueStore: memory);
     await archive.archive(run('run-1'));
-    final decoded = jsonDecode(memory.values.values.single) as Map<String, dynamic>;
+    final decoded =
+        jsonDecode(memory.values.values.single) as Map<String, dynamic>;
     final records = decoded['records'] as List<dynamic>;
     final record = records.single as Map<String, dynamic>;
     record['strategyVersion'] = 'latest';
