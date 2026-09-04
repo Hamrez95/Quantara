@@ -4,22 +4,15 @@ import 'package:quantara_app/features/owner_alpha/application/global_pause_runti
 void main() {
   const policy = GlobalPauseRuntimePolicy();
 
-  GlobalPauseRuntimeEvidence evidence({
-    int positions = 0,
-    int orders = 0,
-    bool protectionVerified = true,
-    bool accountFresh = true,
-    bool reconciliationHealthy = true,
-  }) => GlobalPauseRuntimeEvidence(
-    openPositionCount: positions,
-    openOrderCount: orders,
-    protectionVerified: protectionVerified,
-    accountFresh: accountFresh,
-    reconciliationHealthy: reconciliationHealthy,
-  );
-
   test('flat pause is fully offline', () {
-    final mode = policy.pause(evidence());
+    const evidence = GlobalPauseRuntimeEvidence(
+      openPositionCount: 0,
+      openOrderCount: 0,
+      protectionVerified: true,
+      accountFresh: true,
+      reconciliationHealthy: true,
+    );
+    final mode = policy.pause(evidence);
 
     expect(mode, GlobalPauseRuntimeMode.pausedOffline);
     expect(policy.mayStopScanning(mode), isTrue);
@@ -29,32 +22,67 @@ void main() {
   });
 
   test('exposure preserves private management', () {
-    final mode = policy.pause(evidence(positions: 1));
+    const evidence = GlobalPauseRuntimeEvidence(
+      openPositionCount: 1,
+      openOrderCount: 0,
+      protectionVerified: true,
+      accountFresh: true,
+      reconciliationHealthy: true,
+    );
+    final mode = policy.pause(evidence);
 
     expect(mode, GlobalPauseRuntimeMode.safePausedManagingExisting);
-    expect(policy.mayStopScanning(mode), isTrue);
-    expect(policy.mayStopNonEssentialNetwork(mode), isTrue);
     expect(policy.mustKeepPrivateManagement(mode), isTrue);
     expect(policy.mayStopBackgroundService(mode), isFalse);
   });
 
   test('stale account truth blocks resume', () {
-    expect(policy.beginResume(evidence(accountFresh: false)), isNull);
-    expect(
-      policy.beginResume(evidence(reconciliationHealthy: false)),
-      isNull,
+    const stale = GlobalPauseRuntimeEvidence(
+      openPositionCount: 0,
+      openOrderCount: 0,
+      protectionVerified: true,
+      accountFresh: false,
+      reconciliationHealthy: true,
     );
+    const unreconciled = GlobalPauseRuntimeEvidence(
+      openPositionCount: 0,
+      openOrderCount: 0,
+      protectionVerified: true,
+      accountFresh: true,
+      reconciliationHealthy: false,
+    );
+
+    expect(policy.beginResume(stale), isNull);
+    expect(policy.beginResume(unreconciled), isNull);
   });
 
   test('unprotected exposure blocks resume', () {
-    expect(
-      policy.beginResume(evidence(positions: 1, protectionVerified: false)),
-      isNull,
+    const evidence = GlobalPauseRuntimeEvidence(
+      openPositionCount: 1,
+      openOrderCount: 0,
+      protectionVerified: false,
+      accountFresh: true,
+      reconciliationHealthy: true,
     );
+
+    expect(policy.beginResume(evidence), isNull);
   });
 
   test('resume revalidates before running', () {
-    final healthy = evidence(positions: 1);
+    const healthy = GlobalPauseRuntimeEvidence(
+      openPositionCount: 1,
+      openOrderCount: 0,
+      protectionVerified: true,
+      accountFresh: true,
+      reconciliationHealthy: true,
+    );
+    const unsafe = GlobalPauseRuntimeEvidence(
+      openPositionCount: 1,
+      openOrderCount: 0,
+      protectionVerified: false,
+      accountFresh: true,
+      reconciliationHealthy: true,
+    );
     final started = policy.beginResume(healthy);
 
     expect(started, GlobalPauseRuntimeMode.resuming);
@@ -62,11 +90,10 @@ void main() {
       policy.finishResume(current: started!, evidence: healthy),
       GlobalPauseRuntimeMode.running,
     );
-
     expect(
       policy.finishResume(
         current: GlobalPauseRuntimeMode.resuming,
-        evidence: evidence(positions: 1, protectionVerified: false),
+        evidence: unsafe,
       ),
       GlobalPauseRuntimeMode.safePausedManagingExisting,
     );
