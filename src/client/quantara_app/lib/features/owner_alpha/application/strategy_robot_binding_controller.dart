@@ -5,6 +5,8 @@ import '../data/strategy_registry.dart';
 import '../domain/owner_alpha_models.dart';
 import 'strategy_robot_binding.dart';
 
+enum StrategyRobotBindingRuntimeState { disarmed, running, unknown }
+
 /// Owns the user's selected evaluated strategy identity for Guarded Auto.
 ///
 /// Selection and restore are configuration-only. This controller never starts
@@ -56,13 +58,18 @@ final class StrategyRobotBindingController extends ChangeNotifier {
 
   /// Selects a tested setup for the robot without activating execution.
   ///
-  /// Returns false when the evaluated idea is incomplete or no longer resolves
-  /// to the exact immutable registry snapshot that produced it.
+  /// Rebinding is allowed only while the runtime is explicitly disarmed. An
+  /// unknown state fails closed just like an actively running robot. Returns
+  /// false when the evaluated idea is incomplete or no longer resolves to the
+  /// exact immutable registry snapshot that produced it.
   Future<bool> useInRobot({
     required String evaluationRunId,
     required TradeIdea idea,
+    required StrategyRobotBindingRuntimeState runtimeState,
   }) async {
-    if (_busy) return false;
+    if (_busy || runtimeState != StrategyRobotBindingRuntimeState.disarmed) {
+      return false;
+    }
     final candidate = StrategyRobotBinding.fromEvaluatedIdea(
       evaluationRunId: evaluationRunId,
       idea: idea,
@@ -84,8 +91,13 @@ final class StrategyRobotBindingController extends ChangeNotifier {
     }
   }
 
-  Future<void> clear() async {
-    if (_busy) return;
+  /// Clears the persisted selection only when execution is explicitly disarmed.
+  Future<bool> clear({
+    required StrategyRobotBindingRuntimeState runtimeState,
+  }) async {
+    if (_busy || runtimeState != StrategyRobotBindingRuntimeState.disarmed) {
+      return false;
+    }
     _busy = true;
     notifyListeners();
     try {
@@ -93,6 +105,7 @@ final class StrategyRobotBindingController extends ChangeNotifier {
       _binding = null;
       _resolution = null;
       _initialized = true;
+      return true;
     } finally {
       _busy = false;
       notifyListeners();
