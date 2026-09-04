@@ -73,16 +73,19 @@ void main() {
     expect(restored.allowsNewScanning, isFalse);
   });
 
-  test('missing pre-feature state migrates without silently arming anything', () async {
-    final store = DurableGlobalPauseRuntimeStore(
-      keyValueStore: _MemoryStore(),
-    );
+  test(
+    'missing pre-feature state migrates without silently arming anything',
+    () async {
+      final store = DurableGlobalPauseRuntimeStore(
+        keyValueStore: _MemoryStore(),
+      );
 
-    final restored = await store.restore();
+      final restored = await store.restore();
 
-    expect(restored.mode, GlobalPauseRuntimeMode.running);
-    expect(restored.pauseFullyWhenFlat, isFalse);
-  });
+      expect(restored.mode, GlobalPauseRuntimeMode.running);
+      expect(restored.pauseFullyWhenFlat, isFalse);
+    },
+  );
 }
 
 final class _MemoryStore implements GlobalPauseRuntimeKeyValueStore {
