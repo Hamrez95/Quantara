@@ -4,23 +4,26 @@ import 'package:quantara_app/features/owner_alpha/application/guarded_auto_opera
 import 'package:quantara_app/features/owner_alpha/data/durable_guarded_auto_operational_store.dart';
 
 void main() {
-  test('missing durable state restores paused and blocks new entries', () async {
-    final memory = _MemoryStore();
-    final controller = GuardedAutoOperationalController(
-      store: DurableGuardedAutoOperationalStore(keyValueStore: memory),
-      clock: () => DateTime.utc(2026, 9, 4, 1),
-    );
+  test(
+    'missing durable state restores paused and blocks new entries',
+    () async {
+      final memory = _MemoryStore();
+      final controller = GuardedAutoOperationalController(
+        store: DurableGuardedAutoOperationalStore(keyValueStore: memory),
+        clock: () => DateTime.utc(2026, 9, 4, 1),
+      );
 
-    expect(controller.blocksNewEntries, isTrue);
-    await controller.initialize();
+      expect(controller.blocksNewEntries, isTrue);
+      await controller.initialize();
 
-    expect(controller.state!.isPaused, isTrue);
-    expect(
-      controller.state!.pauseCause,
-      GuardedAutoPauseCause.restoredUnknownState,
-    );
-    expect(controller.blocksNewEntries, isTrue);
-  });
+      expect(controller.state!.isPaused, isTrue);
+      expect(
+        controller.state!.pauseCause,
+        GuardedAutoPauseCause.restoredUnknownState,
+      );
+      expect(controller.blocksNewEntries, isTrue);
+    },
+  );
 
   test('emergency stop is durable and restart remains paused', () async {
     final memory = _MemoryStore();
@@ -45,18 +48,13 @@ void main() {
       restarted.state!.pauseCause,
       GuardedAutoPauseCause.userEmergencyStop,
     );
-    expect(
-      restarted.state!.lastHealthyAtUtc,
-      DateTime.utc(2026, 9, 4, 1, 59),
-    );
+    expect(restarted.state!.lastHealthyAtUtc, DateTime.utc(2026, 9, 4, 1, 59));
     expect(restarted.blocksNewEntries, isTrue);
   });
 
   test('anomaly auto-disable records cause and operator action', () async {
     final controller = GuardedAutoOperationalController(
-      store: DurableGuardedAutoOperationalStore(
-        keyValueStore: _MemoryStore(),
-      ),
+      store: DurableGuardedAutoOperationalStore(keyValueStore: _MemoryStore()),
       clock: () => DateTime.utc(2026, 9, 4, 4),
     );
 
@@ -104,8 +102,8 @@ void main() {
   });
 
   test('corrupt durable state fails closed', () async {
-    final memory =
-        _MemoryStore()..values['quantara.guarded-auto-operational-v1'] = '{bad';
+    final memory = _MemoryStore()
+      ..values['quantara.guarded-auto-operational-v1'] = '{bad';
     final controller = GuardedAutoOperationalController(
       store: DurableGuardedAutoOperationalStore(keyValueStore: memory),
       clock: () => DateTime.utc(2026, 9, 4, 7),
