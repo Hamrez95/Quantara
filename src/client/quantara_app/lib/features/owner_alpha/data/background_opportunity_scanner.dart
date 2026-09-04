@@ -5,8 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../../market_analysis/domain/market_chart_models.dart';
+import '../application/global_pause_background_gate.dart';
 import '../domain/owner_alpha_models.dart';
 import 'bitunix_owner_alpha_repository.dart';
+import 'durable_global_pause_runtime_store.dart';
 import 'platform_opportunity_services.dart';
 import 'signal_outcome_evaluator.dart';
 import 'signal_sizing_reconciler.dart';
@@ -18,6 +20,27 @@ const _backgroundImmediateName = 'quantara-immediate-opportunity-scan';
 const _backgroundConfigurationKey =
     'quantara.opportunities.background-configuration';
 
+final class _SharedPreferencesGlobalPauseStore
+    implements GlobalPauseRuntimeKeyValueStore {
+  _SharedPreferencesGlobalPauseStore({SharedPreferencesAsync? preferences})
+    : _preferences = preferences ?? SharedPreferencesAsync();
+
+  final SharedPreferencesAsync _preferences;
+
+  @override
+  Future<String?> read(String key) => _preferences.getString(key);
+
+  @override
+  Future<void> write(String key, String value) =>
+      _preferences.setString(key, value);
+}
+
+GlobalPauseBackgroundGate _backgroundPauseGate() => GlobalPauseBackgroundGate(
+  store: DurableGlobalPauseRuntimeStore(
+    keyValueStore: _SharedPreferencesGlobalPauseStore(),
+  ),
+);
+
 @pragma('vm:entry-point')
 void quantaraBackgroundDispatcher() {
   Workmanager().executeTask((task, inputData) async {
@@ -25,6 +48,14 @@ void quantaraBackgroundDispatcher() {
       return true;
     }
     WidgetsFlutterBinding.ensureInitialized();
+
+    // WorkManager may invoke a previously scheduled callback after process or
+    // device restart. Re-read the durable pause intent before any network or
+    // market work so a paused runtime can never be revived by Android.
+    if (!await _backgroundPauseGate().allowsNewScanning()) {
+      return true;
+    }
+
     final symbols =
         (inputData['symbols'] as List<Object?>?)
             ?.whereType<String>()
@@ -233,11 +264,18 @@ final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
     try {
       await BackgroundOpportunityScanner.initialize();
       if (!enabled) {
-        await Workmanager().cancelByUniqueName(_backgroundUniqueName);
-        await Workmanager().cancelByUniqueName(_backgroundImmediateName);
-        await SharedPreferencesAsync().remove(_backgroundConfigurationKey);
+        await _cancelScheduledScanning();
         return;
       }
+
+      // A foreground preference change must not re-schedule work while Global
+      // Pause is sticky. The WorkManager entrypoint re-checks the same gate,
+      // covering callbacks already queued by Android before cancellation.
+      if (!await _backgroundPauseGate().allowsNewScanning()) {
+        await _cancelScheduledScanning();
+        return;
+      }
+
       final input = {
         'symbols': settings.symbols,
         'capital': settings.capital,
@@ -277,5 +315,11 @@ final class WorkmanagerBackgroundScanGateway implements BackgroundScanGateway {
     } on Object {
       // Background scheduling is best effort and must not block live analysis.
     }
+  }
+
+  Future<void> _cancelScheduledScanning() async {
+    await Workmanager().cancelByUniqueName(_backgroundUniqueName);
+    await Workmanager().cancelByUniqueName(_backgroundImmediateName);
+    await SharedPreferencesAsync().remove(_backgroundConfigurationKey);
   }
 }
