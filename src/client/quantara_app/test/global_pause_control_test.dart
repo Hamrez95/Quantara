@@ -25,22 +25,25 @@ void main() {
     );
   }
 
-  testWidgets('running state exposes pause but never an arm action', (
-    tester,
-  ) async {
-    var pauses = 0;
-    await tester.pumpWidget(
-      app(
-        mode: GlobalPauseRuntimeMode.running,
-        onPause: () => pauses += 1,
-      ),
-    );
+  testWidgets(
+    'running state exposes pause but never an arm action',
+    (tester) async {
+      var pauses = 0;
+      await tester.pumpWidget(
+        app(
+          mode: GlobalPauseRuntimeMode.running,
+          onPause: () => pauses += 1,
+        ),
+      );
 
-    expect(find.text('Global Pause'), findsOneWidget);
-    expect(find.textContaining('arm', findRichText: true), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('global-pause-primary-action')));
-    expect(pauses, 1);
-  });
+      expect(find.text('Global Pause'), findsOneWidget);
+      expect(find.textContaining('arm', findRichText: true), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('global-pause-primary-action')),
+      );
+      expect(pauses, 1);
+    },
+  );
 
   testWidgets(
     'safe pause explains minimum management and supports flat intent',
@@ -61,37 +64,41 @@ void main() {
     },
   );
 
-  testWidgets('offline pause only delegates explicit resume request', (
-    tester,
-  ) async {
-    var resumes = 0;
-    await tester.pumpWidget(
-      app(
-        mode: GlobalPauseRuntimeMode.pausedOffline,
-        onResume: () => resumes += 1,
-      ),
-    );
+  testWidgets(
+    'offline pause only delegates explicit resume request',
+    (tester) async {
+      var resumes = 0;
+      await tester.pumpWidget(
+        app(
+          mode: GlobalPauseRuntimeMode.pausedOffline,
+          onResume: () => resumes += 1,
+        ),
+      );
 
-    expect(find.text('Resume'), findsOneWidget);
-    expect(find.textContaining('Resume is never automatic'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('global-pause-primary-action')));
-    expect(resumes, 1);
-  });
+      expect(find.text('Resume'), findsOneWidget);
+      expect(find.textContaining('Resume is never automatic'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('global-pause-primary-action')),
+      );
+      expect(resumes, 1);
+    },
+  );
 
-  testWidgets('resuming disables action until runtime validation completes', (
-    tester,
-  ) async {
-    var resumes = 0;
-    await tester.pumpWidget(
-      app(
-        mode: GlobalPauseRuntimeMode.resuming,
-        onResume: () => resumes += 1,
-      ),
-    );
+  testWidgets(
+    'resuming disables action until runtime validation completes',
+    (tester) async {
+      var resumes = 0;
+      await tester.pumpWidget(
+        app(
+          mode: GlobalPauseRuntimeMode.resuming,
+          onResume: () => resumes += 1,
+        ),
+      );
 
-    final button = tester.widget<FilledButton>(find.byType(FilledButton));
-    expect(button.onPressed, isNull);
-    expect(find.text('Validating…'), findsOneWidget);
-    expect(resumes, 0);
-  });
+      final button = tester.widget<FilledButton>(find.byType(FilledButton));
+      expect(button.onPressed, isNull);
+      expect(find.text('Validating…'), findsOneWidget);
+      expect(resumes, 0);
+    },
+  );
 }
