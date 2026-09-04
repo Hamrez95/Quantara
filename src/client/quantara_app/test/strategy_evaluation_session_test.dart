@@ -131,11 +131,12 @@ void main() {
   });
 
   test('invalid manual evaluation capital fails closed', () {
-    final session = () => StrategyEvaluationSession(
-      activeRun: run(runId: 'run-1', grossPnl: 0, cost: 0),
-      baseline: const StrategyEvaluationBaseline(startingCapital: 0),
-    );
+    StrategyEvaluationSession createInvalidSession() =>
+        StrategyEvaluationSession(
+          activeRun: run(runId: 'run-1', grossPnl: 0, cost: 0),
+          baseline: const StrategyEvaluationBaseline(startingCapital: 0),
+        );
 
-    expect(session, throwsArgumentError);
+    expect(createInvalidSession, throwsArgumentError);
   });
 }
