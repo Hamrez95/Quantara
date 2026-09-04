@@ -37,14 +37,14 @@ jobs:
           test -n "$source_sha"
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Require exact-SHA CI evidence
+      - name: Require CI and installable-build evidence
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          require_success() {
+          require_exact_success() {
             workflow="$1"
             run_id="$(
               gh api --paginate \
@@ -53,17 +53,44 @@ jobs:
                 | sed -n '1p'
             )"
             if [ -z "$run_id" ]; then
-              echo "No successful ${workflow} run certifies ${SOURCE_SHA}." >&2
+              echo "No successful ${workflow} run certifies exact candidate ${SOURCE_SHA}." >&2
               exit 1
             fi
             echo "${workflow} certified by run ${run_id}."
           }
-          require_success ci.yml
-          require_success flutter-ci.yml
-          require_success windows-desktop-ci.yml
+
+          require_windows_compatible_success() {
+            candidates="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/windows-desktop-ci.yml/runs?status=success&per_page=100" \
+                --jq '.workflow_runs[] | select(.conclusion == "success") | [.id, .head_sha] | @tsv'
+            )"
+            while IFS=$'\t' read -r run_id certified_sha; do
+              [ -n "$certified_sha" ] || continue
+              git cat-file -e "${certified_sha}^{commit}" 2>/dev/null || continue
+              git merge-base --is-ancestor "$certified_sha" "$SOURCE_SHA" || continue
+              if git diff --quiet "$certified_sha" "$SOURCE_SHA" -- \
+                src/client/quantara_app \
+                src/native/execution \
+                src/windows_service \
+                installer/windows \
+                scripts/build-windows.ps1 \
+                scripts/build-windows-service.ps1 \
+                scripts/manage-windows-service.ps1 \
+                .github/workflows/windows-desktop-ci.yml; then
+                echo "windows-desktop-ci.yml certified by unchanged ancestor ${certified_sha} (run ${run_id})."
+                return 0
+              fi
+            done <<< "$candidates"
+            echo "No successful Windows build certifies ${SOURCE_SHA} or an unchanged relevant ancestor." >&2
+            exit 1
+          }
+
+          require_exact_success ci.yml
+          require_exact_success flutter-ci.yml
+          require_windows_compatible_success
 
       - name: Require versioned release notes and rollback plan
-        id: docs
         shell: bash
         run: |
           set -euo pipefail
