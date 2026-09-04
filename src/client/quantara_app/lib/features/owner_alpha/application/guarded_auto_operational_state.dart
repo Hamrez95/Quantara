@@ -105,7 +105,9 @@ final class GuardedAutoOperationalState {
       final mode = GuardedAutoOperationalMode.values.byName(
         json['mode']! as String,
       );
-      final updatedAtUtc = DateTime.parse(json['updatedAtUtc']! as String).toUtc();
+      final updatedAtUtc = DateTime.parse(
+        json['updatedAtUtc']! as String,
+      ).toUtc();
       if (mode == GuardedAutoOperationalMode.disarmed) {
         return GuardedAutoOperationalState.disarmed(atUtc: updatedAtUtc);
       }
