@@ -56,7 +56,10 @@ void main() {
       'evaluation_history_cleanup_completed',
       'evaluation_chart_replay_opened',
     ]);
-    expect(json.every((row) => row['evaluationRunId'] == 'run-1'), isTrue);
+    expect(
+      json.every((row) => row['evaluationRunId'] == 'run-1'),
+      isTrue,
+    );
     expect(
       (json.first['details']! as Map<Object?, Object?>)['startingCapitalSource'],
       'manualSetting',
