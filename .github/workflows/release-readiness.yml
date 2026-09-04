@@ -1,0 +1,143 @@
+name: Release readiness
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  readiness:
+    name: Release readiness score
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Resolve immutable promotion source
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            source_sha='${{ github.event.pull_request.head.sha }}'
+          else
+            source_sha="$GITHUB_SHA"
+          fi
+          test -n "$source_sha"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Verify checked-in software candidate has no runtime drift
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          software_sha="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('docs/releases/current-readiness.json').read_text())['softwareCandidateSha'])
+          PY
+          )"
+          test -n "$software_sha"
+          git cat-file -e "${software_sha}^{commit}"
+          git merge-base --is-ancestor "$software_sha" "$SOURCE_SHA"
+          unexpected="$(
+            git diff --name-only "$software_sha..$SOURCE_SHA" | \
+              grep -Ev '^(\.github/workflows/release-readiness\.yml|docs/release-rollback\.md|docs/releases/1\.2\.0-rc\.3\.md|docs/releases/1\.2\.0-rc\.3-stability\.md|docs/releases/current-readiness\.json|scripts/release/release_readiness\.py|tests/scripts/test_release_readiness\.py)$' || true
+          )"
+          if [ -n "$unexpected" ]; then
+            echo 'Software changed after the readiness candidate SHA:' >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+
+      - name: Require CI and installable-build evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          require_exact_success() {
+            workflow="$1"
+            run_id="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=success&per_page=100" \
+                --jq ".workflow_runs[] | select(.head_sha == \"$SOURCE_SHA\" and .conclusion == \"success\") | .id" \
+                | sed -n '1p'
+            )"
+            if [ -z "$run_id" ]; then
+              echo "No successful ${workflow} run certifies exact promotion source ${SOURCE_SHA}." >&2
+              exit 1
+            fi
+            echo "${workflow} certified by run ${run_id}."
+          }
+
+          require_windows_compatible_success() {
+            candidates="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/windows-desktop-ci.yml/runs?status=success&per_page=100" \
+                --jq '.workflow_runs[] | select(.conclusion == "success") | [.id, .head_sha] | @tsv'
+            )"
+            while IFS=$'\t' read -r run_id certified_sha; do
+              [ -n "$certified_sha" ] || continue
+              git cat-file -e "${certified_sha}^{commit}" 2>/dev/null || continue
+              git merge-base --is-ancestor "$certified_sha" "$SOURCE_SHA" || continue
+              if git diff --quiet "$certified_sha" "$SOURCE_SHA" -- \
+                src/client/quantara_app \
+                src/native/execution \
+                src/windows_service \
+                installer/windows \
+                scripts/build-windows.ps1 \
+                scripts/build-windows-service.ps1 \
+                scripts/manage-windows-service.ps1 \
+                .github/workflows/windows-desktop-ci.yml; then
+                echo "windows-desktop-ci.yml certified by unchanged ancestor ${certified_sha} (run ${run_id})."
+                return 0
+              fi
+            done <<< "$candidates"
+            echo "No successful Windows build certifies ${SOURCE_SHA} or an unchanged relevant ancestor." >&2
+            exit 1
+          }
+
+          require_exact_success ci.yml
+          require_exact_success flutter-ci.yml
+          require_windows_compatible_success
+
+      - name: Require versioned release documents and validate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+)(\+[0-9]+)?[[:space:]]*$/\1/p' src/client/quantara_app/pubspec.yaml)"
+          test -n "$source_version"
+          test -s "docs/releases/${source_version}.md"
+          test -s "docs/releases/${source_version}-stability.md"
+          test -s docs/release-rollback.md
+          test -s docs/releases/current-readiness.json
+          grep -Fq 'Production/store publication' "docs/releases/${source_version}.md"
+          grep -Fq 'Software stability evidence: PASS' "docs/releases/${source_version}-stability.md"
+          grep -Fq 'forward recovery' docs/release-rollback.md
+          python scripts/release/release_readiness.py \
+            docs/releases/current-readiness.json \
+            --minimum-score 90 \
+            --root .
+
+      - name: Test readiness validator
+        run: python -m unittest tests.scripts.test_release_readiness -v
+
+      - name: State evidence boundary
+        run: |
+          echo 'This score certifies software/release-engineering evidence only.'
+          echo 'Physical-device/permanent-signing remains pending.'
+          echo 'Production/store publication requires explicit owner approval.'
