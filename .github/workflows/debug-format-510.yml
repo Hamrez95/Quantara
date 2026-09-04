@@ -1,0 +1,18 @@
+name: Debug format 510
+on:
+  push:
+    branches: [feat/484-trade-chart-replay-contract]
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+      - name: Format and show diff
+        working-directory: src/client/quantara_app
+        run: |
+          dart format lib/features/owner_alpha/domain/strategy_evaluation_trade_replay.dart test/strategy_evaluation_trade_replay_test.dart
+          git diff -- lib/features/owner_alpha/domain/strategy_evaluation_trade_replay.dart test/strategy_evaluation_trade_replay_test.dart
