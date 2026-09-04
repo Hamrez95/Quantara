@@ -1,0 +1,90 @@
+name: Temporary #484 evaluation UI patch
+
+on:
+  push:
+    branches:
+      - feat/484-single-strategy-evaluation
+    paths:
+      - .github/workflows/tmp-484-evaluation-ui-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/484-single-strategy-evaluation
+          fetch-depth: 0
+      - name: Apply focused UI integration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected one match in {path}, found {count}: {old[:80]!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          page = 'src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart'
+          replace_once(
+              page,
+              'const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];',
+              'const _desktopDestinationIndexes = [0, 1, 2, 3, 4, 5, 6, 7];',
+          )
+          replace_once(
+              page,
+              'const _mobileDestinationIndexes = [0, 1, 5, 7];',
+              'const _mobileDestinationIndexes = [0, 1, 4, 5, 7];',
+          )
+
+          lab = 'src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart'
+          replace_once(
+              lab,
+              "  Future<void> _start() async {\n    final equity = double.tryParse(_equity.text.trim());",
+              "  Future<void> _start() async {\n    final evaluationIdea = widget.controller.defaultEvaluationIdea;\n    if (evaluationIdea == null) {\n      setState(\n        () => _formError = _fa\n            ? 'برای شروع ارزیابی، ابتدا یک ستاپ با Strategy Snapshot معتبر انتخاب کن.'\n            : 'Select a setup with a valid immutable strategy snapshot before starting an evaluation.',\n      );\n      return;\n    }\n    if (widget.controller.run != null) {\n      final confirmed = await showDialog<bool>(\n        context: context,\n        builder: (dialogContext) => AlertDialog(\n          title: Text(_fa ? 'شروع ارزیابی جدید؟' : 'Start new evaluation?'),\n          content: Text(\n            _fa\n                ? 'ارزیابی قبلی در تاریخچه باقی می‌ماند و یک Run جدید با سرمایه شروع و Strategy Snapshot فعلی ساخته می‌شود.'\n                : 'The previous evaluation stays archived. A new run will use the configured starting capital and the currently selected immutable strategy snapshot.',\n          ),\n          actions: [\n            TextButton(\n              onPressed: () => Navigator.of(dialogContext).pop(false),\n              child: Text(_fa ? 'انصراف' : 'Cancel'),\n            ),\n            FilledButton(\n              onPressed: () => Navigator.of(dialogContext).pop(true),\n              child: Text(_fa ? 'شروع جدید' : 'Start new'),\n            ),\n          ],\n        ),\n      );\n      if (confirmed != true || !mounted) return;\n    }\n    final equity = double.tryParse(_equity.text.trim());",
+          )
+          replace_once(
+              lab,
+              "        executionModel: _executionModel,\n        experimentTag: _experimentTag.text.trim(),",
+              "        executionModel: _executionModel,\n        evaluationIdea: evaluationIdea,\n        experimentTag: _experimentTag.text.trim(),",
+          )
+          replace_once(
+              lab,
+              "  Widget _buildNewExperiment(TradingLabRun? previous) {\n    return SectionCard(",
+              "  Widget _buildNewExperiment(TradingLabRun? previous) {\n    final evaluationIdea = widget.controller.defaultEvaluationIdea;\n    return SectionCard(",
+          )
+          replace_once(
+              lab,
+              "          const SizedBox(height: 16),\n          LayoutBuilder(",
+              "          const SizedBox(height: 12),\n          DecoratedBox(\n            decoration: BoxDecoration(\n              color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.35),\n              borderRadius: BorderRadius.circular(14),\n            ),\n            child: Padding(\n              padding: const EdgeInsets.all(12),\n              child: evaluationIdea == null\n                  ? Text(\n                      _fa\n                          ? 'ستاپ قابل ارزیابی با شناسه immutable در Snapshot فعلی پیدا نشد.'\n                          : 'No setup with immutable strategy identity is available in the current snapshot.',\n                    )\n                  : Column(\n                      crossAxisAlignment: CrossAxisAlignment.start,\n                      children: [\n                        Text(\n                          _fa ? 'Strategy Snapshot انتخاب‌شده' : 'Selected strategy snapshot',\n                          style: const TextStyle(fontWeight: FontWeight.w800),\n                        ),\n                        const SizedBox(height: 4),\n                        Text(\n                          '${evaluationIdea.symbol} · ${evaluationIdea.timeframe} · ${evaluationIdea.registryStrategyId}@${evaluationIdea.registryStrategyVersion}',\n                          textDirection: TextDirection.ltr,\n                        ),\n                        Text(\n                          'schema ${evaluationIdea.strategyParameterSchemaVersion} · ${evaluationIdea.strategySnapshotHash}',\n                          textDirection: TextDirection.ltr,\n                          maxLines: 2,\n                          overflow: TextOverflow.ellipsis,\n                          style: Theme.of(context).textTheme.bodySmall,\n                        ),\n                      ],\n                    ),\n            ),\n          ),\n          const SizedBox(height: 16),\n          LayoutBuilder(",
+          )
+          replace_once(
+              lab,
+              "            onPressed: _busy ? null : _start,\n            icon: const Icon(Icons.science_rounded),\n            label: Text(\n              _fa\n                  ? 'شروع آزمایش با بازار واقعی'\n                  : 'Start real-market experiment',",
+              "            onPressed: _busy || evaluationIdea == null ? null : _start,\n            icon: const Icon(Icons.science_rounded),\n            label: Text(\n              _fa\n                  ? 'شروع ارزیابی این Strategy Snapshot'\n                  : 'Start this strategy snapshot evaluation',",
+          )
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Format touched Dart files
+        working-directory: src/client/quantara_app
+        run: dart format lib/features/owner_alpha/presentation/owner_alpha_page.dart lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart
+      - name: Commit focused patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_page.dart src/client/quantara_app/lib/features/owner_alpha/presentation/owner_alpha_trading_lab.dart
+          git diff --cached --check
+          git commit -m "feat(owner-alpha): expose exact strategy evaluation UI"
+          git push origin HEAD:feat/484-single-strategy-evaluation
