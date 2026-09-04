@@ -53,22 +53,25 @@ void main() {
     );
   });
 
-  test('successful resume requires validation both before and after resume', () {
-    final healthy = evidence(positions: 1);
-    final started = policy.beginResume(healthy);
+  test(
+    'successful resume requires validation both before and after resume',
+    () {
+      final healthy = evidence(positions: 1);
+      final started = policy.beginResume(healthy);
 
-    expect(started, GlobalPauseRuntimeMode.resuming);
-    expect(
-      policy.finishResume(current: started!, evidence: healthy),
-      GlobalPauseRuntimeMode.running,
-    );
+      expect(started, GlobalPauseRuntimeMode.resuming);
+      expect(
+        policy.finishResume(current: started!, evidence: healthy),
+        GlobalPauseRuntimeMode.running,
+      );
 
-    expect(
-      policy.finishResume(
-        current: GlobalPauseRuntimeMode.resuming,
-        evidence: evidence(positions: 1, protectionVerified: false),
-      ),
-      GlobalPauseRuntimeMode.safePausedManagingExisting,
-    );
-  });
+      expect(
+        policy.finishResume(
+          current: GlobalPauseRuntimeMode.resuming,
+          evidence: evidence(positions: 1, protectionVerified: false),
+        ),
+        GlobalPauseRuntimeMode.safePausedManagingExisting,
+      );
+    },
+  );
 }
