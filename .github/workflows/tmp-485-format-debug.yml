@@ -1,0 +1,21 @@
+name: tmp 485 format debug
+on:
+  pull_request:
+    branches: [dev]
+
+jobs:
+  format-debug:
+    if: github.head_ref == 'feat/485-exact-tested-strategy-binding-v2'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Print canonical formatter diff
+        working-directory: src/client/quantara_app
+        run: |
+          dart format test/strategy_robot_binding_test.dart
+          git diff -- test/strategy_robot_binding_test.dart
