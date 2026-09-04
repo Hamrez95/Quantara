@@ -57,9 +57,9 @@ void main() {
       sessionId: 'session-1',
       previousBinding: binding(),
     );
-    final exported = LocalLiveObservabilityExport.build(<LocalLiveObservabilityEvent>[
-      event,
-    ]);
+    final exported = LocalLiveObservabilityExport.build(
+      <LocalLiveObservabilityEvent>[event],
+    );
 
     expect(event.eventName, 'strategy_robot_binding_cleared');
     expect(event.decision, 'cleared');
