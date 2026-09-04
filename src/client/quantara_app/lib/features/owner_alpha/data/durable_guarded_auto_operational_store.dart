@@ -37,7 +37,8 @@ final class DurableGuardedAutoOperationalStore {
           if (entry.key is! String) return _unknown(nowUtc);
           json[entry.key! as String] = entry.value;
         }
-        return GuardedAutoOperationalState.tryFromJson(json) ?? _unknown(nowUtc);
+        return GuardedAutoOperationalState.tryFromJson(json) ??
+            _unknown(nowUtc);
       }
     } on Object {
       // Deliberately fail closed below.
