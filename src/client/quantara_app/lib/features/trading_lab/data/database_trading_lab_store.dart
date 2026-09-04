@@ -5,6 +5,7 @@ import '../domain/trading_lab_models.dart';
 abstract interface class TradingLabRunStore {
   Future<TradingLabRun?> loadActive();
   Future<void> save(TradingLabRun run);
+  Future<void> replaceHistory(TradingLabRun run);
   Future<List<TradingLabRun>> loadHistory({int limit = 20});
   Future<void> clearActive();
 }
@@ -35,6 +36,12 @@ final class DatabaseTradingLabRunStore implements TradingLabRunStore {
   Future<void> save(TradingLabRun run) => _serial(() async {
     final database = await _databaseFactory();
     await _put(database, _activeKey, run);
+    await _put(database, '$_historyPrefix${run.manifest.runId}', run);
+  });
+
+  @override
+  Future<void> replaceHistory(TradingLabRun run) => _serial(() async {
+    final database = await _databaseFactory();
     await _put(database, '$_historyPrefix${run.manifest.runId}', run);
   });
 
