@@ -5,81 +5,99 @@ import 'package:quantara_app/features/owner_alpha/application/global_pause_runti
 import 'package:quantara_app/features/owner_alpha/data/durable_global_pause_runtime_store.dart';
 
 void main() {
-  test('offline pause quiesces scanning network and background service', () async {
-    final memory = _MemoryStore();
-    final operations = _FakeOperations()..evidence = _flatHealthy;
-    final coordinator = _coordinator(memory, operations);
-    await coordinator.initialize();
+  test(
+    'offline pause quiesces scanning network and background service',
+    () async {
+      final memory = _MemoryStore();
+      final operations = _FakeOperations()..evidence = _flatHealthy;
+      final coordinator = _coordinator(memory, operations);
+      await coordinator.initialize();
 
-    await coordinator.requestPause();
+      await coordinator.requestPause();
 
-    expect(coordinator.mode, GlobalPauseRuntimeMode.pausedOffline);
-    expect(operations.stopScanningCalls, 1);
-    expect(operations.stopNetworkCalls, 1);
-    expect(operations.stopBackgroundCalls, 1);
-    expect(operations.keepPrivateCalls, 0);
-  });
+      expect(coordinator.mode, GlobalPauseRuntimeMode.pausedOffline);
+      expect(operations.stopScanningCalls, 1);
+      expect(operations.stopNetworkCalls, 1);
+      expect(operations.stopBackgroundCalls, 1);
+      expect(operations.keepPrivateCalls, 0);
+    },
+  );
 
-  test('live exposure enters safe pause and keeps only private management', () async {
-    final memory = _MemoryStore();
-    final operations = _FakeOperations()..evidence = _protectedExposure;
-    final coordinator = _coordinator(memory, operations);
-    await coordinator.initialize();
+  test(
+    'live exposure enters safe pause and keeps only private management',
+    () async {
+      final memory = _MemoryStore();
+      final operations = _FakeOperations()..evidence = _protectedExposure;
+      final coordinator = _coordinator(memory, operations);
+      await coordinator.initialize();
 
-    await coordinator.requestPause(pauseFullyWhenFlat: true);
+      await coordinator.requestPause(pauseFullyWhenFlat: true);
 
-    expect(coordinator.mode, GlobalPauseRuntimeMode.safePausedManagingExisting);
-    expect(operations.stopScanningCalls, 1);
-    expect(operations.stopNetworkCalls, 1);
-    expect(operations.keepPrivateCalls, 1);
-    expect(operations.stopBackgroundCalls, 0);
-  });
+      expect(
+        coordinator.mode,
+        GlobalPauseRuntimeMode.safePausedManagingExisting,
+      );
+      expect(operations.stopScanningCalls, 1);
+      expect(operations.stopNetworkCalls, 1);
+      expect(operations.keepPrivateCalls, 1);
+      expect(operations.stopBackgroundCalls, 0);
+    },
+  );
 
-  test('pause fully when flat transitions without restarting scanners', () async {
-    final memory = _MemoryStore();
-    final operations = _FakeOperations()..evidence = _protectedExposure;
-    final coordinator = _coordinator(memory, operations);
-    await coordinator.initialize();
-    await coordinator.requestPause(pauseFullyWhenFlat: true);
-    operations.evidence = _flatHealthy;
+  test(
+    'pause fully when flat transitions without restarting scanners',
+    () async {
+      final memory = _MemoryStore();
+      final operations = _FakeOperations()..evidence = _protectedExposure;
+      final coordinator = _coordinator(memory, operations);
+      await coordinator.initialize();
+      await coordinator.requestPause(pauseFullyWhenFlat: true);
+      operations.evidence = _flatHealthy;
 
-    await coordinator.reconcilePausedExposure();
+      await coordinator.reconcilePausedExposure();
 
-    expect(coordinator.mode, GlobalPauseRuntimeMode.pausedOffline);
-    expect(operations.stopBackgroundCalls, 1);
-    expect(operations.prepareResumeCalls, 0);
-  });
+      expect(coordinator.mode, GlobalPauseRuntimeMode.pausedOffline);
+      expect(operations.stopBackgroundCalls, 1);
+      expect(operations.prepareResumeCalls, 0);
+    },
+  );
 
-  test('stale account blocks explicit resume and leaves runtime quiesced', () async {
-    final memory = _MemoryStore();
-    final operations = _FakeOperations()..evidence = _flatHealthy;
-    final coordinator = _coordinator(memory, operations);
-    await coordinator.initialize();
-    await coordinator.requestPause();
-    operations.evidence = _staleFlat;
+  test(
+    'stale account blocks explicit resume and leaves runtime quiesced',
+    () async {
+      final memory = _MemoryStore();
+      final operations = _FakeOperations()..evidence = _flatHealthy;
+      final coordinator = _coordinator(memory, operations);
+      await coordinator.initialize();
+      await coordinator.requestPause();
+      operations.evidence = _staleFlat;
 
-    final resumed = await coordinator.requestResume();
+      final resumed = await coordinator.requestResume();
 
-    expect(resumed, isFalse);
-    expect(coordinator.mode, GlobalPauseRuntimeMode.pausedOffline);
-    expect(operations.prepareResumeCalls, 0);
-    expect(operations.stopScanningCalls, greaterThanOrEqualTo(2));
-  });
+      expect(resumed, isFalse);
+      expect(coordinator.mode, GlobalPauseRuntimeMode.pausedOffline);
+      expect(operations.prepareResumeCalls, 0);
+      expect(operations.stopScanningCalls, greaterThanOrEqualTo(2));
+    },
+  );
 
-  test('resume validates twice and never grants robot/order authority', () async {
-    final memory = _MemoryStore();
-    final operations = _FakeOperations()..evidence = _flatHealthy;
-    final coordinator = _coordinator(memory, operations);
-    await coordinator.initialize();
-    await coordinator.requestPause();
+  test(
+    'resume validates twice and never grants robot/order authority',
+    () async {
+      final memory = _MemoryStore();
+      final operations = _FakeOperations()..evidence = _flatHealthy;
+      final coordinator = _coordinator(memory, operations);
+      await coordinator.initialize();
+      await coordinator.requestPause();
 
-    final resumed = await coordinator.requestResume();
+      final resumed = await coordinator.requestResume();
 
-    expect(resumed, isTrue);
-    expect(coordinator.mode, GlobalPauseRuntimeMode.running);
-    expect(operations.evidenceReads, greaterThanOrEqualTo(3));
-    expect(operations.prepareResumeCalls, 1);
-  });
+      expect(resumed, isTrue);
+      expect(coordinator.mode, GlobalPauseRuntimeMode.running);
+      expect(operations.evidenceReads, greaterThanOrEqualTo(3));
+      expect(operations.prepareResumeCalls, 1);
+    },
+  );
 
   test('restored offline state is applied before any resume work', () async {
     final memory = _MemoryStore();

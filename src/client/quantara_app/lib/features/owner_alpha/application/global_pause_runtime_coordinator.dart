@@ -315,10 +315,7 @@ final class GlobalPauseRuntimeCoordinator {
 
   Future<void> _serialize(Future<void> Function() operation) {
     final result = _tail.then((_) => operation());
-    _tail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace _) {},
-    );
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
   }
 }
