@@ -8,6 +8,7 @@ import '../../owner_alpha/domain/profit_protection_policy.dart';
 import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
 import 'trading_lab_canonical_decision.dart';
+import 'trading_lab_strategy_identity.dart';
 
 final class TradingLabPaperBroker {
   const TradingLabPaperBroker();
@@ -151,14 +152,14 @@ final class TradingLabPaperBroker {
         final timeframe = entry.key;
         final idea = entry.value;
         if (!run.manifest.timeframes.contains(timeframe)) continue;
+        if (!tradingLabManifestAcceptsIdea(run.manifest, idea)) continue;
         final analysis = radar.analysesByTimeframe[timeframe];
         if (analysis == null) continue;
         final signalCandle = analysis.latestCandle;
         final decisionKey = [
           idea.symbol.toUpperCase(),
           timeframe,
-          idea.strategy.name,
-          idea.strategyVersion,
+          tradingLabStrategyIdentityKey(idea),
           idea.setupId,
           idea.candleClosedAt.toUtc().toIso8601String(),
         ].join('|');
@@ -184,6 +185,7 @@ final class TradingLabPaperBroker {
             'marketRegime': idea.marketRegime.name,
             'analysisFingerprint': analysis.fingerprint,
             'direction': idea.direction.name,
+            'strategySnapshot': tradingLabStrategyIdentityKey(idea),
           },
         );
 

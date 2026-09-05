@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../owner_alpha/application/owner_alpha_controller.dart';
+import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../data/database_trading_lab_store.dart';
 import '../domain/trading_lab_account_context.dart';
 import '../domain/trading_lab_models.dart';
@@ -10,6 +11,7 @@ import '../domain/trading_lab_real_account_evidence.dart';
 import 'trading_lab_benchmark.dart';
 import 'trading_lab_paper_broker.dart';
 import 'trading_lab_shadow_evidence.dart';
+import 'trading_lab_strategy_identity.dart';
 import 'trading_lab_zip_bundle.dart';
 
 final class TradingLabController extends ChangeNotifier {
@@ -62,6 +64,42 @@ final class TradingLabController extends ChangeNotifier {
       _realAccountEvidenceProvider?.call() ??
       TradingLabRealAccountEvidence.unavailable();
 
+  List<TradeIdea> get availableEvaluationIdeas {
+    final snapshot = _marketController.snapshot;
+    if (snapshot == null) return const <TradeIdea>[];
+    final byIdentity = <String, TradeIdea>{};
+    for (final radar in snapshot.radar) {
+      for (final idea in radar.ideasByTimeframe.values) {
+        if (!getTradingLabIdeaHasImmutableRegistryIdentity(idea)) continue;
+        final key = tradingLabStrategyIdentityKey(idea);
+        final current = byIdentity[key];
+        if (current == null || (!current.isActionable && idea.isActionable)) {
+          byIdentity[key] = idea;
+        }
+      }
+    }
+    final result = byIdentity.values.toList(growable: false)
+      ..sort((left, right) {
+        final strategy = left.registryStrategyId.compareTo(
+          right.registryStrategyId,
+        );
+        if (strategy != 0) return strategy;
+        final symbol = left.symbol.compareTo(right.symbol);
+        if (symbol != 0) return symbol;
+        return left.timeframe.compareTo(right.timeframe);
+      });
+    return List<TradeIdea>.unmodifiable(result);
+  }
+
+  TradeIdea? get defaultEvaluationIdea {
+    final selected = _marketController.snapshot?.selectedIdea;
+    if (selected != null &&
+        getTradingLabIdeaHasImmutableRegistryIdentity(selected)) {
+      return selected;
+    }
+    return availableEvaluationIdeas.firstOrNull;
+  }
+
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
@@ -97,6 +135,7 @@ final class TradingLabController extends ChangeNotifier {
     TradingLabMarginMode marginMode = TradingLabMarginMode.isolated,
     TradingLabExecutionModel executionModel =
         TradingLabExecutionModel.conservativeCandlePath,
+    TradeIdea? evaluationIdea,
     String experimentTag = '',
     String notes = '',
   }) async {
@@ -108,16 +147,33 @@ final class TradingLabController extends ChangeNotifier {
     final now = DateTime.now().toUtc();
     final snapshot = _marketController.snapshot;
     final strategyVersions = <String>{};
-    if (snapshot != null) {
-      for (final radar in snapshot.radar) {
-        for (final idea in radar.ideasByTimeframe.values) {
-          strategyVersions.add('${idea.strategy.name}@${idea.strategyVersion}');
+    late final List<String> symbols;
+    late final List<String> timeframes;
+
+    if (evaluationIdea != null) {
+      if (!getTradingLabIdeaHasImmutableRegistryIdentity(evaluationIdea)) {
+        throw StateError(
+          'The selected setup has no immutable registry snapshot and cannot start a reproducible evaluation.',
+        );
+      }
+      strategyVersions.add(tradingLabStrategyIdentityKey(evaluationIdea));
+      symbols = <String>[evaluationIdea.symbol.trim().toUpperCase()];
+      timeframes = <String>[evaluationIdea.timeframe.trim()];
+    } else {
+      if (snapshot != null) {
+        for (final radar in snapshot.radar) {
+          for (final idea in radar.ideasByTimeframe.values) {
+            strategyVersions.add(tradingLabStrategyIdentityKey(idea));
+          }
         }
       }
+      if (strategyVersions.isEmpty) {
+        strategyVersions.add('${_marketController.strategy.name}@runtime');
+      }
+      symbols = _marketController.symbols;
+      timeframes = const ['5m', '15m', '30m', '1h'];
     }
-    if (strategyVersions.isEmpty) {
-      strategyVersions.add('${_marketController.strategy.name}@runtime');
-    }
+
     _run = TradingLabRun(
       manifest: TradingLabRunManifest(
         runId: 'lab-${now.microsecondsSinceEpoch}',
@@ -126,8 +182,8 @@ final class TradingLabController extends ChangeNotifier {
         riskPercent: riskPercent,
         maximumConcurrentPositions: maximumConcurrentPositions,
         leverage: leverage,
-        symbols: _marketController.symbols,
-        timeframes: const ['5m', '15m', '30m', '1h'],
+        symbols: symbols,
+        timeframes: timeframes,
         strategies: strategyVersions,
         feeRateBps: feeRateBps,
         slippageBps: slippageBps,

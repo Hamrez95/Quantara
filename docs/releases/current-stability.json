@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "version": "1.2.0-rc.3",
+  "buildNumber": 126,
+  "softwareCandidateSha": "7764cf362348d66fa956aeebe154d8198a2f9370",
+  "overallStatus": "pending",
+  "gates": {
+    "software": {
+      "status": "passed",
+      "reason": "Repository, Flutter/Android upgrade, Windows build, installable artifact smoke, release notes and rollback evidence are captured in the machine-readable readiness manifest.",
+      "readinessManifest": "docs/releases/current-readiness.json"
+    },
+    "simulation": {
+      "status": "pending",
+      "reason": "No complete strategy experiment evidence bundle has been supplied for the current candidate; CI must not infer research validity.",
+      "requirements": {
+        "datasetProvenance": false,
+        "immutableConfiguration": false,
+        "chronologicalPartitions": false,
+        "walkForwardOutOfSample": false,
+        "realisticCostsAndFills": false,
+        "regimeBreakdown": false,
+        "parameterSensitivity": false,
+        "baselineComparison": false,
+        "completeTradeLedger": false,
+        "lookAheadLeakageChecks": false
+      }
+    },
+    "strategy_promotion": {
+      "status": "pending",
+      "reason": "Required out-of-sample strategy metrics have not been supplied as release evidence and no profitability claim is made.",
+      "metrics": {
+        "expectancy": {"observed": false, "value": null},
+        "profitFactor": {"observed": false, "value": null},
+        "maximumDrawdown": {"observed": false, "value": null},
+        "returnToDrawdown": {"observed": false, "value": null},
+        "tailLosses": {"observed": false, "value": null},
+        "exposureTime": {"observed": false, "value": null},
+        "turnover": {"observed": false, "value": null},
+        "tradeCount": {"observed": false, "value": null},
+        "confidenceIntervals": {"observed": false, "value": null},
+        "foldAndRegimeStability": {"observed": false, "value": null}
+      }
+    },
+    "paper_shadow": {
+      "status": "pending",
+      "reason": "Repeated paper accounting, live-market shadow observation across regimes, and operational-failure acceptance evidence are not yet supplied.",
+      "requirements": {
+        "accountingReconciliation": false,
+        "restartRecoveryReconciliation": false,
+        "shadowLiveMarketDecisions": false,
+        "multipleMarketRegimes": false,
+        "operationalFailureCoverage": false,
+        "emergencyControlsAcceptance": false
+      }
+    },
+    "physical_device_signing": {
+      "status": "pending",
+      "reason": "Physical-device install/upgrade, battery/network idle behavior, and permanent-signing continuity remain unverified.",
+      "evidenceRefs": []
+    },
+    "exchange_restricted_live": {
+      "status": "pending",
+      "reason": "Exchange-side restricted-live safety and protection evidence is intentionally not inferred from software CI.",
+      "evidenceRefs": []
+    }
+  }
+}

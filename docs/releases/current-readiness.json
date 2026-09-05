@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "version": "1.2.0-rc.3",
+  "buildNumber": 126,
+  "softwareCandidateSha": "7764cf362348d66fa956aeebe154d8198a2f9370",
+  "generatedAt": "2026-09-04T21:40:00Z",
+  "qualityScore": 100,
+  "minimumQualityScore": 90,
+  "evidence": {
+    "repository_integrity": {
+      "passed": true,
+      "runId": 33868131671,
+      "checkRunIds": [101007555115, 101007555277]
+    },
+    "flutter_android_upgrade": {
+      "passed": true,
+      "runId": 33868131672,
+      "jobIds": [101007554963, 101010494526, 101010494522, 101010494572]
+    },
+    "windows_build": {
+      "passed": true,
+      "runId": 33868131712,
+      "checkRunIds": [101007555222]
+    },
+    "installable_artifact_smoke": {
+      "passed": true,
+      "artifactIds": [9935114851, 9935127124],
+      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service install/start/status/stop/uninstall lifecycle"
+    },
+    "stability_report": {
+      "passed": true,
+      "path": "docs/releases/1.2.0-rc.3-stability.md"
+    },
+    "release_notes": {
+      "passed": true,
+      "path": "docs/releases/1.2.0-rc.3.md"
+    },
+    "rollback_plan": {
+      "passed": true,
+      "path": "docs/release-rollback.md"
+    },
+    "safety_regression": {
+      "passed": true,
+      "runId": 33868131672,
+      "scope": "Flutter safety tests plus Android restart/upgrade matrix on the software candidate"
+    }
+  },
+  "manualGates": {
+    "physical_device_permanent_signing": {
+      "status": "pending",
+      "reason": "Current evidence is CI/emulator/internal-artifact evidence; permanent-signing continuity and physical-device installation/upgrade remain unverified."
+    },
+    "production_store_publication": {
+      "status": "approval_required",
+      "reason": "AGENTS.md requires explicit owner approval before production/store publication."
+    }
+  }
+}

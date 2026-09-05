@@ -3,18 +3,22 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('mobile navigation exposes only four stable top-level destinations', () {
+  test('mobile navigation exposes five stable top-level destinations', () {
     final source = File(
       'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
     ).readAsStringSync();
 
-    expect(source, contains('const _mobileDestinationIndexes = [0, 1, 5, 7];'));
     expect(
       source,
-      contains('const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];'),
+      contains('const _mobileDestinationIndexes = [0, 1, 4, 5, 7];'),
+    );
+    expect(
+      source,
+      contains('const _desktopDestinationIndexes = [0, 1, 2, 3, 4, 5, 6, 7];'),
     );
     expect(source, contains("strings.t('خانه', 'Home')"));
     expect(source, contains('Icons.home_outlined'));
+    expect(source, contains("strings.isPersian ? 'آزمایشگاه بات' : 'Bot Lab'"));
   });
 
   test('Strategy Lab is absent from the product navigation surface', () {

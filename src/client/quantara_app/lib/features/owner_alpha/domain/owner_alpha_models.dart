@@ -97,6 +97,14 @@ final class TradeIdea {
     this.rejectionReason = SetupRejectionReason.none,
     this.strategy = AnalysisStrategy.structureZones,
     this.strategyVersion = '1.1',
+    this.registryStrategyId = '',
+    this.registryStrategyVersion = '',
+    this.strategyParameterSchemaVersion = 0,
+    this.normalizedStrategyParameters = const {},
+    this.strategySnapshotHash = '',
+    this.managementPolicyVersion = '',
+    this.strategyImplementationVersion = '',
+    this.strategyLifecycle = '',
     this.marketRegime = MarketRegime.transition,
     this.indicatorSnapshot = const {},
     this.setupQualityScore,
@@ -129,7 +137,20 @@ final class TradeIdea {
   final List<String> reasons;
   final SetupRejectionReason rejectionReason;
   final AnalysisStrategy strategy;
+
+  /// Legacy setup implementation identity (for example rangeReversal/1.0).
   final String strategyVersion;
+
+  /// Stable registry identity used for new runs, history and live attribution.
+  final String registryStrategyId;
+  final String registryStrategyVersion;
+  final int strategyParameterSchemaVersion;
+  final Map<String, Object?> normalizedStrategyParameters;
+  final String strategySnapshotHash;
+  final String managementPolicyVersion;
+  final String strategyImplementationVersion;
+  final String strategyLifecycle;
+
   final MarketRegime marketRegime;
   final Map<String, double> indicatorSnapshot;
   final int? setupQualityScore;
@@ -176,6 +197,59 @@ final class TradeIdea {
     return notionalValue! / leverage;
   }
 
+  TradeIdea copyWithRegistryIdentity({
+    required String registryStrategyId,
+    required String registryStrategyVersion,
+    required int strategyParameterSchemaVersion,
+    required Map<String, Object?> normalizedStrategyParameters,
+    required String strategySnapshotHash,
+    required String managementPolicyVersion,
+    required String strategyImplementationVersion,
+    required String strategyLifecycle,
+  }) => TradeIdea(
+    symbol: symbol,
+    timeframe: timeframe,
+    direction: direction,
+    confidencePercent: confidencePercent,
+    entryLower: entryLower,
+    entryUpper: entryUpper,
+    stopLoss: stopLoss,
+    targets: targets,
+    riskReward: riskReward,
+    maximumLoss: maximumLoss,
+    positionSize: positionSize,
+    notionalValue: notionalValue,
+    recommendedLeverage: recommendedLeverage,
+    maximumSafeLeverage: maximumSafeLeverage,
+    requiredMargin: requiredMargin,
+    estimatedRoundTripCosts: estimatedRoundTripCosts,
+    setupId: setupId,
+    candleClosedAt: candleClosedAt,
+    summary: summary,
+    invalidation: invalidation,
+    reasons: reasons,
+    rejectionReason: rejectionReason,
+    strategy: strategy,
+    strategyVersion: strategyVersion,
+    registryStrategyId: registryStrategyId,
+    registryStrategyVersion: registryStrategyVersion,
+    strategyParameterSchemaVersion: strategyParameterSchemaVersion,
+    normalizedStrategyParameters: Map.unmodifiable(
+      normalizedStrategyParameters,
+    ),
+    strategySnapshotHash: strategySnapshotHash,
+    managementPolicyVersion: managementPolicyVersion,
+    strategyImplementationVersion: strategyImplementationVersion,
+    strategyLifecycle: strategyLifecycle,
+    marketRegime: marketRegime,
+    indicatorSnapshot: indicatorSnapshot,
+    setupQualityScore: setupQualityScore,
+    expectation: expectation,
+    trigger: trigger,
+    contextVersion: contextVersion,
+    evidenceBreakdown: evidenceBreakdown,
+  );
+
   TradeIdea copyWithPlaybookMetadata({
     required String strategyVersion,
     required int setupQualityScore,
@@ -208,6 +282,14 @@ final class TradeIdea {
     rejectionReason: rejectionReason,
     strategy: strategy,
     strategyVersion: strategyVersion,
+    registryStrategyId: registryStrategyId,
+    registryStrategyVersion: registryStrategyVersion,
+    strategyParameterSchemaVersion: strategyParameterSchemaVersion,
+    normalizedStrategyParameters: normalizedStrategyParameters,
+    strategySnapshotHash: strategySnapshotHash,
+    managementPolicyVersion: managementPolicyVersion,
+    strategyImplementationVersion: strategyImplementationVersion,
+    strategyLifecycle: strategyLifecycle,
     marketRegime: marketRegime,
     indicatorSnapshot: indicatorSnapshot,
     setupQualityScore: setupQualityScore,
@@ -387,6 +469,14 @@ final class SignalJournalEntry {
     required this.selectedLeverage,
     required this.summary,
     required this.invalidation,
+    this.registryStrategyId = '',
+    this.registryStrategyVersion = '',
+    this.strategyParameterSchemaVersion = 0,
+    this.normalizedStrategyParameters = const {},
+    this.strategySnapshotHash = '',
+    this.managementPolicyVersion = '',
+    this.strategyImplementationVersion = '',
+    this.strategyLifecycle = '',
     this.setupQualityScore,
     this.expectation = '',
     this.trigger = '',
@@ -417,6 +507,14 @@ final class SignalJournalEntry {
     direction: idea.direction,
     strategy: idea.strategy,
     strategyVersion: idea.strategyVersion,
+    registryStrategyId: idea.registryStrategyId,
+    registryStrategyVersion: idea.registryStrategyVersion,
+    strategyParameterSchemaVersion: idea.strategyParameterSchemaVersion,
+    normalizedStrategyParameters: idea.normalizedStrategyParameters,
+    strategySnapshotHash: idea.strategySnapshotHash,
+    managementPolicyVersion: idea.managementPolicyVersion,
+    strategyImplementationVersion: idea.strategyImplementationVersion,
+    strategyLifecycle: idea.strategyLifecycle,
     createdAt: idea.createdAt,
     validUntil: idea.validUntil,
     entryLower: idea.entryLower,
@@ -449,6 +547,14 @@ final class SignalJournalEntry {
   final TradeDirection direction;
   final AnalysisStrategy strategy;
   final String strategyVersion;
+  final String registryStrategyId;
+  final String registryStrategyVersion;
+  final int strategyParameterSchemaVersion;
+  final Map<String, Object?> normalizedStrategyParameters;
+  final String strategySnapshotHash;
+  final String managementPolicyVersion;
+  final String strategyImplementationVersion;
+  final String strategyLifecycle;
   final DateTime createdAt;
   final DateTime validUntil;
   final double? entryLower;
@@ -530,6 +636,14 @@ final class SignalJournalEntry {
     direction: direction,
     strategy: strategy,
     strategyVersion: strategyVersion,
+    registryStrategyId: registryStrategyId,
+    registryStrategyVersion: registryStrategyVersion,
+    strategyParameterSchemaVersion: strategyParameterSchemaVersion,
+    normalizedStrategyParameters: normalizedStrategyParameters,
+    strategySnapshotHash: strategySnapshotHash,
+    managementPolicyVersion: managementPolicyVersion,
+    strategyImplementationVersion: strategyImplementationVersion,
+    strategyLifecycle: strategyLifecycle,
     createdAt: createdAt,
     validUntil: validUntil,
     entryLower: entryLower,
@@ -572,6 +686,14 @@ final class SignalJournalEntry {
     'direction': direction.name,
     'strategy': strategy.name,
     'strategyVersion': strategyVersion,
+    'registryStrategyId': registryStrategyId,
+    'registryStrategyVersion': registryStrategyVersion,
+    'strategyParameterSchemaVersion': strategyParameterSchemaVersion,
+    'normalizedStrategyParameters': normalizedStrategyParameters,
+    'strategySnapshotHash': strategySnapshotHash,
+    'managementPolicyVersion': managementPolicyVersion,
+    'strategyImplementationVersion': strategyImplementationVersion,
+    'strategyLifecycle': strategyLifecycle,
     'createdAt': createdAt.toIso8601String(),
     'validUntil': validUntil.toIso8601String(),
     'entryLower': entryLower,
@@ -642,7 +764,21 @@ final class SignalJournalEntry {
         timeframe: value['timeframe'] as String,
         direction: direction,
         strategy: strategy,
-        strategyVersion: value['strategyVersion'] as String,
+        strategyVersion: (value['strategyVersion'] as String?) ?? '1.1',
+        registryStrategyId: (value['registryStrategyId'] as String?) ?? '',
+        registryStrategyVersion:
+            (value['registryStrategyVersion'] as String?) ?? '',
+        strategyParameterSchemaVersion:
+            (value['strategyParameterSchemaVersion'] as num?)?.toInt() ?? 0,
+        normalizedStrategyParameters: _tryStrategyParameters(
+          value['normalizedStrategyParameters'],
+        ),
+        strategySnapshotHash: (value['strategySnapshotHash'] as String?) ?? '',
+        managementPolicyVersion:
+            (value['managementPolicyVersion'] as String?) ?? '',
+        strategyImplementationVersion:
+            (value['strategyImplementationVersion'] as String?) ?? '',
+        strategyLifecycle: (value['strategyLifecycle'] as String?) ?? '',
         createdAt: DateTime.parse(value['createdAt'] as String).toUtc(),
         validUntil: DateTime.parse(value['validUntil'] as String).toUtc(),
         entryLower: (value['entryLower'] as num?)?.toDouble(),
@@ -710,6 +846,16 @@ final class SignalJournalEntry {
       final number = (entry.value as num).toDouble();
       if (!number.isFinite || number < 0 || number > 20) continue;
       result[entry.key as String] = number;
+    }
+    return Map.unmodifiable(result);
+  }
+
+  static Map<String, Object?> _tryStrategyParameters(Object? value) {
+    if (value is! Map<Object?, Object?>) return const {};
+    final result = <String, Object?>{};
+    for (final entry in value.entries) {
+      if (entry.key is! String) continue;
+      result[entry.key as String] = entry.value;
     }
     return Map.unmodifiable(result);
   }
