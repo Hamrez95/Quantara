@@ -108,26 +108,24 @@ jobs:
           flutter analyze --fatal-infos
           flutter test --reporter expanded
 
-      - name: Decode and verify owner-managed Stable keystore
+      - name: Decode owner-managed Stable keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.QUANTARA_ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.QUANTARA_ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.QUANTARA_ANDROID_KEY_ALIAS }}
-          EXPECTED_CERT_SHA256: ${{ secrets.QUANTARA_STABLE_CERT_SHA256 }}
+          KEY_PASSWORD: ${{ secrets.QUANTARA_ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$KEYSTORE_BASE64"
           test -n "$KEYSTORE_PASSWORD"
           test -n "$KEY_ALIAS"
-          test -n "$EXPECTED_CERT_SHA256"
+          test -n "$KEY_PASSWORD"
           keystore="$RUNNER_TEMP/quantara-owner-alpha.jks"
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
           chmod 600 "$keystore"
           keytool -list -v -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > "$RUNNER_TEMP/owner-alpha-keystore.txt"
-          actual="$(grep -m1 'SHA256:' "$RUNNER_TEMP/owner-alpha-keystore.txt" | sed 's/.*SHA256: //' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          test "$actual" = "$expected"
+          grep -q 'SHA256:' "$RUNNER_TEMP/owner-alpha-keystore.txt"
           echo "QUANTARA_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
 
       - name: Build signed Owner Alpha APKs
@@ -149,8 +147,6 @@ jobs:
         id: integrity
         working-directory: ${{ env.APP_DIR }}
         shell: bash
-        env:
-          EXPECTED_CERT_SHA256: ${{ secrets.QUANTARA_STABLE_CERT_SHA256 }}
         run: |
           set -euo pipefail
           apk="build/app/outputs/flutter-apk/app-release.apk"
@@ -165,15 +161,37 @@ jobs:
           "$apkanalyzer" manifest version-name "$apk" | grep -Fxq '${{ steps.version.outputs.version }}'
           "$apkanalyzer" manifest version-code "$apk" | grep -Fxq '${{ steps.version.outputs.build_number }}'
           "$apksigner" verify --verbose --print-certs "$apk" | tee owner-alpha-signing.txt
-          actual="$(grep -m1 'certificate SHA-256 digest:' owner-alpha-signing.txt | awk '{print $NF}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          test "$actual" = "$expected"
+          signer="$(grep -m1 'certificate SHA-256 digest:' owner-alpha-signing.txt | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')"
+          test -n "$signer"
           "$zipalign" -c -P 16 -v 4 "$apk"
           "$zipalign" -c -P 16 -v 4 "$arm64"
           apk_sha="$(sha256sum "$apk" | awk '{print $1}')"
           echo "apk_sha256=$apk_sha" >> "$GITHUB_OUTPUT"
-          echo "signing_identity=$actual" >> "$GITHUB_OUTPUT"
+          echo "signing_identity=$signer" >> "$GITHUB_OUTPUT"
           sha256sum build/app/outputs/flutter-apk/*.apk | tee SHA256SUMS.txt
+
+      - name: Require signer continuity with latest published beta
+        working-directory: ${{ env.APP_DIR }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNING_IDENTITY: ${{ steps.integrity.outputs.signing_identity }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_url="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq '[.[]? | select(.draft == false and .prerelease == true) | .assets[]? | select(.name == "release-manifest.json") | .browser_download_url][0] // ""'
+          )"
+          if [ -z "$manifest_url" ]; then
+            echo 'No published beta release manifest exists to prove Android signing continuity.' >&2
+            exit 1
+          fi
+          curl --fail --location --proto '=https' --tlsv1.2 "$manifest_url" \
+            --output "$RUNNER_TEMP/previous-release-manifest.json"
+          python ../../../scripts/release/release_manifest.py guard-identity \
+            --previous-manifest "$RUNNER_TEMP/previous-release-manifest.json" \
+            --android-package-id com.quantara.quantara_app \
+            --android-signing-identity "$SIGNING_IDENTITY"
 
       - name: Write auditable candidate metadata
         working-directory: ${{ env.APP_DIR }}
