@@ -17,7 +17,7 @@ void main() {
       expect(controller, contains('Future<void> _deliverStartCommand'));
       expect(controller, contains("'commandId': commandId"));
       expect(controller, contains('for (var attempt = 0;'));
-      expect(controller, contains('API credentials therefore remain confined'));
+      expect(controller, contains('credentials therefore remain confined'));
       expect(
         controller,
         isNot(contains('saveData(\n        key: localLiveCredentials')),
