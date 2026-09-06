@@ -84,6 +84,8 @@ class _RadarDashboard extends StatelessWidget {
         ],
         _ScanDiagnosticsCard(snapshot: snapshot),
         const SizedBox(height: 16),
+        const _RecentSetupDecisionsCard(),
+        const SizedBox(height: 16),
         _RealtimeRadarPanel(
           realtimeMonitor: realtimeMonitor,
           journal: controller.signalJournal,
@@ -486,6 +488,167 @@ class _ScanDiagnosticsCard extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Turns the persisted realtime candidate ledger into a user-facing answer to
+/// "what happened to the setup?"  It is deliberately read-only: audit data
+/// never changes trading authority or a candidate's lifecycle.
+class _RecentSetupDecisionsCard extends StatefulWidget {
+  const _RecentSetupDecisionsCard();
+
+  @override
+  State<_RecentSetupDecisionsCard> createState() =>
+      _RecentSetupDecisionsCardState();
+}
+
+class _RecentSetupDecisionsCardState extends State<_RecentSetupDecisionsCard> {
+  final CandidateAuditStore _store = DurableCandidateAuditStore(
+    keyValueStore: const SharedPreferencesCandidateAuditKeyValueStore(),
+  );
+  late Future<CandidateAuditLedger> _ledger = _store.load();
+
+  void _reload() => setState(() => _ledger = _store.load());
+
+  @override
+  Widget build(BuildContext context) {
+    final persian = Localizations.localeOf(context).languageCode != 'en';
+    return SectionCard(
+      child: FutureBuilder<CandidateAuditLedger>(
+        future: _ledger,
+        builder: (context, snapshot) {
+          final records =
+              snapshot.data?.records.reversed.take(6).toList() ??
+              const <CandidateAuditRecord>[];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.fact_check_rounded),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      persian
+                          ? 'خلاصه آخرین ستاپ‌ها'
+                          : 'Recent setup decisions',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: persian ? 'به‌روزرسانی' : 'Refresh',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                persian
+                    ? 'هر مورد می‌گوید ستاپ چه شد و چرا؛ این گزارش سفارش ایجاد نمی‌کند.'
+                    : 'Each item explains what happened to a setup. This report never places an order.',
+              ),
+              if (snapshot.connectionState == ConnectionState.waiting) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ] else if (records.isEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  persian
+                      ? 'هنوز ستاپ قابل‌اقدامی در بازار بلادرنگ ثبت نشده است.'
+                      : 'No actionable realtime setup has been recorded yet.',
+                ),
+              ] else ...[
+                const Divider(height: 24),
+                for (final record in records) ...[
+                  _SetupDecisionRow(record: record, persian: persian),
+                  if (record != records.last) const Divider(height: 18),
+                ],
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SetupDecisionRow extends StatelessWidget {
+  const _SetupDecisionRow({required this.record, required this.persian});
+
+  final CandidateAuditRecord record;
+  final bool persian;
+
+  @override
+  Widget build(BuildContext context) {
+    final reason = switch (record.transitionReason) {
+      OpportunityTransitionReason.created =>
+        persian ? 'ستاپ شناسایی شد' : 'Setup detected',
+      OpportunityTransitionReason.evidenceImproved =>
+        persian ? 'شواهد بهتر شد' : 'Evidence improved',
+      OpportunityTransitionReason.evidenceWeakened =>
+        persian ? 'شواهد ضعیف شد' : 'Evidence weakened',
+      OpportunityTransitionReason.entryApproaching =>
+        persian ? 'قیمت به محدوده ورود نزدیک شد' : 'Price approached entry',
+      OpportunityTransitionReason.triggerConfirmed =>
+        persian ? 'تریگر بسته‌شده تأیید شد' : 'Closed-candle trigger confirmed',
+      OpportunityTransitionReason.priceRanAway =>
+        persian ? 'قیمت از محدوده ورود عبور کرد' : 'Price ran beyond entry',
+      OpportunityTransitionReason.validityExpired =>
+        persian ? 'زمان اعتبار ستاپ تمام شد' : 'Setup validity expired',
+      OpportunityTransitionReason.structureInvalidated =>
+        persian ? 'ساختار ستاپ باطل شد' : 'Setup structure invalidated',
+      OpportunityTransitionReason.dataStale =>
+        persian
+            ? 'داده بازار قدیمی شد؛ ورود قفل شد'
+            : 'Market data went stale; entry locked',
+      null => persian ? 'رویداد ستاپ ثبت شد' : 'Setup event recorded',
+    };
+    final stage = record.currentStage?.name ?? record.disposition.name;
+    return Semantics(
+      label: '${record.symbol} ${record.timeframe} $reason',
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            record.currentStage == OpportunityStage.triggered
+                ? Icons.check_circle_rounded
+                : record.currentStage == OpportunityStage.invalidated ||
+                      record.currentStage == OpportunityStage.expired ||
+                      record.currentStage == OpportunityStage.missed
+                ? Icons.block_rounded
+                : Icons.radar_rounded,
+            color: record.currentStage == OpportunityStage.triggered
+                ? QuantaraColors.success
+                : QuantaraColors.warning,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${record.symbol} · ${record.timeframe}',
+                  textDirection: TextDirection.ltr,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 2),
+                Text(reason),
+                const SizedBox(height: 2),
+                Text(
+                  '${persian ? 'وضعیت' : 'State'}: $stage',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

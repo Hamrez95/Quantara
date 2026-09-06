@@ -48,6 +48,9 @@ final class LocalLiveTradeController extends ChangeNotifier {
   bool _accountListenerAttached = false;
   Timer? _accountPollTimer;
 
+  static const _credentialDeliveryAttempts = 4;
+  static const _credentialDeliveryDelay = Duration(milliseconds: 650);
+
   LocalLiveTradeStatus get status => _status;
   String? get error => _error;
   bool get isBusy => _busy;
@@ -212,16 +215,6 @@ final class LocalLiveTradeController extends ChangeNotifier {
         );
         _throwOnServiceFailure(startResult, 'start');
       }
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-      FlutterForegroundTask.sendDataToTask(
-        jsonEncode({
-          'type': 'start',
-          'configuration': configuration.toJson(),
-          'apiKey': credentials.apiKey,
-          'secretKey': credentials.secretKey,
-          'entriesEnabled': entriesEnabled,
-        }),
-      );
       final exchangePositions = account.positions
           .where((position) => position.quantity > 0)
           .toList(growable: false);
@@ -249,6 +242,11 @@ final class LocalLiveTradeController extends ChangeNotifier {
             : 'exchangeTruthPendingLocalRecovery',
         entriesEnabled: entriesEnabled && exchangePositions.isEmpty,
       );
+      await _deliverStartCommand(
+        configuration: configuration,
+        credentials: credentials,
+        entriesEnabled: entriesEnabled,
+      );
       _updateAccountPolling();
       return true;
     } on LocalLiveTradeSafeException catch (error) {
@@ -266,6 +264,37 @@ final class LocalLiveTradeController extends ChangeNotifier {
         _busy = false;
         notifyListeners();
       }
+    }
+  }
+
+  /// A foreground-task isolate may report ready before it has installed its
+  /// data receiver. Re-send one idempotent, in-memory-only start command so a
+  /// user-confirmed start cannot become permanently stuck at "starting".
+  ///
+  /// The command id is intentionally per-start and never persisted. API
+  /// credentials therefore remain confined to secure storage and the active
+  /// service message channel; they never enter foreground-task preferences,
+  /// diagnostics, or logs.
+  Future<void> _deliverStartCommand({
+    required LocalLiveTradeConfiguration configuration,
+    required BitunixApiCredentials credentials,
+    required bool entriesEnabled,
+  }) async {
+    final commandId =
+        'start-${DateTime.now().toUtc().microsecondsSinceEpoch.toRadixString(36)}';
+    final message = jsonEncode({
+      'type': 'start',
+      'commandId': commandId,
+      'configuration': configuration.toJson(),
+      'apiKey': credentials.apiKey,
+      'secretKey': credentials.secretKey,
+      'entriesEnabled': entriesEnabled,
+    });
+    for (var attempt = 0; attempt < _credentialDeliveryAttempts; attempt++) {
+      if (_disposed) return;
+      FlutterForegroundTask.sendDataToTask(message);
+      await Future<void>.delayed(_credentialDeliveryDelay);
+      if (_status.state != LocalLiveTradeState.starting) return;
     }
   }
 
