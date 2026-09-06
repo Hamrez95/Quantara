@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
-  "buildNumber": 126,
-  "softwareCandidateSha": "7764cf362348d66fa956aeebe154d8198a2f9370",
+  "buildNumber": 127,
+  "softwareCandidateSha": "e48162ff4c83bcd681bcd65afd594a3f44cb08dd",
   "overallStatus": "pending",
   "gates": {
     "software": {
@@ -30,16 +30,46 @@
       "status": "pending",
       "reason": "Required out-of-sample strategy metrics have not been supplied as release evidence and no profitability claim is made.",
       "metrics": {
-        "expectancy": {"observed": false, "value": null},
-        "profitFactor": {"observed": false, "value": null},
-        "maximumDrawdown": {"observed": false, "value": null},
-        "returnToDrawdown": {"observed": false, "value": null},
-        "tailLosses": {"observed": false, "value": null},
-        "exposureTime": {"observed": false, "value": null},
-        "turnover": {"observed": false, "value": null},
-        "tradeCount": {"observed": false, "value": null},
-        "confidenceIntervals": {"observed": false, "value": null},
-        "foldAndRegimeStability": {"observed": false, "value": null}
+        "expectancy": {
+          "observed": false,
+          "value": null
+        },
+        "profitFactor": {
+          "observed": false,
+          "value": null
+        },
+        "maximumDrawdown": {
+          "observed": false,
+          "value": null
+        },
+        "returnToDrawdown": {
+          "observed": false,
+          "value": null
+        },
+        "tailLosses": {
+          "observed": false,
+          "value": null
+        },
+        "exposureTime": {
+          "observed": false,
+          "value": null
+        },
+        "turnover": {
+          "observed": false,
+          "value": null
+        },
+        "tradeCount": {
+          "observed": false,
+          "value": null
+        },
+        "confidenceIntervals": {
+          "observed": false,
+          "value": null
+        },
+        "foldAndRegimeStability": {
+          "observed": false,
+          "value": null
+        }
       }
     },
     "paper_shadow": {
