@@ -455,7 +455,11 @@ class _LocalLiveTradeControlCardState
   @override
   Widget build(BuildContext context) {
     final status = widget.controller.status;
-    final serviceActive = status.isRunning;
+    // `starting` is a real Android foreground-service state. Treat it as
+    // active so the user can explicitly retry a lost in-memory handoff rather
+    // than being trapped behind a disabled Start button.
+    final serviceActive =
+        status.isRunning || status.state == LocalLiveTradeState.starting;
     final entriesActive =
         status.state == LocalLiveTradeState.running && status.entriesEnabled;
     final canResumeEntries = status.canResumeEntries;
@@ -774,7 +778,6 @@ class _LocalLiveTradeControlCardState
                   ),
                   onPressed:
                       widget.controller.isBusy ||
-                          starting ||
                           breaker ||
                           widget
                               .accountController
@@ -803,6 +806,8 @@ class _LocalLiveTradeControlCardState
                                 )
                         : phaseOneQuarantine && hasExistingPosition
                         ? _t('شروع مدیریت', 'Start management')
+                        : starting
+                        ? _t('تکمیل شروع امن', 'Complete secure start')
                         : canResumeEntries
                         ? _t('ازسرگیری ورود', 'Resume entries')
                         : _t('شروع ترید', 'Start trading'),
