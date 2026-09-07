@@ -56,11 +56,7 @@ void main() {
             simulatedPnl: 0,
             maximumLoss: 5,
           ),
-          _signal(
-            setupId: 'missing',
-            resolvedAt: now,
-            simulatedPnl: null,
-          ),
+          _signal(setupId: 'missing', resolvedAt: now, simulatedPnl: null),
         ],
         projections: const [],
         filter: const SetupPerformanceFilter(range: SetupPerformanceRange.all),
@@ -152,22 +148,27 @@ void main() {
   });
 
   group('SetupPerformanceReport exchange evidence', () {
-    test('does not report actual zero when no linked exchange trade exists', () {
-      final report = SetupPerformanceReport.build(
-        signals: [_signal(setupId: 'unlinked', resolvedAt: now)],
-        projections: const [],
-        filter: const SetupPerformanceFilter(range: SetupPerformanceRange.all),
-        now: now,
-      );
+    test(
+      'does not report actual zero when no linked exchange trade exists',
+      () {
+        final report = SetupPerformanceReport.build(
+          signals: [_signal(setupId: 'unlinked', resolvedAt: now)],
+          projections: const [],
+          filter: const SetupPerformanceFilter(
+            range: SetupPerformanceRange.all,
+          ),
+          now: now,
+        );
 
-      expect(
-        report.rows.single.actual.status,
-        SetupActualEvidenceStatus.unavailable,
-      );
-      expect(report.rows.single.actual.netRealizedPnl, isNull);
-      expect(report.summary.actualNetRealizedPnl, isNull);
-      expect(report.summary.actualWinRatePercent, isNull);
-    });
+        expect(
+          report.rows.single.actual.status,
+          SetupActualEvidenceStatus.unavailable,
+        );
+        expect(report.rows.single.actual.netRealizedPnl, isNull);
+        expect(report.summary.actualNetRealizedPnl, isNull);
+        expect(report.summary.actualWinRatePercent, isNull);
+      },
+    );
 
     test('uses complete confirmed exchange economics for real net PnL', () {
       final projection = _exchangeProjection(
@@ -255,38 +256,44 @@ void main() {
         now: now,
       );
 
-      expect(report.rows.single.actual.status, SetupActualEvidenceStatus.mismatch);
+      expect(
+        report.rows.single.actual.status,
+        SetupActualEvidenceStatus.mismatch,
+      );
       expect(report.summary.actualMismatchCount, 1);
       expect(report.summary.actualNetRealizedPnl, isNull);
     });
 
-    test('CSV keeps simulated and actual PnL in separate auditable columns', () {
-      final report = SetupPerformanceReport.build(
-        signals: [
-          _signal(setupId: 'csv', resolvedAt: now, simulatedPnl: 5),
-        ],
-        projections: [
-          _exchangeProjection(
-            setupId: 'csv',
-            journalTradeId: 'local-live:p-csv',
-            positionId: 'p-csv',
-            decidedAt: now.subtract(const Duration(hours: 2)),
-            closedAt: now.subtract(const Duration(hours: 1)),
-            grossPnl: -3,
-            fee: 1,
-            funding: 0,
+    test(
+      'CSV keeps simulated and actual PnL in separate auditable columns',
+      () {
+        final report = SetupPerformanceReport.build(
+          signals: [_signal(setupId: 'csv', resolvedAt: now, simulatedPnl: 5)],
+          projections: [
+            _exchangeProjection(
+              setupId: 'csv',
+              journalTradeId: 'local-live:p-csv',
+              positionId: 'p-csv',
+              decidedAt: now.subtract(const Duration(hours: 2)),
+              closedAt: now.subtract(const Duration(hours: 1)),
+              grossPnl: -3,
+              fee: 1,
+              funding: 0,
+            ),
+          ],
+          filter: const SetupPerformanceFilter(
+            range: SetupPerformanceRange.all,
           ),
-        ],
-        filter: const SetupPerformanceFilter(range: SetupPerformanceRange.all),
-        now: now,
-      );
+          now: now,
+        );
 
-      final csv = report.toCsv();
-      expect(csv, contains('analytical_net_pnl_simulated'));
-      expect(csv, contains('actual_net_realized_pnl'));
-      expect(csv, contains('closed_candle_replay_after_defined_costs'));
-      expect(csv, contains('confirmed_exchange_reconciliation'));
-    });
+        final csv = report.toCsv();
+        expect(csv, contains('analytical_net_pnl_simulated'));
+        expect(csv, contains('actual_net_realized_pnl'));
+        expect(csv, contains('closed_candle_replay_after_defined_costs'));
+        expect(csv, contains('confirmed_exchange_reconciliation'));
+      },
+    );
   });
 }
 

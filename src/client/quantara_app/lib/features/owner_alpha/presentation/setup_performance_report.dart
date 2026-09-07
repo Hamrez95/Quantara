@@ -46,18 +46,20 @@ class _SetupPerformanceReportSheetState
     );
     final strategies = widget.signals.map((e) => e.strategy).toSet().toList()
       ..sort((a, b) => a.name.compareTo(b.name));
-    final symbols = widget.signals
-        .map((e) => e.symbol.trim().toUpperCase())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    final timeframes = widget.signals
-        .map((e) => e.timeframe.trim())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final symbols =
+        widget.signals
+            .map((e) => e.symbol.trim().toUpperCase())
+            .where((e) => e.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    final timeframes =
+        widget.signals
+            .map((e) => e.timeframe.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
 
     return SafeArea(
       child: ListView(
@@ -72,9 +74,8 @@ class _SetupPerformanceReportSheetState
                   children: [
                     Text(
                       _t('گزارش عملکرد ستاپ‌ها', 'Setup performance'),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -112,9 +113,9 @@ class _SetupPerformanceReportSheetState
           const SizedBox(height: 16),
           Text(
             _t('بازه', 'Range'),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -213,7 +214,10 @@ class _SetupPerformanceReportSheetState
             _StateCard(
               key: const Key('setup-performance-error'),
               icon: Icons.warning_amber_rounded,
-              title: _t('دادهٔ واقعی قابل تأیید نیست', 'Real data is unavailable'),
+              title: _t(
+                'دادهٔ واقعی قابل تأیید نیست',
+                'Real data is unavailable',
+              ),
               body: _t(
                 'ژورنال یا reconciliation خطا دارد. نتیجهٔ تحلیلی همچنان جداگانه نمایش داده می‌شود؛ PnL واقعی حدس زده نمی‌شود.',
                 'Journal or reconciliation has an error. Analytical results remain separate; real PnL is not estimated.',
@@ -221,12 +225,21 @@ class _SetupPerformanceReportSheetState
             ),
           _SummaryCard(
             key: const Key('analytical-performance-summary'),
-            title: _t('عملکرد تحلیلی / شبیه‌سازی‌شده', 'Analytical / simulated'),
+            title: _t(
+              'عملکرد تحلیلی / شبیه‌سازی‌شده',
+              'Analytical / simulated',
+            ),
             verified: false,
             metrics: [
-              _Metric(_t('نتیجه', 'Resolved'), '${report.summary.resolvedCount}'),
+              _Metric(
+                _t('نتیجه', 'Resolved'),
+                '${report.summary.resolvedCount}',
+              ),
               _Metric(_t('برد', 'Wins'), '${report.summary.analyticalWins}'),
-              _Metric(_t('باخت', 'Losses'), '${report.summary.analyticalLosses}'),
+              _Metric(
+                _t('باخت', 'Losses'),
+                '${report.summary.analyticalLosses}',
+              ),
               _Metric(
                 _t('خنثی', 'Breakeven'),
                 '${report.summary.analyticalBreakeven}',
@@ -307,7 +320,9 @@ class _SetupPerformanceReportSheetState
               onPressed: report.rows.isEmpty
                   ? null
                   : () async {
-                      await Clipboard.setData(ClipboardData(text: report.toCsv()));
+                      await Clipboard.setData(
+                        ClipboardData(text: report.toCsv()),
+                      );
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -327,9 +342,9 @@ class _SetupPerformanceReportSheetState
           const SizedBox(height: 14),
           Text(
             _t('جزئیات ستاپ‌ها', 'Setup details'),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           if (report.rows.isEmpty)
@@ -407,8 +422,9 @@ class _SetupPerformanceReportSheetState
     SetupPerformanceRange.custom => _t('دلخواه', 'Custom'),
   };
 
-  String _percent(double? value) =>
-      value == null ? _t('داده کافی نیست', 'Insufficient data') : '${value.toStringAsFixed(1)}%';
+  String _percent(double? value) => value == null
+      ? _t('داده کافی نیست', 'Insufficient data')
+      : '${value.toStringAsFixed(1)}%';
 
   String _number(double? value, {String suffix = ''}) => value == null
       ? _t('داده کافی نیست', 'Insufficient data')
@@ -515,7 +531,9 @@ class _SummaryCard extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [for (final metric in metrics) _MetricTile(metric: metric)],
+            children: [
+              for (final metric in metrics) _MetricTile(metric: metric),
+            ],
           ),
           if (footnote != null) ...[
             const SizedBox(height: 10),
@@ -553,9 +571,9 @@ class _MetricTile extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           metric.value,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
         ),
       ],
     ),
@@ -673,21 +691,33 @@ class _PerformanceRow extends StatelessWidget {
     SetupAnalyticalClassification.win => _t('برد تحلیلی', 'Analytical win'),
     SetupAnalyticalClassification.loss => _t('باخت تحلیلی', 'Analytical loss'),
     SetupAnalyticalClassification.breakeven => _t('خنثی', 'Breakeven'),
-    SetupAnalyticalClassification.unavailable =>
-      _t('داده کافی نیست', 'Insufficient data'),
+    SetupAnalyticalClassification.unavailable => _t(
+      'داده کافی نیست',
+      'Insufficient data',
+    ),
   };
 
   String _actualStatus(SetupActualEvidenceStatus value) => switch (value) {
-    SetupActualEvidenceStatus.confirmedClosed =>
-      _t('واقعی و تأییدشده توسط صرافی', 'Real and exchange-confirmed'),
-    SetupActualEvidenceStatus.confirmedOpen =>
-      _t('پوزیشن باز؛ PnL بسته‌شده ندارد', 'Open position; no closed PnL'),
-    SetupActualEvidenceStatus.pendingReconciliation =>
-      _t('در انتظار reconciliation', 'Pending reconciliation'),
-    SetupActualEvidenceStatus.mismatch =>
-      _t('عدم تطابق لینک ستاپ و معامله', 'Setup/trade link mismatch'),
-    SetupActualEvidenceStatus.unavailable =>
-      _t('عملکرد واقعی موجود نیست', 'Real performance unavailable'),
+    SetupActualEvidenceStatus.confirmedClosed => _t(
+      'واقعی و تأییدشده توسط صرافی',
+      'Real and exchange-confirmed',
+    ),
+    SetupActualEvidenceStatus.confirmedOpen => _t(
+      'پوزیشن باز؛ PnL بسته‌شده ندارد',
+      'Open position; no closed PnL',
+    ),
+    SetupActualEvidenceStatus.pendingReconciliation => _t(
+      'در انتظار reconciliation',
+      'Pending reconciliation',
+    ),
+    SetupActualEvidenceStatus.mismatch => _t(
+      'عدم تطابق لینک ستاپ و معامله',
+      'Setup/trade link mismatch',
+    ),
+    SetupActualEvidenceStatus.unavailable => _t(
+      'عملکرد واقعی موجود نیست',
+      'Real performance unavailable',
+    ),
   };
 
   String _price(double? value) =>
@@ -712,9 +742,9 @@ class _DetailLine extends StatelessWidget {
           width: 132,
           child: Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
         const SizedBox(width: 8),
@@ -746,9 +776,9 @@ class _StateCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),

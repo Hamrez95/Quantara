@@ -38,7 +38,10 @@ void main() {
     expect(Directionality.of(tester.element(report)), TextDirection.rtl);
     expect(find.text('گزارش عملکرد ستاپ‌ها'), findsOneWidget);
     expect(find.byKey(const Key('setup-performance-empty')), findsOneWidget);
-    expect(find.textContaining('عملکرد واقعی صرافی برای این ستاپ‌ها موجود نیست'), findsOneWidget);
+    expect(
+      find.textContaining('عملکرد واقعی صرافی برای این ستاپ‌ها موجود نیست'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders loading and error states without inventing real PnL', (
@@ -64,13 +67,19 @@ void main() {
     );
     await tester.pumpWidget(harness(signals: [recent, old]));
 
-    expect(find.byKey(const Key('setup-performance-row-recent')), findsOneWidget);
+    expect(
+      find.byKey(const Key('setup-performance-row-recent')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('setup-performance-row-old')), findsNothing);
 
     await tester.tap(find.byKey(const Key('performance-range-all')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('setup-performance-row-recent')), findsOneWidget);
+    expect(
+      find.byKey(const Key('setup-performance-row-recent')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('setup-performance-row-old')), findsOneWidget);
   });
 

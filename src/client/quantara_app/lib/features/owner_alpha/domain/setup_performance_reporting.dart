@@ -235,14 +235,15 @@ final class SetupPerformanceReport {
     required SetupPerformanceFilter filter,
     required DateTime now,
   }) {
-    final filtered = signals
-        .where((entry) => filter.includes(entry, now: now))
-        .toList(growable: false)
-      ..sort((a, b) {
-        final left = a.resolvedAt ?? a.createdAt;
-        final right = b.resolvedAt ?? b.createdAt;
-        return right.compareTo(left);
-      });
+    final filtered =
+        signals
+            .where((entry) => filter.includes(entry, now: now))
+            .toList(growable: false)
+          ..sort((a, b) {
+            final left = a.resolvedAt ?? a.createdAt;
+            final right = b.resolvedAt ?? b.createdAt;
+            return right.compareTo(left);
+          });
 
     final projectionsBySetup = <String, List<TradingJournalProjection>>{};
     for (final projection in projections) {
@@ -418,7 +419,8 @@ SetupActualEvidence _actualEvidence(
       status: SetupActualEvidenceStatus.pendingReconciliation,
       journalTradeId: projection.journalTradeId,
       positionId: projection.positionId,
-      warning: 'The setup is linked, but confirmed exchange evidence is absent.',
+      warning:
+          'The setup is linked, but confirmed exchange evidence is absent.',
     );
   }
 
@@ -580,9 +582,8 @@ SetupPerformanceSummary _summarize(List<SetupPerformanceRow> rows) {
   );
 }
 
-double? _sumOrNull(List<double> values) => values.isEmpty
-    ? null
-    : values.fold<double>(0, (sum, value) => sum + value);
+double? _sumOrNull(List<double> values) =>
+    values.isEmpty ? null : values.fold<double>(0, (sum, value) => sum + value);
 
 double? _averageOrNull(List<double> values) {
   final total = _sumOrNull(values);
