@@ -29,6 +29,15 @@ void main() {
     ),
   );
 
+  Future<void> scrollDownTo(WidgetTester tester, Finder target) async {
+    await tester.scrollUntilVisible(
+      target,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('renders Persian RTL and empty real-performance state', (
     tester,
   ) async {
@@ -38,11 +47,18 @@ void main() {
     expect(report, findsOneWidget);
     expect(Directionality.of(tester.element(report)), TextDirection.rtl);
     expect(find.text('گزارش عملکرد ستاپ‌ها'), findsOneWidget);
-    expect(find.byKey(const Key('setup-performance-empty')), findsOneWidget);
+
+    final realSummary = find.byKey(const Key('actual-performance-summary'));
+    await scrollDownTo(tester, realSummary);
+    expect(realSummary, findsOneWidget);
     expect(
       find.textContaining('عملکرد واقعی صرافی برای این ستاپ‌ها موجود نیست'),
       findsOneWidget,
     );
+
+    final empty = find.byKey(const Key('setup-performance-empty'));
+    await scrollDownTo(tester, empty);
+    expect(empty, findsOneWidget);
   });
 
   testWidgets('renders loading and error states without inventing real PnL', (
@@ -68,20 +84,14 @@ void main() {
     );
     await tester.pumpWidget(harness(signals: [recent, old]));
 
-    expect(
-      find.byKey(const Key('setup-performance-row-recent')),
-      findsOneWidget,
-    );
     expect(find.byKey(const Key('setup-performance-row-old')), findsNothing);
 
     await tester.tap(find.byKey(const Key('performance-range-all')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const Key('setup-performance-row-recent')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const Key('setup-performance-row-old')), findsOneWidget);
+    final oldRow = find.byKey(const Key('setup-performance-row-old'));
+    await scrollDownTo(tester, oldRow);
+    expect(oldRow, findsOneWidget);
   });
 
   testWidgets('drill-down opens the exact setup', (tester) async {
@@ -95,6 +105,7 @@ void main() {
     );
 
     final row = find.byKey(const Key('setup-performance-row-drill'));
+    await scrollDownTo(tester, row);
     expect(row, findsOneWidget);
     await tester.tap(row);
     await tester.pumpAndSettle();
