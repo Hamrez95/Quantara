@@ -4,6 +4,7 @@ import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart
 import 'package:quantara_app/features/owner_alpha/presentation/setup_performance_report.dart';
 import 'package:quantara_app/features/trading_journal/domain/trading_journal_projection.dart';
 
+// Regression coverage for #527: reporting stays read-only and evidence-first.
 void main() {
   final now = DateTime.utc(2026, 9, 7, 12);
 
