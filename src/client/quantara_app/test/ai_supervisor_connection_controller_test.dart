@@ -66,8 +66,30 @@ void main() {
           SupervisorConnectionStatus.connected,
         ]),
       );
+      expect(harness.controller.snapshot.diagnosticCode, isNull);
     },
   );
+
+  test('smoke server proves connectivity without claiming real analysis', () async {
+    final harness = _Harness((_) async => _smokeHealthy());
+
+    final validation = await harness.controller.saveAndCheck(
+      serverUrl: serverUrl,
+      controlToken: token,
+    );
+
+    expect(validation.isValid, isTrue);
+    expect(
+      harness.controller.snapshot.status,
+      SupervisorConnectionStatus.connected,
+    );
+    expect(
+      harness.controller.snapshot.diagnosticCode,
+      'smoke_connectivity_only',
+    );
+    expect(harness.controller.snapshot.lastSuccessfulHealthCheckAt, isNotNull);
+    expect(harness.controller.snapshot.toString(), isNot(contains(token)));
+  });
 
   test('invalid setup remains fail closed and never probes', () async {
     var calls = 0;
@@ -122,6 +144,13 @@ void main() {
 http.Response _healthy() => http.Response(
   '{"enabled":true,"model":"gpt-5","readOnly":true,'
   '"liveTradingMutation":false,"credentialExposure":false}',
+  200,
+);
+
+http.Response _smokeHealthy() => http.Response(
+  '{"enabled":true,"model":"mock-read-only","readOnly":true,'
+  '"liveTradingMutation":false,"credentialExposure":false,'
+  '"smokeTest":true,"analysisAvailable":false}',
   200,
 );
 
