@@ -2,6 +2,7 @@ enum SupervisorConnectionStatus {
   notConfigured,
   connecting,
   connected,
+  smokeConnected,
   expired,
   revoked,
   serverUnreachable,
@@ -126,6 +127,8 @@ final class SupervisorConnectionSnapshot {
   final String? diagnosticCode;
 
   bool get isHealthy => status == SupervisorConnectionStatus.connected;
+  bool get isSmokeConnectivityOnly =>
+      status == SupervisorConnectionStatus.smokeConnected;
 
   SupervisorConnectionSnapshot connectedAt(DateTime at) {
     if (serverOrigin == null) {
