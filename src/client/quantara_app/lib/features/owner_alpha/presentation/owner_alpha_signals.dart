@@ -60,7 +60,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       filter: filter,
       now: now,
       isTaken: controller.isTaken,
-    ).length;
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
