@@ -52,9 +52,15 @@ void main() {
           200,
         ),
       );
-      final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+      final probe = SupervisorHealthClient(
+        client: client,
+        now: () => checkedAt,
+      );
 
-      final result = await probe.check(serverOrigin: origin, controlToken: token);
+      final result = await probe.check(
+        serverOrigin: origin,
+        controlToken: token,
+      );
 
       expect(result.status, SupervisorHealthTransportStatus.reachable);
       expect(result.supervisorEnabled, isTrue);
