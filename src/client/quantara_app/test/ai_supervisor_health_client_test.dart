@@ -41,26 +41,29 @@ void main() {
     expect(result.toString(), isNot(contains(token)));
   });
 
-  test('accepts explicit smoke connectivity without analysis authority', () async {
-    final client = MockClient(
-      (_) async => http.Response(
-        '{"enabled":true,"model":"mock-read-only","readOnly":true,'
-        '"liveTradingMutation":false,"credentialExposure":false,'
-        '"smokeTest":true,"analysisAvailable":false}',
-        200,
-      ),
-    );
-    final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+  test(
+    'accepts explicit smoke connectivity without analysis authority',
+    () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          '{"enabled":true,"model":"mock-read-only","readOnly":true,'
+          '"liveTradingMutation":false,"credentialExposure":false,'
+          '"smokeTest":true,"analysisAvailable":false}',
+          200,
+        ),
+      );
+      final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
 
-    final result = await probe.check(serverOrigin: origin, controlToken: token);
+      final result = await probe.check(serverOrigin: origin, controlToken: token);
 
-    expect(result.status, SupervisorHealthTransportStatus.reachable);
-    expect(result.supervisorEnabled, isTrue);
-    expect(result.model, 'mock-read-only');
-    expect(result.smokeTest, isTrue);
-    expect(result.analysisAvailable, isFalse);
-    expect(result.diagnosticCode, isNull);
-  });
+      expect(result.status, SupervisorHealthTransportStatus.reachable);
+      expect(result.supervisorEnabled, isTrue);
+      expect(result.model, 'mock-read-only');
+      expect(result.smokeTest, isTrue);
+      expect(result.analysisAvailable, isFalse);
+      expect(result.diagnosticCode, isNull);
+    },
+  );
 
   test('rejects smoke status that claims analysis authority', () async {
     final client = MockClient(
