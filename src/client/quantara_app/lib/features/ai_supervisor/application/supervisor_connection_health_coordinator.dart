@@ -54,6 +54,22 @@ final class SupervisorConnectionHealthCoordinator {
           );
         }
         _lastSuccessfulHealthCheckAt = result.checkedAt.toUtc();
+        if (result.smokeTest) {
+          return SupervisorConnectionSnapshot(
+            status: SupervisorConnectionStatus.smokeConnected,
+            serverOrigin: setup.serverOrigin,
+            lastSuccessfulHealthCheckAt: _lastSuccessfulHealthCheckAt,
+            diagnosticCode: 'smoke_connectivity_only',
+          );
+        }
+        if (result.analysisAvailable != true) {
+          return SupervisorConnectionSnapshot(
+            status: SupervisorConnectionStatus.incompatibleServer,
+            serverOrigin: setup.serverOrigin,
+            lastSuccessfulHealthCheckAt: _lastSuccessfulHealthCheckAt,
+            diagnosticCode: 'analysis_not_available',
+          );
+        }
         return SupervisorConnectionSnapshot(
           status: SupervisorConnectionStatus.connected,
           serverOrigin: setup.serverOrigin,
