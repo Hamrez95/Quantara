@@ -56,7 +56,7 @@ final class SupervisorConnectionHealthCoordinator {
         _lastSuccessfulHealthCheckAt = result.checkedAt.toUtc();
         if (result.smokeTest) {
           return SupervisorConnectionSnapshot(
-            status: SupervisorConnectionStatus.smokeConnected,
+            status: SupervisorConnectionStatus.connected,
             serverOrigin: setup.serverOrigin,
             lastSuccessfulHealthCheckAt: _lastSuccessfulHealthCheckAt,
             diagnosticCode: 'smoke_connectivity_only',
