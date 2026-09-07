@@ -336,7 +336,7 @@ SignalJournalEntry _signal({
   resolvedAt: resolvedAt,
   priceChangePercent: simulatedPnl == null ? null : simulatedPnl / 10,
   simulatedPnl: simulatedPnl,
-  marginReturnPercent: simulatedPnl == null ? null : simulatedPnl,
+  marginReturnPercent: simulatedPnl,
 );
 
 TradingJournalProjection _exchangeProjection({
