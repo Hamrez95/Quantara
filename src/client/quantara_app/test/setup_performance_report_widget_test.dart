@@ -112,7 +112,7 @@ void main() {
 
     final openButton = find.text('باز کردن ستاپ');
     expect(openButton, findsOneWidget);
-    await tester.ensureVisible(openButton);
+    await scrollDownTo(tester, openButton);
     await tester.tap(openButton);
     await tester.pump();
 
