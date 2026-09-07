@@ -70,26 +70,32 @@ void main() {
     },
   );
 
-  test('smoke server proves connectivity without claiming real analysis', () async {
-    final harness = _Harness((_) async => _smokeHealthy());
+  test(
+    'smoke server proves connectivity without claiming real analysis',
+    () async {
+      final harness = _Harness((_) async => _smokeHealthy());
 
-    final validation = await harness.controller.saveAndCheck(
-      serverUrl: serverUrl,
-      controlToken: token,
-    );
+      final validation = await harness.controller.saveAndCheck(
+        serverUrl: serverUrl,
+        controlToken: token,
+      );
 
-    expect(validation.isValid, isTrue);
-    expect(
-      harness.controller.snapshot.status,
-      SupervisorConnectionStatus.connected,
-    );
-    expect(
-      harness.controller.snapshot.diagnosticCode,
-      'smoke_connectivity_only',
-    );
-    expect(harness.controller.snapshot.lastSuccessfulHealthCheckAt, isNotNull);
-    expect(harness.controller.snapshot.toString(), isNot(contains(token)));
-  });
+      expect(validation.isValid, isTrue);
+      expect(
+        harness.controller.snapshot.status,
+        SupervisorConnectionStatus.connected,
+      );
+      expect(
+        harness.controller.snapshot.diagnosticCode,
+        'smoke_connectivity_only',
+      );
+      expect(
+        harness.controller.snapshot.lastSuccessfulHealthCheckAt,
+        isNotNull,
+      );
+      expect(harness.controller.snapshot.toString(), isNot(contains(token)));
+    },
+  );
 
   test('invalid setup remains fail closed and never probes', () async {
     var calls = 0;
