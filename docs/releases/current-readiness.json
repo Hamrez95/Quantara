@@ -2,41 +2,45 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "e48162ff4c83bcd681bcd65afd594a3f44cb08dd",
-  "generatedAt": "2026-09-06T07:44:00Z",
+  "softwareCandidateSha": "8786adadc768775aeb755993ccdfa1459e30e734",
+  "generatedAt": "2026-09-08T20:49:00Z",
   "qualityScore": 100,
   "minimumQualityScore": 90,
   "evidence": {
     "repository_integrity": {
       "passed": true,
-      "runId": 34019258908,
+      "runId": 34275083336,
       "checkRunIds": [
-        101448678807,
-        101448678925
+        102225999537,
+        102225999821
       ]
     },
     "flutter_android_upgrade": {
       "passed": true,
-      "runId": 34019258910,
+      "runId": 34275083260,
       "jobIds": [
-        101448689487,
-        101450040253,
-        101450040141,
-        101450040122
+        102231160699,
+        102231161148,
+        102231160332,
+        102231161556
       ]
     },
     "windows_build": {
       "passed": true,
-      "runId": 34019258892,
+      "runId": 34275083191,
       "checkRunIds": [
-        101448691653
+        102225998451
       ]
     },
     "installable_artifact_smoke": {
       "passed": true,
       "artifactIds": [
-        9985076805,
-        9985117211
+        10075784532,
+        10075788719,
+        10075891693,
+        10076055305,
+        10075926358,
+        10075906724
       ],
       "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service install/start/status/stop/uninstall lifecycle"
     },
@@ -54,8 +58,8 @@
     },
     "safety_regression": {
       "passed": true,
-      "runId": 34019258910,
-      "scope": "Flutter safety tests plus Android restart/upgrade matrix on the software candidate"
+      "runId": 34275083260,
+      "scope": "Flutter safety tests, hot-path software stress gate, and Android restart/upgrade matrix on the software candidate"
     }
   },
   "manualGates": {
