@@ -34,9 +34,58 @@ void main() {
     expect(result.status, SupervisorHealthTransportStatus.reachable);
     expect(result.supervisorEnabled, isTrue);
     expect(result.model, 'gpt-5');
+    expect(result.smokeTest, isFalse);
+    expect(result.analysisAvailable, isTrue);
     expect(result.checkedAt, checkedAt);
     expect(result.diagnosticCode, isNull);
     expect(result.toString(), isNot(contains(token)));
+  });
+
+  test(
+    'accepts explicit smoke connectivity without analysis authority',
+    () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          '{"enabled":true,"model":"mock-read-only","readOnly":true,'
+          '"liveTradingMutation":false,"credentialExposure":false,'
+          '"smokeTest":true,"analysisAvailable":false}',
+          200,
+        ),
+      );
+      final probe = SupervisorHealthClient(
+        client: client,
+        now: () => checkedAt,
+      );
+
+      final result = await probe.check(
+        serverOrigin: origin,
+        controlToken: token,
+      );
+
+      expect(result.status, SupervisorHealthTransportStatus.reachable);
+      expect(result.supervisorEnabled, isTrue);
+      expect(result.model, 'mock-read-only');
+      expect(result.smokeTest, isTrue);
+      expect(result.analysisAvailable, isFalse);
+      expect(result.diagnosticCode, isNull);
+    },
+  );
+
+  test('rejects smoke status that claims analysis authority', () async {
+    final client = MockClient(
+      (_) async => http.Response(
+        '{"enabled":true,"model":"mock-read-only","readOnly":true,'
+        '"liveTradingMutation":false,"credentialExposure":false,'
+        '"smokeTest":true,"analysisAvailable":true}',
+        200,
+      ),
+    );
+    final probe = SupervisorHealthClient(client: client, now: () => checkedAt);
+
+    final result = await probe.check(serverOrigin: origin, controlToken: token);
+
+    expect(result.status, SupervisorHealthTransportStatus.incompatibleServer);
+    expect(result.diagnosticCode, 'unsafe_smoke_status_contract');
   });
 
   test('reports a disabled Supervisor truthfully', () async {
@@ -53,6 +102,7 @@ void main() {
 
     expect(result.status, SupervisorHealthTransportStatus.reachable);
     expect(result.supervisorEnabled, isFalse);
+    expect(result.analysisAvailable, isFalse);
     expect(result.diagnosticCode, 'supervisor_not_enabled');
   });
 

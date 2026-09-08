@@ -9,24 +9,23 @@ public static class SupervisorEndpoints
 
         endpoints.MapGet(
             "/api/v1/supervisor/status",
-            (HttpContext context, IConfiguration configuration) =>
+            (
+                HttpContext context,
+                IConfiguration configuration,
+                IHostEnvironment environment) =>
             {
                 if (!SupervisorEndpointAuthority.HasAuthority(context, configuration))
                 {
                     return Results.Unauthorized();
                 }
 
-                return Results.Json(new
-                {
-                    enabled = !string.IsNullOrWhiteSpace(configuration["OPENAI_API_KEY"]),
-                    model = configuration["QUANTARA_SUPERVISOR_OPENAI_MODEL"] ?? "gpt-5",
-                    readOnly = true,
-                    liveTradingMutation = false,
-                    credentialExposure = false
-                });
+                return Results.Json(
+                    SupervisorStatusContractFactory.Create(
+                        configuration,
+                        environment.EnvironmentName));
             })
             .WithName("SupervisorStatus")
-            .Produces(StatusCodes.Status200OK)
+            .Produces<SupervisorStatusContract>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized);
 
         endpoints.MapPost(
