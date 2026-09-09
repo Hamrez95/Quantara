@@ -1,5 +1,7 @@
 import '../domain/owner_alpha_models.dart';
 
+export '../presentation/setup_performance_report.dart';
+
 enum SignalInboxFilter { all, opportunities, active, results, expired, taken }
 
 enum SignalInboxSort { recommended, score, expiringSoon, newest, latestResult }

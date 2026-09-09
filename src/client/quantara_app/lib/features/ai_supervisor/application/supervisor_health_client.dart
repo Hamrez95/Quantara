@@ -17,6 +17,8 @@ final class SupervisorHealthProbeResult {
     required this.checkedAt,
     this.supervisorEnabled,
     this.model,
+    this.smokeTest = false,
+    this.analysisAvailable,
     this.diagnosticCode,
   });
 
@@ -24,6 +26,8 @@ final class SupervisorHealthProbeResult {
   final DateTime checkedAt;
   final bool? supervisorEnabled;
   final String? model;
+  final bool smokeTest;
+  final bool? analysisAvailable;
 
   /// Sanitized machine-readable reason only. Never populate this with a raw
   /// response body, authorization header, exchange credential, or token.
@@ -113,13 +117,25 @@ final class SupervisorHealthClient {
       final readOnly = decoded['readOnly'];
       final liveTradingMutation = decoded['liveTradingMutation'];
       final credentialExposure = decoded['credentialExposure'];
+      final smokeTestValue = decoded['smokeTest'];
+      final analysisAvailableValue = decoded['analysisAvailable'];
       if (enabled is! bool ||
           model is! String ||
           model.trim().isEmpty ||
           readOnly != true ||
           liveTradingMutation != false ||
-          credentialExposure != false) {
+          credentialExposure != false ||
+          (smokeTestValue != null && smokeTestValue is! bool) ||
+          (analysisAvailableValue != null && analysisAvailableValue is! bool)) {
         return _incompatible(checkedAt, 'incompatible_status_contract');
+      }
+
+      final smokeTest = smokeTestValue == true;
+      final analysisAvailable = analysisAvailableValue is bool
+          ? analysisAvailableValue
+          : enabled;
+      if (smokeTest && (!enabled || analysisAvailable)) {
+        return _incompatible(checkedAt, 'unsafe_smoke_status_contract');
       }
 
       return SupervisorHealthProbeResult(
@@ -127,6 +143,8 @@ final class SupervisorHealthClient {
         checkedAt: checkedAt,
         supervisorEnabled: enabled,
         model: model.trim(),
+        smokeTest: smokeTest,
+        analysisAvailable: analysisAvailable,
         diagnosticCode: enabled ? null : 'supervisor_not_enabled',
       );
     } on TimeoutException {

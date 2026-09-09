@@ -16,9 +16,23 @@ class _SignalInboxView extends StatefulWidget {
 class _SignalInboxViewState extends State<_SignalInboxView> {
   SignalInboxFilter _filter = SignalInboxFilter.all;
   SignalInboxSort _sort = SignalInboxSort.recommended;
+  late final TradingJournalController _performanceJournalController =
+      TradingJournalController(store: DatabaseTradingJournalStore());
 
   bool get _fa => Directionality.of(context) == TextDirection.rtl;
   String _t(String fa, String en) => _fa ? fa : en;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_performanceJournalController.initialize());
+  }
+
+  @override
+  void dispose() {
+    _performanceJournalController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +105,16 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 14),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilledButton.tonalIcon(
+                  key: const Key('setup-performance-open'),
+                  onPressed: _showPerformanceReport,
+                  icon: const Icon(Icons.query_stats_rounded),
+                  label: Text(_t('گزارش عملکرد', 'Performance report')),
+                ),
               ),
               const SizedBox(height: 14),
               Wrap(
@@ -200,6 +224,36 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
             if (index != filtered.length - 1) const SizedBox(height: 12),
           ],
       ],
+    );
+  }
+
+  Future<void> _showPerformanceReport() async {
+    await _performanceJournalController.refresh();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.94,
+        child: AnimatedBuilder(
+          animation: _performanceJournalController,
+          builder: (context, _) => SetupPerformanceReportSheet(
+            signals: widget.controller.signalJournal,
+            projections: _performanceJournalController.projections,
+            isJournalLoading: _performanceJournalController.isLoading,
+            journalError: _performanceJournalController.error,
+            onOpenSetup: (entry) {
+              Navigator.of(sheetContext).pop();
+              widget.onOpenAnalysis(
+                entry.symbol,
+                entry.timeframe,
+                entry.setupId,
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
