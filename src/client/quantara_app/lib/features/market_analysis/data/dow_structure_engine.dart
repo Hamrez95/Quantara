@@ -44,14 +44,14 @@ abstract final class DowStructureEngine {
             interval: interval,
             scope: DowStructureScope.internal,
             wing: config.internalWing,
-            equalityTolerance: atr * config.equalPivotAtrFraction,
+            equalPivotAtrFraction: config.equalPivotAtrFraction,
           ),
           ..._confirmedPivots(
             candles: candles,
             interval: interval,
             scope: DowStructureScope.external,
             wing: config.externalWing,
-            equalityTolerance: atr * config.equalPivotAtrFraction,
+            equalPivotAtrFraction: config.equalPivotAtrFraction,
           ),
         ]..sort((left, right) {
           final confirmed = left.confirmedAtUtc.compareTo(right.confirmedAtUtc);
@@ -132,7 +132,7 @@ abstract final class DowStructureEngine {
     required Duration interval,
     required DowStructureScope scope,
     required int wing,
-    required double equalityTolerance,
+    required double equalPivotAtrFraction,
   }) {
     final result = <DowPivot>[];
     DowPivot? previousHigh;
@@ -152,7 +152,14 @@ abstract final class DowStructureEngine {
         }
         if (!isHigh && !isLow) break;
       }
-      final confirmedAt = candles[index + wing].openTime.add(interval);
+      final confirmationIndex = index + wing;
+      final confirmedAt = candles[confirmationIndex].openTime.add(interval);
+      // Freeze volatility-normalized equality semantics at the moment the pivot
+      // becomes knowable. Future candles must never change a confirmed label.
+      final confirmationAtr = _atrThrough(candles, confirmationIndex);
+      final equalityTolerance = confirmationAtr.isFinite && confirmationAtr > 0
+          ? confirmationAtr * equalPivotAtrFraction
+          : 0.0;
       if (isHigh) {
         final label = _highLabel(
           previousHigh?.price,
@@ -329,12 +336,16 @@ abstract final class DowStructureEngine {
     );
   }
 
-  static double _atr(List<ChartCandle> candles) {
-    if (candles.length < 2) return double.nan;
-    final start = math.max(1, candles.length - 14);
+  static double _atr(List<ChartCandle> candles) =>
+      _atrThrough(candles, candles.length - 1);
+
+  static double _atrThrough(List<ChartCandle> candles, int endIndex) {
+    if (candles.length < 2 || endIndex < 1) return double.nan;
+    final boundedEnd = math.min(endIndex, candles.length - 1);
+    final start = math.max(1, boundedEnd - 13);
     var total = 0.0;
     var count = 0;
-    for (var index = start; index < candles.length; index++) {
+    for (var index = start; index <= boundedEnd; index++) {
       final candle = candles[index];
       final previousClose = candles[index - 1].close;
       final trueRange = math.max(

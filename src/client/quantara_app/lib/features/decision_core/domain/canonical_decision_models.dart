@@ -144,6 +144,9 @@ final class CanonicalOpportunityPlan {
           'strategy:${idea.strategy.name}',
           'regime:${idea.marketRegime.name}',
           'rejection:${idea.rejectionReason.name}',
+          ...idea.reasons.where((reason) => reason.startsWith('dow:')),
+          if (idea.contextVersion.contains('dow-'))
+            'dow:context:${idea.contextVersion}',
         ],
       );
 

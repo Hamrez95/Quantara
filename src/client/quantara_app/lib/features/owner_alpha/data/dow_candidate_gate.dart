@@ -48,6 +48,8 @@ abstract final class DowCandidateGate {
       reasons: <String>[
         ...idea.reasons,
         'Dow Structural Alignment ${alignment.cappedScore.toStringAsFixed(1)}/${alignment.cap.toStringAsFixed(0)} — ${alignment.version}.',
+        'dow:config:${snapshot.version}:${snapshot.configFingerprint}',
+        'dow:alignment-version:${alignment.version}',
         ...alignment.reasonCodes,
         if (snapshot.external.latestHigh case final pivot?) pivot.reasonCode,
         if (snapshot.external.latestLow case final pivot?) pivot.reasonCode,
