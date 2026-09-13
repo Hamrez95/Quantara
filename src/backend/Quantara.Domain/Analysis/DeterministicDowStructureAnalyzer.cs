@@ -4,6 +4,18 @@ namespace Quantara.Domain.Analysis;
 
 public sealed class DeterministicDowStructureAnalyzer
 {
+    private readonly string _engineVersion;
+
+    public DeterministicDowStructureAnalyzer(string engineVersion = "dow-engine-v1")
+    {
+        if (string.IsNullOrWhiteSpace(engineVersion))
+        {
+            throw new ArgumentException("Engine version is required.", nameof(engineVersion));
+        }
+
+        _engineVersion = engineVersion;
+    }
+
     public DowStructureBuildResult Analyze(
         IReadOnlyList<Candle> candles,
         DowStructureSpecification? specification = null)
@@ -19,8 +31,8 @@ public sealed class DeterministicDowStructureAnalyzer
         }
 
         var minimumCandleCount = Math.Max(
-            specification.AtrPeriod + (specification.ExternalPivotRadius * 2) + 1,
-            24);
+            specification.AtrPeriod,
+            (specification.ExternalPivotRadius * 2) + 1);
         if (candles.Count < minimumCandleCount)
         {
             return Rejected(
@@ -89,8 +101,11 @@ public sealed class DeterministicDowStructureAnalyzer
             swings,
             layer,
             specification);
-        var state = ResolveState(swings);
-        return new DowStructureLayerSnapshot(layer, state, swings, events);
+        return new DowStructureLayerSnapshot(
+            layer,
+            ResolveState(swings),
+            swings,
+            events);
     }
 
     private static DowSwingPoint[] DetectSwings(
@@ -204,26 +219,32 @@ public sealed class DeterministicDowStructureAnalyzer
         DowStructureSpecification specification)
     {
         var events = new List<DowStructureEvent>();
+        var confirmed = new List<DowSwingPoint>();
         var brokenHighs = new HashSet<int>();
         var brokenLows = new HashSet<int>();
         var failedHighs = new HashSet<int>();
         var failedLows = new HashSet<int>();
         var pendingHighBreaks = new Dictionary<int, int>();
         var pendingLowBreaks = new Dictionary<int, int>();
+        var swingCursor = 0;
 
         for (var index = 0; index < candles.Count; index++)
         {
-            var available = swings
-                .Where(swing => swing.ConfirmedAtCandleIndex <= index)
-                .ToArray();
-            if (available.Length == 0)
+            while (swingCursor < swings.Count
+                && swings[swingCursor].ConfirmedAtCandleIndex <= index)
+            {
+                confirmed.Add(swings[swingCursor]);
+                swingCursor++;
+            }
+
+            if (confirmed.Count == 0)
             {
                 continue;
             }
 
-            var high = available.LastOrDefault(static swing => swing.Kind == DowSwingKind.High);
-            var low = available.LastOrDefault(static swing => swing.Kind == DowSwingKind.Low);
-            var context = ResolveState(available);
+            var high = confirmed.LastOrDefault(static swing => swing.Kind == DowSwingKind.High);
+            var low = confirmed.LastOrDefault(static swing => swing.Kind == DowSwingKind.Low);
+            var context = ResolveState(confirmed);
 
             if (high is not null && !brokenHighs.Contains(high.CandleIndex))
             {
@@ -436,7 +457,7 @@ public sealed class DeterministicDowStructureAnalyzer
         return DowMarketState.Transition;
     }
 
-    private static string ComputeFingerprint(
+    private string ComputeFingerprint(
         IReadOnlyList<Candle> candles,
         DowStructureSpecification specification,
         DowStructureLayerSnapshot internalStructure,
@@ -444,6 +465,7 @@ public sealed class DeterministicDowStructureAnalyzer
     {
         return PriceStructureMath.ComputeHash(builder =>
         {
+            PriceStructureMath.Append(builder, _engineVersion);
             PriceStructureMath.Append(builder, specification.ConfigVersion);
             PriceStructureMath.Append(builder, specification.InternalPivotRadius);
             PriceStructureMath.Append(builder, specification.ExternalPivotRadius);
