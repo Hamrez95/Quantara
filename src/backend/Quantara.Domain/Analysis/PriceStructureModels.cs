@@ -54,6 +54,8 @@ public sealed record PriceStructureSpecification(
         BreakoutAtrMultiplier: 0.75m,
         RecencyHalfLifeBars: 80,
         MaximumZones: 8);
+
+    public DowStructureSpecification Dow { get; init; } = DowStructureSpecification.Conservative;
 }
 
 public sealed record PriceStructureZone(
@@ -83,6 +85,7 @@ public sealed class TimeframePriceStructureAnalysis
         decimal volatilityPercent,
         IReadOnlyList<PriceStructureZone> zones,
         IReadOnlyList<string> warnings,
+        DowStructureSnapshot dowStructure,
         string fingerprintSha256)
     {
         Symbol = symbol;
@@ -94,6 +97,7 @@ public sealed class TimeframePriceStructureAnalysis
         VolatilityPercent = volatilityPercent;
         Zones = Array.AsReadOnly(zones.ToArray());
         Warnings = Array.AsReadOnly(warnings.ToArray());
+        DowStructure = dowStructure;
         FingerprintSha256 = fingerprintSha256;
     }
 
@@ -114,6 +118,8 @@ public sealed class TimeframePriceStructureAnalysis
     public IReadOnlyList<PriceStructureZone> Zones { get; }
 
     public IReadOnlyList<string> Warnings { get; }
+
+    public DowStructureSnapshot DowStructure { get; }
 
     public string FingerprintSha256 { get; }
 }
