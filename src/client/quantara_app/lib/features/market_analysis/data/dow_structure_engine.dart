@@ -17,7 +17,9 @@ abstract final class DowStructureEngine {
 
     var gapped = false;
     for (var index = 1; index < candles.length; index++) {
-      final delta = candles[index].openTime.difference(candles[index - 1].openTime);
+      final delta = candles[index].openTime.difference(
+        candles[index - 1].openTime,
+      );
       if (delta.inMicroseconds >
           interval.inMicroseconds * config.maximumGapMultiple) {
         gapped = true;
@@ -28,34 +30,36 @@ abstract final class DowStructureEngine {
 
     final generatedBeforeClose = analysis.generatedAt.isBefore(latestClosedAt);
     final staleness = analysis.generatedAt.difference(latestClosedAt);
-    final stale = generatedBeforeClose ||
+    final stale =
+        generatedBeforeClose ||
         staleness > interval * config.maximumStalenessBars;
     if (generatedBeforeClose) reasonCodes.add('dow:data:unclosed');
     if (!generatedBeforeClose && stale) reasonCodes.add('dow:data:stale');
 
     final atr = _atr(candles);
-    final pivots = <DowPivot>[
-      ..._confirmedPivots(
-        candles: candles,
-        interval: interval,
-        scope: DowStructureScope.internal,
-        wing: config.internalWing,
-        equalityTolerance: atr * config.equalPivotAtrFraction,
-      ),
-      ..._confirmedPivots(
-        candles: candles,
-        interval: interval,
-        scope: DowStructureScope.external,
-        wing: config.externalWing,
-        equalityTolerance: atr * config.equalPivotAtrFraction,
-      ),
-    ]..sort((left, right) {
-        final confirmed = left.confirmedAtUtc.compareTo(right.confirmedAtUtc);
-        if (confirmed != 0) return confirmed;
-        final scope = left.scope.index.compareTo(right.scope.index);
-        if (scope != 0) return scope;
-        return left.index.compareTo(right.index);
-      });
+    final pivots =
+        <DowPivot>[
+          ..._confirmedPivots(
+            candles: candles,
+            interval: interval,
+            scope: DowStructureScope.internal,
+            wing: config.internalWing,
+            equalityTolerance: atr * config.equalPivotAtrFraction,
+          ),
+          ..._confirmedPivots(
+            candles: candles,
+            interval: interval,
+            scope: DowStructureScope.external,
+            wing: config.externalWing,
+            equalityTolerance: atr * config.equalPivotAtrFraction,
+          ),
+        ]..sort((left, right) {
+          final confirmed = left.confirmedAtUtc.compareTo(right.confirmedAtUtc);
+          if (confirmed != 0) return confirmed;
+          final scope = left.scope.index.compareTo(right.scope.index);
+          if (scope != 0) return scope;
+          return left.index.compareTo(right.index);
+        });
 
     final internalPivots = pivots
         .where((pivot) => pivot.scope == DowStructureScope.internal)
@@ -411,7 +415,8 @@ abstract final class DowStructuralAlignmentEngine {
         reasons.add('dow:evidence:internal_aligned');
       }
     } else if (rangeCompatible) {
-      final compatible = external.state == DowStructureState.range ||
+      final compatible =
+          external.state == DowStructureState.range ||
           external.state == DowStructureState.transition;
       if (!compatible) {
         allowed = false;

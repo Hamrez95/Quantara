@@ -8,18 +8,21 @@ import 'package:quantara_app/features/owner_alpha/data/dow_candidate_gate.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
 void main() {
-  test('disabled rollout leaves Champion candidate byte-for-field unchanged', () {
-    final analysis = _analysis();
-    final idea = _idea(direction: TradeDirection.long);
+  test(
+    'disabled rollout leaves Champion candidate byte-for-field unchanged',
+    () {
+      final analysis = _analysis();
+      final idea = _idea(direction: TradeDirection.long);
 
-    final result = DowCandidateGate.evaluate(
-      idea: idea,
-      analysis: analysis,
-      confluence: const {'4h': ChartDirection.bullish},
-    );
+      final result = DowCandidateGate.evaluate(
+        idea: idea,
+        analysis: analysis,
+        confluence: const {'4h': ChartDirection.bullish},
+      );
 
-    expect(identical(result, idea), isTrue);
-  });
+      expect(identical(result, idea), isTrue);
+    },
+  );
 
   test('shadow adds evidence but cannot reject an actionable candidate', () {
     final analysis = _analysis();
@@ -56,10 +59,7 @@ void main() {
     expect(result.targets, isEmpty);
     expect(result.recommendedLeverage, isNull);
     expect(result.rejectionReason, SetupRejectionReason.weakDirection);
-    expect(
-      result.reasons,
-      contains('dow:gate:external_direction_conflict'),
-    );
+    expect(result.reasons, contains('dow:gate:external_direction_conflict'));
   });
 
   test('Dow never promotes an existing wait decision', () {

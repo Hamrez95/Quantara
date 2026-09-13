@@ -96,9 +96,8 @@ final class DowStructureRollout {
     : mode = DowRolloutMode.disabled,
       config = const DowStructureConfig();
 
-  const DowStructureRollout.shadow({
-    this.config = const DowStructureConfig(),
-  }) : mode = DowRolloutMode.shadow;
+  const DowStructureRollout.shadow({this.config = const DowStructureConfig()})
+    : mode = DowRolloutMode.shadow;
 
   const DowStructureRollout.challengerGate({
     this.config = const DowStructureConfig(),

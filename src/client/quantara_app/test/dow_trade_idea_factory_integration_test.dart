@@ -61,8 +61,10 @@ void main() {
 
     expect(shadow.direction, champion.direction);
     expect(shadow.setupId, champion.setupId);
-    expect(shadow.evidenceBreakdown['dowStructuralAlignment'],
-        inInclusiveRange(0, 20));
+    expect(
+      shadow.evidenceBreakdown['dowStructuralAlignment'],
+      inInclusiveRange(0, 20),
+    );
     expect(shadow.reasons.any((reason) => reason.startsWith('dow:')), isTrue);
   });
 }

@@ -15,8 +15,10 @@ void main() {
 
       expect(first.fingerprint, second.fingerprint);
       expect(first.reasonCodes, second.reasonCodes);
-      expect(first.pivots.map((item) => item.reasonCode),
-          second.pivots.map((item) => item.reasonCode));
+      expect(
+        first.pivots.map((item) => item.reasonCode),
+        second.pivots.map((item) => item.reasonCode),
+      );
       expect(first.valid, isTrue);
     });
 
@@ -37,7 +39,8 @@ void main() {
       };
 
       for (final pivot in before.pivots) {
-        final identity = '${pivot.scope.name}/${pivot.kind.name}/${pivot.index}';
+        final identity =
+            '${pivot.scope.name}/${pivot.kind.name}/${pivot.index}';
         final later = afterByIdentity[identity];
         expect(later, isNotNull, reason: identity);
         expect(later!.price, pivot.price, reason: identity);
@@ -111,7 +114,9 @@ void main() {
       final result = DowStructureEngine.analyze(
         analysis: _analysis(
           candles: source.candles,
-          generatedAt: source.candles.last.openTime.add(const Duration(hours: 8)),
+          generatedAt: source.candles.last.openTime.add(
+            const Duration(hours: 8),
+          ),
           fingerprint: 'stale',
         ),
       );
