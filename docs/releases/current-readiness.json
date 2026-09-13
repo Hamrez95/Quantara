@@ -2,47 +2,47 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "8786adadc768775aeb755993ccdfa1459e30e734",
-  "generatedAt": "2026-09-08T20:49:00Z",
+  "softwareCandidateSha": "a361b8c91f6b5488409460d37f8d46cd1dabfb19",
+  "generatedAt": "2026-09-13T13:58:34Z",
   "qualityScore": 100,
   "minimumQualityScore": 90,
   "evidence": {
     "repository_integrity": {
       "passed": true,
-      "runId": 34275083336,
+      "runId": 34760553634,
       "checkRunIds": [
-        102225999537,
-        102225999821
+        103732522833,
+        103732522976
       ]
     },
     "flutter_android_upgrade": {
       "passed": true,
-      "runId": 34275083260,
+      "runId": 34760553640,
       "jobIds": [
-        102231160699,
-        102231161148,
-        102231160332,
-        102231161556
+        103732522779,
+        103733860756,
+        103733860650,
+        103733860645
       ]
     },
     "windows_build": {
       "passed": true,
-      "runId": 34275083191,
+      "runId": 34760553635,
       "checkRunIds": [
-        102225998451
+        103732540849
       ]
     },
     "installable_artifact_smoke": {
       "passed": true,
       "artifactIds": [
-        10075784532,
-        10075788719,
-        10075891693,
-        10076055305,
-        10075926358,
-        10075906724
+        10318429518,
+        10318882910,
+        10319340692,
+        10318379895,
+        10319525035,
+        10318887082
       ],
-      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service install/start/status/stop/uninstall lifecycle"
+      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service install/start/status/stop/uninstall lifecycle and Windows release-candidate build"
     },
     "stability_report": {
       "passed": true,
@@ -58,8 +58,8 @@
     },
     "safety_regression": {
       "passed": true,
-      "runId": 34275083260,
-      "scope": "Flutter safety tests, hot-path software stress gate, and Android restart/upgrade matrix on the software candidate"
+      "runId": 34760553640,
+      "scope": "Flutter safety tests, no-look-ahead/no-repaint and canonical parity regressions, hot-path software stress gate, and Android API 34/35/36 restart/upgrade matrix on the Dow software candidate"
     }
   },
   "manualGates": {
