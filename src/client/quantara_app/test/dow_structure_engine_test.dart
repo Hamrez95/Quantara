@@ -49,6 +49,49 @@ void main() {
       }
     });
 
+    test('future volatility cannot relabel already confirmed pivots', () {
+      final prefix = _waveTrend(count: 78);
+      final before = DowStructureEngine.analyze(analysis: prefix);
+      final candles = prefix.candles.toList(growable: true);
+      var center = candles.last.close;
+      for (var index = 0; index < 18; index++) {
+        final openTime = candles.last.openTime.add(const Duration(hours: 1));
+        final sign = index.isEven ? 1.0 : -1.0;
+        final open = center;
+        final close = center + sign * 18;
+        candles.add(
+          ChartCandle(
+            openTime: openTime,
+            open: open,
+            high: math.max(open, close) + 12,
+            low: math.min(open, close) - 12,
+            close: close,
+            volume: 5000,
+          ),
+        );
+        center = close;
+      }
+      final after = DowStructureEngine.analyze(
+        analysis: _analysis(
+          candles: candles,
+          generatedAt: candles.last.openTime.add(const Duration(hours: 1)),
+          fingerprint: 'future-volatility',
+        ),
+      );
+      final afterByIdentity = {
+        for (final pivot in after.pivots)
+          '${pivot.scope.name}/${pivot.kind.name}/${pivot.index}': pivot,
+      };
+
+      for (final pivot in before.pivots) {
+        final identity =
+            '${pivot.scope.name}/${pivot.kind.name}/${pivot.index}';
+        final later = afterByIdentity[identity];
+        expect(later, isNotNull, reason: identity);
+        expect(later!.label, pivot.label, reason: identity);
+      }
+    });
+
     test('wick-only break is failed-break context, never BOS', () {
       final base = _waveTrend(count: 90);
       final initial = DowStructureEngine.analyze(analysis: base);
