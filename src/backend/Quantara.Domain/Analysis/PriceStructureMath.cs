@@ -16,7 +16,8 @@ internal static class PriceStructureMath
             && specification.MinimumZoneWidthBps is > 0m and <= 500m
             && specification.BreakoutAtrMultiplier is > 0m and <= 10m
             && specification.RecencyHalfLifeBars is >= 2 and <= 10000
-            && specification.MaximumZones is >= 1 and <= 50;
+            && specification.MaximumZones is >= 1 and <= 50
+            && specification.Dow.IsValid;
     }
 
     public static (PriceStructureBuildCode Code, string Message) ValidateCandles(
@@ -168,6 +169,9 @@ internal static class PriceStructureMath
 
     public static void Append(StringBuilder builder, decimal value) =>
         Append(builder, value.ToString("G29", CultureInfo.InvariantCulture));
+
+    public static void Append(StringBuilder builder, bool value) =>
+        Append(builder, value ? "true" : "false");
 
     public static decimal RoundPrice(decimal value) =>
         decimal.Round(value, 8, MidpointRounding.ToEven);
