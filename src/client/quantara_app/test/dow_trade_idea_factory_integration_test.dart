@@ -100,10 +100,7 @@ void main() {
         shadow.evidenceBreakdown['dowStructuralAlignment'],
         inInclusiveRange(0, 20),
       );
-      expect(
-        shadow.reasons.any((reason) => reason.startsWith('dow:')),
-        isTrue,
-      );
+      expect(shadow.reasons.any((reason) => reason.startsWith('dow:')), isTrue);
     },
   );
 }
