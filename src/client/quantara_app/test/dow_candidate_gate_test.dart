@@ -28,7 +28,7 @@ void main() {
     final result = DowCandidateGate.evaluate(
       idea: idea,
       analysis: analysis,
-      confluence: const {'4h': ChartDirection.short == null ? ChartDirection.bearish : ChartDirection.bearish},
+      confluence: const {'4h': ChartDirection.bearish},
       rollout: const DowStructureRollout.shadow(),
     );
 
