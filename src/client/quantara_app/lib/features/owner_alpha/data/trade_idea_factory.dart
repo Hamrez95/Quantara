@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
+import '../../market_analysis/domain/dow_structure_models.dart';
 import '../../market_analysis/domain/market_chart_models.dart';
 import '../../trading_journal/domain/trading_journal_chart_snapshot.dart';
 import '../domain/owner_alpha_models.dart';
+import 'dow_candidate_gate.dart';
 import 'professional_strategy_engine.dart';
 import 'strategy_registry.dart';
 
@@ -22,6 +24,7 @@ abstract final class TradeIdeaFactory {
     StrategyRegistry? strategyRegistry,
     String? requiredRegistryVersion,
     Map<String, Object?> strategyParameters = const {},
+    DowStructureRollout dowRollout = const DowStructureRollout.disabled(),
   }) {
     final registry = strategyRegistry ?? StrategyRegistry.shared;
     final parameters = <String, Object?>{
@@ -73,14 +76,22 @@ abstract final class TradeIdeaFactory {
     );
     if (!idea.isActionable) return idea;
 
-    final requiredMargin = idea.requiredMargin;
+    final dowEvaluatedIdea = DowCandidateGate.evaluate(
+      idea: idea,
+      analysis: analysis,
+      confluence: confluence,
+      rollout: dowRollout,
+    );
+    if (!dowEvaluatedIdea.isActionable) return dowEvaluatedIdea;
+
+    final requiredMargin = dowEvaluatedIdea.requiredMargin;
     final marginCap = capital * targetMarginFraction;
     if (requiredMargin == null ||
         !requiredMargin.isFinite ||
         requiredMargin <= 0 ||
         requiredMargin > marginCap) {
       return _blockedIdea(
-        idea: idea,
+        idea: dowEvaluatedIdea,
         maximumLoss: capital * riskPercent / 100,
         languageCode: languageCode,
         fa: 'مارجین موردنیاز از سقف محافظه‌کارانه هر پوزیشن بیشتر است.',
@@ -88,17 +99,20 @@ abstract final class TradeIdeaFactory {
       );
     }
 
-    if (idea.strategyVersion == 'rangeReversal/1.0' &&
-        !_hasCorrectSideRangeBoundary(analysis: analysis, idea: idea)) {
+    if (dowEvaluatedIdea.strategyVersion == 'rangeReversal/1.0' &&
+        !_hasCorrectSideRangeBoundary(
+          analysis: analysis,
+          idea: dowEvaluatedIdea,
+        )) {
       return _blockedIdea(
-        idea: idea,
+        idea: dowEvaluatedIdea,
         maximumLoss: capital * riskPercent / 100,
         languageCode: languageCode,
         fa: 'مرز ساختاری رنج در سمت صحیح قیمت قرار ندارد.',
         en: 'The structural range boundary is not on the correct price side.',
       );
     }
-    return idea;
+    return dowEvaluatedIdea;
   }
 
   static bool protectiveAlignment(
