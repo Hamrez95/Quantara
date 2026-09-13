@@ -24,7 +24,7 @@ abstract final class TradeIdeaFactory {
     StrategyRegistry? strategyRegistry,
     String? requiredRegistryVersion,
     Map<String, Object?> strategyParameters = const {},
-    DowStructureRollout dowRollout = const DowStructureRollout.disabled(),
+    DowStructureRollout dowRollout = const DowStructureRollout.shadow(),
   }) {
     final registry = strategyRegistry ?? StrategyRegistry.shared;
     final parameters = <String, Object?>{
