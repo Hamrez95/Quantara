@@ -7,17 +7,45 @@ import 'package:quantara_app/features/owner_alpha/data/trade_idea_factory.dart';
 import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart';
 
 void main() {
-  test('Champion remains unchanged when Dow rollout is disabled', () {
+  test(
+    'production default records Dow shadow evidence without authority change',
+    () {
+      final analysis = _trendAnalysis();
+      final disabled = TradeIdeaFactory.create(
+        analysis: analysis,
+        capital: 10000,
+        riskPercent: 1,
+        confluence: const {'4h': ChartDirection.bullish},
+        languageCode: 'en',
+        strategy: AnalysisStrategy.trendPullback,
+        cadence: SignalCadence.active,
+        dowRollout: const DowStructureRollout.disabled(),
+      );
+      final productionDefault = TradeIdeaFactory.create(
+        analysis: analysis,
+        capital: 10000,
+        riskPercent: 1,
+        confluence: const {'4h': ChartDirection.bullish},
+        languageCode: 'en',
+        strategy: AnalysisStrategy.trendPullback,
+        cadence: SignalCadence.active,
+      );
+
+      expect(productionDefault.direction, disabled.direction);
+      expect(productionDefault.setupId, disabled.setupId);
+      expect(
+        productionDefault.evidenceBreakdown['dowStructuralAlignment'],
+        inInclusiveRange(0, 20),
+      );
+      expect(
+        productionDefault.reasons.any((reason) => reason.startsWith('dow:')),
+        isTrue,
+      );
+    },
+  );
+
+  test('explicit disabled rollout is a deterministic rollback path', () {
     final analysis = _trendAnalysis();
-    final champion = TradeIdeaFactory.create(
-      analysis: analysis,
-      capital: 10000,
-      riskPercent: 1,
-      confluence: const {'4h': ChartDirection.bullish},
-      languageCode: 'en',
-      strategy: AnalysisStrategy.trendPullback,
-      cadence: SignalCadence.active,
-    );
     final disabled = TradeIdeaFactory.create(
       analysis: analysis,
       capital: 10000,
@@ -29,44 +57,55 @@ void main() {
       dowRollout: const DowStructureRollout.disabled(),
     );
 
-    expect(champion.setupId, disabled.setupId);
-    expect(champion.direction, disabled.direction);
-    expect(champion.evidenceBreakdown, disabled.evidenceBreakdown);
-    expect(champion.contextVersion, disabled.contextVersion);
-  });
-
-  test('shadow records capped Dow evidence without changing authority', () {
-    final analysis = _trendAnalysis();
-    final champion = TradeIdeaFactory.create(
-      analysis: analysis,
-      capital: 10000,
-      riskPercent: 1,
-      confluence: const {'4h': ChartDirection.bullish},
-      languageCode: 'en',
-      strategy: AnalysisStrategy.trendPullback,
-      cadence: SignalCadence.active,
-    );
-    expect(champion.isActionable, isTrue);
-
-    final shadow = TradeIdeaFactory.create(
-      analysis: analysis,
-      capital: 10000,
-      riskPercent: 1,
-      confluence: const {'4h': ChartDirection.bullish},
-      languageCode: 'en',
-      strategy: AnalysisStrategy.trendPullback,
-      cadence: SignalCadence.active,
-      dowRollout: const DowStructureRollout.shadow(),
-    );
-
-    expect(shadow.direction, champion.direction);
-    expect(shadow.setupId, champion.setupId);
     expect(
-      shadow.evidenceBreakdown['dowStructuralAlignment'],
-      inInclusiveRange(0, 20),
+      disabled.evidenceBreakdown.containsKey('dowStructuralAlignment'),
+      isFalse,
     );
-    expect(shadow.reasons.any((reason) => reason.startsWith('dow:')), isTrue);
+    expect(
+      disabled.reasons.any((reason) => reason.startsWith('dow:')),
+      isFalse,
+    );
   });
+
+  test(
+    'explicit shadow records capped Dow evidence without changing authority',
+    () {
+      final analysis = _trendAnalysis();
+      final champion = TradeIdeaFactory.create(
+        analysis: analysis,
+        capital: 10000,
+        riskPercent: 1,
+        confluence: const {'4h': ChartDirection.bullish},
+        languageCode: 'en',
+        strategy: AnalysisStrategy.trendPullback,
+        cadence: SignalCadence.active,
+        dowRollout: const DowStructureRollout.disabled(),
+      );
+      expect(champion.isActionable, isTrue);
+
+      final shadow = TradeIdeaFactory.create(
+        analysis: analysis,
+        capital: 10000,
+        riskPercent: 1,
+        confluence: const {'4h': ChartDirection.bullish},
+        languageCode: 'en',
+        strategy: AnalysisStrategy.trendPullback,
+        cadence: SignalCadence.active,
+        dowRollout: const DowStructureRollout.shadow(),
+      );
+
+      expect(shadow.direction, champion.direction);
+      expect(shadow.setupId, champion.setupId);
+      expect(
+        shadow.evidenceBreakdown['dowStructuralAlignment'],
+        inInclusiveRange(0, 20),
+      );
+      expect(
+        shadow.reasons.any((reason) => reason.startsWith('dow:')),
+        isTrue,
+      );
+    },
+  );
 }
 
 TimeframeChartAnalysis _trendAnalysis() {
