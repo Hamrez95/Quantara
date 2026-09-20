@@ -74,10 +74,7 @@ final class _ManualTradeExecutionSheetState
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ReviewLine(
-                label: _t('نماد', 'Symbol'),
-                value: plan.symbol,
-              ),
+              _ReviewLine(label: _t('نماد', 'Symbol'), value: plan.symbol),
               _ReviewLine(
                 label: _t('جهت', 'Direction'),
                 value: plan.direction == TradeDirection.long
@@ -186,7 +183,10 @@ final class _ManualTradeExecutionSheetState
           return Center(
             child: Text(
               widget.controller.error ??
-                  _t('اطلاعات معامله در دسترس نیست.', 'Trade data unavailable.'),
+                  _t(
+                    'اطلاعات معامله در دسترس نیست.',
+                    'Trade data unavailable.',
+                  ),
             ),
           );
         }
@@ -244,7 +244,10 @@ final class _ManualTradeExecutionSheetState
                     ),
                     if (plan.systemSuggested)
                       Chip(
-                        avatar: const Icon(Icons.auto_awesome_rounded, size: 18),
+                        avatar: const Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 18,
+                        ),
                         label: Text(_t('پیشنهاد سیستم', 'System suggestion')),
                       ),
                   ],
@@ -351,9 +354,8 @@ final class _ManualTradeExecutionSheetState
                       const SizedBox(height: 10),
                       Text(
                         _t('تعداد حد سود', 'Take-profit count'),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 8),
                       SegmentedButton<int>(
@@ -370,9 +372,7 @@ final class _ManualTradeExecutionSheetState
                         onSelectionChanged: widget.controller.isBusy
                             ? null
                             : (selection) {
-                                setState(
-                                  () => _targetCount = selection.single,
-                                );
+                                setState(() => _targetCount = selection.single);
                                 _recalculate();
                               },
                       ),

@@ -223,7 +223,8 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                 now: now,
                 marketDataFresh: marketDataFresh,
               ),
-              onOpenTrade: _tradeBlockReason(
+              onOpenTrade:
+                  _tradeBlockReason(
                         filtered[index],
                         now: now,
                         marketDataFresh: marketDataFresh,

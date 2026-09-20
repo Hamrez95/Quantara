@@ -6,31 +6,34 @@ import 'package:quantara_app/features/owner_alpha/domain/owner_alpha_models.dart
 void main() {
   final now = DateTime.utc(2026, 9, 20, 16);
 
-  test('default proposal uses quality only to scale risk below the hard cap', () {
-    final high = ManualTradeSizingPolicy.propose(
-      setup: _setup(now, quality: 100),
-      account: _account(now),
-      rules: _rules(),
-      markPrice: 100,
-      nowUtc: now,
-      targetCount: 3,
-    );
-    final lower = ManualTradeSizingPolicy.propose(
-      setup: _setup(now, quality: 60),
-      account: _account(now),
-      rules: _rules(),
-      markPrice: 100,
-      nowUtc: now,
-      targetCount: 3,
-    );
+  test(
+    'default proposal uses quality only to scale risk below the hard cap',
+    () {
+      final high = ManualTradeSizingPolicy.propose(
+        setup: _setup(now, quality: 100),
+        account: _account(now),
+        rules: _rules(),
+        markPrice: 100,
+        nowUtc: now,
+        targetCount: 3,
+      );
+      final lower = ManualTradeSizingPolicy.propose(
+        setup: _setup(now, quality: 60),
+        account: _account(now),
+        rules: _rules(),
+        markPrice: 100,
+        nowUtc: now,
+        targetCount: 3,
+      );
 
-    expect(high.allowed, isTrue);
-    expect(lower.allowed, isTrue);
-    expect(high.maximumLoss, lessThanOrEqualTo(high.hardRiskCap + 1e-9));
-    expect(lower.maximumLoss, lessThan(high.maximumLoss));
-    expect(lower.qualityRiskMultiplier, 0.8);
-    expect(high.qualityRiskMultiplier, 1);
-  });
+      expect(high.allowed, isTrue);
+      expect(lower.allowed, isTrue);
+      expect(high.maximumLoss, lessThanOrEqualTo(high.hardRiskCap + 1e-9));
+      expect(lower.maximumLoss, lessThan(high.maximumLoss));
+      expect(lower.qualityRiskMultiplier, 0.8);
+      expect(high.qualityRiskMultiplier, 1);
+    },
+  );
 
   test('user margin override cannot exceed the hard setup risk cap', () {
     final plan = ManualTradeSizingPolicy.recalculate(
@@ -131,10 +134,7 @@ void main() {
     );
 
     expect(plan.allowed, isFalse);
-    expect(
-      plan.blockReason,
-      ManualTradePlanBlockReason.marketOutsideEntryZone,
-    );
+    expect(plan.blockReason, ManualTradePlanBlockReason.marketOutsideEntryZone);
   });
 
   test('exchange quantity minimum is enforced after rounding', () {
@@ -173,10 +173,7 @@ void main() {
     );
 
     expect(expired.blockReason, ManualTradePlanBlockReason.setupExpired);
-    expect(
-      resolved.blockReason,
-      ManualTradePlanBlockReason.setupNotExecutable,
-    );
+    expect(resolved.blockReason, ManualTradePlanBlockReason.setupNotExecutable);
   });
 }
 

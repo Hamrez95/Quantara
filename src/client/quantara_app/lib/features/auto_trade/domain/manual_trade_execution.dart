@@ -247,7 +247,8 @@ abstract final class ManualTradeSizingPolicy {
         targets: List.unmodifiable(targets),
         targetQuantities: List.unmodifiable(targetQuantities),
         targetAllocation:
-            targetAllocation ?? _allocationFor(setup, targetCount.clamp(1, 3).toInt()),
+            targetAllocation ??
+            _allocationFor(setup, targetCount.clamp(1, 3).toInt()),
         maximumLoss: maximumLoss,
         riskPercentOfEquity: account.estimatedEquity > 0
             ? maximumLoss / account.estimatedEquity * 100
@@ -478,8 +479,9 @@ abstract final class ManualTradeSizingPolicy {
         rules.maximumMarketQuantity,
       );
       final rounded = rules.roundQuantityDown(rawQuantity);
-      requestedOrSuggestedMargin =
-          rounded <= 0 ? 0 : rounded * markPrice / requestedLeverage;
+      requestedOrSuggestedMargin = rounded <= 0
+          ? 0
+          : rounded * markPrice / requestedLeverage;
     } else {
       if (requestedMargin == null ||
           !requestedMargin.isFinite ||

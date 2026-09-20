@@ -350,8 +350,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       final quantityTolerance = math
           .pow(10, -rules.quantityPrecision)
           .toDouble();
-      if ((detail.filledQuantity - plan.quantity).abs() >
-              quantityTolerance ||
+      if ((detail.filledQuantity - plan.quantity).abs() > quantityTolerance ||
           (position.quantity - plan.quantity).abs() > quantityTolerance) {
         await _closeUnprotected(
           credentials: credentials,
@@ -366,8 +365,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         );
       }
 
-      final priceTolerance =
-          math.pow(10, -rules.pricePrecision).toDouble() / 2;
+      final priceTolerance = math.pow(10, -rules.pricePrecision).toDouble() / 2;
       var protections = await _exchange.fetchPendingProtection(
         credentials,
         symbol: prepared.setup.symbol,

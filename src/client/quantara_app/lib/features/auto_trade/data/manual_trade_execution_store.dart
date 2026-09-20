@@ -2,12 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum ManualTradeExecutionState {
-  submitting,
-  ambiguous,
-  protected,
-  failedSafe,
-}
+enum ManualTradeExecutionState { submitting, ambiguous, protected, failedSafe }
 
 final class ManualTradeExecutionRecord {
   const ManualTradeExecutionRecord({
@@ -89,9 +84,9 @@ final class ManualTradeExecutionRecord {
     final updatedAt = DateTime.tryParse(
       json['updatedAtUtc']?.toString() ?? '',
     )?.toUtc();
-    final state = ManualTradeExecutionState.values.where(
-      (item) => item.name == json['state'],
-    ).firstOrNull;
+    final state = ManualTradeExecutionState.values
+        .where((item) => item.name == json['state'])
+        .firstOrNull;
     final setupId = json['setupId']?.toString().trim() ?? '';
     final symbol = json['symbol']?.toString().trim().toUpperCase() ?? '';
     final clientId = json['clientId']?.toString().trim() ?? '';

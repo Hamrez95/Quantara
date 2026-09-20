@@ -16,55 +16,51 @@ import 'package:quantara_app/features/trading_journal/domain/trading_journal_mod
 void main() {
   final now = DateTime.utc(2026, 9, 20, 16);
 
-  test('explicit confirmation opens one position with selected TP count', () async {
-    final account = _account(now);
-    final accountController = _FakeAccountController(account);
-    final exchange = _FakeExchange();
-    final executionStore = _MemoryExecutionStore();
-    final journalStore = _MemoryJournalStore();
-    final controller = ManualTradeExecutionController(
-      accountController: accountController,
-      exchange: exchange,
-      credentialsStore: _FakeCredentialsStore(),
-      executionStore: executionStore,
-      journalObserver: ManualTradeJournalObserver(store: journalStore),
-      utcNow: () => now,
-    );
+  test(
+    'explicit confirmation opens one position with selected TP count',
+    () async {
+      final account = _account(now);
+      final accountController = _FakeAccountController(account);
+      final exchange = _FakeExchange();
+      final executionStore = _MemoryExecutionStore();
+      final journalStore = _MemoryJournalStore();
+      final controller = ManualTradeExecutionController(
+        accountController: accountController,
+        exchange: exchange,
+        credentialsStore: _FakeCredentialsStore(),
+        executionStore: executionStore,
+        journalObserver: ManualTradeJournalObserver(store: journalStore),
+        utcNow: () => now,
+      );
 
-    final prepared = await controller.prepare(_setup(now));
+      final prepared = await controller.prepare(_setup(now));
 
-    expect(prepared, isNotNull);
-    expect(prepared!.plan.allowed, isTrue);
-    controller.recalculate(
-      margin: 100,
-      leverage: 5,
-      targetCount: 2,
-    );
-    expect(controller.preparation!.plan.allowed, isTrue);
+      expect(prepared, isNotNull);
+      expect(prepared!.plan.allowed, isTrue);
+      controller.recalculate(margin: 100, leverage: 5, targetCount: 2);
+      expect(controller.preparation!.plan.allowed, isTrue);
 
-    final receipt = await controller.confirmAndExecute();
+      final receipt = await controller.confirmAndExecute();
 
-    expect(receipt, isNotNull);
-    expect(receipt!.targetOrderIds, hasLength(2));
-    expect(exchange.entryCalls, 1);
-    expect(exchange.takeProfitCalls, 2);
-    expect(exchange.closeCalls, 0);
-    expect(exchange.changedLeverage, 5);
-    expect(executionStore.record!.state, ManualTradeExecutionState.protected);
-    expect(executionStore.record!.positionId, 'position-1');
-    expect(journalStore.ledger.plans.single.setupId, 'setup-540');
-    expect(
-      journalStore.ledger.plans.single.source,
-      TradingJournalSource.manual,
-    );
-    expect(
-      journalStore.ledger.plans.single.positionId,
-      'position-1',
-    );
+      expect(receipt, isNotNull);
+      expect(receipt!.targetOrderIds, hasLength(2));
+      expect(exchange.entryCalls, 1);
+      expect(exchange.takeProfitCalls, 2);
+      expect(exchange.closeCalls, 0);
+      expect(exchange.changedLeverage, 5);
+      expect(executionStore.record!.state, ManualTradeExecutionState.protected);
+      expect(executionStore.record!.positionId, 'position-1');
+      expect(journalStore.ledger.plans.single.setupId, 'setup-540');
+      expect(
+        journalStore.ledger.plans.single.source,
+        TradingJournalSource.manual,
+      );
+      expect(journalStore.ledger.plans.single.positionId, 'position-1');
 
-    controller.dispose();
-    accountController.dispose();
-  });
+      controller.dispose();
+      accountController.dispose();
+    },
+  );
 
   test('protected setup cannot be submitted twice', () async {
     final account = _account(now);
@@ -76,9 +72,7 @@ void main() {
       exchange: exchange,
       credentialsStore: _FakeCredentialsStore(),
       executionStore: executionStore,
-      journalObserver: ManualTradeJournalObserver(
-        store: _MemoryJournalStore(),
-      ),
+      journalObserver: ManualTradeJournalObserver(store: _MemoryJournalStore()),
       utcNow: () => now,
     );
 
