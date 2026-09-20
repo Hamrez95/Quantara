@@ -219,6 +219,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
 
     ManualTradeExecutionRecord? intent;
     BitunixLivePosition? openedPosition;
+    BitunixApiCredentials? activeCredentials;
     try {
       final credentials = await _credentialsStore.load();
       if (credentials == null) {
@@ -226,6 +227,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
           'Bitunix credentials are unavailable.',
         );
       }
+      activeCredentials = credentials;
       final reconciled = await _accountController.reconcile(
         reason: PrivateAccountRefreshReason.startPreflight,
         force: true,
@@ -529,21 +531,23 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       _error = error.message;
       return null;
     } on LocalLiveTradeSafeException catch (error) {
-      if (openedPosition != null && intent != null) {
-        await _markAmbiguous(
-          intent,
-          'Unexpected exchange-safe failure after exposure existed: ${error.message}',
-        );
-      }
+      await _cleanupUnexpectedExposureIfNeeded(
+        credentials: activeCredentials,
+        position: openedPosition,
+        intent: intent,
+        message:
+            'Unexpected exchange-safe failure after exposure existed: ${error.message}',
+      );
       _error = error.message;
       return null;
     } on Object catch (error) {
-      if (openedPosition != null && intent != null) {
-        await _markAmbiguous(
-          intent,
-          'Unexpected execution failure after exposure existed: ${error.runtimeType}.',
-        );
-      }
+      await _cleanupUnexpectedExposureIfNeeded(
+        credentials: activeCredentials,
+        position: openedPosition,
+        intent: intent,
+        message:
+            'Unexpected execution failure after exposure existed: ${error.runtimeType}.',
+      );
       _error =
           'Manual trade execution stopped safely because an unexpected error occurred.';
       return null;
@@ -689,6 +693,32 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         '$message Reduce-only fail-closed cleanup could not prove the position flat.',
       );
       rethrow;
+    }
+  }
+
+  Future<void> _cleanupUnexpectedExposureIfNeeded({
+    required BitunixApiCredentials? credentials,
+    required BitunixLivePosition? position,
+    required ManualTradeExecutionRecord? intent,
+    required String message,
+  }) async {
+    if (credentials == null || position == null || intent == null) return;
+    final persisted = await _executionStore.load(intent.setupId);
+    if (persisted == null ||
+        persisted.state != ManualTradeExecutionState.submitting) {
+      return;
+    }
+    try {
+      await _closeUnprotected(
+        credentials: credentials,
+        position: position,
+        clientId: '${intent.clientId}-unexpected-close',
+        intent: persisted,
+        message: message,
+      );
+    } on Object {
+      // _closeUnprotected persists an ambiguous state when flatness cannot be
+      // proven. Never retry the entry from this catch path.
     }
   }
 
