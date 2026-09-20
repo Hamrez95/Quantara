@@ -62,74 +62,83 @@ void main() {
     },
   );
 
-  test('ambiguous previous submit stays blocked even when current account is flat', () async {
-    final account = _account(now);
-    final accountController = _FakeAccountController(account);
-    final exchange = _FakeExchange();
-    final executionStore = _MemoryExecutionStore()
-      ..record = ManualTradeExecutionRecord(
-        setupId: 'setup-540',
-        symbol: 'BTCUSDT',
-        clientId: 'q-manual-deadbeef',
-        state: ManualTradeExecutionState.ambiguous,
-        updatedAtUtc: now.subtract(const Duration(minutes: 5)),
-        margin: 100,
-        leverage: 5,
-        targetCount: 2,
+  test(
+    'ambiguous previous submit stays blocked even when current account is flat',
+    () async {
+      final account = _account(now);
+      final accountController = _FakeAccountController(account);
+      final exchange = _FakeExchange();
+      final executionStore = _MemoryExecutionStore()
+        ..record = ManualTradeExecutionRecord(
+          setupId: 'setup-540',
+          symbol: 'BTCUSDT',
+          clientId: 'q-manual-deadbeef',
+          state: ManualTradeExecutionState.ambiguous,
+          updatedAtUtc: now.subtract(const Duration(minutes: 5)),
+          margin: 100,
+          leverage: 5,
+          targetCount: 2,
+        );
+      final controller = ManualTradeExecutionController(
+        accountController: accountController,
+        exchange: exchange,
+        credentialsStore: _FakeCredentialsStore(),
+        executionStore: executionStore,
+        journalObserver: ManualTradeJournalObserver(
+          store: _MemoryJournalStore(),
+        ),
+        utcNow: () => now,
+        exchangePollDelay: Duration.zero,
       );
-    final controller = ManualTradeExecutionController(
-      accountController: accountController,
-      exchange: exchange,
-      credentialsStore: _FakeCredentialsStore(),
-      executionStore: executionStore,
-      journalObserver: ManualTradeJournalObserver(
-        store: _MemoryJournalStore(),
-      ),
-      utcNow: () => now,
-      exchangePollDelay: Duration.zero,
-    );
 
-    final prepared = await controller.prepare(_setup(now));
+      final prepared = await controller.prepare(_setup(now));
 
-    expect(prepared, isNull);
-    expect(controller.error, contains('ambiguous'));
-    expect(exchange.entryCalls, 0);
+      expect(prepared, isNull);
+      expect(controller.error, contains('ambiguous'));
+      expect(exchange.entryCalls, 0);
 
-    controller.dispose();
-    accountController.dispose();
-  });
+      controller.dispose();
+      accountController.dispose();
+    },
+  );
 
-  test('unverified selected TP ladder closes the new exposure fail-closed', () async {
-    final account = _account(now);
-    final accountController = _FakeAccountController(account);
-    final exchange = _FakeExchange(confirmTargets: false);
-    final executionStore = _MemoryExecutionStore();
-    final controller = ManualTradeExecutionController(
-      accountController: accountController,
-      exchange: exchange,
-      credentialsStore: _FakeCredentialsStore(),
-      executionStore: executionStore,
-      journalObserver: ManualTradeJournalObserver(
-        store: _MemoryJournalStore(),
-      ),
-      utcNow: () => now,
-      exchangePollDelay: Duration.zero,
-    );
+  test(
+    'unverified selected TP ladder closes the new exposure fail-closed',
+    () async {
+      final account = _account(now);
+      final accountController = _FakeAccountController(account);
+      final exchange = _FakeExchange(confirmTargets: false);
+      final executionStore = _MemoryExecutionStore();
+      final controller = ManualTradeExecutionController(
+        accountController: accountController,
+        exchange: exchange,
+        credentialsStore: _FakeCredentialsStore(),
+        executionStore: executionStore,
+        journalObserver: ManualTradeJournalObserver(
+          store: _MemoryJournalStore(),
+        ),
+        utcNow: () => now,
+        exchangePollDelay: Duration.zero,
+      );
 
-    expect(await controller.prepare(_setup(now)), isNotNull);
-    controller.recalculate(margin: 100, leverage: 5, targetCount: 2);
+      expect(await controller.prepare(_setup(now)), isNotNull);
+      controller.recalculate(margin: 100, leverage: 5, targetCount: 2);
 
-    final receipt = await controller.confirmAndExecute();
+      final receipt = await controller.confirmAndExecute();
 
-    expect(receipt, isNull);
-    expect(exchange.takeProfitCalls, 2);
-    expect(exchange.closeCalls, 1);
-    expect(executionStore.record!.state, ManualTradeExecutionState.failedSafe);
-    expect(controller.error, contains('SL/TP ladder'));
+      expect(receipt, isNull);
+      expect(exchange.takeProfitCalls, 2);
+      expect(exchange.closeCalls, 1);
+      expect(
+        executionStore.record!.state,
+        ManualTradeExecutionState.failedSafe,
+      );
+      expect(controller.error, contains('SL/TP ladder'));
 
-    controller.dispose();
-    accountController.dispose();
-  });
+      controller.dispose();
+      accountController.dispose();
+    },
+  );
 
   test('protected setup cannot be submitted twice', () async {
     final account = _account(now);
