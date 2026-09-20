@@ -144,7 +144,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       final markPrice = values[0] as double;
       final exchangeRules = values[1] as BitunixInstrumentRules;
       final rules = _rules(exchangeRules);
-      final availableTargets = math.min(3, setup.targets.length);
+      final availableTargets = math.min(3, setup.targets.length).toInt();
       if (availableTargets < 1) {
         throw const ManualTradeExecutionException(
           'This setup does not have a valid take-profit target.',
