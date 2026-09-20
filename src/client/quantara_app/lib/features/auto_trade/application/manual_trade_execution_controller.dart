@@ -83,6 +83,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     ManualTradeExecutionStore? executionStore,
     ManualTradeJournalObserver? journalObserver,
     DateTime Function()? utcNow,
+    this.exchangePollDelay = const Duration(milliseconds: 500),
   }) : _accountController = accountController,
        _exchange = exchange,
        _credentialsStore = credentialsStore,
@@ -97,6 +98,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
   final ManualTradeExecutionStore _executionStore;
   final ManualTradeJournalObserver _journalObserver;
   final DateTime Function() _utcNow;
+  final Duration exchangePollDelay;
 
   ManualTradePreparation? _preparation;
   bool _busy = false;
@@ -440,7 +442,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       var ladderConfirmed = false;
       for (var attempt = 0; attempt < 6; attempt++) {
         if (attempt > 0) {
-          await Future<void>.delayed(const Duration(milliseconds: 500));
+          await Future<void>.delayed(exchangePollDelay);
         }
         protections = await _exchange.fetchPendingProtection(
           credentials,
@@ -590,7 +592,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
   }) async {
     for (var attempt = 0; attempt < 6; attempt++) {
       if (attempt > 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
+        await Future<void>.delayed(exchangePollDelay);
       }
       final values = await Future.wait<Object>([
         _exchange.fetchOrderDetail(
