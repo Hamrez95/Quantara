@@ -563,12 +563,6 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       );
     }
 
-    final age = _utcNow().toUtc().difference(record.updatedAtUtc);
-    if (age < const Duration(seconds: 30)) {
-      throw const ManualTradeExecutionException(
-        'A previous entry attempt is still inside the exchange reconciliation window.',
-      );
-    }
     final snapshot = await _exchange.fetchCurrentAccountSnapshot(credentials);
     final sameSymbolPosition = snapshot.positions.any(
       (position) =>
@@ -584,13 +578,8 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         'A previous manual attempt still has exchange exposure or an order identity; duplicate submission remains blocked.',
       );
     }
-    await _executionStore.save(
-      record.copyWith(
-        state: ManualTradeExecutionState.failedSafe,
-        updatedAtUtc: _utcNow().toUtc(),
-        message:
-            'Fresh Bitunix truth proved no position and no matching pending order after the ambiguity window.',
-      ),
+    throw const ManualTradeExecutionException(
+      'A previous entry attempt is ambiguous. Current flat account state cannot prove that the order never executed, so this setup will not be submitted again automatically.',
     );
   }
 
