@@ -410,10 +410,9 @@ abstract final class ManualTradeSizingPolicy {
       );
     }
 
-    final maximumPermittedLeverage = math.min(
-      setup.maximumSafeLeverage,
-      rules.maximumLeverage,
-    );
+    final maximumPermittedLeverage = math
+        .min(setup.maximumSafeLeverage, rules.maximumLeverage)
+        .toInt();
     if (maximumPermittedLeverage < rules.minimumLeverage ||
         requestedLeverage < rules.minimumLeverage ||
         requestedLeverage > maximumPermittedLeverage) {
