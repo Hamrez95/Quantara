@@ -154,10 +154,12 @@ abstract final class ManualTradeSizingPolicy {
   }) {
     final quality = _qualityScore(setup);
     final multiplier = _qualityMultiplier(quality);
-    final leverage = setup.recommendedLeverage.clamp(
-      rules.minimumLeverage,
-      math.min(setup.maximumSafeLeverage, rules.maximumLeverage),
-    );
+    final leverage = setup.recommendedLeverage
+        .clamp(
+          rules.minimumLeverage,
+          math.min(setup.maximumSafeLeverage, rules.maximumLeverage),
+        )
+        .toInt();
     return _build(
       setup: setup,
       account: account,
@@ -245,7 +247,7 @@ abstract final class ManualTradeSizingPolicy {
         targets: List.unmodifiable(targets),
         targetQuantities: List.unmodifiable(targetQuantities),
         targetAllocation:
-            targetAllocation ?? _allocationFor(setup, targetCount.clamp(1, 3)),
+            targetAllocation ?? _allocationFor(setup, targetCount.clamp(1, 3).toInt()),
         maximumLoss: maximumLoss,
         riskPercentOfEquity: account.estimatedEquity > 0
             ? maximumLoss / account.estimatedEquity * 100
@@ -627,7 +629,9 @@ abstract final class ManualTradeSizingPolicy {
   }
 
   static int _qualityScore(SignalJournalEntry setup) =>
-      (setup.setupQualityScore ?? setup.confidencePercent).clamp(0, 100);
+      (setup.setupQualityScore ?? setup.confidencePercent)
+          .clamp(0, 100)
+          .toInt();
 
   static double _qualityMultiplier(int score) =>
       (0.50 + score.clamp(0, 100) / 200).clamp(0.50, 1.0).toDouble();
