@@ -85,6 +85,10 @@ final class _ManualTradeExecutionSheetState
                     : _t('فروش / Short', 'Short'),
               ),
               _ReviewLine(
+                label: _t('نوع سفارش', 'Order type'),
+                value: _t('Market', 'Market'),
+              ),
+              _ReviewLine(
                 label: _t('مارجین', 'Margin'),
                 value: _money(plan.margin),
               ),
@@ -299,6 +303,19 @@ final class _ManualTradeExecutionSheetState
                           FocusScope.of(context).unfocus();
                         },
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        plan.systemSuggested
+                            ? _t(
+                                'پیشنهاد سیستم: ${(plan.qualityRiskMultiplier * 100).toStringAsFixed(0)}٪ از سقف ریسک این ستاپ، بدون عبور از محدودیت‌های حساب و صرافی.',
+                                'System proposal: ${(plan.qualityRiskMultiplier * 100).toStringAsFixed(0)}% of this setup risk cap, without exceeding account or exchange limits.',
+                              )
+                            : _t(
+                                'مقادیر را شما تغییر داده‌اید؛ سقف‌های سخت ریسک و صرافی همچنان اعمال می‌شوند.',
+                                'You edited these values; hard risk and exchange limits still apply.',
+                              ),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                       const SizedBox(height: 18),
                       Row(
                         children: [
@@ -370,6 +387,11 @@ final class _ManualTradeExecutionSheetState
                     runSpacing: 12,
                     children: [
                       _Metric(
+                        label: _t('مارجین', 'Margin'),
+                        value:
+                            '${_money(plan.margin)} · ${(plan.margin / preparation.account.estimatedEquity * 100).toStringAsFixed(2)}%',
+                      ),
+                      _Metric(
                         label: _t('حجم پوزیشن', 'Notional'),
                         value: _money(plan.notional),
                       ),
@@ -393,6 +415,13 @@ final class _ManualTradeExecutionSheetState
                       _Metric(
                         label: _t('حد ضرر', 'Stop loss'),
                         value: _price(plan.stopLoss),
+                      ),
+                      _Metric(
+                        label: _t('لیکوییدیشن', 'Liquidation'),
+                        value: _t(
+                          'پس از تأیید صرافی',
+                          'After exchange confirmation',
+                        ),
                       ),
                     ],
                   ),
