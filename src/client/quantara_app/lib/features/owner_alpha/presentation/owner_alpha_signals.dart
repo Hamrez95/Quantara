@@ -3,10 +3,14 @@ part of 'owner_alpha_page.dart';
 class _SignalInboxView extends StatefulWidget {
   const _SignalInboxView({
     required this.controller,
+    required this.autoTradeController,
+    required this.manualTradeController,
     required this.onOpenAnalysis,
   });
 
   final OwnerAlphaController controller;
+  final AutoTradeController autoTradeController;
+  final ManualTradeExecutionController manualTradeController;
   final _OpenAnalysis onOpenAnalysis;
 
   @override
@@ -25,11 +29,17 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
   @override
   void initState() {
     super.initState();
+    widget.autoTradeController.addListener(_onAutoTradeStateChanged);
     unawaited(_performanceJournalController.initialize());
+  }
+
+  void _onAutoTradeStateChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    widget.autoTradeController.removeListener(_onAutoTradeStateChanged);
     _performanceJournalController.dispose();
     super.dispose();
   }
@@ -208,6 +218,19 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
               quote: quotesBySymbol[filtered[index].symbol],
               marketDataFresh: marketDataFresh,
               taken: controller.isTaken(filtered[index].setupId),
+              tradeBlockReason: _tradeBlockReason(
+                filtered[index],
+                now: now,
+                marketDataFresh: marketDataFresh,
+              ),
+              onOpenTrade: _tradeBlockReason(
+                        filtered[index],
+                        now: now,
+                        marketDataFresh: marketDataFresh,
+                      ) ==
+                      null
+                  ? () => unawaited(_showManualTrade(filtered[index]))
+                  : null,
               onOpen: () => widget.onOpenAnalysis(
                 filtered[index].symbol,
                 filtered[index].timeframe,
@@ -224,6 +247,102 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
             if (index != filtered.length - 1) const SizedBox(height: 12),
           ],
       ],
+    );
+  }
+
+  String? _tradeBlockReason(
+    SignalJournalEntry entry, {
+    required DateTime now,
+    required bool marketDataFresh,
+  }) {
+    if (!marketDataFresh) {
+      return _t(
+        'داده بازار تازه نیست؛ فعلاً معامله باز نمی‌شود.',
+        'Market data is not fresh; opening a trade is blocked.',
+      );
+    }
+    if (entry.closed ||
+        (entry.outcome != SignalOutcome.pendingEntry &&
+            entry.outcome != SignalOutcome.active) ||
+        !now.toUtc().isBefore(entry.validUntil.toUtc())) {
+      return _t(
+        'این ستاپ دیگر برای ورود جدید معتبر نیست.',
+        'This setup is no longer valid for a new entry.',
+      );
+    }
+    if (entry.entryLower == null ||
+        entry.entryUpper == null ||
+        entry.stopLoss == null ||
+        entry.targets.isEmpty) {
+      return _t(
+        'پلن Entry / SL / TP این ستاپ کامل نیست.',
+        'This setup does not have a complete Entry / SL / TP plan.',
+      );
+    }
+    if (!widget.autoTradeController.isConnected) {
+      return _t(
+        'برای باز کردن معامله ابتدا حساب Bitunix را متصل کنید.',
+        'Connect the Bitunix account before opening a trade.',
+      );
+    }
+    if (!widget.autoTradeController.canStartNewEntry) {
+      final reconciliation = widget.autoTradeController.reconciliation;
+      final snapshot = widget.autoTradeController.snapshot;
+      if (reconciliation.blocksNewEntries) {
+        return _t(
+          'وضعیت حساب باید دوباره با Bitunix همگام و تازه شود.',
+          'The account must be freshly reconciled with Bitunix.',
+        );
+      }
+      if (snapshot != null && !snapshot.allOpenPositionsFullyProtected) {
+        return _t(
+          'تا وقتی پوزیشن‌های باز فعلی کاملاً محافظت نشده‌اند ورود جدید مسدود است.',
+          'New entry is blocked until existing positions are fully protected.',
+        );
+      }
+      if (snapshot?.authoritativePnl.isReadyForRiskGates != true) {
+        return _t(
+          'داده ریسک حساب هنوز برای ورود واقعی قابل اتکا نیست.',
+          'Account risk truth is not ready for a real entry yet.',
+        );
+      }
+      return _t(
+        'ورود واقعی در وضعیت فعلی حساب موقتاً مجاز نیست.',
+        'Real entry is temporarily unavailable for the current account state.',
+      );
+    }
+    return null;
+  }
+
+  Future<void> _showManualTrade(SignalJournalEntry entry) async {
+    final preparation = await widget.manualTradeController.prepare(entry);
+    if (!mounted) return;
+    if (preparation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            widget.manualTradeController.error ??
+                _t(
+                  'پیش‌بررسی معامله کامل نشد.',
+                  'Trade preflight could not be completed.',
+                ),
+          ),
+        ),
+      );
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.96,
+        child: ManualTradeExecutionSheet(
+          controller: widget.manualTradeController,
+          setup: entry,
+        ),
+      ),
     );
   }
 
@@ -459,6 +578,8 @@ class _SignalJournalCard extends StatelessWidget {
     required this.quote,
     required this.marketDataFresh,
     required this.taken,
+    required this.tradeBlockReason,
+    required this.onOpenTrade,
     required this.onOpen,
     required this.onTakenChanged,
     required this.onNote,
@@ -471,6 +592,8 @@ class _SignalJournalCard extends StatelessWidget {
   final AlphaMarketQuote? quote;
   final bool marketDataFresh;
   final bool taken;
+  final String? tradeBlockReason;
+  final VoidCallback? onOpenTrade;
   final VoidCallback onOpen;
   final ValueChanged<bool> onTakenChanged;
   final VoidCallback onNote;
@@ -654,6 +777,12 @@ class _SignalJournalCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              FilledButton.icon(
+                key: ValueKey('manual-trade-open-${entry.setupId}'),
+                onPressed: onOpenTrade,
+                icon: const Icon(Icons.swap_horiz_rounded),
+                label: Text(_t(context, 'باز کردن معامله', 'Open trade')),
+              ),
               FilledButton.tonalIcon(
                 onPressed: onOpen,
                 icon: const Icon(Icons.candlestick_chart_rounded),
@@ -678,6 +807,28 @@ class _SignalJournalCard extends StatelessWidget {
               ),
             ],
           ),
+          if (tradeBlockReason != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 17,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    tradeBlockReason!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
