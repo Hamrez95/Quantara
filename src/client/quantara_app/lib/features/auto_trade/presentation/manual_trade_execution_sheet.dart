@@ -190,14 +190,12 @@ final class _ManualTradeExecutionSheetState
         final maximumLeverage = plan.maximumPermittedLeverage < 1
             ? 1
             : plan.maximumPermittedLeverage;
-        final minimumLeverage = preparation.rules.minimumLeverage.clamp(
-          1,
-          maximumLeverage,
-        );
-        final leverageValue = _leverage.clamp(
-          minimumLeverage,
-          maximumLeverage,
-        );
+        final minimumLeverage = preparation.rules.minimumLeverage
+            .clamp(1, maximumLeverage)
+            .toInt();
+        final leverageValue = _leverage
+            .clamp(minimumLeverage, maximumLeverage)
+            .toInt();
 
         return SafeArea(
           child: SingleChildScrollView(
