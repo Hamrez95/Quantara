@@ -14,6 +14,9 @@ final class ManualTradeExecutionRecord {
     required this.margin,
     required this.leverage,
     required this.targetCount,
+    this.systemMargin,
+    this.systemLeverage,
+    this.systemTargetCount,
     this.entryOrderId,
     this.positionId,
     this.stopOrderId,
@@ -29,6 +32,9 @@ final class ManualTradeExecutionRecord {
   final double margin;
   final int leverage;
   final int targetCount;
+  final double? systemMargin;
+  final int? systemLeverage;
+  final int? systemTargetCount;
   final String? entryOrderId;
   final String? positionId;
   final String? stopOrderId;
@@ -57,6 +63,9 @@ final class ManualTradeExecutionRecord {
     margin: margin,
     leverage: leverage,
     targetCount: targetCount,
+    systemMargin: systemMargin,
+    systemLeverage: systemLeverage,
+    systemTargetCount: systemTargetCount,
     entryOrderId: entryOrderId ?? this.entryOrderId,
     positionId: positionId ?? this.positionId,
     stopOrderId: stopOrderId ?? this.stopOrderId,
@@ -73,6 +82,9 @@ final class ManualTradeExecutionRecord {
     'margin': margin,
     'leverage': leverage,
     'targetCount': targetCount,
+    'systemMargin': systemMargin,
+    'systemLeverage': systemLeverage,
+    'systemTargetCount': systemTargetCount,
     'entryOrderId': entryOrderId,
     'positionId': positionId,
     'stopOrderId': stopOrderId,
@@ -93,6 +105,9 @@ final class ManualTradeExecutionRecord {
     final margin = (json['margin'] as num?)?.toDouble() ?? double.nan;
     final leverage = (json['leverage'] as num?)?.toInt() ?? 0;
     final targetCount = (json['targetCount'] as num?)?.toInt() ?? 0;
+    final systemMargin = (json['systemMargin'] as num?)?.toDouble();
+    final systemLeverage = (json['systemLeverage'] as num?)?.toInt();
+    final systemTargetCount = (json['systemTargetCount'] as num?)?.toInt();
     if (updatedAt == null ||
         state == null ||
         setupId.isEmpty ||
@@ -116,6 +131,9 @@ final class ManualTradeExecutionRecord {
       margin: margin,
       leverage: leverage,
       targetCount: targetCount,
+      systemMargin: systemMargin,
+      systemLeverage: systemLeverage,
+      systemTargetCount: systemTargetCount,
       entryOrderId: _nullable(json['entryOrderId']),
       positionId: _nullable(json['positionId']),
       stopOrderId: _nullable(json['stopOrderId']),
