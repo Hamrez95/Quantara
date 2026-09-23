@@ -449,7 +449,7 @@ abstract final class ManualTradeSizingPolicy {
       );
     }
 
-    final stopDistance = (markPrice - stop!).abs();
+    final stopDistance = (markPrice - stop).abs();
     final costRate =
         setup.notionalValue > 0 && setup.estimatedRoundTripCosts >= 0
         ? (setup.estimatedRoundTripCosts / setup.notionalValue).clamp(0.0, 0.05)
