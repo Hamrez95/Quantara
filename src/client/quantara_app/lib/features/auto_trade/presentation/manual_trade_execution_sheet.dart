@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/formatting/number_formatters.dart';
 import '../../owner_alpha/domain/owner_alpha_models.dart';
 import '../application/manual_trade_execution_controller.dart';
-import '../domain/manual_trade_execution.dart';
 
 final class ManualTradeExecutionSheet extends StatefulWidget {
   const ManualTradeExecutionSheet({
