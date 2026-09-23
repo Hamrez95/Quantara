@@ -47,6 +47,9 @@ void main() {
       expect(exchange.changedLeverage, 5);
       expect(executionStore.record!.state, ManualTradeExecutionState.protected);
       expect(executionStore.record!.positionId, 'position-1');
+      expect(executionStore.record!.systemTargetCount, 3);
+      expect(executionStore.record!.targetCount, 2);
+      expect(executionStore.record!.systemMargin, isNotNull);
       expect(journalStore.ledger.plans.single.setupId, 'setup-540');
       expect(
         journalStore.ledger.plans.single.source,
