@@ -47,7 +47,10 @@ void main() {
       await tester.pump();
 
       expect(controller.preparation!.plan.targetCount, 1);
-      expect(controller.preparation!.plan.targetAllocation.activeTargetCount, 1);
+      expect(
+        controller.preparation!.plan.targetAllocation.activeTargetCount,
+        1,
+      );
 
       await tester.enterText(
         find.byKey(const Key('manual-trade-margin')),
