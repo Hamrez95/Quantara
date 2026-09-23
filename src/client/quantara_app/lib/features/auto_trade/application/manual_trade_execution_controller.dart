@@ -30,6 +30,7 @@ final class ManualTradePreparation {
     required this.account,
     required this.rules,
     required this.markPrice,
+    required this.systemProposal,
     required this.plan,
   });
 
@@ -37,6 +38,7 @@ final class ManualTradePreparation {
   final AutoTradeAccountSnapshot account;
   final ManualTradeInstrumentRules rules;
   final double markPrice;
+  final ManualTradePlan systemProposal;
   final ManualTradePlan plan;
 
   ManualTradePreparation copyWith({required ManualTradePlan plan}) =>
@@ -45,6 +47,7 @@ final class ManualTradePreparation {
         account: account,
         rules: rules,
         markPrice: markPrice,
+        systemProposal: systemProposal,
         plan: plan,
       );
 }
@@ -409,6 +412,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         account: account,
         rules: rules,
         markPrice: markPrice,
+        systemProposal: plan,
         plan: plan,
       );
       if (!plan.allowed) _error = plan.explanation;
@@ -513,6 +517,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         account: account,
         rules: rules,
         markPrice: currentMark,
+        systemProposal: prepared.systemProposal,
         plan: plan,
       );
       if (!plan.allowed) {
@@ -531,6 +536,9 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         margin: plan.margin,
         leverage: plan.leverage,
         targetCount: plan.targetCount,
+        systemMargin: prepared.systemProposal.margin,
+        systemLeverage: prepared.systemProposal.leverage,
+        systemTargetCount: prepared.systemProposal.targetCount,
         message: 'Persisted before the first exchange mutation.',
       );
       await _executionStore.save(intent);
@@ -735,6 +743,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       try {
         await _journalObserver.recordProtectedTrade(
           setup: prepared.setup,
+          systemProposal: prepared.systemProposal,
           plan: plan,
           account: account,
           positionId: position.positionId,
