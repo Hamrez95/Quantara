@@ -11,6 +11,7 @@ import '../data/secure_auto_trade_credentials_store.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/full_position_stop_policy.dart';
 import '../domain/manual_trade_execution.dart';
+import '../domain/local_live_trade_models.dart';
 import '../domain/private_account_reconciliation.dart';
 import 'auto_trade_controller.dart';
 
@@ -74,6 +75,225 @@ final class ManualTradeExecutionReceipt {
   final String? warning;
 }
 
+abstract interface class ManualTradeAccountGateway {
+  AutoTradeAccountSnapshot? get snapshot;
+  bool get canStartNewEntry;
+
+  Future<bool> reconcile({
+    required PrivateAccountRefreshReason reason,
+    bool force = false,
+  });
+}
+
+final class AutoTradeManualTradeAccountGateway
+    implements ManualTradeAccountGateway {
+  const AutoTradeManualTradeAccountGateway(this.controller);
+
+  final AutoTradeController controller;
+
+  @override
+  AutoTradeAccountSnapshot? get snapshot => controller.snapshot;
+
+  @override
+  bool get canStartNewEntry => controller.canStartNewEntry;
+
+  @override
+  Future<bool> reconcile({
+    required PrivateAccountRefreshReason reason,
+    bool force = false,
+  }) => controller.reconcile(reason: reason, force: force);
+}
+
+abstract interface class ManualTradeExchangeGateway {
+  Future<double> fetchMarkPrice(String symbol);
+  Future<BitunixInstrumentRules> fetchInstrumentRules(String symbol);
+  Future<AutoTradeAccountSnapshot> fetchCurrentAccountSnapshot(
+    BitunixApiCredentials credentials,
+  );
+  Future<void> ensureIsolatedMargin({
+    required String symbol,
+    required BitunixApiCredentials credentials,
+  });
+  Future<void> changeLeverage({
+    required String symbol,
+    required int leverage,
+    required BitunixApiCredentials credentials,
+  });
+  Future<BitunixPlacedOrder> placeMarketEntry({
+    required String symbol,
+    required double quantity,
+    required bool long,
+    required String clientId,
+    required double stopLoss,
+    required BitunixApiCredentials credentials,
+  });
+  Future<List<BitunixPendingProtection>> fetchPendingProtection(
+    BitunixApiCredentials credentials, {
+    String? symbol,
+    String? positionId,
+  });
+  Future<String> placePositionStop({
+    required String symbol,
+    required String positionId,
+    required double stopLoss,
+    required BitunixApiCredentials credentials,
+  });
+  Future<String> placePartialTakeProfit({
+    required String symbol,
+    required String positionId,
+    required double triggerPrice,
+    required double quantity,
+    required BitunixApiCredentials credentials,
+  });
+  Future<BitunixOrderDetail> fetchOrderDetail({
+    required String orderId,
+    required BitunixApiCredentials credentials,
+  });
+  Future<List<BitunixLivePosition>> fetchPositions(
+    BitunixApiCredentials credentials, {
+    String? symbol,
+  });
+  Future<void> cancelEntryOrder({
+    required String symbol,
+    required String orderId,
+    required String clientId,
+    required BitunixApiCredentials credentials,
+  });
+  Future<BitunixPlacedOrder> closePositionReduceOnly({
+    required BitunixLivePosition position,
+    required String clientId,
+    required BitunixApiCredentials credentials,
+  });
+}
+
+final class BitunixManualTradeExchangeGateway
+    implements ManualTradeExchangeGateway {
+  const BitunixManualTradeExchangeGateway(this.client);
+
+  final BitunixLocalLiveApiClient client;
+
+  @override
+  Future<double> fetchMarkPrice(String symbol) => client.fetchMarkPrice(symbol);
+
+  @override
+  Future<BitunixInstrumentRules> fetchInstrumentRules(String symbol) =>
+      client.fetchInstrumentRules(symbol);
+
+  @override
+  Future<AutoTradeAccountSnapshot> fetchCurrentAccountSnapshot(
+    BitunixApiCredentials credentials,
+  ) => client.fetchCurrentAccountSnapshot(credentials);
+
+  @override
+  Future<void> ensureIsolatedMargin({
+    required String symbol,
+    required BitunixApiCredentials credentials,
+  }) => client.ensureIsolatedMargin(symbol: symbol, credentials: credentials);
+
+  @override
+  Future<void> changeLeverage({
+    required String symbol,
+    required int leverage,
+    required BitunixApiCredentials credentials,
+  }) => client.changeLeverage(
+    symbol: symbol,
+    leverage: leverage,
+    credentials: credentials,
+  );
+
+  @override
+  Future<BitunixPlacedOrder> placeMarketEntry({
+    required String symbol,
+    required double quantity,
+    required bool long,
+    required String clientId,
+    required double stopLoss,
+    required BitunixApiCredentials credentials,
+  }) => client.placeMarketEntry(
+    symbol: symbol,
+    quantity: quantity,
+    long: long,
+    clientId: clientId,
+    stopLoss: stopLoss,
+    credentials: credentials,
+  );
+
+  @override
+  Future<List<BitunixPendingProtection>> fetchPendingProtection(
+    BitunixApiCredentials credentials, {
+    String? symbol,
+    String? positionId,
+  }) => client.fetchPendingProtection(
+    credentials,
+    symbol: symbol,
+    positionId: positionId,
+  );
+
+  @override
+  Future<String> placePositionStop({
+    required String symbol,
+    required String positionId,
+    required double stopLoss,
+    required BitunixApiCredentials credentials,
+  }) => client.placePositionStop(
+    symbol: symbol,
+    positionId: positionId,
+    stopLoss: stopLoss,
+    credentials: credentials,
+  );
+
+  @override
+  Future<String> placePartialTakeProfit({
+    required String symbol,
+    required String positionId,
+    required double triggerPrice,
+    required double quantity,
+    required BitunixApiCredentials credentials,
+  }) => client.placePartialTakeProfit(
+    symbol: symbol,
+    positionId: positionId,
+    triggerPrice: triggerPrice,
+    quantity: quantity,
+    credentials: credentials,
+  );
+
+  @override
+  Future<BitunixOrderDetail> fetchOrderDetail({
+    required String orderId,
+    required BitunixApiCredentials credentials,
+  }) => client.fetchOrderDetail(orderId: orderId, credentials: credentials);
+
+  @override
+  Future<List<BitunixLivePosition>> fetchPositions(
+    BitunixApiCredentials credentials, {
+    String? symbol,
+  }) => client.fetchPositions(credentials, symbol: symbol);
+
+  @override
+  Future<void> cancelEntryOrder({
+    required String symbol,
+    required String orderId,
+    required String clientId,
+    required BitunixApiCredentials credentials,
+  }) => client.cancelEntryOrder(
+    symbol: symbol,
+    orderId: orderId,
+    clientId: clientId,
+    credentials: credentials,
+  );
+
+  @override
+  Future<BitunixPlacedOrder> closePositionReduceOnly({
+    required BitunixLivePosition position,
+    required String clientId,
+    required BitunixApiCredentials credentials,
+  }) => client.closePositionReduceOnly(
+    position: position,
+    clientId: clientId,
+    credentials: credentials,
+  );
+}
+
 final class ManualTradeExecutionController extends ChangeNotifier {
   ManualTradeExecutionController({
     required AutoTradeController accountController,
@@ -83,18 +303,33 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     ManualTradeExecutionStore? executionStore,
     ManualTradeJournalObserver? journalObserver,
     DateTime Function()? utcNow,
+    Duration exchangePollDelay = const Duration(milliseconds: 500),
+  }) : this.withGateways(
+         accountGateway: AutoTradeManualTradeAccountGateway(accountController),
+         exchangeGateway: BitunixManualTradeExchangeGateway(exchange),
+         credentialsStore: credentialsStore,
+         executionStore: executionStore,
+         journalObserver: journalObserver,
+         utcNow: utcNow,
+         exchangePollDelay: exchangePollDelay,
+       );
+
+  ManualTradeExecutionController.withGateways({
+    required this.accountGateway,
+    required this.exchangeGateway,
+    this.credentialsStore = const SecureAutoTradeCredentialsStore(),
+    ManualTradeExecutionStore? executionStore,
+    ManualTradeJournalObserver? journalObserver,
+    DateTime Function()? utcNow,
     this.exchangePollDelay = const Duration(milliseconds: 500),
-  }) : _accountController = accountController,
-       _exchange = exchange,
-       _credentialsStore = credentialsStore,
-       _executionStore =
+  }) : _executionStore =
            executionStore ?? SharedPreferencesManualTradeExecutionStore(),
        _journalObserver = journalObserver ?? ManualTradeJournalObserver(),
        _utcNow = utcNow ?? DateTime.now;
 
-  final AutoTradeController _accountController;
-  final BitunixLocalLiveApiClient _exchange;
-  final AutoTradeCredentialsStore _credentialsStore;
+  final ManualTradeAccountGateway accountGateway;
+  final ManualTradeExchangeGateway exchangeGateway;
+  final AutoTradeCredentialsStore credentialsStore;
   final ManualTradeExecutionStore _executionStore;
   final ManualTradeJournalObserver _journalObserver;
   final DateTime Function() _utcNow;
@@ -117,20 +352,20 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     _lastReceipt = null;
     notifyListeners();
     try {
-      final credentials = await _credentialsStore.load();
+      final credentials = await credentialsStore.load();
       if (credentials == null) {
         throw const ManualTradeExecutionException(
           'Connect and validate the Bitunix account before opening a setup.',
         );
       }
-      final reconciled = await _accountController.reconcile(
+      final reconciled = await accountGateway.reconcile(
         reason: PrivateAccountRefreshReason.startPreflight,
         force: true,
       );
-      final account = _accountController.snapshot;
+      final account = accountGateway.snapshot;
       if (!reconciled ||
           account == null ||
-          !_accountController.canStartNewEntry) {
+          !accountGateway.canStartNewEntry) {
         throw const ManualTradeExecutionException(
           'A fresh, coherent and fully protected Bitunix account state is required before a new manual entry.',
         );
@@ -140,8 +375,8 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         credentials: credentials,
       );
       final values = await Future.wait<Object>([
-        _exchange.fetchMarkPrice(setup.symbol),
-        _exchange.fetchInstrumentRules(setup.symbol),
+        exchangeGateway.fetchMarkPrice(setup.symbol),
+        exchangeGateway.fetchInstrumentRules(setup.symbol),
       ]);
       final markPrice = values[0] as double;
       final exchangeRules = values[1] as BitunixInstrumentRules;
@@ -221,21 +456,21 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     BitunixLivePosition? openedPosition;
     BitunixApiCredentials? activeCredentials;
     try {
-      final credentials = await _credentialsStore.load();
+      final credentials = await credentialsStore.load();
       if (credentials == null) {
         throw const ManualTradeExecutionException(
           'Bitunix credentials are unavailable.',
         );
       }
       activeCredentials = credentials;
-      final reconciled = await _accountController.reconcile(
+      final reconciled = await accountGateway.reconcile(
         reason: PrivateAccountRefreshReason.startPreflight,
         force: true,
       );
-      final account = _accountController.snapshot;
+      final account = accountGateway.snapshot;
       if (!reconciled ||
           account == null ||
-          !_accountController.canStartNewEntry) {
+          !accountGateway.canStartNewEntry) {
         throw const ManualTradeExecutionException(
           'Account truth changed before confirmation; the trade was not submitted.',
         );
@@ -249,8 +484,8 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       }
 
       final values = await Future.wait<Object>([
-        _exchange.fetchMarkPrice(prepared.setup.symbol),
-        _exchange.fetchInstrumentRules(prepared.setup.symbol),
+        exchangeGateway.fetchMarkPrice(prepared.setup.symbol),
+        exchangeGateway.fetchInstrumentRules(prepared.setup.symbol),
       ]);
       final currentMark = values[0] as double;
       final rules = _rules(values[1] as BitunixInstrumentRules);
@@ -291,11 +526,11 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       );
       await _executionStore.save(intent);
 
-      await _exchange.ensureIsolatedMargin(
+      await exchangeGateway.ensureIsolatedMargin(
         symbol: prepared.setup.symbol,
         credentials: credentials,
       );
-      await _exchange.changeLeverage(
+      await exchangeGateway.changeLeverage(
         symbol: prepared.setup.symbol,
         leverage: plan.leverage,
         credentials: credentials,
@@ -303,7 +538,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
 
       BitunixPlacedOrder placed;
       try {
-        placed = await _exchange.placeMarketEntry(
+        placed = await exchangeGateway.placeMarketEntry(
           symbol: prepared.setup.symbol,
           quantity: plan.quantity,
           long: prepared.setup.direction == TradeDirection.long,
@@ -370,7 +605,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       }
 
       final priceTolerance = math.pow(10, -rules.pricePrecision).toDouble() / 2;
-      var protections = await _exchange.fetchPendingProtection(
+      var protections = await exchangeGateway.fetchPendingProtection(
         credentials,
         symbol: prepared.setup.symbol,
         positionId: position.positionId,
@@ -383,13 +618,13 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         quantityTolerance: quantityTolerance,
         priceTolerance: priceTolerance,
       );
-      stopOrderId ??= await _exchange.placePositionStop(
+      stopOrderId ??= await exchangeGateway.placePositionStop(
         symbol: prepared.setup.symbol,
         positionId: position.positionId,
         stopLoss: plan.stopLoss,
         credentials: credentials,
       );
-      protections = await _exchange.fetchPendingProtection(
+      protections = await exchangeGateway.fetchPendingProtection(
         credentials,
         symbol: prepared.setup.symbol,
         positionId: position.positionId,
@@ -419,7 +654,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       try {
         for (var index = 0; index < plan.targetCount; index++) {
           targetOrderIds.add(
-            await _exchange.placePartialTakeProfit(
+            await exchangeGateway.placePartialTakeProfit(
               symbol: prepared.setup.symbol,
               positionId: position.positionId,
               triggerPrice: plan.targets[index],
@@ -446,7 +681,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         if (attempt > 0) {
           await Future<void>.delayed(exchangePollDelay);
         }
-        protections = await _exchange.fetchPendingProtection(
+        protections = await exchangeGateway.fetchPendingProtection(
           credentials,
           symbol: prepared.setup.symbol,
           positionId: position.positionId,
@@ -508,7 +743,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
             'The position is protected on Bitunix, but local journal persistence needs reconciliation.';
       }
 
-      await _accountController.reconcile(
+      await accountGateway.reconcile(
         reason: PrivateAccountRefreshReason.manual,
         force: true,
       );
@@ -569,7 +804,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       );
     }
 
-    final snapshot = await _exchange.fetchCurrentAccountSnapshot(credentials);
+    final snapshot = await exchangeGateway.fetchCurrentAccountSnapshot(credentials);
     final sameSymbolPosition = snapshot.positions.any(
       (position) =>
           position.quantity > 0 &&
@@ -599,11 +834,11 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         await Future<void>.delayed(exchangePollDelay);
       }
       final values = await Future.wait<Object>([
-        _exchange.fetchOrderDetail(
+        exchangeGateway.fetchOrderDetail(
           orderId: order.orderId,
           credentials: credentials,
         ),
-        _exchange.fetchPositions(credentials, symbol: setup.symbol),
+        exchangeGateway.fetchPositions(credentials, symbol: setup.symbol),
       ]);
       final detail = values[0] as BitunixOrderDetail;
       final position = _matchingPosition(
@@ -624,7 +859,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     required ManualTradeExecutionRecord intent,
   }) async {
     try {
-      await _exchange.cancelEntryOrder(
+      await exchangeGateway.cancelEntryOrder(
         symbol: setup.symbol,
         orderId: order.orderId,
         clientId: order.clientId,
@@ -637,14 +872,14 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       );
       return;
     }
-    final positions = await _exchange.fetchPositions(
+    final positions = await exchangeGateway.fetchPositions(
       credentials,
       symbol: setup.symbol,
     );
     final position = _matchingPosition(positions, setup);
     if (position != null && position.quantity > 0) {
       try {
-        await _exchange.closePositionReduceOnly(
+        await exchangeGateway.closePositionReduceOnly(
           position: position,
           clientId: '${order.clientId}-partial-close',
           credentials: credentials,
@@ -674,7 +909,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     required String message,
   }) async {
     try {
-      await _exchange.closePositionReduceOnly(
+      await exchangeGateway.closePositionReduceOnly(
         position: position,
         clientId: clientId,
         credentials: credentials,
