@@ -813,7 +813,9 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       );
     }
 
-    final snapshot = await exchangeGateway.fetchCurrentAccountSnapshot(credentials);
+    final snapshot = await exchangeGateway.fetchCurrentAccountSnapshot(
+      credentials,
+    );
     final sameSymbolPosition = snapshot.positions.any(
       (position) =>
           position.quantity > 0 &&
