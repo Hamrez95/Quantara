@@ -176,37 +176,45 @@ final class BitunixManualTradeExchangeGateway
   final BitunixLocalLiveApiClient client;
 
   @override
-  Future<double> fetchMarkPrice(String symbol) =>
-      client.fetchMarkPrice(symbol);
+  Future<double> fetchMarkPrice(String symbol) {
+    return client.fetchMarkPrice(symbol);
+  }
 
   @override
-  Future<BitunixInstrumentRules> fetchInstrumentRules(String symbol) =>
-      client.fetchInstrumentRules(symbol);
+  Future<BitunixInstrumentRules> fetchInstrumentRules(String symbol) {
+    return client.fetchInstrumentRules(symbol);
+  }
 
   @override
   Future<AutoTradeAccountSnapshot> fetchCurrentAccountSnapshot(
     BitunixApiCredentials credentials,
-  ) => client.fetchCurrentAccountSnapshot(credentials);
+  ) {
+    return client.fetchCurrentAccountSnapshot(credentials);
+  }
 
   @override
   Future<void> ensureIsolatedMargin({
     required String symbol,
     required BitunixApiCredentials credentials,
-  }) => client.ensureIsolatedMargin(
-    symbol: symbol,
-    credentials: credentials,
-  );
+  }) {
+    return client.ensureIsolatedMargin(
+      symbol: symbol,
+      credentials: credentials,
+    );
+  }
 
   @override
   Future<void> changeLeverage({
     required String symbol,
     required int leverage,
     required BitunixApiCredentials credentials,
-  }) => client.changeLeverage(
-    symbol: symbol,
-    leverage: leverage,
-    credentials: credentials,
-  );
+  }) {
+    return client.changeLeverage(
+      symbol: symbol,
+      leverage: leverage,
+      credentials: credentials,
+    );
+  }
 
   @override
   Future<BitunixPlacedOrder> placeMarketEntry({
@@ -216,25 +224,29 @@ final class BitunixManualTradeExchangeGateway
     required String clientId,
     required double stopLoss,
     required BitunixApiCredentials credentials,
-  }) => client.placeMarketEntry(
-    symbol: symbol,
-    quantity: quantity,
-    long: long,
-    clientId: clientId,
-    stopLoss: stopLoss,
-    credentials: credentials,
-  );
+  }) {
+    return client.placeMarketEntry(
+      symbol: symbol,
+      quantity: quantity,
+      long: long,
+      clientId: clientId,
+      stopLoss: stopLoss,
+      credentials: credentials,
+    );
+  }
 
   @override
   Future<List<BitunixPendingProtection>> fetchPendingProtection(
     BitunixApiCredentials credentials, {
     String? symbol,
     String? positionId,
-  }) => client.fetchPendingProtection(
-    credentials,
-    symbol: symbol,
-    positionId: positionId,
-  );
+  }) {
+    return client.fetchPendingProtection(
+      credentials,
+      symbol: symbol,
+      positionId: positionId,
+    );
+  }
 
   @override
   Future<String> placePositionStop({
@@ -242,12 +254,14 @@ final class BitunixManualTradeExchangeGateway
     required String positionId,
     required double stopLoss,
     required BitunixApiCredentials credentials,
-  }) => client.placePositionStop(
-    symbol: symbol,
-    positionId: positionId,
-    stopLoss: stopLoss,
-    credentials: credentials,
-  );
+  }) {
+    return client.placePositionStop(
+      symbol: symbol,
+      positionId: positionId,
+      stopLoss: stopLoss,
+      credentials: credentials,
+    );
+  }
 
   @override
   Future<String> placePartialTakeProfit({
@@ -256,28 +270,34 @@ final class BitunixManualTradeExchangeGateway
     required double triggerPrice,
     required double quantity,
     required BitunixApiCredentials credentials,
-  }) => client.placePartialTakeProfit(
-    symbol: symbol,
-    positionId: positionId,
-    triggerPrice: triggerPrice,
-    quantity: quantity,
-    credentials: credentials,
-  );
+  }) {
+    return client.placePartialTakeProfit(
+      symbol: symbol,
+      positionId: positionId,
+      triggerPrice: triggerPrice,
+      quantity: quantity,
+      credentials: credentials,
+    );
+  }
 
   @override
   Future<BitunixOrderDetail> fetchOrderDetail({
     required String orderId,
     required BitunixApiCredentials credentials,
-  }) => client.fetchOrderDetail(
-    orderId: orderId,
-    credentials: credentials,
-  );
+  }) {
+    return client.fetchOrderDetail(
+      orderId: orderId,
+      credentials: credentials,
+    );
+  }
 
   @override
   Future<List<BitunixLivePosition>> fetchPositions(
     BitunixApiCredentials credentials, {
     String? symbol,
-  }) => client.fetchPositions(credentials, symbol: symbol);
+  }) {
+    return client.fetchPositions(credentials, symbol: symbol);
+  }
 
   @override
   Future<void> cancelEntryOrder({
@@ -285,23 +305,27 @@ final class BitunixManualTradeExchangeGateway
     required String orderId,
     required String clientId,
     required BitunixApiCredentials credentials,
-  }) => client.cancelEntryOrder(
-    symbol: symbol,
-    orderId: orderId,
-    clientId: clientId,
-    credentials: credentials,
-  );
+  }) {
+    return client.cancelEntryOrder(
+      symbol: symbol,
+      orderId: orderId,
+      clientId: clientId,
+      credentials: credentials,
+    );
+  }
 
   @override
   Future<BitunixPlacedOrder> closePositionReduceOnly({
     required BitunixLivePosition position,
     required String clientId,
     required BitunixApiCredentials credentials,
-  }) => client.closePositionReduceOnly(
-    position: position,
-    clientId: clientId,
-    credentials: credentials,
-  );
+  }) {
+    return client.closePositionReduceOnly(
+      position: position,
+      clientId: clientId,
+      credentials: credentials,
+    );
+  }
 }
 
 final class ManualTradeExecutionController extends ChangeNotifier {
@@ -326,18 +350,37 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     );
   }
 
-  ManualTradeExecutionController.withGateways({
-    required this.accountGateway,
-    required this.exchangeGateway,
-    this.credentialsStore = const SecureAutoTradeCredentialsStore(),
+  factory ManualTradeExecutionController.withGateways({
+    required ManualTradeAccountGateway accountGateway,
+    required ManualTradeExchangeGateway exchangeGateway,
+    AutoTradeCredentialsStore credentialsStore =
+        const SecureAutoTradeCredentialsStore(),
     ManualTradeExecutionStore? executionStore,
     ManualTradeJournalObserver? journalObserver,
     DateTime Function()? utcNow,
-    this.exchangePollDelay = const Duration(milliseconds: 500),
-  }) : _executionStore =
-           executionStore ?? SharedPreferencesManualTradeExecutionStore(),
-       _journalObserver = journalObserver ?? ManualTradeJournalObserver(),
-       _utcNow = utcNow ?? DateTime.now;
+    Duration exchangePollDelay = const Duration(milliseconds: 500),
+  }) {
+    return ManualTradeExecutionController._internal(
+      accountGateway: accountGateway,
+      exchangeGateway: exchangeGateway,
+      credentialsStore: credentialsStore,
+      executionStore:
+          executionStore ?? SharedPreferencesManualTradeExecutionStore(),
+      journalObserver: journalObserver ?? ManualTradeJournalObserver(),
+      utcNow: utcNow ?? DateTime.now,
+      exchangePollDelay: exchangePollDelay,
+    );
+  }
+
+  ManualTradeExecutionController._internal({
+    required this.accountGateway,
+    required this.exchangeGateway,
+    required this.credentialsStore,
+    required this._executionStore,
+    required this._journalObserver,
+    required this._utcNow,
+    required this.exchangePollDelay,
+  });
 
   final ManualTradeAccountGateway accountGateway;
   final ManualTradeExchangeGateway exchangeGateway;
