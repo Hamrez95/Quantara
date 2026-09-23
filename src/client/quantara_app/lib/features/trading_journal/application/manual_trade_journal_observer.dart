@@ -18,6 +18,7 @@ final class ManualTradeJournalObserver {
 
   Future<void> recordProtectedTrade({
     required SignalJournalEntry setup,
+    required ManualTradePlan systemProposal,
     required ManualTradePlan plan,
     required AutoTradeAccountSnapshot account,
     required String positionId,
@@ -93,7 +94,13 @@ final class ManualTradeJournalObserver {
       entryOrderId: entryOrderId,
       clientId: clientId,
       notes:
-          'Manual setup execution. Quantara does not manage this position after initial exchange-native SL/TP protection is confirmed.',
+          'Manual setup execution. System proposal: '
+          '${systemProposal.margin.toStringAsFixed(4)} USDT, '
+          '${systemProposal.leverage}x, ${systemProposal.targetCount} TP. '
+          'Confirmed: ${plan.margin.toStringAsFixed(4)} USDT, '
+          '${plan.leverage}x, ${plan.targetCount} TP. '
+          'Quantara does not manage this position after initial exchange-native '
+          'SL/TP protection is confirmed.',
       indicatorSnapshot: setup.evidenceBreakdown,
     );
     await _store.appendPlan(planRecord);
@@ -120,8 +127,16 @@ final class ManualTradeJournalObserver {
         remainingQuantity: plan.quantity,
         details: {
           'manualExecution': true,
-          'margin': plan.margin,
-          'leverage': plan.leverage,
+          'systemMargin': systemProposal.margin,
+          'systemLeverage': systemProposal.leverage,
+          'systemTargetCount': systemProposal.targetCount,
+          'confirmedMargin': plan.margin,
+          'confirmedLeverage': plan.leverage,
+          'confirmedTargetCount': plan.targetCount,
+          'userEdited':
+              (systemProposal.margin - plan.margin).abs() > 1e-9 ||
+              systemProposal.leverage != plan.leverage ||
+              systemProposal.targetCount != plan.targetCount,
           'maximumLoss': plan.maximumLoss,
           'policyVersion': plan.policyVersion,
         },
