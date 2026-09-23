@@ -55,7 +55,7 @@ void main() {
       expect(journalStore.ledger.plans.single.positionId, 'position-1');
 
       controller.dispose();
-      },
+    },
   );
 
   test(
@@ -94,7 +94,7 @@ void main() {
       expect(exchange.entryCalls, 0);
 
       controller.dispose();
-      },
+    },
   );
 
   test(
@@ -131,7 +131,7 @@ void main() {
       expect(controller.error, contains('SL/TP ladder'));
 
       controller.dispose();
-      },
+    },
   );
 
   test('protected setup cannot be submitted twice', () async {
