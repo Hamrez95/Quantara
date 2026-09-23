@@ -1,9 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:quantara_app/features/auto_trade/application/auto_trade_controller.dart';
 import 'package:quantara_app/features/auto_trade/application/manual_trade_execution_controller.dart';
 import 'package:quantara_app/features/auto_trade/data/bitunix_local_live_api_client.dart';
-import 'package:quantara_app/features/auto_trade/data/bitunix_private_api_client.dart';
 import 'package:quantara_app/features/auto_trade/data/manual_trade_execution_store.dart';
 import 'package:quantara_app/features/auto_trade/data/secure_auto_trade_credentials_store.dart';
 import 'package:quantara_app/features/auto_trade/domain/auto_trade_models.dart';
@@ -24,9 +21,9 @@ void main() {
       final exchange = _FakeExchange();
       final executionStore = _MemoryExecutionStore();
       final journalStore = _MemoryJournalStore();
-      final controller = ManualTradeExecutionController(
-        accountController: accountController,
-        exchange: exchange,
+      final controller = ManualTradeExecutionController.withGateways(
+        accountGateway: accountController,
+        exchangeGateway: exchange,
         credentialsStore: _FakeCredentialsStore(),
         executionStore: executionStore,
         journalObserver: ManualTradeJournalObserver(store: journalStore),
@@ -58,8 +55,7 @@ void main() {
       expect(journalStore.ledger.plans.single.positionId, 'position-1');
 
       controller.dispose();
-      accountController.dispose();
-    },
+      },
   );
 
   test(
@@ -79,9 +75,9 @@ void main() {
           leverage: 5,
           targetCount: 2,
         );
-      final controller = ManualTradeExecutionController(
-        accountController: accountController,
-        exchange: exchange,
+      final controller = ManualTradeExecutionController.withGateways(
+        accountGateway: accountController,
+        exchangeGateway: exchange,
         credentialsStore: _FakeCredentialsStore(),
         executionStore: executionStore,
         journalObserver: ManualTradeJournalObserver(
@@ -98,8 +94,7 @@ void main() {
       expect(exchange.entryCalls, 0);
 
       controller.dispose();
-      accountController.dispose();
-    },
+      },
   );
 
   test(
@@ -109,9 +104,9 @@ void main() {
       final accountController = _FakeAccountController(account);
       final exchange = _FakeExchange(confirmTargets: false);
       final executionStore = _MemoryExecutionStore();
-      final controller = ManualTradeExecutionController(
-        accountController: accountController,
-        exchange: exchange,
+      final controller = ManualTradeExecutionController.withGateways(
+        accountGateway: accountController,
+        exchangeGateway: exchange,
         credentialsStore: _FakeCredentialsStore(),
         executionStore: executionStore,
         journalObserver: ManualTradeJournalObserver(
@@ -136,8 +131,7 @@ void main() {
       expect(controller.error, contains('SL/TP ladder'));
 
       controller.dispose();
-      accountController.dispose();
-    },
+      },
   );
 
   test('protected setup cannot be submitted twice', () async {
@@ -145,9 +139,9 @@ void main() {
     final accountController = _FakeAccountController(account);
     final exchange = _FakeExchange();
     final executionStore = _MemoryExecutionStore();
-    final controller = ManualTradeExecutionController(
-      accountController: accountController,
-      exchange: exchange,
+    final controller = ManualTradeExecutionController.withGateways(
+      accountGateway: accountController,
+      exchangeGateway: exchange,
       credentialsStore: _FakeCredentialsStore(),
       executionStore: executionStore,
       journalObserver: ManualTradeJournalObserver(store: _MemoryJournalStore()),
@@ -166,24 +160,16 @@ void main() {
     expect(exchange.entryCalls, 1);
 
     controller.dispose();
-    accountController.dispose();
   });
 }
 
-final class _FakeAccountController extends AutoTradeController {
-  _FakeAccountController(this.value)
-    : super(
-        apiClient: BitunixPrivateApiClient(client: http.Client()),
-        credentialsStore: _FakeCredentialsStore(),
-      );
+final class _FakeAccountController implements ManualTradeAccountGateway {
+  const _FakeAccountController(this.value);
 
   final AutoTradeAccountSnapshot value;
 
   @override
   AutoTradeAccountSnapshot? get snapshot => value;
-
-  @override
-  bool get isConnected => true;
 
   @override
   bool get canStartNewEntry => true;
@@ -244,8 +230,8 @@ final class _MemoryJournalStore implements TradingJournalStore {
   }
 }
 
-final class _FakeExchange extends BitunixLocalLiveApiClient {
-  _FakeExchange({this.confirmTargets = true}) : super(client: http.Client());
+final class _FakeExchange implements ManualTradeExchangeGateway {
+  _FakeExchange({this.confirmTargets = true});
 
   final bool confirmTargets;
   int entryCalls = 0;
