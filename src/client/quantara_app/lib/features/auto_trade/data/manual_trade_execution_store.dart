@@ -117,7 +117,12 @@ final class ManualTradeExecutionRecord {
         margin <= 0 ||
         leverage < 1 ||
         targetCount < 1 ||
-        targetCount > 3) {
+        targetCount > 3 ||
+        (systemMargin != null &&
+            (!systemMargin.isFinite || systemMargin <= 0)) ||
+        (systemLeverage != null && systemLeverage < 1) ||
+        (systemTargetCount != null &&
+            (systemTargetCount < 1 || systemTargetCount > 3))) {
       throw const FormatException(
         'Manual trade execution record failed integrity validation.',
       );
