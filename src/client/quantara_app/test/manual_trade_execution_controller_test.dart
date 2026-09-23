@@ -137,6 +137,67 @@ void main() {
     },
   );
 
+  test(
+    'ambiguous transport failure is persisted and never blindly retried',
+    () async {
+      final accountController = _FakeAccountController(_account(now));
+      final exchange = _FakeExchange(throwOnEntry: true);
+      final executionStore = _MemoryExecutionStore();
+      final controller = ManualTradeExecutionController.withGateways(
+        accountGateway: accountController,
+        exchangeGateway: exchange,
+        credentialsStore: _FakeCredentialsStore(),
+        executionStore: executionStore,
+        journalObserver: ManualTradeJournalObserver(
+          store: _MemoryJournalStore(),
+        ),
+        utcNow: () => now,
+        exchangePollDelay: Duration.zero,
+      );
+
+      expect(await controller.prepare(_setup(now)), isNotNull);
+
+      expect(await controller.confirmAndExecute(), isNull);
+      expect(executionStore.record!.state, ManualTradeExecutionState.ambiguous);
+      expect(exchange.entryCalls, 1);
+
+      expect(await controller.confirmAndExecute(), isNull);
+      expect(exchange.entryCalls, 1);
+      expect(controller.error, contains('Duplicate submission'));
+
+      controller.dispose();
+    },
+  );
+
+  test(
+    'partial fill is cancelled and remaining exposure is closed fail-closed',
+    () async {
+      final accountController = _FakeAccountController(_account(now));
+      final exchange = _FakeExchange(fullFill: false);
+      final executionStore = _MemoryExecutionStore();
+      final controller = ManualTradeExecutionController.withGateways(
+        accountGateway: accountController,
+        exchangeGateway: exchange,
+        credentialsStore: _FakeCredentialsStore(),
+        executionStore: executionStore,
+        journalObserver: ManualTradeJournalObserver(
+          store: _MemoryJournalStore(),
+        ),
+        utcNow: () => now,
+        exchangePollDelay: Duration.zero,
+      );
+
+      expect(await controller.prepare(_setup(now)), isNotNull);
+
+      expect(await controller.confirmAndExecute(), isNull);
+      expect(exchange.cancelCalls, 1);
+      expect(exchange.closeCalls, 1);
+      expect(executionStore.record!.state, ManualTradeExecutionState.failedSafe);
+
+      controller.dispose();
+    },
+  );
+
   test('protected setup cannot be submitted twice', () async {
     final account = _account(now);
     final accountController = _FakeAccountController(account);
@@ -234,10 +295,17 @@ final class _MemoryJournalStore implements TradingJournalStore {
 }
 
 final class _FakeExchange implements ManualTradeExchangeGateway {
-  _FakeExchange({this.confirmTargets = true});
+  _FakeExchange({
+    this.confirmTargets = true,
+    this.throwOnEntry = false,
+    this.fullFill = true,
+  });
 
   final bool confirmTargets;
+  final bool throwOnEntry;
+  final bool fullFill;
   int entryCalls = 0;
+  int cancelCalls = 0;
   int takeProfitCalls = 0;
   int closeCalls = 0;
   int changedLeverage = 0;
@@ -291,6 +359,9 @@ final class _FakeExchange implements ManualTradeExchangeGateway {
     required BitunixApiCredentials credentials,
   }) async {
     entryCalls++;
+    if (throwOnEntry) {
+      throw StateError('simulated ambiguous transport failure');
+    }
     position = BitunixLivePosition(
       positionId: 'position-1',
       symbol: symbol,
@@ -329,8 +400,8 @@ final class _FakeExchange implements ManualTradeExchangeGateway {
     clientId: 'client',
     symbol: 'BTCUSDT',
     quantity: position!.quantity,
-    filledQuantity: position!.quantity,
-    status: 'FILLED',
+    filledQuantity: fullFill ? position!.quantity : position!.quantity / 2,
+    status: fullFill ? 'FILLED' : 'PARTIALLY_FILLED',
     fee: 0,
     realizedPnl: 0,
   );
@@ -380,6 +451,16 @@ final class _FakeExchange implements ManualTradeExchangeGateway {
       );
     }
     return id;
+  }
+
+  @override
+  Future<void> cancelEntryOrder({
+    required String symbol,
+    required String orderId,
+    required String clientId,
+    required BitunixApiCredentials credentials,
+  }) async {
+    cancelCalls++;
   }
 
   @override
