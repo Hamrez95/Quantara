@@ -173,7 +173,8 @@ final class BitunixManualTradeExchangeGateway
   final BitunixLocalLiveApiClient client;
 
   @override
-  Future<double> fetchMarkPrice(String symbol) => client.fetchMarkPrice(symbol);
+  Future<double> fetchMarkPrice(String symbol) =>
+      client.fetchMarkPrice(symbol);
 
   @override
   Future<BitunixInstrumentRules> fetchInstrumentRules(String symbol) =>
@@ -188,7 +189,10 @@ final class BitunixManualTradeExchangeGateway
   Future<void> ensureIsolatedMargin({
     required String symbol,
     required BitunixApiCredentials credentials,
-  }) => client.ensureIsolatedMargin(symbol: symbol, credentials: credentials);
+  }) => client.ensureIsolatedMargin(
+    symbol: symbol,
+    credentials: credentials,
+  );
 
   @override
   Future<void> changeLeverage({
@@ -261,7 +265,10 @@ final class BitunixManualTradeExchangeGateway
   Future<BitunixOrderDetail> fetchOrderDetail({
     required String orderId,
     required BitunixApiCredentials credentials,
-  }) => client.fetchOrderDetail(orderId: orderId, credentials: credentials);
+  }) => client.fetchOrderDetail(
+    orderId: orderId,
+    credentials: credentials,
+  );
 
   @override
   Future<List<BitunixLivePosition>> fetchPositions(
@@ -295,7 +302,7 @@ final class BitunixManualTradeExchangeGateway
 }
 
 final class ManualTradeExecutionController extends ChangeNotifier {
-  ManualTradeExecutionController({
+  factory ManualTradeExecutionController({
     required AutoTradeController accountController,
     required BitunixLocalLiveApiClient exchange,
     AutoTradeCredentialsStore credentialsStore =
@@ -304,15 +311,17 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     ManualTradeJournalObserver? journalObserver,
     DateTime Function()? utcNow,
     Duration exchangePollDelay = const Duration(milliseconds: 500),
-  }) : this.withGateways(
-         accountGateway: AutoTradeManualTradeAccountGateway(accountController),
-         exchangeGateway: BitunixManualTradeExchangeGateway(exchange),
-         credentialsStore: credentialsStore,
-         executionStore: executionStore,
-         journalObserver: journalObserver,
-         utcNow: utcNow,
-         exchangePollDelay: exchangePollDelay,
-       );
+  }) {
+    return ManualTradeExecutionController.withGateways(
+      accountGateway: AutoTradeManualTradeAccountGateway(accountController),
+      exchangeGateway: BitunixManualTradeExchangeGateway(exchange),
+      credentialsStore: credentialsStore,
+      executionStore: executionStore,
+      journalObserver: journalObserver,
+      utcNow: utcNow,
+      exchangePollDelay: exchangePollDelay,
+    );
+  }
 
   ManualTradeExecutionController.withGateways({
     required this.accountGateway,
