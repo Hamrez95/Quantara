@@ -192,7 +192,10 @@ void main() {
       expect(await controller.confirmAndExecute(), isNull);
       expect(exchange.cancelCalls, 1);
       expect(exchange.closeCalls, 1);
-      expect(executionStore.record!.state, ManualTradeExecutionState.failedSafe);
+      expect(
+        executionStore.record!.state,
+        ManualTradeExecutionState.failedSafe,
+      );
 
       controller.dispose();
     },
