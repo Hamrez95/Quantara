@@ -229,14 +229,82 @@ final class RealtimeMarketHost
       _candidates = const [];
       _candidateRevision = -1;
     }
-    value = RealtimeMarketMonitorSnapshot(
+    final next = RealtimeMarketMonitorSnapshot(
       health: health,
       error: error,
       foregroundOnly: true,
       candidates: _candidates,
       candidateRevision: _candidateRevision,
     );
+    if (!_sameMonitorSnapshot(value, next)) {
+      value = next;
+    }
     _maybeRecoverDegraded(health, error: error);
+  }
+
+  bool _sameMonitorSnapshot(
+    RealtimeMarketMonitorSnapshot left,
+    RealtimeMarketMonitorSnapshot right,
+  ) {
+    if (left.error != right.error ||
+        left.foregroundOnly != right.foregroundOnly ||
+        left.candidateRevision != right.candidateRevision) {
+      return false;
+    }
+    return _sameHealthSnapshot(left.health, right.health);
+  }
+
+  bool _sameHealthSnapshot(
+    RealtimeMarketHealthSnapshot? left,
+    RealtimeMarketHealthSnapshot? right,
+  ) {
+    if (identical(left, right)) return true;
+    if (left == null || right == null) return false;
+    return left.state == right.state &&
+        left.configuredStreams == right.configuredStreams &&
+        left.activeStreams == right.activeStreams &&
+        left.quarantinedStreams == right.quarantinedStreams &&
+        _sameMap(
+          left.quarantinedStreamReasons,
+          right.quarantinedStreamReasons,
+        ) &&
+        left.activeShards == right.activeShards &&
+        left.liveShards == right.liveShards &&
+        left.eventsReceived == right.eventsReceived &&
+        left.klineEventsReceived == right.klineEventsReceived &&
+        left.closedCandleEvents == right.closedCandleEvents &&
+        left.gapEvents == right.gapEvents &&
+        left.reconciliationEvents == right.reconciliationEvents &&
+        left.candidateEvaluations == right.candidateEvaluations &&
+        left.candidateCommits == right.candidateCommits &&
+        left.reconnectTransitions == right.reconnectTransitions &&
+        left.bootstrapFaults == right.bootstrapFaults &&
+        left.malformedPayloadFaults == right.malformedPayloadFaults &&
+        left.backpressureFaults == right.backpressureFaults &&
+        left.pendingEvents == right.pendingEvents &&
+        left.maximumObservedPendingEvents ==
+            right.maximumObservedPendingEvents &&
+        left.maximumObservedPendingPerStream ==
+            right.maximumObservedPendingPerStream &&
+        left.coalescedWorkingEvents == right.coalescedWorkingEvents &&
+        left.staleDroppedWorkingEvents == right.staleDroppedWorkingEvents &&
+        _sameMap(left.p95StageLatency, right.p95StageLatency) &&
+        left.p95TransportLag == right.p95TransportLag &&
+        left.p95PipelineLatency == right.p95PipelineLatency &&
+        left.lastEventAtUtc == right.lastEventAtUtc &&
+        left.lastFaultAtUtc == right.lastFaultAtUtc &&
+        left.lastFaultMessage == right.lastFaultMessage;
+  }
+
+  bool _sameMap<K, V>(Map<K, V> left, Map<K, V> right) {
+    if (identical(left, right)) return true;
+    if (left.length != right.length) return false;
+    for (final entry in left.entries) {
+      if (!right.containsKey(entry.key) || right[entry.key] != entry.value) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _maybeRecoverDegraded(

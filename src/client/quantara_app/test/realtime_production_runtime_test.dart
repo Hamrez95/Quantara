@@ -100,6 +100,32 @@ void main() {
     },
   );
 
+  test(
+    'identical realtime polls do not notify monitor listeners repeatedly',
+    () async {
+      final runtime = _FakeRuntime();
+      final host = RealtimeMarketHost(
+        runtime: runtime,
+        pollInterval: const Duration(milliseconds: 250),
+      );
+      var notifications = 0;
+      host.addListener(() => notifications++);
+
+      await host.initialize();
+      expect(notifications, 1);
+
+      await Future<void>.delayed(const Duration(milliseconds: 620));
+
+      expect(notifications, 1);
+
+      runtime.eventsReceived++;
+      await Future<void>.delayed(const Duration(milliseconds: 280));
+
+      expect(notifications, 2);
+      host.dispose();
+    },
+  );
+
   test('degraded monitoring receives one bounded recovery restart', () async {
     final runtime = _FakeRuntime(degraded: true);
     final host = RealtimeMarketHost(
@@ -137,6 +163,7 @@ final class _FakeRuntime implements RealtimeMarketRuntimeLifecycle {
   var pauses = 0;
   var resumes = 0;
   var stops = 0;
+  var eventsReceived = 0;
   RealtimeMarketRuntimeState _state = RealtimeMarketRuntimeState.idle;
 
   @override
@@ -156,7 +183,7 @@ final class _FakeRuntime implements RealtimeMarketRuntimeLifecycle {
     quarantinedStreams: degraded ? 1 : 0,
     activeShards: 1,
     liveShards: _state == RealtimeMarketRuntimeState.live ? 1 : 0,
-    eventsReceived: 0,
+    eventsReceived: eventsReceived,
     klineEventsReceived: 0,
     closedCandleEvents: 0,
     gapEvents: 0,
