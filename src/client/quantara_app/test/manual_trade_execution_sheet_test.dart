@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/application/manual_trade_execution_controller.dart';
 import 'package:quantara_app/features/auto_trade/data/bitunix_local_live_api_client.dart';
+import 'package:quantara_app/features/auto_trade/data/manual_trade_execution_store.dart';
 import 'package:quantara_app/features/auto_trade/data/secure_auto_trade_credentials_store.dart';
 import 'package:quantara_app/features/auto_trade/domain/auto_trade_models.dart';
 import 'package:quantara_app/features/auto_trade/domain/private_account_reconciliation.dart';
@@ -18,6 +19,7 @@ void main() {
         accountGateway: _AccountGateway(_account(now)),
         exchangeGateway: const _PrepareOnlyExchangeGateway(),
         credentialsStore: const _CredentialsStore(),
+        executionStore: _MemoryExecutionStore(),
         utcNow: () => now,
       );
       final setup = _setup(now);
@@ -189,6 +191,19 @@ final class _PrepareOnlyExchangeGateway implements ManualTradeExchangeGateway {
     required String clientId,
     required BitunixApiCredentials credentials,
   }) async => throw UnimplementedError();
+}
+
+final class _MemoryExecutionStore implements ManualTradeExecutionStore {
+  ManualTradeExecutionRecord? record;
+
+  @override
+  Future<ManualTradeExecutionRecord?> load(String setupId) async =>
+      record?.setupId == setupId ? record : null;
+
+  @override
+  Future<void> save(ManualTradeExecutionRecord value) async {
+    record = value;
+  }
 }
 
 final class _CredentialsStore implements AutoTradeCredentialsStore {
