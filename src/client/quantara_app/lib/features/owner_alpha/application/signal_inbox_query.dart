@@ -52,9 +52,7 @@ abstract final class SignalInboxQuery {
     required bool Function(String setupId) isTaken,
   }) {
     final utcNow = now.toUtc();
-    final result = {
-      for (final filter in SignalInboxFilter.values) filter: 0,
-    };
+    final result = {for (final filter in SignalInboxFilter.values) filter: 0};
     for (final entry in entries) {
       final taken = isTaken(entry.setupId);
       result[SignalInboxFilter.all] = result[SignalInboxFilter.all]! + 1;
@@ -75,8 +73,7 @@ abstract final class SignalInboxQuery {
             result[SignalInboxFilter.expired]! + 1;
       }
       if (taken) {
-        result[SignalInboxFilter.taken] =
-            result[SignalInboxFilter.taken]! + 1;
+        result[SignalInboxFilter.taken] = result[SignalInboxFilter.taken]! + 1;
       }
     }
     return Map.unmodifiable(result);
