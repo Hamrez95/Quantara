@@ -75,7 +75,7 @@ jobs:
           status=$?
           if [ "$status" -ne 0 ]; then
             echo "::group::Formatter diff"
-            git diff -- lib test tool
+            git diff -- .
             echo "::endgroup::"
           fi
           exit "$status"
