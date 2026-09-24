@@ -33,7 +33,6 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
   void initState() {
     super.initState();
     widget.autoTradeController.addListener(_onAutoTradeStateChanged);
-    unawaited(_performanceJournalController.initialize());
   }
 
   void _onAutoTradeStateChanged() {
