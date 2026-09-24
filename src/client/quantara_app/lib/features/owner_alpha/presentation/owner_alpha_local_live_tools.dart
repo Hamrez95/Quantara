@@ -700,6 +700,77 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
     }
   }
 
+  Future<Map<String, Object?>> _buildLocalLiveDiagnosticSections(
+    List<LocalLiveAuditEvent> events,
+  ) async {
+    final snapshot = widget.accountController.snapshot;
+    final reconciliation = widget.accountController.reconciliation;
+    final preferences = _currentPreferences;
+    final persisted = <String, Object?>{
+      'configuration': await _storedJson(localLiveConfigurationKey),
+      'status': await _storedJson(localLiveStatusKey),
+      'managedPositions': await _storedJson(localLiveManagedPositionsKey),
+      'pendingJournalClosures': await _storedJson(
+        localLivePendingJournalClosuresKey,
+      ),
+      'executedSetupIds': await _storedJson(localLiveExecutedSetupIdsKey),
+      'audit': await _storedJson(localLiveAuditKey),
+      'sessionId': await _storedValue<String>(localLiveSessionIdKey),
+      'sessionStartedAt': await _storedValue<String>(
+        localLiveSessionStartedAtKey,
+      ),
+      'sessionPositionIds': await _storedJson(localLiveSessionPositionIdsKey),
+      'sessionStartEquity': await _storedValue<double>(
+        localLiveSessionStartEquityKey,
+      ),
+    };
+    return <String, Object?>{
+      'configuration': <String, Object?>{
+        'symbols': preferences.symbols,
+        'timeframes': preferences.timeframes.toList(growable: false),
+        'strategies': preferences.strategies
+            .map((item) => item.name)
+            .toList(growable: false),
+        'leverage': preferences.leverage,
+        'riskPercent': preferences.riskPercent,
+        'dailyLossLimitPercent': preferences.dailyLossLimitPercent,
+        'maximumConcurrentPositions': preferences.maximumConcurrentPositions,
+        'targetAllocation': preferences.targetAllocation.toJson(),
+        'cadence': widget.analysisController.cadence.name,
+      },
+      'localLiveStatus': widget.controller.status.toJson(),
+      'privateAccountReconciliation': <String, Object?>{
+        'health': reconciliation.health.name,
+        'cycleId': reconciliation.cycleId,
+        'completedAt': reconciliation.completedAt?.toUtc().toIso8601String(),
+        'lastAttemptAt': reconciliation.lastAttemptAt
+            ?.toUtc()
+            .toIso8601String(),
+        'refreshing': reconciliation.refreshing,
+        'warning': reconciliation.warning,
+        'localLiveOpenPositionCount': reconciliation.localLiveOpenPositionCount,
+        'localLiveObservedAt': reconciliation.localLiveObservedAt
+            ?.toUtc()
+            .toIso8601String(),
+      },
+      'accountSnapshot': snapshot == null
+          ? null
+          : _accountSnapshotDiagnostic(snapshot),
+      'analysisRuntime': <String, Object?>{
+        'watchlist': widget.analysisController.symbols,
+        'selectedSymbol': widget.analysisController.selectedSymbol,
+        'selectedTimeframe': widget.analysisController.selectedTimeframe,
+        'primaryStrategy': widget.analysisController.strategy.name,
+        'cadence': widget.analysisController.cadence.name,
+        'languageCode': widget.analysisController.languageCode,
+      },
+      'auditEvents': events
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'persistedLocalServiceState': persisted,
+    };
+  }
+
   Map<String, Object?> _accountSnapshotDiagnostic(
     AutoTradeAccountSnapshot snapshot,
   ) => {
