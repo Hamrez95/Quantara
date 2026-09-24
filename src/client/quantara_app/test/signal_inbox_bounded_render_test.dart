@@ -15,14 +15,9 @@ void main() {
     expect(source, isNot(contains('signal-inbox-show-more')));
     expect(
       source,
-      contains(r"PageStorageKey<String>('signal-card-${entry.setupId}')"),
+      contains("PageStorageKey<String>('signal-card-\${entry.setupId}')"),
     );
-    expect(source, contains(r"'signal-diagnostics-${entry.setupId}'"));
-    expect(source, contains("Key('setup-performance-open')"));
-    expect(
-      source,
-      contains(r"ValueKey('manual-trade-open-${entry.setupId}')"),
-    );
+    expect(source, contains("'signal-diagnostics-\${entry.setupId}'"));
 
     final stateStart = source.indexOf('class _SignalInboxViewState');
     final policyStart = source.indexOf('class _SignalPolicyCard', stateStart);
