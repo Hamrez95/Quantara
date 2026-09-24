@@ -8,18 +8,9 @@ void main() {
       'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
     ).readAsStringSync();
 
-    expect(
-      source,
-      contains('final journalLiveAnalyses = destination == 6'),
-    );
-    expect(
-      source,
-      contains('final journalLiveIdeas = destination == 6'),
-    );
-    expect(
-      source,
-      contains("const <String, TimeframeChartAnalysis>{}"),
-    );
+    expect(source, contains('final journalLiveAnalyses = destination == 6'));
+    expect(source, contains('final journalLiveIdeas = destination == 6'));
+    expect(source, contains("const <String, TimeframeChartAnalysis>{}"));
     expect(source, contains("const <String, TradeIdea>{}"));
   });
 }
