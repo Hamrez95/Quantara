@@ -71,12 +71,13 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
         .take(_visibleLimit)
         .toList(growable: false);
 
-    int count(SignalInboxFilter filter) => SignalInboxQuery.count(
+    final counts = SignalInboxQuery.counts(
       entries: all,
-      filter: filter,
       now: now,
       isTaken: controller.isTaken,
     );
+
+    int count(SignalInboxFilter filter) => counts[filter] ?? 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
