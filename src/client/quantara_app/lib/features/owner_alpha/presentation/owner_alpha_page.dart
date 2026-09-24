@@ -951,6 +951,42 @@ class _OwnerAlphaBody extends StatelessWidget {
         ),
       );
     }
+    if (destination == 1 && controller.snapshot != null) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: _SignalInboxView(
+          controller: controller,
+          autoTradeController: autoTradeController,
+          manualTradeController: manualTradeController,
+          onOpenAnalysis: onOpenAnalysis,
+          scrollKey: PageStorageKey('owner-alpha-$destination'),
+          horizontalPadding: wide ? 28 : 16,
+          header: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (showTopBar) ...[
+                _AlphaTopBar(
+                  controller: controller,
+                  themeMode: themeMode,
+                  onToggleTheme: onToggleTheme,
+                ),
+                const SizedBox(height: 14),
+              ],
+              _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
+              if (controller.error != null) ...[
+                const SizedBox(height: 12),
+                _AlphaErrorStrip(
+                  message: controller.error!,
+                  stale: controller.hasStaleSnapshot,
+                  onRetry: controller.refresh,
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
