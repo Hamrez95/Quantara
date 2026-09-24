@@ -23,8 +23,9 @@ void main() {
     expect(controller, contains('outcomeCatchUpBatchSize = 2'));
     expect(controller, contains('_collectOutcomeCandles'));
     expect(controller, contains('selectChartContext'));
-    expect(signals, contains('filtered[index].timeframe'));
-    expect(signals, contains('filtered[index].setupId'));
+    expect(signals, contains('final entry = filtered[index]'));
+    expect(signals, contains('entry.timeframe'));
+    expect(signals, contains('entry.setupId'));
     expect(analysis, contains('frozenSignal: controller.selectedChartSignal'));
     expect(notifications, contains('onDidReceiveNotificationResponse'));
     expect(notifications, contains('getNotificationAppLaunchDetails'));
