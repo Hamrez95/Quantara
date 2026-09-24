@@ -29,6 +29,17 @@ class QuantaraLauncherContractTests(unittest.TestCase):
         self.assertIn("Type RELEASE STABLE to continue", self.source)
         self.assertIn("Stable release cancelled.", self.source)
 
+    def test_windows_install_action_syncs_main_then_delegates(self) -> None:
+        self.assertIn("'WindowsInstall'", self.source)
+        self.assertIn(
+            "$WindowsInstallScript = Join-Path $RepositoryRoot 'scripts\\install-windows-local.ps1'",
+            self.source,
+        )
+        function_start = self.source.index("function Invoke-WindowsInstall")
+        function_end = self.source.index("function Invoke-LocalBuild", function_start)
+        function = self.source[function_start:function_end]
+        self.assertLess(function.index("Sync-Main"), function.index("& $WindowsInstallScript"))
+
     def test_main_sync_is_fast_forward_only_and_requires_clean_tree(self) -> None:
         self.assertIn("Sync main requires a clean worktree.", self.source)
         self.assertIn("git' @('pull','--ff-only','origin','main')", self.source)
