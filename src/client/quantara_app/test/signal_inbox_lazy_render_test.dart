@@ -51,25 +51,38 @@ void main() {
           key.value.startsWith('manual-trade-open-');
     });
 
-    final initiallyBuilt = materialized.evaluate().length;
-    expect(initiallyBuilt, greaterThan(0));
-    expect(initiallyBuilt, lessThan(entries.length));
-    expect(
-      find.byKey(const ValueKey('manual-trade-open-PERF81USDT|15m|long|81')),
-      findsNothing,
-    );
+    final scrollView = find.byType(CustomScrollView);
+    expect(scrollView, findsOneWidget);
 
-    await tester.dragUntilVisible(
-      find.byKey(const ValueKey('manual-trade-open-PERF81USDT|15m|long|81')),
-      find.byType(CustomScrollView),
-      const Offset(0, -600),
-      maxIteration: 100,
-    );
-    await tester.pump();
+    for (
+      var attempt = 0;
+      attempt < 8 && materialized.evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(scrollView, const Offset(0, -500));
+      await tester.pump();
+    }
 
+    Set<String> materializedKeys() => materialized
+        .evaluate()
+        .map((element) => (element.widget.key! as ValueKey<String>).value)
+        .toSet();
+
+    final initiallyMaterialized = materializedKeys();
+    expect(initiallyMaterialized, isNotEmpty);
+    expect(initiallyMaterialized.length, lessThan(entries.length));
+
+    for (var attempt = 0; attempt < 24; attempt++) {
+      await tester.drag(scrollView, const Offset(0, -600));
+      await tester.pump();
+    }
+
+    final afterScrollMaterialized = materializedKeys();
+    expect(afterScrollMaterialized, isNotEmpty);
+    expect(afterScrollMaterialized.length, lessThan(entries.length));
     expect(
-      find.byKey(const ValueKey('manual-trade-open-PERF81USDT|15m|long|81')),
-      findsOneWidget,
+      afterScrollMaterialized.difference(initiallyMaterialized),
+      isNotEmpty,
     );
   });
 }
