@@ -161,16 +161,19 @@ final class SharedPreferencesManualTradeExecutionStore
   SharedPreferencesManualTradeExecutionStore({
     SharedPreferencesAsync? preferences,
     this.storageKey = 'quantara.manual-trade-execution.v1',
-  }) : _preferences = preferences ?? SharedPreferencesAsync();
+  }) : _preferences = preferences;
 
-  final SharedPreferencesAsync _preferences;
+  SharedPreferencesAsync? _preferences;
   final String storageKey;
+
+  SharedPreferencesAsync get _client =>
+      _preferences ??= SharedPreferencesAsync();
   Future<void> _writeTail = Future<void>.value();
 
   @override
   Future<ManualTradeExecutionRecord?> load(String setupId) async {
     await _writeTail;
-    final raw = await _preferences.getString(storageKey);
+    final raw = await _client.getString(storageKey);
     if (raw == null || raw.trim().isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -196,7 +199,7 @@ final class SharedPreferencesManualTradeExecutionStore
   }
 
   Future<void> _saveInternal(ManualTradeExecutionRecord record) async {
-    final raw = await _preferences.getString(storageKey);
+    final raw = await _client.getString(storageKey);
     final records = <String, Object?>{};
     if (raw != null && raw.trim().isNotEmpty) {
       try {
@@ -212,7 +215,7 @@ final class SharedPreferencesManualTradeExecutionStore
       }
     }
     records[record.setupId] = record.toJson();
-    await _preferences.setString(storageKey, jsonEncode(records));
+    await _client.setString(storageKey, jsonEncode(records));
   }
 }
 
