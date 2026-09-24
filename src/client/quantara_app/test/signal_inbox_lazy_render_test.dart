@@ -74,7 +74,11 @@ void main() {
     final lastCard = find.byKey(
       const ValueKey('manual-trade-open-PERF81USDT|15m|long|81'),
     );
-    for (var attempt = 0; attempt < 160 && lastCard.evaluate().isEmpty; attempt++) {
+    for (
+      var attempt = 0;
+      attempt < 160 && lastCard.evaluate().isEmpty;
+      attempt++
+    ) {
       await tester.drag(scrollView, const Offset(0, -600));
       await tester.pump();
     }
