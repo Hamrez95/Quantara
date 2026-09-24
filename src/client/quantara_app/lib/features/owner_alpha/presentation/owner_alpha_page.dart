@@ -871,18 +871,24 @@ class _OwnerAlphaBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
     final marketSnapshot = controller.snapshot;
-    final journalLiveAnalyses = <String, TimeframeChartAnalysis>{
-      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
-        for (final entry in radar.analysesByTimeframe.entries)
-          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
-              entry.value,
-    };
-    final journalLiveIdeas = <String, TradeIdea>{
-      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
-        for (final entry in radar.ideasByTimeframe.entries)
-          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
-              entry.value,
-    };
+    final journalLiveAnalyses = destination == 6
+        ? <String, TimeframeChartAnalysis>{
+            for (final radar
+                in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+              for (final entry in radar.analysesByTimeframe.entries)
+                '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+                    entry.value,
+          }
+        : const <String, TimeframeChartAnalysis>{};
+    final journalLiveIdeas = destination == 6
+        ? <String, TradeIdea>{
+            for (final radar
+                in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+              for (final entry in radar.ideasByTimeframe.entries)
+                '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+                    entry.value,
+          }
+        : const <String, TradeIdea>{};
     final initialMarketLoading =
         controller.snapshot == null &&
         destination != 4 &&
