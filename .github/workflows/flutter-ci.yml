@@ -68,13 +68,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        shell: bash
-        run: |
-          dart format lib/features/auto_trade/application/manual_trade_execution_controller.dart
-          echo "::group::Formatter diff"
-          git diff -- .
-          echo "::endgroup::"
-          exit 1
+        run: dart format --output=none --set-exit-if-changed lib test tool
 
       - name: Analyze
         shell: bash
