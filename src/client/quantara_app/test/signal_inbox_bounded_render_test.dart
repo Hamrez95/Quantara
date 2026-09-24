@@ -15,5 +15,17 @@ void main() {
       source,
       isNot(contains('for (var index = 0; index < filtered.length; index++)')),
     );
+
+    final stateStart = source.indexOf('class _SignalInboxViewState');
+    final policyStart = source.indexOf('class _SignalPolicyCard', stateStart);
+    final inboxState = source.substring(stateStart, policyStart);
+    expect(
+      inboxState,
+      isNot(contains('_performanceJournalController.initialize()')),
+    );
+    expect(
+      inboxState,
+      contains('await _performanceJournalController.refresh()'),
+    );
   });
 }
