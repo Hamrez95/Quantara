@@ -18,9 +18,10 @@ import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
 import '../../auto_trade/application/local_live_diagnostic_bundle.dart';
+import '../../auto_trade/application/manual_trade_execution_controller.dart';
 import '../../auto_trade/application/local_live_trade_service.dart';
-import '../../auto_trade/application/read_only_support_session.dart';
 import '../../auto_trade/application/unattended_auto_trade_controller.dart';
+import '../../auto_trade/data/bitunix_local_live_api_client.dart';
 import '../../auto_trade/data/bitunix_private_api_client.dart';
 import '../../auto_trade/data/local_live_preferences_store.dart';
 import '../../auto_trade/data/secure_auto_trade_credentials_store.dart';
@@ -30,6 +31,7 @@ import '../../auto_trade/domain/auto_trade_models.dart';
 import '../../auto_trade/domain/private_account_reconciliation.dart';
 import '../../auto_trade/domain/trading_pnl_projection.dart';
 import '../../auto_trade/domain/unattended_auto_trade_models.dart';
+import '../../auto_trade/presentation/manual_trade_execution_sheet.dart';
 import '../../auto_trade/presentation/private_account_reconciliation_banner.dart';
 import '../../auto_trade/presentation/position_protection_summary.dart';
 import '../../auto_trade/presentation/tp_allocation_editor.dart';
@@ -38,7 +40,6 @@ import '../../market_analysis/domain/market_regime_models.dart';
 import '../../market_analysis/presentation/tradingview_lightweight_chart.dart';
 import '../../trading_journal/application/trading_journal_controller.dart';
 import '../../trading_journal/data/database_trading_journal_store.dart';
-import '../../trading_journal/domain/trading_journal_evidence_packet.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../../trading_lab/application/trading_lab_controller.dart';
 import '../../trading_lab/application/trading_lab_metrics.dart';
@@ -196,6 +197,11 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     apiClient: BitunixPrivateApiClient(client: _autoTradeHttpClient),
     credentialsStore: const SecureAutoTradeCredentialsStore(),
   );
+  late final ManualTradeExecutionController _manualTradeExecutionController =
+      ManualTradeExecutionController(
+        accountController: _autoTradeController,
+        exchange: BitunixLocalLiveApiClient(client: _autoTradeHttpClient),
+      );
   late final UnattendedAutoTradeController _unattendedAutoTradeController =
       UnattendedAutoTradeController(
         apiClient: UnattendedAutoTradeApiClient(client: _autoTradeHttpClient),
@@ -244,6 +250,9 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
       GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
+  bool _tradingLabInitialized = false;
+  bool _unattendedAutoTradeInitialized = false;
+  bool _journalInitialized = false;
   StreamSubscription<String>? _notificationOpenSubscription;
   late final Future<void> _ownerAlphaInitialization;
 
@@ -254,10 +263,9 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     _notificationOpenSubscription = widget.notificationGateway.openedSetupIds
         .listen((setupId) => unawaited(_openNotificationSetup(setupId)));
     unawaited(_consumeInitialNotification());
-    unawaited(_tradingLabController.initialize());
+    // Account truth is required by Setups/manual execution, so keep it eager.
+    // Heavy destination-specific controllers initialize only on first use.
     unawaited(_autoTradeController.initialize());
-    unawaited(_unattendedAutoTradeController.initialize());
-    unawaited(_journalController.initialize());
   }
 
   @override
@@ -265,6 +273,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     unawaited(_notificationOpenSubscription?.cancel());
     _tradingLabController.dispose();
     _controller.dispose();
+    _manualTradeExecutionController.dispose();
     _autoTradeController.dispose();
     _unattendedAutoTradeController.dispose();
     _journalController.dispose();
@@ -338,6 +347,62 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     );
   }
 
+  Future<void> _ensureDestinationInitialized(int destination) async {
+    switch (destination) {
+      case 4:
+        if (_tradingLabInitialized) return;
+        _tradingLabInitialized = true;
+        try {
+          await _tradingLabController.initialize();
+        } on Object {
+          _tradingLabInitialized = false;
+          rethrow;
+        }
+        return;
+      case 5:
+        if (!_unattendedAutoTradeInitialized) {
+          _unattendedAutoTradeInitialized = true;
+          try {
+            await _unattendedAutoTradeController.initialize();
+          } on Object {
+            _unattendedAutoTradeInitialized = false;
+            rethrow;
+          }
+        }
+        if (!_journalInitialized) {
+          _journalInitialized = true;
+          try {
+            await _journalController.initialize();
+          } on Object {
+            _journalInitialized = false;
+            rethrow;
+          }
+        }
+        return;
+      case 6:
+        if (_journalInitialized) return;
+        _journalInitialized = true;
+        try {
+          await _journalController.initialize();
+        } on Object {
+          _journalInitialized = false;
+          rethrow;
+        }
+        return;
+      default:
+        return;
+    }
+  }
+
+  void _selectDestination(int destination) {
+    if (_destination != destination) {
+      setState(() => _destination = destination);
+    }
+    if (destination == 4 || destination == 5 || destination == 6) {
+      unawaited(_refreshCurrentDestination());
+    }
+  }
+
   Future<void> _reconcileJournalFromAccount() async {
     final snapshot = _autoTradeController.snapshot;
     if (snapshot == null) return;
@@ -351,6 +416,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   }
 
   Future<void> _refreshCurrentDestination() async {
+    await _ensureDestinationInitialized(_destination);
+    if (!mounted) return;
     switch (_destination) {
       case 5:
         final state = _autoTradeViewKey.currentState;
@@ -409,6 +476,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           builder: (context, _) => _OwnerAlphaBody(
             controller: _controller,
             autoTradeController: _autoTradeController,
+            manualTradeController: _manualTradeExecutionController,
             unattendedAutoTradeController: _unattendedAutoTradeController,
             journalController: _journalController,
             tradingLabController: _tradingLabController,
@@ -420,12 +488,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
             onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
-            onNavigate: (value) {
-              setState(() => _destination = value);
-              if (value == 4 || value == 5 || value == 6) {
-                unawaited(_refreshCurrentDestination());
-              }
-            },
+            onNavigate: _selectDestination,
             showTopBar: desktop,
             realtimeMonitor: widget.realtimeMonitor,
             autoTradeViewKey: _autoTradeViewKey,
@@ -445,9 +508,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
                         ? _desktopDestinationIndexes.indexOf(_destination)
                         : 0,
                     onDestinationSelected: (value) {
-                      setState(
-                        () => _destination = _desktopDestinationIndexes[value],
-                      );
+                      _selectDestination(_desktopDestinationIndexes[value]);
                     },
                     leading: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 18),
@@ -502,7 +563,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
                   ? NavigationDestinationLabelBehavior.onlyShowSelected
                   : NavigationDestinationLabelBehavior.alwaysShow,
               onDestinationSelected: (value) {
-                setState(() => _destination = _mobileDestinationIndexes[value]);
+                _selectDestination(_mobileDestinationIndexes[value]);
               },
               destinations: _mobileDestinationIndexes
                   .map(
@@ -767,6 +828,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   const _OwnerAlphaBody({
     required this.controller,
     required this.autoTradeController,
+    required this.manualTradeController,
     required this.unattendedAutoTradeController,
     required this.journalController,
     required this.tradingLabController,
@@ -787,6 +849,7 @@ class _OwnerAlphaBody extends StatelessWidget {
 
   final OwnerAlphaController controller;
   final AutoTradeController autoTradeController;
+  final ManualTradeExecutionController manualTradeController;
   final UnattendedAutoTradeController unattendedAutoTradeController;
   final TradingJournalController journalController;
   final TradingLabController tradingLabController;
@@ -808,18 +871,24 @@ class _OwnerAlphaBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
     final marketSnapshot = controller.snapshot;
-    final journalLiveAnalyses = <String, TimeframeChartAnalysis>{
-      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
-        for (final entry in radar.analysesByTimeframe.entries)
-          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
-              entry.value,
-    };
-    final journalLiveIdeas = <String, TradeIdea>{
-      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
-        for (final entry in radar.ideasByTimeframe.entries)
-          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
-              entry.value,
-    };
+    final journalLiveAnalyses = destination == 6
+        ? <String, TimeframeChartAnalysis>{
+            for (final radar
+                in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+              for (final entry in radar.analysesByTimeframe.entries)
+                '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+                    entry.value,
+          }
+        : const <String, TimeframeChartAnalysis>{};
+    final journalLiveIdeas = destination == 6
+        ? <String, TradeIdea>{
+            for (final radar
+                in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+              for (final entry in radar.ideasByTimeframe.entries)
+                '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+                    entry.value,
+          }
+        : const <String, TradeIdea>{};
     final initialMarketLoading =
         controller.snapshot == null &&
         destination != 4 &&
@@ -882,6 +951,42 @@ class _OwnerAlphaBody extends StatelessWidget {
         ),
       );
     }
+    if (destination == 1 && controller.snapshot != null) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: _SignalInboxView(
+          controller: controller,
+          autoTradeController: autoTradeController,
+          manualTradeController: manualTradeController,
+          onOpenAnalysis: onOpenAnalysis,
+          scrollKey: PageStorageKey('owner-alpha-$destination'),
+          horizontalPadding: wide ? 28 : 16,
+          header: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (showTopBar) ...[
+                _AlphaTopBar(
+                  controller: controller,
+                  themeMode: themeMode,
+                  onToggleTheme: onToggleTheme,
+                ),
+                const SizedBox(height: 14),
+              ],
+              _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
+              if (controller.error != null) ...[
+                const SizedBox(height: 12),
+                _AlphaErrorStrip(
+                  message: controller.error!,
+                  stale: controller.hasStaleSnapshot,
+                  onRetry: controller.refresh,
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
@@ -955,6 +1060,8 @@ class _OwnerAlphaBody extends StatelessWidget {
                     switch (destination) {
                       1 => _SignalInboxView(
                         controller: controller,
+                        autoTradeController: autoTradeController,
+                        manualTradeController: manualTradeController,
                         onOpenAnalysis: onOpenAnalysis,
                       ),
                       2 => _AlphaAnalysisView(

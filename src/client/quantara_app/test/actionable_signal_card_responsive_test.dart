@@ -45,7 +45,11 @@ void main() {
         await tester.pumpAndSettle();
 
         final action = find.textContaining(testCase.actionLabel);
-        await tester.ensureVisible(action.first);
+        await tester.dragUntilVisible(
+          action,
+          find.byType(CustomScrollView),
+          const Offset(0, -240),
+        );
         await tester.pump();
 
         expect(action, findsWidgets);

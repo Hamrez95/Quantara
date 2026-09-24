@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "8786adadc768775aeb755993ccdfa1459e30e734",
+  "softwareCandidateSha": "5d60dde9d9200fb4fd5dac96b70142e6e9f87404",
   "overallStatus": "pending",
   "gates": {
     "software": {
@@ -28,7 +28,7 @@
     },
     "strategy_promotion": {
       "status": "pending",
-      "reason": "Required out-of-sample strategy metrics have not been supplied as release evidence and no profitability claim is made.",
+      "reason": "Required out-of-sample strategy metrics have not been supplied as release evidence and no profitability claim is made; Dow remains shadow/non-authoritative.",
       "metrics": {
         "expectancy": {"observed": false, "value": null},
         "profitFactor": {"observed": false, "value": null},
@@ -44,7 +44,7 @@
     },
     "paper_shadow": {
       "status": "pending",
-      "reason": "Repeated paper accounting, live-market shadow observation across regimes, and operational-failure acceptance evidence are not yet supplied.",
+      "reason": "Dow shadow evidence collection is wired into the shared setup path, but repeated paper accounting, live-market shadow observation across regimes, and operational-failure acceptance evidence are not yet supplied.",
       "requirements": {
         "accountingReconciliation": false,
         "restartRecoveryReconciliation": false,

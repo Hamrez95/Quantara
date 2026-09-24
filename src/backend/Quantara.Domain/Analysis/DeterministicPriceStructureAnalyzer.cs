@@ -5,8 +5,9 @@ namespace Quantara.Domain.Analysis;
 
 public sealed class DeterministicPriceStructureAnalyzer
 {
-    private const string SchemaVersion = "price-structure-v1";
+    private const string SchemaVersion = "price-structure-v2-dow";
     private readonly string _schemaVersion = SchemaVersion;
+    private readonly DeterministicDowStructureAnalyzer _dowAnalyzer = new();
 
     public PriceStructureBuildResult Analyze(
         IReadOnlyList<Candle> candles,
@@ -44,6 +45,12 @@ public sealed class DeterministicPriceStructureAnalyzer
                 OpenTime = candle.OpenTime.ToUniversalTime()
             })
             .ToArray();
+        var dowResult = _dowAnalyzer.Analyze(normalizedCandles, specification.Dow);
+        if (!dowResult.IsCreated || dowResult.Snapshot is null)
+        {
+            return Rejected(dowResult.Code, dowResult.Message);
+        }
+
         var trueRanges = PriceStructureMath.CalculateTrueRanges(normalizedCandles);
         var averageTrueRanges = PriceStructureMath.CalculateRollingAverages(
             trueRanges,
@@ -77,7 +84,8 @@ public sealed class DeterministicPriceStructureAnalyzer
             directionStrength,
             volatilityPercent,
             zones,
-            warnings);
+            warnings,
+            dowResult.Snapshot);
 
         var analysis = new TimeframePriceStructureAnalysis(
             currentCandle.Symbol,
@@ -89,6 +97,7 @@ public sealed class DeterministicPriceStructureAnalyzer
             volatilityPercent,
             zones,
             warnings,
+            dowResult.Snapshot,
             fingerprint);
 
         return new PriceStructureBuildResult(
@@ -359,7 +368,8 @@ public sealed class DeterministicPriceStructureAnalyzer
         decimal directionStrength,
         decimal volatilityPercent,
         IReadOnlyList<PriceStructureZone> zones,
-        IReadOnlyList<string> warnings)
+        IReadOnlyList<string> warnings,
+        DowStructureSnapshot dowStructure)
     {
         return PriceStructureMath.ComputeHash(builder =>
         {
@@ -374,6 +384,7 @@ public sealed class DeterministicPriceStructureAnalyzer
             PriceStructureMath.Append(builder, specification.BreakoutAtrMultiplier);
             PriceStructureMath.Append(builder, specification.RecencyHalfLifeBars);
             PriceStructureMath.Append(builder, specification.MaximumZones);
+            PriceStructureMath.Append(builder, dowStructure.FingerprintSha256);
 
             foreach (var candle in candles)
             {

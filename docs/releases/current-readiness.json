@@ -2,47 +2,49 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "8786adadc768775aeb755993ccdfa1459e30e734",
-  "generatedAt": "2026-09-08T20:49:00Z",
+  "softwareCandidateSha": "5d60dde9d9200fb4fd5dac96b70142e6e9f87404",
+  "generatedAt": "2026-09-24T15:18:35Z",
   "qualityScore": 100,
   "minimumQualityScore": 90,
   "evidence": {
     "repository_integrity": {
       "passed": true,
-      "runId": 34275083336,
+      "runId": 36019233394,
       "checkRunIds": [
-        102225999537,
-        102225999821
+        107699575084,
+        107699575708
       ]
     },
     "flutter_android_upgrade": {
       "passed": true,
-      "runId": 34275083260,
+      "runId": 36016725624,
       "jobIds": [
-        102231160699,
-        102231161148,
-        102231160332,
-        102231161556
-      ]
+        107691424490,
+        107696417014,
+        107696417088,
+        107696416899
+      ],
+      "scope": "Final Flutter/Android application tree on ancestor 19b7bd3856bb4cc66a8c405631010e3a1bf07e11; release-only changes through the candidate do not touch app/Android/Flutter-CI paths and are revalidated by release-readiness compatibility checks."
     },
     "windows_build": {
       "passed": true,
-      "runId": 34275083191,
+      "runId": 36016967092,
       "checkRunIds": [
-        102225998451
-      ]
+        107691878362
+      ],
+      "scope": "Windows/service/release-launcher tree certified on ancestor 17e3ab255fa5d90e81c1338f5b1cbb81d2ad1352 and merged unchanged into the final candidate."
     },
     "installable_artifact_smoke": {
       "passed": true,
       "artifactIds": [
-        10075784532,
-        10075788719,
-        10075891693,
-        10076055305,
-        10075926358,
-        10075906724
+        10815178621,
+        10815044091,
+        10815423169,
+        10815423182,
+        10815981430,
+        10815583848
       ],
-      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service install/start/status/stop/uninstall lifecycle"
+      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service lifecycle and native release-candidate packaging. Ancestor evidence is accepted only where release-readiness proves relevant paths are unchanged."
     },
     "stability_report": {
       "passed": true,
@@ -58,18 +60,18 @@
     },
     "safety_regression": {
       "passed": true,
-      "runId": 34275083260,
-      "scope": "Flutter safety tests, hot-path software stress gate, and Android restart/upgrade matrix on the software candidate"
+      "runId": 36016725624,
+      "scope": "Flutter safety/regression suite, hot-path stress gate, and Android API 34/35/36 cold-start plus in-place-upgrade matrix on the final application tree."
     }
   },
   "manualGates": {
     "physical_device_permanent_signing": {
       "status": "pending",
-      "reason": "Current evidence is CI/emulator/internal-artifact evidence; permanent-signing continuity and physical-device installation/upgrade remain unverified."
+      "reason": "Current evidence is CI/emulator/internal-artifact evidence; physical-device install/upgrade, long-duration battery/network behavior, and permanent-signing continuity still require explicit device/release validation."
     },
     "production_store_publication": {
       "status": "approval_required",
-      "reason": "AGENTS.md requires explicit owner approval before production/store publication."
+      "reason": "AGENTS.md requires explicit owner approval before production/store publication; local/device review is intentionally performed first."
     }
   }
 }

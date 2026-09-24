@@ -27,10 +27,17 @@ void main() {
     candleClosedAt: eventTime.subtract(const Duration(minutes: 30)),
     summary: 'fixture',
     invalidation: 'fixture stop',
-    reasons: const ['closed-candle-fixture'],
+    reasons: const [
+      'closed-candle-fixture',
+      'dow:config:dow-structure/1.0:fixture-fingerprint',
+      'dow:alignment-version:dow-structural-alignment/1.0',
+      'dow:evidence:external_aligned',
+    ],
     strategy: AnalysisStrategy.trendPullback,
     strategyVersion: 'trend-pullback/2.0',
     marketRegime: MarketRegime.directionalTrend,
+    contextVersion:
+        'contextual-price-action/3.0|dow-structure/1.0|dow-structural-alignment/1.0',
   );
   const rules = CanonicalInstrumentRules(
     open: true,
@@ -100,6 +107,27 @@ void main() {
       );
     },
   );
+
+  test('Dow config and reason codes survive the canonical journal boundary', () {
+    final plan = CanonicalOpportunityPlan.fromTradeIdea(idea);
+
+    expect(
+      plan.reasonCodes,
+      contains('dow:config:dow-structure/1.0:fixture-fingerprint'),
+    );
+    expect(
+      plan.reasonCodes,
+      contains('dow:alignment-version:dow-structural-alignment/1.0'),
+    );
+    expect(plan.reasonCodes, contains('dow:evidence:external_aligned'));
+    expect(
+      plan.reasonCodes,
+      contains(
+        'dow:context:contextual-price-action/3.0|dow-structure/1.0|dow-structural-alignment/1.0',
+      ),
+    );
+    expect(plan.reasonCodes, isNot(contains('closed-candle-fixture')));
+  });
 
   test('closed-candle event time is a hard parity gate', () {
     final plan = CanonicalOpportunityPlan.fromTradeIdea(idea);
