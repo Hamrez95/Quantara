@@ -70,15 +70,11 @@ jobs:
       - name: Verify formatting
         shell: bash
         run: |
-          set +e
-          dart format --output=none --set-exit-if-changed lib test tool
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo "::group::Formatter diff"
-            git diff -- .
-            echo "::endgroup::"
-          fi
-          exit "$status"
+          dart format lib/features/auto_trade/application/manual_trade_execution_controller.dart
+          echo "::group::Formatter diff"
+          git diff -- .
+          echo "::endgroup::"
+          exit 1
 
       - name: Analyze
         shell: bash
