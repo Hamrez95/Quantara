@@ -44,8 +44,7 @@ abstract final class SignalInboxQuery {
     required SignalInboxFilter filter,
     required DateTime now,
     required bool Function(String setupId) isTaken,
-  }) =>
-      counts(entries: entries, now: now, isTaken: isTaken)[filter] ?? 0;
+  }) => counts(entries: entries, now: now, isTaken: isTaken)[filter] ?? 0;
 
   static Map<SignalInboxFilter, int> counts({
     required Iterable<SignalJournalEntry> entries,
