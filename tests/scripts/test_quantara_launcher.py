@@ -14,7 +14,7 @@ class QuantaraLauncherContractTests(unittest.TestCase):
     def test_cloud_release_uses_only_canonical_signed_workflow(self) -> None:
         self.assertIn("$ReleaseWorkflow = 'release-quantara.yml'", self.source)
         self.assertIn("'workflow','run',$ReleaseWorkflow", self.source)
-        self.assertIn("'-f',"include_windows=", self.source)
+        self.assertIn("include_windows=$(", self.source)
         self.assertNotIn("QUANTARA_ANDROID_KEYSTORE_", self.source)
         self.assertNotIn("QUANTARA_WINDOWS_PFX_", self.source)
 
