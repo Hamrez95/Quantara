@@ -52,6 +52,30 @@ void main() {
     expect(ids(SignalInboxFilter.expired), ['expired']);
   });
 
+  test('counts all inbox filters in one semantic pass', () {
+    final entries = [
+      _entry('open'),
+      _entry('taken-open'),
+      _entry('active', outcome: SignalOutcome.active),
+      _entry('tp1', outcome: SignalOutcome.tp1),
+      _entry('stopped', outcome: SignalOutcome.stopped),
+      _entry('expired', validUntil: now.subtract(const Duration(minutes: 1))),
+    ];
+
+    final counts = SignalInboxQuery.counts(
+      entries: entries,
+      now: now,
+      isTaken: (setupId) => setupId == 'taken-open',
+    );
+
+    expect(counts[SignalInboxFilter.all], 6);
+    expect(counts[SignalInboxFilter.opportunities], 1);
+    expect(counts[SignalInboxFilter.active], 2);
+    expect(counts[SignalInboxFilter.results], 2);
+    expect(counts[SignalInboxFilter.expired], 1);
+    expect(counts[SignalInboxFilter.taken], 1);
+  });
+
   test('score sort uses persisted confidence then reward risk', () {
     final result = SignalInboxQuery.apply(
       entries: [
