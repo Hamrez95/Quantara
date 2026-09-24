@@ -37,6 +37,8 @@ class ReleaseReadinessWorkflowContractTests(unittest.TestCase):
     def test_one_click_installer_is_release_only_but_windows_certified(self) -> None:
         self.assertIn("Quantara\\.ps1", self.source)
         self.assertIn("scripts/install-windows-local\\.ps1", self.source)
+        self.assertIn("tests/scripts/test_quantara_launcher\\.py", self.source)
+        self.assertIn("tests/scripts/test_windows_one_click_install\\.py", self.source)
         self.assertIn("scripts/install-windows-local.ps1", self.source)
 
     def test_windows_gate_is_not_truncated_before_invocation(self) -> None:
