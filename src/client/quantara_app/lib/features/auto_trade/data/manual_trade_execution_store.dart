@@ -158,10 +158,18 @@ abstract interface class ManualTradeExecutionStore {
 
 final class SharedPreferencesManualTradeExecutionStore
     implements ManualTradeExecutionStore {
-  SharedPreferencesManualTradeExecutionStore({
+  factory SharedPreferencesManualTradeExecutionStore({
     SharedPreferencesAsync? preferences,
-    this.storageKey = 'quantara.manual-trade-execution.v1',
-  }) : _preferences = preferences;
+    String storageKey = 'quantara.manual-trade-execution.v1',
+  }) => SharedPreferencesManualTradeExecutionStore._(
+    preferences,
+    storageKey,
+  );
+
+  SharedPreferencesManualTradeExecutionStore._(
+    this._preferences,
+    this.storageKey,
+  );
 
   SharedPreferencesAsync? _preferences;
   final String storageKey;
