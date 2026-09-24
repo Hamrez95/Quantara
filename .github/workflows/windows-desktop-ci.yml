@@ -14,6 +14,7 @@ on:
       - 'scripts/build-windows.ps1'
       - 'scripts/build-windows-service.ps1'
       - 'scripts/manage-windows-service.ps1'
+      - 'scripts/install-windows-local.ps1'
       - 'Quantara.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
   pull_request:
@@ -28,6 +29,7 @@ on:
       - 'scripts/build-windows.ps1'
       - 'scripts/build-windows-service.ps1'
       - 'scripts/manage-windows-service.ps1'
+      - 'scripts/install-windows-local.ps1'
       - 'Quantara.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
 
@@ -54,19 +56,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate root release launcher syntax
+      - name: Validate Windows PowerShell launcher syntax
         shell: pwsh
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path '.\Quantara.ps1'),
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            exit 1
+          foreach ($script in @('.\Quantara.ps1', '.\scripts\install-windows-local.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              Write-Error "PowerShell parse errors in $script"
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+            }
           }
 
       - name: Build fail-closed Windows service host
