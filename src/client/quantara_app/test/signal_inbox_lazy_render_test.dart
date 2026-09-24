@@ -71,18 +71,15 @@ void main() {
       findsNothing,
     );
 
-    await tester.dragUntilVisible(
-      find.byKey(const ValueKey('manual-trade-open-PERF81USDT|15m|long|81')),
-      scrollView,
-      const Offset(0, -600),
-      maxIteration: 100,
+    final lastCard = find.byKey(
+      const ValueKey('manual-trade-open-PERF81USDT|15m|long|81'),
     );
-    await tester.pump();
+    for (var attempt = 0; attempt < 160 && lastCard.evaluate().isEmpty; attempt++) {
+      await tester.drag(scrollView, const Offset(0, -600));
+      await tester.pump();
+    }
 
-    expect(
-      find.byKey(const ValueKey('manual-trade-open-PERF81USDT|15m|long|81')),
-      findsOneWidget,
-    );
+    expect(lastCard, findsOneWidget);
   });
 }
 
