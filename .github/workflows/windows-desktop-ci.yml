@@ -241,6 +241,66 @@ jobs:
           }
           Write-Host "Installer: $($installer.FullName)"
 
+      - name: Smoke packaged Windows installer install and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem -Path 'dist/windows' -Filter 'QuantaraSetup-*.exe' |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+          if ($null -eq $installer) {
+            throw 'Packaged Windows installer was not found for install smoke.'
+          }
+
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART',
+            '/SP-',
+            '/CLOSEAPPLICATIONS'
+          ) -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "Packaged Windows installer failed with exit code $($install.ExitCode)."
+          }
+
+          $appExe = Join-Path $env:ProgramFiles 'Quantara\quantara_app.exe'
+          $serviceExe = Join-Path $env:ProgramFiles 'Quantara\service\quantara_windows_service.exe'
+          if (-not (Test-Path -LiteralPath $appExe -PathType Leaf)) {
+            throw "Installed Quantara app was not found: $appExe"
+          }
+          if (-not (Test-Path -LiteralPath $serviceExe -PathType Leaf)) {
+            throw "Installed Quantara service was not found: $serviceExe"
+          }
+
+          $service = Get-Service -Name $env:QUANTARA_SERVICE_NAME -ErrorAction Stop
+          $service.Refresh()
+          if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
+            throw "Packaged installer must leave the service STOPPED/disarmed, got $($service.Status)."
+          }
+
+          $config = & sc.exe qc $env:QUANTARA_SERVICE_NAME 2>&1
+          if ($LASTEXITCODE -ne 0 -or (($config -join [Environment]::NewLine) -notmatch [regex]::Escape($serviceExe))) {
+            throw "Installed service configuration does not point at the packaged host: $($config -join ' ')"
+          }
+
+          $uninstaller = Join-Path $env:ProgramFiles 'Quantara\unins000.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
+            throw "Quantara uninstaller was not found: $uninstaller"
+          }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART'
+          ) -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) {
+            throw "Quantara uninstall smoke failed with exit code $($uninstall.ExitCode)."
+          }
+
+          Start-Sleep -Seconds 1
+          if ($null -ne (Get-Service -Name $env:QUANTARA_SERVICE_NAME -ErrorAction SilentlyContinue)) {
+            throw 'Quantara service remained registered after packaged uninstall smoke.'
+          }
+
       - name: Upload Windows release candidate and profiling evidence
         uses: actions/upload-artifact@v4
         with:
