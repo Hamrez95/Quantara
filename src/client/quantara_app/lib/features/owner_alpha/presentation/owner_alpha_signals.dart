@@ -107,9 +107,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                                 width: 46,
                                 height: 46,
                                 decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primaryContainer,
+                                  color: Theme.of(context).colorScheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: const Icon(Icons.inbox_rounded),
@@ -124,9 +122,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                                       style: Theme.of(context)
                                           .textTheme
                                           .headlineSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
-                                          ),
+                                          ?.copyWith(fontWeight: FontWeight.w900),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
@@ -147,9 +143,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                               key: const Key('setup-performance-open'),
                               onPressed: _showPerformanceReport,
                               icon: const Icon(Icons.query_stats_rounded),
-                              label: Text(
-                                _t('گزارش عملکرد', 'Performance report'),
-                              ),
+                              label: Text(_t('گزارش عملکرد', 'Performance report')),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -235,8 +229,9 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                                     'در این دسته چیزی نیست',
                                     'Nothing in this category',
                                   ),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w800),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 6),
