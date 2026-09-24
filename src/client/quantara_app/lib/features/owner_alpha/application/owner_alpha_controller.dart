@@ -224,6 +224,14 @@ final class OwnerAlphaController extends ChangeNotifier {
       if (silent) {
         return false;
       }
+      final pureRefresh =
+          symbols == null &&
+          selectedSymbol == null &&
+          selectedTimeframe == null &&
+          !persistSettings;
+      if (pureRefresh) {
+        return active;
+      }
       await active;
       return _requestScan(
         silent: silent,
