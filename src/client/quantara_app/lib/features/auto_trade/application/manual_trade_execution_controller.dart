@@ -285,10 +285,7 @@ final class BitunixManualTradeExchangeGateway
     required String orderId,
     required BitunixApiCredentials credentials,
   }) {
-    return client.fetchOrderDetail(
-      orderId: orderId,
-      credentials: credentials,
-    );
+    return client.fetchOrderDetail(orderId: orderId, credentials: credentials);
   }
 
   @override
@@ -418,9 +415,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         force: true,
       );
       final account = accountGateway.snapshot;
-      if (!reconciled ||
-          account == null ||
-          !accountGateway.canStartNewEntry) {
+      if (!reconciled || account == null || !accountGateway.canStartNewEntry) {
         throw const ManualTradeExecutionException(
           'A fresh, coherent and fully protected Bitunix account state is required before a new manual entry.',
         );
@@ -524,9 +519,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         force: true,
       );
       final account = accountGateway.snapshot;
-      if (!reconciled ||
-          account == null ||
-          !accountGateway.canStartNewEntry) {
+      if (!reconciled || account == null || !accountGateway.canStartNewEntry) {
         throw const ManualTradeExecutionException(
           'Account truth changed before confirmation; the trade was not submitted.',
         );
