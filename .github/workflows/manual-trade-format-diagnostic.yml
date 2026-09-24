@@ -1,0 +1,32 @@
+name: Manual trade format diagnostic
+
+on:
+  push:
+    branches:
+      - feat/540-manual-setup-execution
+    paths:
+      - 'src/client/quantara_app/lib/features/auto_trade/application/manual_trade_execution_controller.dart'
+      - '.github/workflows/manual-trade-format-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  show-format-diff:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client/quantara_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Show formatter diff
+        shell: bash
+        run: |
+          cp lib/features/auto_trade/application/manual_trade_execution_controller.dart /tmp/before.dart
+          dart format lib/features/auto_trade/application/manual_trade_execution_controller.dart
+          diff -u /tmp/before.dart lib/features/auto_trade/application/manual_trade_execution_controller.dart || true
