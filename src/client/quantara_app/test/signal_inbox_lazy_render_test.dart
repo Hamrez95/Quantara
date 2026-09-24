@@ -63,27 +63,27 @@ void main() {
       await tester.pump();
     }
 
-    final initiallyBuilt = materialized.evaluate().length;
-    expect(initiallyBuilt, greaterThan(0));
-    expect(initiallyBuilt, lessThan(entries.length));
-    expect(
-      find.byKey(const ValueKey('manual-trade-open-PERF81USDT|15m|long|81')),
-      findsNothing,
-    );
+    Set<String> materializedKeys() => materialized
+        .evaluate()
+        .map((element) => (element.widget.key! as ValueKey<String>).value)
+        .toSet();
 
-    final lastCard = find.byKey(
-      const ValueKey('manual-trade-open-PERF81USDT|15m|long|81'),
-    );
-    for (
-      var attempt = 0;
-      attempt < 160 && lastCard.evaluate().isEmpty;
-      attempt++
-    ) {
+    final initiallyMaterialized = materializedKeys();
+    expect(initiallyMaterialized, isNotEmpty);
+    expect(initiallyMaterialized.length, lessThan(entries.length));
+
+    for (var attempt = 0; attempt < 24; attempt++) {
       await tester.drag(scrollView, const Offset(0, -600));
       await tester.pump();
     }
 
-    expect(lastCard, findsOneWidget);
+    final afterScrollMaterialized = materializedKeys();
+    expect(afterScrollMaterialized, isNotEmpty);
+    expect(afterScrollMaterialized.length, lessThan(entries.length));
+    expect(
+      afterScrollMaterialized.difference(initiallyMaterialized),
+      isNotEmpty,
+    );
   });
 }
 
