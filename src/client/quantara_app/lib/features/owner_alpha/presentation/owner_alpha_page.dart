@@ -250,6 +250,9 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   final GlobalKey<_AutoTradeViewState> _autoTradeViewKey =
       GlobalKey<_AutoTradeViewState>();
   int _destination = 0;
+  bool _tradingLabInitialized = false;
+  bool _unattendedAutoTradeInitialized = false;
+  bool _journalInitialized = false;
   StreamSubscription<String>? _notificationOpenSubscription;
   late final Future<void> _ownerAlphaInitialization;
 
@@ -260,10 +263,9 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     _notificationOpenSubscription = widget.notificationGateway.openedSetupIds
         .listen((setupId) => unawaited(_openNotificationSetup(setupId)));
     unawaited(_consumeInitialNotification());
-    unawaited(_tradingLabController.initialize());
+    // Account truth is required by Setups/manual execution, so keep it eager.
+    // Heavy destination-specific controllers initialize only on first use.
     unawaited(_autoTradeController.initialize());
-    unawaited(_unattendedAutoTradeController.initialize());
-    unawaited(_journalController.initialize());
   }
 
   @override
@@ -345,6 +347,62 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     );
   }
 
+  Future<void> _ensureDestinationInitialized(int destination) async {
+    switch (destination) {
+      case 4:
+        if (_tradingLabInitialized) return;
+        _tradingLabInitialized = true;
+        try {
+          await _tradingLabController.initialize();
+        } on Object {
+          _tradingLabInitialized = false;
+          rethrow;
+        }
+        return;
+      case 5:
+        if (!_unattendedAutoTradeInitialized) {
+          _unattendedAutoTradeInitialized = true;
+          try {
+            await _unattendedAutoTradeController.initialize();
+          } on Object {
+            _unattendedAutoTradeInitialized = false;
+            rethrow;
+          }
+        }
+        if (!_journalInitialized) {
+          _journalInitialized = true;
+          try {
+            await _journalController.initialize();
+          } on Object {
+            _journalInitialized = false;
+            rethrow;
+          }
+        }
+        return;
+      case 6:
+        if (_journalInitialized) return;
+        _journalInitialized = true;
+        try {
+          await _journalController.initialize();
+        } on Object {
+          _journalInitialized = false;
+          rethrow;
+        }
+        return;
+      default:
+        return;
+    }
+  }
+
+  void _selectDestination(int destination) {
+    if (_destination != destination) {
+      setState(() => _destination = destination);
+    }
+    if (destination == 4 || destination == 5 || destination == 6) {
+      unawaited(_refreshCurrentDestination());
+    }
+  }
+
   Future<void> _reconcileJournalFromAccount() async {
     final snapshot = _autoTradeController.snapshot;
     if (snapshot == null) return;
@@ -358,6 +416,8 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
   }
 
   Future<void> _refreshCurrentDestination() async {
+    await _ensureDestinationInitialized(_destination);
+    if (!mounted) return;
     switch (_destination) {
       case 5:
         final state = _autoTradeViewKey.currentState;
@@ -428,12 +488,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
             onOpenAnalysis: _openAnalysis,
             onAddSymbol: _showAddSymbolDialog,
             onOpenPortfolioRisk: widget.onOpenPortfolioRisk,
-            onNavigate: (value) {
-              setState(() => _destination = value);
-              if (value == 4 || value == 5 || value == 6) {
-                unawaited(_refreshCurrentDestination());
-              }
-            },
+            onNavigate: _selectDestination,
             showTopBar: desktop,
             realtimeMonitor: widget.realtimeMonitor,
             autoTradeViewKey: _autoTradeViewKey,
@@ -453,9 +508,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
                         ? _desktopDestinationIndexes.indexOf(_destination)
                         : 0,
                     onDestinationSelected: (value) {
-                      setState(
-                        () => _destination = _desktopDestinationIndexes[value],
-                      );
+                      _selectDestination(_desktopDestinationIndexes[value]);
                     },
                     leading: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 18),
@@ -510,7 +563,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
                   ? NavigationDestinationLabelBehavior.onlyShowSelected
                   : NavigationDestinationLabelBehavior.alwaysShow,
               onDestinationSelected: (value) {
-                setState(() => _destination = _mobileDestinationIndexes[value]);
+                _selectDestination(_mobileDestinationIndexes[value]);
               },
               destinations: _mobileDestinationIndexes
                   .map(

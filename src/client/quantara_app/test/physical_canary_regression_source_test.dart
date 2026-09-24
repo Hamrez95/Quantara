@@ -57,7 +57,9 @@ void main() {
       expect(controller, contains('reconcileVerifiedExchangeClosures'));
       expect(page, contains('_reconcileJournalFromAccount'));
       expect(page, contains('snapshot.authoritativePnl'));
-      expect(page, contains('value == 5 || value == 6'));
+      expect(page, contains('_selectDestination'));
+      expect(page, contains('case 5:'));
+      expect(page, contains('case 6:'));
     },
   );
 
