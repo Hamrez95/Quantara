@@ -84,6 +84,91 @@ jobs:
             echo "${workflow} certified by run ${run_id}."
           }
 
+          require_flutter_compatible_success() {
+            candidates="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/flutter-ci.yml/runs?status=success&per_page=100" \
+                --jq '.workflow_runs[] | select(.conclusion == "success") | [.id, .head_sha] | @tsv'
+            )"
+            while IFS=            while IFS=$'\t' read -r run_id certified_sha; do
+              [ -n "$certified_sha" ] || continue
+              git cat-file -e "${certified_sha}^{commit}" 2>/dev/null || continue
+              git merge-base --is-ancestor "$certified_sha" "$SOURCE_SHA" || continue
+              if git diff --quiet "$certified_sha" "$SOURCE_SHA" -- \
+                src/client/quantara_app \
+                src/native/execution \
+                src/windows_service \
+                installer/windows \
+                scripts/build-windows.ps1 \
+                scripts/build-windows-service.ps1 \
+                scripts/manage-windows-service.ps1 \
+                .github/workflows/windows-desktop-ci.yml; then
+                echo "windows-desktop-ci.yml certified by unchanged ancestor ${certified_sha} (run ${run_id})."
+                return 0
+              fi
+            done <<< "$candidates"
+            echo "No successful Windows build certifies ${SOURCE_SHA} or an unchanged relevant ancestor." >&2
+            exit 1
+          }
+
+          require_exact_success ci.yml
+          require_flutter_compatible_success
+          require_windows_compatible_success
+
+      - name: Require versioned release documents and validate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+)(\+[0-9]+)?[[:space:]]*$/\1/p' src/client/quantara_app/pubspec.yaml)"
+          test -n "$source_version"
+          test -s "docs/releases/${source_version}.md"
+          test -s "docs/releases/${source_version}-stability.md"
+          test -s "docs/releases/${source_version}-owner-alpha-stability.md"
+          test -s docs/release-rollback.md
+          test -s docs/releases/current-readiness.json
+          test -s docs/releases/current-stability.json
+          grep -Fq 'Production/store publication' "docs/releases/${source_version}.md"
+          grep -Fq 'Software stability evidence: PASS' "docs/releases/${source_version}-stability.md"
+          grep -Fq 'forward recovery' docs/release-rollback.md
+          python scripts/release/release_readiness.py \
+            docs/releases/current-readiness.json \
+            --minimum-score 90 \
+            --root .
+          cp "docs/releases/${source_version}-owner-alpha-stability.md" /tmp/checked-in-stability.md
+          python scripts/release/stability_report.py \
+            docs/releases/current-stability.json \
+            --root . \
+            --write-markdown "docs/releases/${source_version}-owner-alpha-stability.md"
+          diff -u /tmp/checked-in-stability.md "docs/releases/${source_version}-owner-alpha-stability.md"
+
+      - name: Test release evidence validators
+        run: |
+          python -m unittest tests.scripts.test_release_readiness -v
+          python -m unittest tests.scripts.test_stability_report -v
+
+      - name: State evidence boundary
+        run: |
+          echo 'Software/release-engineering evidence can pass while overall owner-alpha stability remains pending.'
+          echo 'Simulation, paper/shadow, physical-device/signing and exchange evidence are never inferred from CI.'
+          echo 'Production/store publication requires explicit owner approval.'
+\t' read -r run_id certified_sha; do
+              [ -n "$certified_sha" ] || continue
+              git cat-file -e "${certified_sha}^{commit}" 2>/dev/null || continue
+              git merge-base --is-ancestor "$certified_sha" "$SOURCE_SHA" || continue
+              if git diff --quiet "$certified_sha" "$SOURCE_SHA" -- \
+                src/client/quantara_app \
+                scripts/android-cold-start-smoke.sh \
+                scripts/android-upgrade-smoke.sh \
+                .github/workflows/flutter-ci.yml \
+                .github/workflows/release-quantara.yml; then
+                echo "flutter-ci.yml certified by unchanged ancestor ${certified_sha} (run ${run_id})."
+                return 0
+              fi
+            done <<< "$candidates"
+            echo "No successful Flutter CI certifies ${SOURCE_SHA} or an unchanged relevant ancestor." >&2
+            exit 1
+          }
+
           require_windows_compatible_success() {
             candidates="$(
               gh api --paginate \
