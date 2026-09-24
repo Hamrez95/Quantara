@@ -33,18 +33,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
   String _t(String fa, String en) => _fa ? fa : en;
 
   @override
-  void initState() {
-    super.initState();
-    widget.autoTradeController.addListener(_onAutoTradeStateChanged);
-  }
-
-  void _onAutoTradeStateChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
   void dispose() {
-    widget.autoTradeController.removeListener(_onAutoTradeStateChanged);
     _performanceJournalController.dispose();
     super.dispose();
   }
@@ -291,11 +280,6 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     required bool marketDataFresh,
   }) {
     final controller = widget.controller;
-    final blockReason = _tradeBlockReason(
-      entry,
-      now: now,
-      marketDataFresh: marketDataFresh,
-    );
     return _SignalJournalCard(
       key: PageStorageKey<String>('signal-card-${entry.setupId}'),
       entry: entry,
@@ -303,10 +287,13 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       quote: quote,
       marketDataFresh: marketDataFresh,
       taken: controller.isTaken(entry.setupId),
-      tradeBlockReason: blockReason,
-      onOpenTrade: blockReason == null
-          ? () => unawaited(_showManualTrade(entry))
-          : null,
+      tradeAvailabilityListenable: widget.autoTradeController,
+      tradeBlockReason: () => _tradeBlockReason(
+        entry,
+        now: DateTime.now().toUtc(),
+        marketDataFresh: marketDataFresh,
+      ),
+      onOpenTrade: () => unawaited(_showManualTrade(entry)),
       onOpen: () =>
           widget.onOpenAnalysis(entry.symbol, entry.timeframe, entry.setupId),
       onTakenChanged: (value) => controller.setTaken(entry.setupId, value),
@@ -646,6 +633,7 @@ class _SignalJournalCard extends StatelessWidget {
     required this.quote,
     required this.marketDataFresh,
     required this.taken,
+    required this.tradeAvailabilityListenable,
     required this.tradeBlockReason,
     required this.onOpenTrade,
     required this.onOpen,
@@ -660,8 +648,9 @@ class _SignalJournalCard extends StatelessWidget {
   final AlphaMarketQuote? quote;
   final bool marketDataFresh;
   final bool taken;
-  final String? tradeBlockReason;
-  final VoidCallback? onOpenTrade;
+  final Listenable tradeAvailabilityListenable;
+  final String? Function() tradeBlockReason;
+  final VoidCallback onOpenTrade;
   final VoidCallback onOpen;
   final ValueChanged<bool> onTakenChanged;
   final VoidCallback onNote;
@@ -848,11 +837,17 @@ class _SignalJournalCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              FilledButton.icon(
-                key: ValueKey('manual-trade-open-${entry.setupId}'),
-                onPressed: onOpenTrade,
-                icon: const Icon(Icons.swap_horiz_rounded),
-                label: Text(_t(context, 'باز کردن معامله', 'Open trade')),
+              AnimatedBuilder(
+                animation: tradeAvailabilityListenable,
+                builder: (context, _) {
+                  final blockReason = tradeBlockReason();
+                  return FilledButton.icon(
+                    key: ValueKey('manual-trade-open-${entry.setupId}'),
+                    onPressed: blockReason == null ? onOpenTrade : null,
+                    icon: const Icon(Icons.swap_horiz_rounded),
+                    label: Text(_t(context, 'باز کردن معامله', 'Open trade')),
+                  );
+                },
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpen,
@@ -878,28 +873,37 @@ class _SignalJournalCard extends StatelessWidget {
               ),
             ],
           ),
-          if (tradeBlockReason != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 17,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    tradeBlockReason!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          AnimatedBuilder(
+            animation: tradeAvailabilityListenable,
+            builder: (context, _) {
+              final blockReason = tradeBlockReason();
+              if (blockReason == null) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 17,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        blockReason,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
+              );
+            },
+          ),
         ],
       ),
     );
