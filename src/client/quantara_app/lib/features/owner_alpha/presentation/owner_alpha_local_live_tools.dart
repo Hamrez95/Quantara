@@ -706,6 +706,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
     final snapshot = widget.accountController.snapshot;
     final reconciliation = widget.accountController.reconciliation;
     final preferences = _currentPreferences;
+    final journalLedger = await DatabaseTradingJournalStore().load();
     final persisted = <String, Object?>{
       'configuration': await _storedJson(localLiveConfigurationKey),
       'status': await _storedJson(localLiveStatusKey),
@@ -767,6 +768,7 @@ extension _LocalLiveIssue169Tools on _LocalLiveTradeControlCardState {
       'auditEvents': events
           .map((item) => item.toJson())
           .toList(growable: false),
+      'tradingJournal': journalLedger.toJson(),
       'persistedLocalServiceState': persisted,
     };
   }
