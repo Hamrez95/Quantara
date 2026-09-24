@@ -107,69 +107,24 @@ jobs:
             echo "No successful Flutter CI certifies ${SOURCE_SHA} or an unchanged relevant ancestor." >&2
             exit 1
           }
-
           require_windows_compatible_success() {
             run_id="$(
-              python - <<'PY'
-          import json
-          from pathlib import Path
-          payload = json.loads(Path('docs/releases/current-readiness.json').read_text())
-          print(payload['evidence']['windows_build']['runId'])
-          PY
+              python -c "import json; from pathlib import Path; print(json.loads(Path('docs/releases/current-readiness.json').read_text())['evidence']['windows_build']['runId'])"
             )"
             test -n "$run_id"
-            run_record="$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
-                --jq '[.conclusion, .head_sha, .path] | @tsv'
-            )"
-            IFS=
-          require_exact_success ci.yml
-          require_flutter_compatible_success
-          require_windows_compatible_success
 
-      - name: Require versioned release documents and validate manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          source_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+)(\+[0-9]+)?[[:space:]]*$/\1/p' src/client/quantara_app/pubspec.yaml)"
-          test -n "$source_version"
-          test -s "docs/releases/${source_version}.md"
-          test -s "docs/releases/${source_version}-stability.md"
-          test -s "docs/releases/${source_version}-owner-alpha-stability.md"
-          test -s docs/release-rollback.md
-          test -s docs/releases/current-readiness.json
-          test -s docs/releases/current-stability.json
-          grep -Fq 'Production/store publication' "docs/releases/${source_version}.md"
-          grep -Fq 'Software stability evidence: PASS' "docs/releases/${source_version}-stability.md"
-          grep -Fq 'forward recovery' docs/release-rollback.md
-          python scripts/release/release_readiness.py \
-            docs/releases/current-readiness.json \
-            --minimum-score 90 \
-            --root .
-          cp "docs/releases/${source_version}-owner-alpha-stability.md" /tmp/checked-in-stability.md
-          python scripts/release/stability_report.py \
-            docs/releases/current-stability.json \
-            --root . \
-            --write-markdown "docs/releases/${source_version}-owner-alpha-stability.md"
-          diff -u /tmp/checked-in-stability.md "docs/releases/${source_version}-owner-alpha-stability.md"
+            conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion')"
+            certified_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.head_sha')"
+            workflow_path="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.path')"
 
-      - name: Test release evidence validators
-        run: |
-          python -m unittest tests.scripts.test_release_readiness -v
-          python -m unittest tests.scripts.test_stability_report -v
-
-      - name: State evidence boundary
-        run: |
-          echo 'Software/release-engineering evidence can pass while overall owner-alpha stability remains pending.'
-          echo 'Simulation, paper/shadow, physical-device/signing and exchange evidence are never inferred from CI.'
-          echo 'Production/store publication requires explicit owner approval.'
-\t' read -r conclusion certified_sha workflow_path <<< "$run_record"
             if [ "$conclusion" != "success" ] || [ "$workflow_path" != ".github/workflows/windows-desktop-ci.yml" ]; then
               echo "Manifest Windows run ${run_id} is not a successful windows-desktop-ci.yml run." >&2
               exit 1
             fi
+
             git cat-file -e "${certified_sha}^{commit}" 2>/dev/null
             git merge-base --is-ancestor "$certified_sha" "$SOURCE_SHA"
+
             if ! git diff --quiet "$certified_sha" "$SOURCE_SHA" -- \
               Quantara.ps1 \
               src/client/quantara_app \
@@ -183,9 +138,9 @@ jobs:
               echo "Windows-relevant files changed after manifest-certified run ${run_id} (${certified_sha})." >&2
               exit 1
             fi
+
             echo "windows-desktop-ci.yml certified by manifest run ${run_id} on unchanged ancestor ${certified_sha}."
           }
-
           require_exact_success ci.yml
           require_flutter_compatible_success
           require_windows_compatible_success
