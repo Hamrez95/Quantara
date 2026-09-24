@@ -161,10 +161,7 @@ final class SharedPreferencesManualTradeExecutionStore
   factory SharedPreferencesManualTradeExecutionStore({
     SharedPreferencesAsync? preferences,
     String storageKey = 'quantara.manual-trade-execution.v1',
-  }) => SharedPreferencesManualTradeExecutionStore._(
-    preferences,
-    storageKey,
-  );
+  }) => SharedPreferencesManualTradeExecutionStore._(preferences, storageKey);
 
   SharedPreferencesManualTradeExecutionStore._(
     this._preferences,
