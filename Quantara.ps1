@@ -1,7 +1,7 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Menu','Status','Windows','AndroidApk','AndroidBundle','Pwa','AllLocal','ReleaseBeta','ReleaseStable','OpenActions','OpenReleases')]
+    [ValidateSet('Menu','Status','SyncMain','Windows','AndroidApk','AndroidBundle','Pwa','AllLocal','ReleaseBeta','ReleaseStable','OpenActions','OpenReleases')]
     [string]$Action = 'Menu',
 
     [ValidateSet('patch','minor','major','promote')]
@@ -71,6 +71,18 @@ function Show-Status {
     } else {
         Write-Host 'Worktree: clean' -ForegroundColor Green
     }
+}
+
+function Sync-Main {
+    Require-Command 'git' 'Install Git and add it to PATH.'
+    Set-Location $RepositoryRoot
+    if (git status --porcelain) {
+        throw 'Sync main requires a clean worktree.'
+    }
+    Invoke-Checked 'git' @('fetch','origin','main')
+    Invoke-Checked 'git' @('switch','main')
+    Invoke-Checked 'git' @('pull','--ff-only','origin','main')
+    Show-Status
 }
 
 function Require-CleanMainAtOrigin {
@@ -176,29 +188,31 @@ function Invoke-CloudRelease([ValidateSet('beta','stable')] [string]$Channel) {
 function Show-Menu {
     Write-Title 'Quantara launcher'
     Write-Host '1) Status            - branch, HEAD, version and worktree state'
-    Write-Host '2) Windows local     - verified native Windows release build'
-    Write-Host '3) Android APK local - installable release APK'
-    Write-Host '4) Android AAB local - Google Play release bundle'
-    Write-Host '5) PWA local         - release web ZIP'
-    Write-Host '6) All local         - APK + AAB + PWA'
-    Write-Host '7) Signed Beta       - GitHub release: signed Android + PWA + signed Windows by default'
-    Write-Host '8) Signed Stable     - public stable release; requires explicit typed confirmation'
-    Write-Host '9) Open Actions'
-    Write-Host '10) Open Releases'
+    Write-Host '2) Sync main         - clean fast-forward to the latest origin/main'
+    Write-Host '3) Windows local     - native Windows release ZIP (local/unsigned)'
+    Write-Host '4) Android APK local - installable local release APK'
+    Write-Host '5) Android AAB local - local Google Play release bundle'
+    Write-Host '6) PWA local         - local release web ZIP'
+    Write-Host '7) All local         - APK + AAB + PWA + Windows when on Windows'
+    Write-Host '8) Signed Beta       - GitHub: signed Android + PWA + signed Windows by default'
+    Write-Host '9) Signed Stable     - public stable release; explicit typed confirmation'
+    Write-Host '10) Open Actions'
+    Write-Host '11) Open Releases'
     Write-Host '0) Exit'
     Write-Host ''
     $choice = Read-Host 'Choose'
     switch ($choice) {
         '1' { return 'Status' }
-        '2' { return 'Windows' }
-        '3' { return 'AndroidApk' }
-        '4' { return 'AndroidBundle' }
-        '5' { return 'Pwa' }
-        '6' { return 'AllLocal' }
-        '7' { return 'ReleaseBeta' }
-        '8' { return 'ReleaseStable' }
-        '9' { return 'OpenActions' }
-        '10' { return 'OpenReleases' }
+        '2' { return 'SyncMain' }
+        '3' { return 'Windows' }
+        '4' { return 'AndroidApk' }
+        '5' { return 'AndroidBundle' }
+        '6' { return 'Pwa' }
+        '7' { return 'AllLocal' }
+        '8' { return 'ReleaseBeta' }
+        '9' { return 'ReleaseStable' }
+        '10' { return 'OpenActions' }
+        '11' { return 'OpenReleases' }
         '0' { return 'Exit' }
         default { throw "Unknown menu option: $choice" }
     }
@@ -212,6 +226,7 @@ if ($Action -eq 'Menu') {
 switch ($Action) {
     'Exit' { return }
     'Status' { Show-Status }
+    'SyncMain' { Sync-Main }
     'Windows' { Invoke-LocalBuild 'Windows' }
     'AndroidApk' { Invoke-LocalBuild 'AndroidApk' }
     'AndroidBundle' { Invoke-LocalBuild 'AndroidBundle' }
