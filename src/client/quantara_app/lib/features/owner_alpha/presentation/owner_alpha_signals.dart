@@ -18,8 +18,11 @@ class _SignalInboxView extends StatefulWidget {
 }
 
 class _SignalInboxViewState extends State<_SignalInboxView> {
+  static const _pageSize = 20;
+
   SignalInboxFilter _filter = SignalInboxFilter.all;
   SignalInboxSort _sort = SignalInboxSort.recommended;
+  int _visibleLimit = _pageSize;
   late final TradingJournalController _performanceJournalController =
       TradingJournalController(store: DatabaseTradingJournalStore());
 
@@ -64,6 +67,9 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       now: now,
       isTaken: controller.isTaken,
     );
+    final visible = filtered
+        .take(_visibleLimit)
+        .toList(growable: false);
 
     int count(SignalInboxFilter filter) => SignalInboxQuery.count(
       entries: all,
@@ -141,7 +147,10 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      onSelected: (_) => setState(() => _filter = filter),
+                      onSelected: (_) => setState(() {
+                        _filter = filter;
+                        _visibleLimit = _pageSize;
+                      }),
                     ),
                 ],
               ),
@@ -164,7 +173,10 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                             selected: _sort == sort,
                             showCheckmark: false,
                             label: Text(_sortLabel(sort)),
-                            onSelected: (_) => setState(() => _sort = sort),
+                            onSelected: (_) => setState(() {
+                              _sort = sort;
+                              _visibleLimit = _pageSize;
+                            }),
                           ),
                       ],
                     ),
@@ -210,44 +222,75 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
               ),
             ),
           )
-        else
-          for (var index = 0; index < filtered.length; index++) ...[
-            _SignalJournalCard(
-              entry: filtered[index],
-              nowUtc: now,
-              quote: quotesBySymbol[filtered[index].symbol],
+        else ...[
+          for (var index = 0; index < visible.length; index++) ...[
+            _buildSignalCard(
+              entry: visible[index],
+              now: now,
+              quote: quotesBySymbol[visible[index].symbol],
               marketDataFresh: marketDataFresh,
-              taken: controller.isTaken(filtered[index].setupId),
-              tradeBlockReason: _tradeBlockReason(
-                filtered[index],
-                now: now,
-                marketDataFresh: marketDataFresh,
-              ),
-              onOpenTrade:
-                  _tradeBlockReason(
-                        filtered[index],
-                        now: now,
-                        marketDataFresh: marketDataFresh,
-                      ) ==
-                      null
-                  ? () => unawaited(_showManualTrade(filtered[index]))
-                  : null,
-              onOpen: () => widget.onOpenAnalysis(
-                filtered[index].symbol,
-                filtered[index].timeframe,
-                filtered[index].setupId,
-              ),
-              onTakenChanged: (value) =>
-                  controller.setTaken(filtered[index].setupId, value),
-              onNote: () => _editNote(filtered[index]),
-              onClose: (value) =>
-                  controller.closeSignal(filtered[index].setupId, value),
-              onLeverageChanged: (value) =>
-                  controller.setSignalLeverage(filtered[index].setupId, value),
             ),
-            if (index != filtered.length - 1) const SizedBox(height: 12),
+            if (index != visible.length - 1) const SizedBox(height: 12),
           ],
+          if (visible.length < filtered.length) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: AlignmentDirectional.center,
+              child: OutlinedButton.icon(
+                key: const Key('signal-inbox-show-more'),
+                onPressed: () => setState(() {
+                  _visibleLimit = math.min(
+                    filtered.length,
+                    _visibleLimit + _pageSize,
+                  );
+                }),
+                icon: const Icon(Icons.expand_more_rounded),
+                label: Text(
+                  _t(
+                    'نمایش بیشتر (${filtered.length - visible.length} باقی‌مانده)',
+                    'Show more (${filtered.length - visible.length} remaining)',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ],
+    );
+  }
+
+  Widget _buildSignalCard({
+    required SignalJournalEntry entry,
+    required DateTime now,
+    required AlphaMarketQuote? quote,
+    required bool marketDataFresh,
+  }) {
+    final controller = widget.controller;
+    final blockReason = _tradeBlockReason(
+      entry,
+      now: now,
+      marketDataFresh: marketDataFresh,
+    );
+    return _SignalJournalCard(
+      entry: entry,
+      nowUtc: now,
+      quote: quote,
+      marketDataFresh: marketDataFresh,
+      taken: controller.isTaken(entry.setupId),
+      tradeBlockReason: blockReason,
+      onOpenTrade: blockReason == null
+          ? () => unawaited(_showManualTrade(entry))
+          : null,
+      onOpen: () => widget.onOpenAnalysis(
+        entry.symbol,
+        entry.timeframe,
+        entry.setupId,
+      ),
+      onTakenChanged: (value) => controller.setTaken(entry.setupId, value),
+      onNote: () => _editNote(entry),
+      onClose: (value) => controller.closeSignal(entry.setupId, value),
+      onLeverageChanged: (value) =>
+          controller.setSignalLeverage(entry.setupId, value),
     );
   }
 
