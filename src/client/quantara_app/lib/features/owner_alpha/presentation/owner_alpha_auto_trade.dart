@@ -756,8 +756,6 @@ class _LocalLiveTradeControlCardState
             const SizedBox(height: 12),
           ],
           _buildLocalLiveConfigurationSummary(serviceActive: serviceActive),
-          const SizedBox(height: 12),
-          _buildSupervisorSupportSessionCard(),
           if (status.managedPositions.isNotEmpty ||
               exchangeOpenPositions.isNotEmpty) ...[
             const SizedBox(height: 12),
