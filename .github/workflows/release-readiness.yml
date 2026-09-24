@@ -84,6 +84,30 @@ jobs:
             echo "${workflow} certified by run ${run_id}."
           }
 
+          require_flutter_compatible_success() {
+            candidates="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/flutter-ci.yml/runs?status=success&per_page=100" \
+                --jq '.workflow_runs[] | select(.conclusion == "success") | [.id, .head_sha] | @tsv'
+            )"
+            while IFS=$'\t' read -r run_id certified_sha; do
+              [ -n "$certified_sha" ] || continue
+              git cat-file -e "${certified_sha}^{commit}" 2>/dev/null || continue
+              git merge-base --is-ancestor "$certified_sha" "$SOURCE_SHA" || continue
+              if git diff --quiet "$certified_sha" "$SOURCE_SHA" -- \
+                src/client/quantara_app \
+                scripts/android-cold-start-smoke.sh \
+                scripts/android-upgrade-smoke.sh \
+                .github/workflows/flutter-ci.yml \
+                .github/workflows/release-quantara.yml; then
+                echo "flutter-ci.yml certified by unchanged ancestor ${certified_sha} (run ${run_id})."
+                return 0
+              fi
+            done <<< "$candidates"
+            echo "No successful Flutter CI certifies ${SOURCE_SHA} or an unchanged relevant ancestor." >&2
+            exit 1
+          }
+
           require_windows_compatible_success() {
             candidates="$(
               gh api --paginate \
@@ -112,7 +136,7 @@ jobs:
           }
 
           require_exact_success ci.yml
-          require_exact_success flutter-ci.yml
+          require_flutter_compatible_success
           require_windows_compatible_success
 
       - name: Require versioned release documents and validate manifest

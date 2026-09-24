@@ -14,6 +14,7 @@ on:
       - 'scripts/build-windows.ps1'
       - 'scripts/build-windows-service.ps1'
       - 'scripts/manage-windows-service.ps1'
+      - 'Quantara.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
   pull_request:
     branches:
@@ -27,6 +28,7 @@ on:
       - 'scripts/build-windows.ps1'
       - 'scripts/build-windows-service.ps1'
       - 'scripts/manage-windows-service.ps1'
+      - 'Quantara.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
 
 permissions:
@@ -51,6 +53,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate root release launcher syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '.\Quantara.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
 
       - name: Build fail-closed Windows service host
         shell: pwsh
