@@ -18,9 +18,11 @@ import '../../../core/theme/quantara_theme.dart';
 import '../../../core/widgets/quantara_ui.dart';
 import '../../auto_trade/application/auto_trade_controller.dart';
 import '../../auto_trade/application/local_live_diagnostic_bundle.dart';
+import '../../auto_trade/application/manual_trade_execution_controller.dart';
 import '../../auto_trade/application/local_live_trade_service.dart';
 import '../../auto_trade/application/read_only_support_session.dart';
 import '../../auto_trade/application/unattended_auto_trade_controller.dart';
+import '../../auto_trade/data/bitunix_local_live_api_client.dart';
 import '../../auto_trade/data/bitunix_private_api_client.dart';
 import '../../auto_trade/data/local_live_preferences_store.dart';
 import '../../auto_trade/data/secure_auto_trade_credentials_store.dart';
@@ -30,6 +32,7 @@ import '../../auto_trade/domain/auto_trade_models.dart';
 import '../../auto_trade/domain/private_account_reconciliation.dart';
 import '../../auto_trade/domain/trading_pnl_projection.dart';
 import '../../auto_trade/domain/unattended_auto_trade_models.dart';
+import '../../auto_trade/presentation/manual_trade_execution_sheet.dart';
 import '../../auto_trade/presentation/private_account_reconciliation_banner.dart';
 import '../../auto_trade/presentation/position_protection_summary.dart';
 import '../../auto_trade/presentation/tp_allocation_editor.dart';
@@ -196,6 +199,11 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     apiClient: BitunixPrivateApiClient(client: _autoTradeHttpClient),
     credentialsStore: const SecureAutoTradeCredentialsStore(),
   );
+  late final ManualTradeExecutionController _manualTradeExecutionController =
+      ManualTradeExecutionController(
+        accountController: _autoTradeController,
+        exchange: BitunixLocalLiveApiClient(client: _autoTradeHttpClient),
+      );
   late final UnattendedAutoTradeController _unattendedAutoTradeController =
       UnattendedAutoTradeController(
         apiClient: UnattendedAutoTradeApiClient(client: _autoTradeHttpClient),
@@ -265,6 +273,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
     unawaited(_notificationOpenSubscription?.cancel());
     _tradingLabController.dispose();
     _controller.dispose();
+    _manualTradeExecutionController.dispose();
     _autoTradeController.dispose();
     _unattendedAutoTradeController.dispose();
     _journalController.dispose();
@@ -409,6 +418,7 @@ class _OwnerAlphaPageState extends State<OwnerAlphaPage> {
           builder: (context, _) => _OwnerAlphaBody(
             controller: _controller,
             autoTradeController: _autoTradeController,
+            manualTradeController: _manualTradeExecutionController,
             unattendedAutoTradeController: _unattendedAutoTradeController,
             journalController: _journalController,
             tradingLabController: _tradingLabController,
@@ -767,6 +777,7 @@ class _OwnerAlphaBody extends StatelessWidget {
   const _OwnerAlphaBody({
     required this.controller,
     required this.autoTradeController,
+    required this.manualTradeController,
     required this.unattendedAutoTradeController,
     required this.journalController,
     required this.tradingLabController,
@@ -787,6 +798,7 @@ class _OwnerAlphaBody extends StatelessWidget {
 
   final OwnerAlphaController controller;
   final AutoTradeController autoTradeController;
+  final ManualTradeExecutionController manualTradeController;
   final UnattendedAutoTradeController unattendedAutoTradeController;
   final TradingJournalController journalController;
   final TradingLabController tradingLabController;
@@ -955,6 +967,8 @@ class _OwnerAlphaBody extends StatelessWidget {
                     switch (destination) {
                       1 => _SignalInboxView(
                         controller: controller,
+                        autoTradeController: autoTradeController,
+                        manualTradeController: manualTradeController,
                         onOpenAnalysis: onOpenAnalysis,
                       ),
                       2 => _AlphaAnalysisView(
