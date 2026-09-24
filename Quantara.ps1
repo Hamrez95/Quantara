@@ -188,18 +188,18 @@ function Show-Menu {
     Write-Host '0) Exit'
     Write-Host ''
     $choice = Read-Host 'Choose'
-    return switch ($choice) {
-        '1' { 'Status' }
-        '2' { 'Windows' }
-        '3' { 'AndroidApk' }
-        '4' { 'AndroidBundle' }
-        '5' { 'Pwa' }
-        '6' { 'AllLocal' }
-        '7' { 'ReleaseBeta' }
-        '8' { 'ReleaseStable' }
-        '9' { 'OpenActions' }
-        '10' { 'OpenReleases' }
-        '0' { 'Exit' }
+    switch ($choice) {
+        '1' { return 'Status' }
+        '2' { return 'Windows' }
+        '3' { return 'AndroidApk' }
+        '4' { return 'AndroidBundle' }
+        '5' { return 'Pwa' }
+        '6' { return 'AllLocal' }
+        '7' { return 'ReleaseBeta' }
+        '8' { return 'ReleaseStable' }
+        '9' { return 'OpenActions' }
+        '10' { return 'OpenReleases' }
+        '0' { return 'Exit' }
         default { throw "Unknown menu option: $choice" }
     }
 }
