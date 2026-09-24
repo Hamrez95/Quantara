@@ -51,6 +51,14 @@ void main() {
           key.value.startsWith('manual-trade-open-');
     });
 
+    final scrollView = find.byType(CustomScrollView);
+    expect(scrollView, findsOneWidget);
+
+    for (var attempt = 0; attempt < 8 && materialized.evaluate().isEmpty; attempt++) {
+      await tester.drag(scrollView, const Offset(0, -500));
+      await tester.pump();
+    }
+
     final initiallyBuilt = materialized.evaluate().length;
     expect(initiallyBuilt, greaterThan(0));
     expect(initiallyBuilt, lessThan(entries.length));
@@ -61,7 +69,7 @@ void main() {
 
     await tester.dragUntilVisible(
       find.byKey(const ValueKey('manual-trade-open-PERF81USDT|15m|long|81')),
-      find.byType(CustomScrollView),
+      scrollView,
       const Offset(0, -600),
       maxIteration: 100,
     );
