@@ -3,16 +3,16 @@
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
   "softwareCandidateSha": "5d60dde9d9200fb4fd5dac96b70142e6e9f87404",
-  "generatedAt": "2026-09-24T15:18:35Z",
+  "generatedAt": "2026-09-24T22:12:37Z",
   "qualityScore": 100,
   "minimumQualityScore": 90,
   "evidence": {
     "repository_integrity": {
       "passed": true,
-      "runId": 36019233394,
+      "runId": 36064669037,
       "checkRunIds": [
-        107699575084,
-        107699575708
+        107851519505,
+        107851519165
       ]
     },
     "flutter_android_upgrade": {
@@ -28,11 +28,11 @@
     },
     "windows_build": {
       "passed": true,
-      "runId": 36016967092,
+      "runId": 36064669109,
       "checkRunIds": [
-        107691878362
+        107851818697
       ],
-      "scope": "Windows/service/release-launcher tree certified on ancestor 17e3ab255fa5d90e81c1338f5b1cbb81d2ad1352 and merged unchanged into the final candidate."
+      "scope": "Windows/service/release-launcher tree certified on ancestor 3f99479a407369c1b27927851a5a8b4546f431af. The workflow parsed both PowerShell entrypoints, passed fail-closed service lifecycle checks, built the native app and Inno installer, installed the packaged installer, verified the service remained STOPPED/disarmed, and completed packaged uninstall smoke."
     },
     "installable_artifact_smoke": {
       "passed": true,
@@ -42,9 +42,10 @@
         10815423169,
         10815423182,
         10815981430,
-        10815583848
+        10815583848,
+        10836925107
       ],
-      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service lifecycle and native release-candidate packaging. Ancestor evidence is accepted only where release-readiness proves relevant paths are unchanged."
+      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service lifecycle, native packaging, and packaged Inno installer install/uninstall smoke. Ancestor evidence is accepted only where release-readiness proves relevant paths are unchanged."
     },
     "stability_report": {
       "passed": true,
