@@ -107,7 +107,9 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                                 width: 46,
                                 height: 46,
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
                                   borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: const Icon(Icons.inbox_rounded),
@@ -122,7 +124,9 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                                       style: Theme.of(context)
                                           .textTheme
                                           .headlineSmall
-                                          ?.copyWith(fontWeight: FontWeight.w900),
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                          ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
@@ -143,7 +147,9 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                               key: const Key('setup-performance-open'),
                               onPressed: _showPerformanceReport,
                               icon: const Icon(Icons.query_stats_rounded),
-                              label: Text(_t('گزارش عملکرد', 'Performance report')),
+                              label: Text(
+                                _t('گزارش عملکرد', 'Performance report'),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -229,9 +235,8 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                                     'در این دسته چیزی نیست',
                                     'Nothing in this category',
                                   ),
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 6),
@@ -254,28 +259,25 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
           SliverPadding(
             padding: EdgeInsets.fromLTRB(horizontal, 14, horizontal, 32),
             sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final entry = filtered[index];
-                  return Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1280),
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          bottom: index == filtered.length - 1 ? 0 : 12,
-                        ),
-                        child: _buildSignalCard(
-                          entry: entry,
-                          now: now,
-                          quote: quotesBySymbol[entry.symbol],
-                          marketDataFresh: marketDataFresh,
-                        ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final entry = filtered[index];
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1280),
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == filtered.length - 1 ? 0 : 12,
+                      ),
+                      child: _buildSignalCard(
+                        entry: entry,
+                        now: now,
+                        quote: quotesBySymbol[entry.symbol],
+                        marketDataFresh: marketDataFresh,
                       ),
                     ),
-                  );
-                },
-                childCount: filtered.length,
-              ),
+                  ),
+                );
+              }, childCount: filtered.length),
             ),
           ),
       ],
@@ -305,11 +307,8 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       onOpenTrade: blockReason == null
           ? () => unawaited(_showManualTrade(entry))
           : null,
-      onOpen: () => widget.onOpenAnalysis(
-        entry.symbol,
-        entry.timeframe,
-        entry.setupId,
-      ),
+      onOpen: () =>
+          widget.onOpenAnalysis(entry.symbol, entry.timeframe, entry.setupId),
       onTakenChanged: (value) => controller.setTaken(entry.setupId, value),
       onNote: () => _editNote(entry),
       onClose: (value) => controller.closeSignal(entry.setupId, value),
