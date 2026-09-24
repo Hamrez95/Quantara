@@ -871,18 +871,24 @@ class _OwnerAlphaBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1024;
     final marketSnapshot = controller.snapshot;
-    final journalLiveAnalyses = <String, TimeframeChartAnalysis>{
-      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
-        for (final entry in radar.analysesByTimeframe.entries)
-          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
-              entry.value,
-    };
-    final journalLiveIdeas = <String, TradeIdea>{
-      for (final radar in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
-        for (final entry in radar.ideasByTimeframe.entries)
-          '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
-              entry.value,
-    };
+    final journalLiveAnalyses = destination == 6
+        ? <String, TimeframeChartAnalysis>{
+            for (final radar
+                in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+              for (final entry in radar.analysesByTimeframe.entries)
+                '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+                    entry.value,
+          }
+        : const <String, TimeframeChartAnalysis>{};
+    final journalLiveIdeas = destination == 6
+        ? <String, TradeIdea>{
+            for (final radar
+                in marketSnapshot?.radar ?? const <SymbolRadarResult>[])
+              for (final entry in radar.ideasByTimeframe.entries)
+                '${radar.quote.symbol.trim().toUpperCase()}|${entry.key.trim()}':
+                    entry.value,
+          }
+        : const <String, TradeIdea>{};
     final initialMarketLoading =
         controller.snapshot == null &&
         destination != 4 &&
@@ -945,6 +951,42 @@ class _OwnerAlphaBody extends StatelessWidget {
         ),
       );
     }
+    if (destination == 1 && controller.snapshot != null) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: _SignalInboxView(
+          controller: controller,
+          autoTradeController: autoTradeController,
+          manualTradeController: manualTradeController,
+          onOpenAnalysis: onOpenAnalysis,
+          scrollKey: PageStorageKey('owner-alpha-$destination'),
+          horizontalPadding: wide ? 28 : 16,
+          header: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (showTopBar) ...[
+                _AlphaTopBar(
+                  controller: controller,
+                  themeMode: themeMode,
+                  onToggleTheme: onToggleTheme,
+                ),
+                const SizedBox(height: 14),
+              ],
+              _LiveBoundaryStrip(realtimeMonitor: realtimeMonitor),
+              if (controller.error != null) ...[
+                const SizedBox(height: 12),
+                _AlphaErrorStrip(
+                  message: controller.error!,
+                  stale: controller.hasStaleSnapshot,
+                  onRetry: controller.refresh,
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(

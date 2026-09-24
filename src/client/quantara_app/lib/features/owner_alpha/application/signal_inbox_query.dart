@@ -44,13 +44,40 @@ abstract final class SignalInboxQuery {
     required SignalInboxFilter filter,
     required DateTime now,
     required bool Function(String setupId) isTaken,
-  }) => apply(
-    entries: entries,
-    filter: filter,
-    sort: SignalInboxSort.recommended,
-    now: now,
-    isTaken: isTaken,
-  ).length;
+  }) => counts(entries: entries, now: now, isTaken: isTaken)[filter] ?? 0;
+
+  static Map<SignalInboxFilter, int> counts({
+    required Iterable<SignalJournalEntry> entries,
+    required DateTime now,
+    required bool Function(String setupId) isTaken,
+  }) {
+    final utcNow = now.toUtc();
+    final result = {for (final filter in SignalInboxFilter.values) filter: 0};
+    for (final entry in entries) {
+      final taken = isTaken(entry.setupId);
+      result[SignalInboxFilter.all] = result[SignalInboxFilter.all]! + 1;
+      if (isOpenOpportunity(entry, now: utcNow, taken: taken)) {
+        result[SignalInboxFilter.opportunities] =
+            result[SignalInboxFilter.opportunities]! + 1;
+      }
+      if (isActive(entry)) {
+        result[SignalInboxFilter.active] =
+            result[SignalInboxFilter.active]! + 1;
+      }
+      if (hasVisibleResult(entry)) {
+        result[SignalInboxFilter.results] =
+            result[SignalInboxFilter.results]! + 1;
+      }
+      if (isExpired(entry, now: utcNow)) {
+        result[SignalInboxFilter.expired] =
+            result[SignalInboxFilter.expired]! + 1;
+      }
+      if (taken) {
+        result[SignalInboxFilter.taken] = result[SignalInboxFilter.taken]! + 1;
+      }
+    }
+    return Map.unmodifiable(result);
+  }
 
   static bool isOpenOpportunity(
     SignalJournalEntry entry, {
