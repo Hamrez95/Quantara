@@ -54,7 +54,11 @@ void main() {
     final scrollView = find.byType(CustomScrollView);
     expect(scrollView, findsOneWidget);
 
-    for (var attempt = 0; attempt < 8 && materialized.evaluate().isEmpty; attempt++) {
+    for (
+      var attempt = 0;
+      attempt < 8 && materialized.evaluate().isEmpty;
+      attempt++
+    ) {
       await tester.drag(scrollView, const Offset(0, -500));
       await tester.pump();
     }
