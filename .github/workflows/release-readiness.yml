@@ -110,19 +110,38 @@ jobs:
 
           require_windows_compatible_success() {
             run_id="$(
-              python - <<'PY'
-          import json
-          from pathlib import Path
-          payload = json.loads(Path('docs/releases/current-readiness.json').read_text())
-          print(payload['evidence']['windows_build']['runId'])
-          PY
+              python -c "import json; from pathlib import Path; print(json.loads(Path('docs/releases/current-readiness.json').read_text())['evidence']['windows_build']['runId'])"
             )"
             test -n "$run_id"
-            run_record="$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
-                --jq '[.conclusion, .head_sha, .path] | @tsv'
-            )"
-            IFS=
+
+            conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion')"
+            certified_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.head_sha')"
+            workflow_path="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.path')"
+
+            if [ "$conclusion" != "success" ] || [ "$workflow_path" != ".github/workflows/windows-desktop-ci.yml" ]; then
+              echo "Manifest Windows run ${run_id} is not a successful windows-desktop-ci.yml run." >&2
+              exit 1
+            fi
+
+            git cat-file -e "${certified_sha}^{commit}"
+            git merge-base --is-ancestor "$certified_sha" "$SOURCE_SHA"
+
+            if ! git diff --quiet "$certified_sha" "$SOURCE_SHA" -- \
+              Quantara.ps1 \
+              src/client/quantara_app \
+              src/native/execution \
+              src/windows_service \
+              installer/windows \
+              scripts/build-windows.ps1 \
+              scripts/build-windows-service.ps1 \
+              scripts/manage-windows-service.ps1 \
+              .github/workflows/windows-desktop-ci.yml; then
+              echo "Windows-relevant files changed after manifest-certified run ${run_id} (${certified_sha})." >&2
+              exit 1
+            fi
+
+            echo "windows-desktop-ci.yml certified by manifest run ${run_id} on unchanged ancestor ${certified_sha}."
+          }
           require_exact_success ci.yml
           require_flutter_compatible_success
           require_windows_compatible_success
