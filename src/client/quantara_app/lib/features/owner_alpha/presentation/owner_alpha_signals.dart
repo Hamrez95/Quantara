@@ -6,23 +6,26 @@ class _SignalInboxView extends StatefulWidget {
     required this.autoTradeController,
     required this.manualTradeController,
     required this.onOpenAnalysis,
+    this.header = const SizedBox.shrink(),
+    this.scrollKey,
+    this.horizontalPadding = 16,
   });
 
   final OwnerAlphaController controller;
   final AutoTradeController autoTradeController;
   final ManualTradeExecutionController manualTradeController;
   final _OpenAnalysis onOpenAnalysis;
+  final Widget header;
+  final Key? scrollKey;
+  final double horizontalPadding;
 
   @override
   State<_SignalInboxView> createState() => _SignalInboxViewState();
 }
 
 class _SignalInboxViewState extends State<_SignalInboxView> {
-  static const _pageSize = 20;
-
   SignalInboxFilter _filter = SignalInboxFilter.all;
   SignalInboxSort _sort = SignalInboxSort.recommended;
-  int _visibleLimit = _pageSize;
   late final TradingJournalController _performanceJournalController =
       TradingJournalController(store: DatabaseTradingJournalStore());
 
@@ -66,10 +69,6 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       now: now,
       isTaken: controller.isTaken,
     );
-    final visible = filtered
-        .take(_visibleLimit)
-        .toList(growable: false);
-
     final counts = SignalInboxQuery.counts(
       entries: all,
       now: now,
@@ -78,183 +77,212 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
 
     int count(SignalInboxFilter filter) => counts[filter] ?? 0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SignalPolicyCard(controller: controller),
-        const SizedBox(height: 16),
-        SectionCard(
-          semanticLabel: _t('صندوق پیشنهادها', 'Signal inbox'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.inbox_rounded),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _t('صندوق پیشنهادها', 'Signal inbox'),
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w900),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _t(
-                            'پیشنهادها و سرنوشت آن‌ها؛ بدون صفحه آزمایشگاه جداگانه.',
-                            'Setups and their outcomes, without a separate lab screen.',
+    final horizontal = widget.horizontalPadding;
+    return CustomScrollView(
+      key: widget.scrollKey,
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(horizontal, 14, horizontal, 0),
+          sliver: SliverToBoxAdapter(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1280),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    widget.header,
+                    const SizedBox(height: 16),
+                    _SignalPolicyCard(controller: controller),
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      semanticLabel: _t('صندوق پیشنهادها', 'Signal inbox'),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Icon(Icons.inbox_rounded),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _t('صندوق پیشنهادها', 'Signal inbox'),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _t(
+                                        'پیشنهادها و سرنوشت آن‌ها؛ بدون صفحه آزمایشگاه جداگانه.',
+                                        'Setups and their outcomes, without a separate lab screen.',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 14),
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: FilledButton.tonalIcon(
+                              key: const Key('setup-performance-open'),
+                              onPressed: _showPerformanceReport,
+                              icon: const Icon(Icons.query_stats_rounded),
+                              label: Text(
+                                _t('گزارش عملکرد', 'Performance report'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final filter in SignalInboxFilter.values)
+                                FilterChip(
+                                  selected: _filter == filter,
+                                  showCheckmark: false,
+                                  avatar: Icon(_filterIcon(filter), size: 18),
+                                  label: Text(
+                                    '${_filterLabel(filter)} ${count(filter)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onSelected: (_) =>
+                                      setState(() => _filter = filter),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ExpansionTile(
+                            key: const PageStorageKey<String>(
+                              'signal-inbox-sort',
+                            ),
+                            tilePadding: EdgeInsets.zero,
+                            childrenPadding: const EdgeInsets.only(bottom: 4),
+                            leading: const Icon(Icons.sort_rounded),
+                            title: Text(_t('مرتب‌سازی', 'Sort')),
+                            subtitle: Text(_sortLabel(_sort)),
+                            children: [
+                              Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    for (final sort in SignalInboxSort.values)
+                                      ChoiceChip(
+                                        selected: _sort == sort,
+                                        showCheckmark: false,
+                                        label: Text(_sortLabel(sort)),
+                                        onSelected: (_) =>
+                                            setState(() => _sort = sort),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: FilledButton.tonalIcon(
-                  key: const Key('setup-performance-open'),
-                  onPressed: _showPerformanceReport,
-                  icon: const Icon(Icons.query_stats_rounded),
-                  label: Text(_t('گزارش عملکرد', 'Performance report')),
+                  ],
                 ),
               ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final filter in SignalInboxFilter.values)
-                    FilterChip(
-                      selected: _filter == filter,
-                      showCheckmark: false,
-                      avatar: Icon(_filterIcon(filter), size: 18),
-                      label: Text(
-                        '${_filterLabel(filter)} ${count(filter)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onSelected: (_) => setState(() {
-                        _filter = filter;
-                        _visibleLimit = _pageSize;
-                      }),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: const EdgeInsets.only(bottom: 4),
-                leading: const Icon(Icons.sort_rounded),
-                title: Text(_t('مرتب‌سازی', 'Sort')),
-                subtitle: Text(_sortLabel(_sort)),
-                children: [
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final sort in SignalInboxSort.values)
-                          ChoiceChip(
-                            selected: _sort == sort,
-                            showCheckmark: false,
-                            label: Text(_sortLabel(sort)),
-                            onSelected: (_) => setState(() {
-                              _sort = sort;
-                              _visibleLimit = _pageSize;
-                            }),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
-        const SizedBox(height: 14),
         if (filtered.isEmpty)
-          SectionCard(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 28),
-              child: Column(
-                children: [
-                  const Icon(Icons.inbox_outlined, size: 44),
-                  const SizedBox(height: 12),
-                  Text(
-                    all.isEmpty
-                        ? _t(
-                            'هنوز پیشنهاد قابل‌اقدامی ثبت نشده',
-                            'No actionable idea has been recorded yet',
-                          )
-                        : _t(
-                            'در این دسته چیزی نیست',
-                            'Nothing in this category',
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(horizontal, 14, horizontal, 32),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1280),
+                  child: SectionCard(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 28),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.inbox_outlined, size: 44),
+                          const SizedBox(height: 12),
+                          Text(
+                            all.isEmpty
+                                ? _t(
+                                    'هنوز پیشنهاد قابل‌اقدامی ثبت نشده',
+                                    'No actionable idea has been recorded yet',
+                                  )
+                                : _t(
+                                    'در این دسته چیزی نیست',
+                                    'Nothing in this category',
+                                  ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                            textAlign: TextAlign.center,
                           ),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+                          const SizedBox(height: 6),
+                          Text(
+                            _t(
+                              'اسکن ادامه دارد؛ کیفیت فدای تعداد پیشنهاد نمی‌شود.',
+                              'Scanning continues without trading quality for quantity.',
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _t(
-                      'اسکن ادامه دارد؛ کیفیت فدای تعداد پیشنهاد نمی‌شود.',
-                      'Scanning continues without trading quality for quantity.',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+                ),
               ),
             ),
           )
-        else ...[
-          for (var index = 0; index < visible.length; index++) ...[
-            _buildSignalCard(
-              entry: visible[index],
-              now: now,
-              quote: quotesBySymbol[visible[index].symbol],
-              marketDataFresh: marketDataFresh,
-            ),
-            if (index != visible.length - 1) const SizedBox(height: 12),
-          ],
-          if (visible.length < filtered.length) ...[
-            const SizedBox(height: 12),
-            Align(
-              alignment: AlignmentDirectional.center,
-              child: OutlinedButton.icon(
-                key: const Key('signal-inbox-show-more'),
-                onPressed: () => setState(() {
-                  _visibleLimit = math.min(
-                    filtered.length,
-                    _visibleLimit + _pageSize,
+        else
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(horizontal, 14, horizontal, 32),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final entry = filtered[index];
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1280),
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == filtered.length - 1 ? 0 : 12,
+                        ),
+                        child: _buildSignalCard(
+                          entry: entry,
+                          now: now,
+                          quote: quotesBySymbol[entry.symbol],
+                          marketDataFresh: marketDataFresh,
+                        ),
+                      ),
+                    ),
                   );
-                }),
-                icon: const Icon(Icons.expand_more_rounded),
-                label: Text(
-                  _t(
-                    'نمایش بیشتر (${filtered.length - visible.length} باقی‌مانده)',
-                    'Show more (${filtered.length - visible.length} remaining)',
-                  ),
-                ),
+                },
+                childCount: filtered.length,
               ),
             ),
-          ],
-        ],
+          ),
       ],
     );
   }
@@ -272,6 +300,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       marketDataFresh: marketDataFresh,
     );
     return _SignalJournalCard(
+      key: PageStorageKey<String>('signal-card-${entry.setupId}'),
       entry: entry,
       nowUtc: now,
       quote: quote,
@@ -617,6 +646,7 @@ class _SignalPolicyCard extends StatelessWidget {
 
 class _SignalJournalCard extends StatelessWidget {
   const _SignalJournalCard({
+    super.key,
     required this.entry,
     required this.nowUtc,
     required this.quote,
@@ -723,6 +753,9 @@ class _SignalJournalCard extends StatelessWidget {
           _ActionableSignalSummary(
             presentation: actionable,
             qualityScore: entry.setupQualityScore,
+            storageKey: PageStorageKey<String>(
+              'signal-diagnostics-${entry.setupId}',
+            ),
           ),
           const SizedBox(height: 12),
           Text(entry.summary),
@@ -949,10 +982,12 @@ class _ActionableSignalSummary extends StatelessWidget {
   const _ActionableSignalSummary({
     required this.presentation,
     required this.qualityScore,
+    required this.storageKey,
   });
 
   final ActionableSignalPresentation presentation;
   final int? qualityScore;
+  final PageStorageKey<String> storageKey;
 
   bool _fa(BuildContext context) =>
       Directionality.of(context) == TextDirection.rtl;
@@ -1042,6 +1077,7 @@ class _ActionableSignalSummary extends StatelessWidget {
             Material(
               type: MaterialType.transparency,
               child: ExpansionTile(
+                key: storageKey,
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: EdgeInsets.zero,
                 visualDensity: VisualDensity.compact,
