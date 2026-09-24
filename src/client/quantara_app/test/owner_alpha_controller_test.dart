@@ -68,6 +68,35 @@ void main() {
   );
 
   test(
+    'concurrent manual refreshes coalesce into the active market scan',
+    () async {
+      final repository = _ControlledRepository();
+      final controller = OwnerAlphaController(
+        repository: repository,
+        settingsStore: MemoryOwnerAlphaSettingsStore(),
+      );
+      addTearDown(controller.dispose);
+
+      final initialization = controller.initialize();
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.gates, hasLength(1));
+
+      final firstRefresh = controller.refresh();
+      final secondRefresh = controller.refresh();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.gates, hasLength(1));
+
+      repository.gates.single.complete();
+      await Future.wait([initialization, firstRefresh, secondRefresh]);
+
+      expect(repository.gates, hasLength(1));
+      expect(controller.snapshot, isNotNull);
+      expect(controller.error, isNull);
+    },
+  );
+
+  test(
     'a user selection waits for an active scan and commits atomically',
     () async {
       final repository = _ControlledRepository();
