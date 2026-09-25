@@ -15,6 +15,7 @@ on:
       - 'scripts/build-windows-service.ps1'
       - 'scripts/manage-windows-service.ps1'
       - 'scripts/install-windows-local.ps1'
+      - 'tests/scripts/test_windows_one_click_install.py'
       - 'Quantara.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
   pull_request:
@@ -30,6 +31,7 @@ on:
       - 'scripts/build-windows-service.ps1'
       - 'scripts/manage-windows-service.ps1'
       - 'scripts/install-windows-local.ps1'
+      - 'tests/scripts/test_windows_one_click_install.py'
       - 'Quantara.ps1'
       - '.github/workflows/windows-desktop-ci.yml'
 
@@ -55,6 +57,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python for Windows install contract tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test one-click Windows prerequisite and safety contract
+        shell: pwsh
+        run: python tests/scripts/test_windows_one_click_install.py -v
 
       - name: Validate Windows PowerShell launcher syntax
         shell: pwsh
