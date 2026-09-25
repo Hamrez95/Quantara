@@ -1,7 +1,7 @@
 #requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Menu','Status','SyncMain','Windows','AndroidApk','AndroidBundle','Pwa','AllLocal','ReleaseBeta','ReleaseStable','OpenActions','OpenReleases')]
+    [ValidateSet('Menu','Status','SyncMain','WindowsInstall','Windows','AndroidApk','AndroidBundle','Pwa','AllLocal','ReleaseBeta','ReleaseStable','OpenActions','OpenReleases')]
     [string]$Action = 'Menu',
 
     [ValidateSet('patch','minor','major','promote')]
@@ -22,6 +22,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 $RepositoryRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BuildScript = Join-Path $RepositoryRoot 'scripts\build-release.ps1'
+$WindowsInstallScript = Join-Path $RepositoryRoot 'scripts\install-windows-local.ps1'
 $ReleaseWorkflow = 'release-quantara.yml'
 $RepoSlug = 'Hamrez95/Quantara'
 $ActionsUrl = "https://github.com/$RepoSlug/actions"
@@ -109,6 +110,20 @@ function Require-CleanMainAtOrigin {
     return $head
 }
 
+function Invoke-WindowsInstall {
+    if ($env:OS -ne 'Windows_NT') {
+        throw 'Windows Install/Update can only run on Windows.'
+    }
+    if (-not (Test-Path -LiteralPath $WindowsInstallScript -PathType Leaf)) {
+        throw "Windows installer script was not found: $WindowsInstallScript"
+    }
+
+    Write-Title 'Windows one-click install/update'
+    Write-Host 'This will sync the latest main, build/test it, create an installer, install/update Quantara and launch it.'
+    Sync-Main
+    & $WindowsInstallScript
+}
+
 function Invoke-LocalBuild([string]$Target) {
     if (-not (Test-Path -LiteralPath $BuildScript)) {
         throw "Build script was not found: $BuildScript"
@@ -187,32 +202,34 @@ function Invoke-CloudRelease([ValidateSet('beta','stable')] [string]$Channel) {
 
 function Show-Menu {
     Write-Title 'Quantara launcher'
-    Write-Host '1) Status            - branch, HEAD, version and worktree state'
-    Write-Host '2) Sync main         - clean fast-forward to the latest origin/main'
-    Write-Host '3) Windows local     - native Windows release ZIP (local/unsigned)'
-    Write-Host '4) Android APK local - installable local release APK'
-    Write-Host '5) Android AAB local - local Google Play release bundle'
-    Write-Host '6) PWA local         - local release web ZIP'
-    Write-Host '7) All local         - APK + AAB + PWA + Windows when on Windows'
-    Write-Host '8) Signed Beta       - GitHub: signed Android + PWA + signed Windows by default'
-    Write-Host '9) Signed Stable     - public stable release; explicit typed confirmation'
-    Write-Host '10) Open Actions'
-    Write-Host '11) Open Releases'
+    Write-Host '1) Status                 - branch, HEAD, version and worktree state'
+    Write-Host '2) Sync main              - clean fast-forward to the latest origin/main'
+    Write-Host '3) Windows Install/Update - ONE CLICK: sync + test + installer + install/update + launch'
+    Write-Host '4) Windows build only     - native Windows release ZIP (local/unsigned)'
+    Write-Host '5) Android APK local      - installable local release APK'
+    Write-Host '6) Android AAB local      - local Google Play release bundle'
+    Write-Host '7) PWA local              - local release web ZIP'
+    Write-Host '8) All local              - APK + AAB + PWA + Windows when on Windows'
+    Write-Host '9) Signed Beta            - GitHub: signed Android + PWA + signed Windows by default'
+    Write-Host '10) Signed Stable         - public stable release; explicit typed confirmation'
+    Write-Host '11) Open Actions'
+    Write-Host '12) Open Releases'
     Write-Host '0) Exit'
     Write-Host ''
     $choice = Read-Host 'Choose'
     switch ($choice) {
         '1' { return 'Status' }
         '2' { return 'SyncMain' }
-        '3' { return 'Windows' }
-        '4' { return 'AndroidApk' }
-        '5' { return 'AndroidBundle' }
-        '6' { return 'Pwa' }
-        '7' { return 'AllLocal' }
-        '8' { return 'ReleaseBeta' }
-        '9' { return 'ReleaseStable' }
-        '10' { return 'OpenActions' }
-        '11' { return 'OpenReleases' }
+        '3' { return 'WindowsInstall' }
+        '4' { return 'Windows' }
+        '5' { return 'AndroidApk' }
+        '6' { return 'AndroidBundle' }
+        '7' { return 'Pwa' }
+        '8' { return 'AllLocal' }
+        '9' { return 'ReleaseBeta' }
+        '10' { return 'ReleaseStable' }
+        '11' { return 'OpenActions' }
+        '12' { return 'OpenReleases' }
         '0' { return 'Exit' }
         default { throw "Unknown menu option: $choice" }
     }
@@ -227,6 +244,7 @@ switch ($Action) {
     'Exit' { return }
     'Status' { Show-Status }
     'SyncMain' { Sync-Main }
+    'WindowsInstall' { Invoke-WindowsInstall }
     'Windows' { Invoke-LocalBuild 'Windows' }
     'AndroidApk' { Invoke-LocalBuild 'AndroidApk' }
     'AndroidBundle' { Invoke-LocalBuild 'AndroidBundle' }
