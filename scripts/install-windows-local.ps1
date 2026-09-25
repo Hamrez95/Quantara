@@ -79,6 +79,7 @@ function Invoke-WingetInstall([string[]]$Arguments, [string]$DependencyName) {
 }
 
 function Get-CMakeVersion([string]$CMakePath) {
+    $LASTEXITCODE = 0
     $versionText = & $CMakePath --version 2>&1 | Select-Object -First 1
     if ($LASTEXITCODE -ne 0 -or $versionText -notmatch 'cmake version\s+(\d+)\.(\d+)') {
         throw "CMake was found at '$CMakePath' but its version could not be read. Reinstall CMake and rerun Quantara.ps1."

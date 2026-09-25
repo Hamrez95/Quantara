@@ -52,6 +52,8 @@ class WindowsOneClickInstallContractTests(unittest.TestCase):
     def test_cmake_failure_is_actionable_and_service_state_is_not_changed(self) -> None:
         service_build = (ROOT / 'scripts' / 'build-windows-service.ps1').read_text(encoding='utf-8')
         self.assertIn('CMake 3.20 or newer is required.', service_build)
+        self.assertIn('$LASTEXITCODE = 0', service_build)
+        self.assertIn('$LASTEXITCODE = 0', self.source)
         self.assertIn('CMake installation', self.source)
         self.assertNotIn('Start-Service', self.source)
 

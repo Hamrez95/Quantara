@@ -64,6 +64,7 @@ if (-not $cmakeCommand) {
 }
 $cmakePath = $cmakeCommand.Source
 if (-not $cmakePath) { $cmakePath = $cmakeCommand.FullName }
+$LASTEXITCODE = 0
 $cmakeVersion = & $cmakePath --version 2>&1 | Select-Object -First 1
 if ($LASTEXITCODE -ne 0 -or $cmakeVersion -notmatch 'cmake version\s+(\d+)\.(\d+)') {
     throw "CMake was found at '$cmakePath' but its version could not be read. Reinstall CMake and rerun Quantara.ps1."
