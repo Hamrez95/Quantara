@@ -17,6 +17,6 @@ void main() {
     expect(gate, isNot(contains('autoTradeController.isConnected')));
     expect(gate, isNot(contains('autoTradeController.canStartNewEntry')));
     expect(source, contains('manualTradeController.prepare(entry)'));
-    expect(source, contains('private account snapshot'));
+    expect(source, contains('startPreflight reconciliation'));
   });
 }
