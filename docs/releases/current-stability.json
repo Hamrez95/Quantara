@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "5d60dde9d9200fb4fd5dac96b70142e6e9f87404",
+  "softwareCandidateSha": "bdf4c2c27159530d0830c23f276de43444e01d68",
   "overallStatus": "pending",
   "gates": {
     "software": {
@@ -30,16 +30,46 @@
       "status": "pending",
       "reason": "Required out-of-sample strategy metrics have not been supplied as release evidence and no profitability claim is made; Dow remains shadow/non-authoritative.",
       "metrics": {
-        "expectancy": {"observed": false, "value": null},
-        "profitFactor": {"observed": false, "value": null},
-        "maximumDrawdown": {"observed": false, "value": null},
-        "returnToDrawdown": {"observed": false, "value": null},
-        "tailLosses": {"observed": false, "value": null},
-        "exposureTime": {"observed": false, "value": null},
-        "turnover": {"observed": false, "value": null},
-        "tradeCount": {"observed": false, "value": null},
-        "confidenceIntervals": {"observed": false, "value": null},
-        "foldAndRegimeStability": {"observed": false, "value": null}
+        "expectancy": {
+          "observed": false,
+          "value": null
+        },
+        "profitFactor": {
+          "observed": false,
+          "value": null
+        },
+        "maximumDrawdown": {
+          "observed": false,
+          "value": null
+        },
+        "returnToDrawdown": {
+          "observed": false,
+          "value": null
+        },
+        "tailLosses": {
+          "observed": false,
+          "value": null
+        },
+        "exposureTime": {
+          "observed": false,
+          "value": null
+        },
+        "turnover": {
+          "observed": false,
+          "value": null
+        },
+        "tradeCount": {
+          "observed": false,
+          "value": null
+        },
+        "confidenceIntervals": {
+          "observed": false,
+          "value": null
+        },
+        "foldAndRegimeStability": {
+          "observed": false,
+          "value": null
+        }
       }
     },
     "paper_shadow": {
