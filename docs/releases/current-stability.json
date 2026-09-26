@@ -30,46 +30,16 @@
       "status": "pending",
       "reason": "Required out-of-sample strategy metrics have not been supplied as release evidence and no profitability claim is made; Dow remains shadow/non-authoritative.",
       "metrics": {
-        "expectancy": {
-          "observed": false,
-          "value": null
-        },
-        "profitFactor": {
-          "observed": false,
-          "value": null
-        },
-        "maximumDrawdown": {
-          "observed": false,
-          "value": null
-        },
-        "returnToDrawdown": {
-          "observed": false,
-          "value": null
-        },
-        "tailLosses": {
-          "observed": false,
-          "value": null
-        },
-        "exposureTime": {
-          "observed": false,
-          "value": null
-        },
-        "turnover": {
-          "observed": false,
-          "value": null
-        },
-        "tradeCount": {
-          "observed": false,
-          "value": null
-        },
-        "confidenceIntervals": {
-          "observed": false,
-          "value": null
-        },
-        "foldAndRegimeStability": {
-          "observed": false,
-          "value": null
-        }
+        "expectancy": {"observed": false, "value": null},
+        "profitFactor": {"observed": false, "value": null},
+        "maximumDrawdown": {"observed": false, "value": null},
+        "returnToDrawdown": {"observed": false, "value": null},
+        "tailLosses": {"observed": false, "value": null},
+        "exposureTime": {"observed": false, "value": null},
+        "turnover": {"observed": false, "value": null},
+        "tradeCount": {"observed": false, "value": null},
+        "confidenceIntervals": {"observed": false, "value": null},
+        "foldAndRegimeStability": {"observed": false, "value": null}
       }
     },
     "paper_shadow": {
