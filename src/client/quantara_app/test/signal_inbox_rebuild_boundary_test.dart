@@ -42,7 +42,7 @@ void main() {
     expect(
       source,
       contains(
-        'Private account snapshot',
+        'private account snapshot',
       ),
       reason: 'The UI gate should document that account truth is refreshed by preflight.',
     );
