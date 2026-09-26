@@ -21,4 +21,31 @@ void main() {
     );
     expect(source, contains('now: DateTime.now().toUtc()'));
   });
+  test('manual trade entry point is not deadlocked by stale account UI state', () {
+    final source = File(
+      'lib/features/owner_alpha/presentation/owner_alpha_signals.dart',
+    ).readAsStringSync();
+
+    final gateStart = source.indexOf('String? _tradeBlockReason');
+    final gateEnd = source.indexOf(
+      'Future<void> _showManualTrade',
+      gateStart,
+    );
+    final gate = source.substring(gateStart, gateEnd);
+
+    expect(gate, contains('marketDataFresh'));
+    expect(gate, contains('entry.validUntil'));
+    expect(gate, contains('entry.stopLoss'));
+    expect(gate, isNot(contains('autoTradeController.isConnected')));
+    expect(gate, isNot(contains('autoTradeController.canStartNewEntry')));
+    expect(source, contains('manualTradeController.prepare(entry)'));
+    expect(
+      source,
+      contains(
+        'Private account snapshot',
+      ),
+      reason: 'The UI gate should document that account truth is refreshed by preflight.',
+    );
+  });
+
 }
