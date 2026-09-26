@@ -2,50 +2,49 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "5d60dde9d9200fb4fd5dac96b70142e6e9f87404",
-  "generatedAt": "2026-09-24T22:12:37Z",
+  "softwareCandidateSha": "bdf4c2c27159530d0830c23f276de43444e01d68",
+  "generatedAt": "2026-09-26T15:42:02Z",
   "qualityScore": 100,
   "minimumQualityScore": 90,
   "evidence": {
     "repository_integrity": {
       "passed": true,
-      "runId": 36064669037,
+      "runId": 36252014760,
       "checkRunIds": [
-        107851519505,
-        107851519165
+        108431684947,
+        108431685038
       ]
     },
     "flutter_android_upgrade": {
       "passed": true,
-      "runId": 36016725624,
+      "runId": 36252014763,
       "jobIds": [
-        107691424490,
-        107696417014,
-        107696417088,
-        107696416899
+        108431685317,
+        108433475673,
+        108433475703,
+        108433475794
       ],
-      "scope": "Final Flutter/Android application tree on ancestor 19b7bd3856bb4cc66a8c405631010e3a1bf07e11; release-only changes through the candidate do not touch app/Android/Flutter-CI paths and are revalidated by release-readiness compatibility checks."
+      "scope": "Exact software candidate bdf4c2c27159530d0830c23f276de43444e01d68: Flutter format/analyze/widget+safety tests, reproducible hot-path stress gate, Android QA build, and API 34/35/36 cold-start plus in-place-upgrade matrix all passed."
     },
     "windows_build": {
       "passed": true,
-      "runId": 36064669109,
+      "runId": 36252014768,
       "checkRunIds": [
-        107851818697
+        108431685222
       ],
-      "scope": "Windows/service/release-launcher tree certified on ancestor 3f99479a407369c1b27927851a5a8b4546f431af. The workflow parsed both PowerShell entrypoints, passed fail-closed service lifecycle checks, built the native app and Inno installer, installed the packaged installer, verified the service remained STOPPED/disarmed, and completed packaged uninstall smoke."
+      "scope": "Exact software candidate bdf4c2c27159530d0830c23f276de43444e01d68: fail-closed Windows service lifecycle, native desktop build, Inno installer packaging, packaged install with service STOPPED/disarmed, and packaged uninstall smoke all passed."
     },
     "installable_artifact_smoke": {
       "passed": true,
       "artifactIds": [
-        10815178621,
-        10815044091,
-        10815423169,
-        10815423182,
-        10815981430,
-        10815583848,
-        10836925107
+        10909022646,
+        10909177357,
+        10909537145,
+        10909712752,
+        10909553156,
+        10909377275
       ],
-      "scope": "Android candidate install/cold-start/in-place-upgrade on API 34/35/36 plus Windows service lifecycle, native packaging, and packaged Inno installer install/uninstall smoke. Ancestor evidence is accepted only where release-readiness proves relevant paths are unchanged."
+      "scope": "Exact candidate Android QA install/cold-start/in-place-upgrade on API 34/35/36 plus Windows native/Inno packaged install/uninstall smoke. Physical-device and permanent-signing evidence remains explicitly pending."
     },
     "stability_report": {
       "passed": true,
@@ -61,8 +60,8 @@
     },
     "safety_regression": {
       "passed": true,
-      "runId": 36016725624,
-      "scope": "Flutter safety/regression suite, hot-path stress gate, and Android API 34/35/36 cold-start plus in-place-upgrade matrix on the final application tree."
+      "runId": 36252014763,
+      "scope": "Exact candidate Flutter safety/regression suite and API 34/35/36 cold-start plus in-place-upgrade matrix. The manual-trade stale-account UI fix keeps forced startPreflight reconciliation and final pre-mutation account/risk checks fail-closed."
     }
   },
   "manualGates": {
