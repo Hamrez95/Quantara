@@ -333,38 +333,13 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
         'This setup does not have a complete Entry / SL / TP plan.',
       );
     }
-    if (!widget.autoTradeController.isConnected) {
-      return _t(
-        'برای باز کردن معامله ابتدا حساب Bitunix را متصل کنید.',
-        'Connect the Bitunix account before opening a trade.',
-      );
-    }
-    if (!widget.autoTradeController.canStartNewEntry) {
-      final reconciliation = widget.autoTradeController.reconciliation;
-      final snapshot = widget.autoTradeController.snapshot;
-      if (reconciliation.blocksNewEntries) {
-        return _t(
-          'وضعیت حساب باید دوباره با Bitunix همگام و تازه شود.',
-          'The account must be freshly reconciled with Bitunix.',
-        );
-      }
-      if (snapshot != null && !snapshot.allOpenPositionsFullyProtected) {
-        return _t(
-          'تا وقتی پوزیشن‌های باز فعلی کاملاً محافظت نشده‌اند ورود جدید مسدود است.',
-          'New entry is blocked until existing positions are fully protected.',
-        );
-      }
-      if (snapshot?.authoritativePnl.isReadyForRiskGates != true) {
-        return _t(
-          'داده ریسک حساب هنوز برای ورود واقعی قابل اتکا نیست.',
-          'Account risk truth is not ready for a real entry yet.',
-        );
-      }
-      return _t(
-        'ورود واقعی در وضعیت فعلی حساب موقتاً مجاز نیست.',
-        'Real entry is temporarily unavailable for the current account state.',
-      );
-    }
+    // Do not disable the manual-trade entry point from a cached private
+    // account snapshot. The execution controller performs a forced
+    // startPreflight reconciliation before opening the sheet, and repeats
+    // the same fail-closed account/risk check immediately before mutation.
+    // Keeping stale account truth out of this UI-only gate prevents the
+    // setup card from becoming permanently disabled after the 45s freshness
+    // window while preserving all real-entry safety checks.
     return null;
   }
 
