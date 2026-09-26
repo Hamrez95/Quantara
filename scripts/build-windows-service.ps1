@@ -46,17 +46,40 @@ function Invoke-BoundedNativeTest {
     }
 }
 
-if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
-    throw 'CMake is not available on PATH.'
+$cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
+if (-not $cmakeCommand) {
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles 'CMake\bin\cmake.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'CMake\bin\cmake.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\CMake\bin\cmake.exe')
+    )) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $cmakeCommand = Get-Item -LiteralPath $candidate
+            break
+        }
+    }
+}
+if (-not $cmakeCommand) {
+    throw 'CMake 3.20 or newer is required. Run .\Quantara.ps1 and choose Windows Install/Update to install prerequisites, or install CMake and add it to PATH.'
+}
+$cmakePath = $cmakeCommand.Source
+if (-not $cmakePath) { $cmakePath = $cmakeCommand.FullName }
+$LASTEXITCODE = 0
+$cmakeVersion = & $cmakePath --version 2>&1 | Select-Object -First 1
+if ($LASTEXITCODE -ne 0 -or $cmakeVersion -notmatch 'cmake version\s+(\d+)\.(\d+)') {
+    throw "CMake was found at '$cmakePath' but its version could not be read. Reinstall CMake and rerun Quantara.ps1."
+}
+if ([int]$Matches[1] -lt 3 -or ([int]$Matches[1] -eq 3 -and [int]$Matches[2] -lt 20)) {
+    throw "CMake 3.20 or newer is required; found '$cmakeVersion' at '$cmakePath'. Upgrade CMake and rerun Quantara.ps1."
 }
 
 if (-not $SkipBuild) {
     New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 
-    & cmake -S $serviceRoot -B $buildRoot -A x64
+    & $cmakePath -S $serviceRoot -B $buildRoot -A x64
     Assert-LastExitCode 'cmake configure'
 
-    & cmake --build $buildRoot --config $Configuration --parallel
+    & $cmakePath --build $buildRoot --config $Configuration --parallel
     Assert-LastExitCode 'cmake build'
 }
 

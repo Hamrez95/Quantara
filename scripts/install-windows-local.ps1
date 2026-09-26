@@ -31,6 +31,128 @@ function Require-Command([string]$Name, [string]$Hint) {
     }
 }
 
+function Refresh-ProcessPath {
+    $pathParts = [System.Collections.Generic.List[string]]::new()
+    foreach ($scopePath in @($env:PATH, [Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User'))) {
+        if ($scopePath) {
+            foreach ($entry in ($scopePath -split ';')) {
+                if (-not [string]::IsNullOrWhiteSpace($entry) -and -not $pathParts.Contains($entry)) { $pathParts.Add($entry) }
+            }
+        }
+    }
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles 'CMake\bin'),
+        (Join-Path ${env:ProgramFiles(x86)} 'CMake\bin'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\CMake\bin')
+    )) {
+        if ((Test-Path -LiteralPath $candidate -PathType Container) -and -not $pathParts.Contains($candidate)) {
+            $pathParts.Add($candidate)
+        }
+    }
+    $env:PATH = $pathParts -join ';'
+}
+
+function Get-CMakeCommand {
+    $command = Get-Command cmake -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles 'CMake\bin\cmake.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'CMake\bin\cmake.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\CMake\bin\cmake.exe')
+    )) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    return $null
+}
+
+function Invoke-WingetInstall([string[]]$Arguments, [string]$DependencyName) {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw "$DependencyName is missing and winget is unavailable. Install winget (App Installer) or install $DependencyName manually, then rerun Quantara.ps1."
+    }
+    Write-Step "Installing $DependencyName with winget"
+    & $winget.Source @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "winget could not install $DependencyName (exit $LASTEXITCODE). Install it manually and rerun Quantara.ps1."
+    }
+    Refresh-ProcessPath
+}
+
+function Get-CMakeVersion([string]$CMakePath) {
+    $LASTEXITCODE = 0
+    $versionText = & $CMakePath --version 2>&1 | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0 -or $versionText -notmatch 'cmake version\s+(\d+)\.(\d+)') {
+        throw "CMake was found at '$CMakePath' but its version could not be read. Reinstall CMake and rerun Quantara.ps1."
+    }
+    return @{ Major = [int]$Matches[1]; Minor = [int]$Matches[2]; Text = $Matches[0] }
+}
+
+function Find-VsWhere {
+    $command = Get-Command vswhere.exe -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    $candidate = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    return $null
+}
+
+function Get-VisualCppInstallation([string]$VsWherePath) {
+    if (-not $VsWherePath) { return $null }
+    $installation = & $VsWherePath -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return ($installation | Select-Object -First 1)
+}
+
+function Test-WindowsSdkInstalled {
+    $sdkInclude = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Include'
+    return (Test-Path -LiteralPath $sdkInclude -PathType Container) -and
+        (@(Get-ChildItem -LiteralPath $sdkInclude -Directory -ErrorAction SilentlyContinue).Count -gt 0)
+}
+
+function Ensure-WindowsBuildPrerequisites {
+    Require-Command 'flutter' 'Install Flutter stable and add flutter/bin to PATH.'
+    Require-Command 'git' 'Install Git and add it to PATH.'
+
+    $cmake = Get-CMakeCommand
+    if (-not $cmake) {
+        Invoke-WingetInstall @('install', '--id', 'Kitware.CMake', '--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements') 'CMake 3.20 or newer'
+        $cmake = Get-CMakeCommand
+    }
+    if (-not $cmake) {
+        throw 'CMake installation completed but cmake.exe is still unavailable. Restart PowerShell so PATH can refresh, then rerun Quantara.ps1.'
+    }
+    $cmakeVersion = Get-CMakeVersion $cmake
+    if ($cmakeVersion.Major -lt 3 -or ($cmakeVersion.Major -eq 3 -and $cmakeVersion.Minor -lt 20)) {
+        Invoke-WingetInstall @('upgrade', '--id', 'Kitware.CMake', '--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements') 'CMake 3.20 or newer'
+        $cmake = Get-CMakeCommand
+        if (-not $cmake) { throw 'CMake upgrade completed but cmake.exe is still unavailable. Restart PowerShell and rerun Quantara.ps1.' }
+        $cmakeVersion = Get-CMakeVersion $cmake
+        if ($cmakeVersion.Major -lt 3 -or ($cmakeVersion.Major -eq 3 -and $cmakeVersion.Minor -lt 20)) {
+            throw "CMake 3.20 or newer is required; found $($cmakeVersion.Text) at '$cmake'. Upgrade CMake and rerun Quantara.ps1."
+        }
+    }
+    Write-Host "CMake: $($cmakeVersion.Text) ($cmake)"
+
+    $vswhere = Find-VsWhere
+    $visualCpp = Get-VisualCppInstallation $vswhere
+    if (-not $visualCpp) {
+        Invoke-WingetInstall @(
+            'install', '--id', 'Microsoft.VisualStudio.2022.BuildTools', '--exact', '--silent',
+            '--accept-package-agreements', '--accept-source-agreements',
+            '--override', '--wait --passive --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'
+        ) 'Visual Studio 2022 C++ build tools and Windows SDK'
+        $vswhere = Find-VsWhere
+        $visualCpp = Get-VisualCppInstallation $vswhere
+    }
+    if (-not $visualCpp) {
+        throw 'The MSVC x64 C++ toolchain is missing. Install Visual Studio 2022 Build Tools with the Desktop development with C++ workload, then rerun Quantara.ps1.'
+    }
+    if (-not (Test-WindowsSdkInstalled)) {
+        throw "Windows SDK was not found alongside Visual Studio at '$visualCpp'. Add a Windows 10/11 SDK through Visual Studio Installer, then rerun Quantara.ps1."
+    }
+    Write-Host "Visual C++ toolchain: $visualCpp"
+    Write-Host 'Windows SDK: available'
+}
+
 function Invoke-Checked([string]$FilePath, [string[]]$Arguments) {
     Write-Host "> $FilePath $($Arguments -join ' ')" -ForegroundColor DarkGray
     & $FilePath @Arguments
@@ -137,7 +259,6 @@ function Assert-InstalledPostconditions {
     return $appExe
 }
 
-Require-Command 'flutter' 'Install Flutter and add it to PATH.'
 if (-not (Test-Path -LiteralPath $WindowsBuildScript -PathType Leaf)) {
     throw "Windows build script was not found: $WindowsBuildScript"
 }
@@ -154,6 +275,11 @@ $version = Get-QuantaraVersion
 $safeVersion = $version.Replace('+','-')
 $shortSha = $head.Substring(0, 12)
 $outputDir = Join-Path $RepositoryRoot "release-artifacts\windows-installer\$safeVersion-$shortSha"
+
+Write-Step 'Checking Windows build prerequisites before starting any build'
+Ensure-WindowsBuildPrerequisites
+$iscc = Get-InnoCompiler
+
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 
 Write-Host ''
@@ -174,7 +300,6 @@ if (-not $?) {
     throw 'Windows desktop build/test failed.'
 }
 
-$iscc = Get-InnoCompiler
 $buildRoot = (Resolve-Path (Join-Path $AppRoot 'build\windows\x64\runner\Release')).Path
 $serviceBuildRoot = (Resolve-Path (Join-Path $RepositoryRoot 'build\windows-service\Release')).Path
 
