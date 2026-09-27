@@ -112,7 +112,7 @@ if (-not $SkipBuild) {
 
     $cachePath = Join-Path $buildRoot 'CMakeCache.txt'
     if (Test-Path -LiteralPath $cachePath -PathType Leaf) {
-        $configuredGenerator = Select-String -LiteralPath $cachePath -Pattern '^CMAKE_GENERATOR:INTERNAL=(.+)
+        $configuredGenerator = Select-String -LiteralPath $cachePath -Pattern '^CMAKE_GENERATOR:INTERNAL=(.+)'
 
 $serviceExe = Join-Path $buildRoot "$Configuration/quantara_windows_service.exe"
 $clientExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_client.exe"
