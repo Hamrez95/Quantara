@@ -230,6 +230,7 @@ void main() {
 
     controller.dispose();
   });
+
   test(
     'in-flight preflight does not notify after controller disposal',
     () async {
