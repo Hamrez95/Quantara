@@ -235,10 +235,7 @@ void main() {
     'in-flight preflight does not notify after controller disposal',
     () async {
       final gate = Completer<bool>();
-      final accountController = _BlockingAccountController(
-        _account(now),
-        gate,
-      );
+      final accountController = _BlockingAccountController(_account(now), gate);
       final controller = ManualTradeExecutionController.withGateways(
         accountGateway: accountController,
         exchangeGateway: _FakeExchange(),
