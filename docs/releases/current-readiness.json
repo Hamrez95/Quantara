@@ -2,37 +2,37 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "bdf4c2c27159530d0830c23f276de43444e01d68",
-  "generatedAt": "2026-09-26T15:42:02Z",
+  "softwareCandidateSha": "b5365cf242a060a7e4d21088e93854450fac0d68",
+  "generatedAt": "2026-09-27T20:59:23Z",
   "qualityScore": 100,
   "minimumQualityScore": 90,
   "evidence": {
     "repository_integrity": {
       "passed": true,
-      "runId": 36252014760,
+      "runId": 36348651682,
       "checkRunIds": [
-        108431684947,
-        108431685038
+        108702854185,
+        108702854318
       ]
     },
     "flutter_android_upgrade": {
       "passed": true,
-      "runId": 36252014763,
+      "runId": 36348651695,
       "jobIds": [
-        108431685317,
-        108433475673,
-        108433475703,
-        108433475794
+        108702854158,
+        108704604860,
+        108704604870,
+        108704604897
       ],
-      "scope": "Exact software candidate bdf4c2c27159530d0830c23f276de43444e01d68: Flutter format/analyze/widget+safety tests, reproducible hot-path stress gate, Android QA build, and API 34/35/36 cold-start plus in-place-upgrade matrix all passed."
+      "scope": "Exact software candidate b5365cf242a060a7e4d21088e93854450fac0d68: Flutter format/analyze/widget+safety tests, reproducible hot-path stress gate, Android QA build, and API 34/35/36 cold-start plus in-place-upgrade matrix all passed."
     },
     "windows_build": {
       "passed": true,
-      "runId": 36252014768,
+      "runId": 36348651686,
       "checkRunIds": [
-        108431685222
+        108702854183
       ],
-      "scope": "Exact software candidate bdf4c2c27159530d0830c23f276de43444e01d68: fail-closed Windows service lifecycle, native desktop build, Inno installer packaging, packaged install with service STOPPED/disarmed, and packaged uninstall smoke all passed."
+      "scope": "Exact software candidate b5365cf242a060a7e4d21088e93854450fac0d68: fail-closed Windows service lifecycle, native desktop build, Inno installer packaging, packaged install with service STOPPED/disarmed, and packaged uninstall smoke all passed."
     },
     "installable_artifact_smoke": {
       "passed": true,
