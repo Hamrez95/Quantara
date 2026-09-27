@@ -73,9 +73,26 @@ function Get-CMakeConfigureArguments {
     }
 
     if ($vswhere) {
-        $installation = & $vswhere.Source -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($installation | Select-Object -First 1))) {
-            return @('-G', 'Visual Studio 17 2022', '-A', 'x64')
+        $installation = & $vswhere.Source -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath |
+            Select-Object -First 1
+        $installationVersion = & $vswhere.Source -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion |
+            Select-Object -First 1
+        if (
+            $LASTEXITCODE -eq 0 -and
+            -not [string]::IsNullOrWhiteSpace($installation) -and
+            -not [string]::IsNullOrWhiteSpace($installationVersion)
+        ) {
+            $vsMajor = [int](($installationVersion -split '\.')[0])
+            $vsYear = switch ($vsMajor) {
+                18 { '2026' }
+                17 { '2022' }
+                16 { '2019' }
+                15 { '2017' }
+                default { $null }
+            }
+            if ($null -ne $vsYear) {
+                return @('-G', "Visual Studio $vsMajor $vsYear", '-A', 'x64')
+            }
         }
     }
 
@@ -85,7 +102,7 @@ function Get-CMakeConfigureArguments {
         return @('-G', 'NMake Makefiles')
     }
 
-    throw 'A Visual Studio 2022 x64 toolchain was not found. Install Desktop development with C++ and a Windows SDK, then rerun .\Quantara.ps1.'
+    throw 'A supported Visual Studio x64 toolchain was not found. Install Desktop development with C++ and a Windows SDK, then rerun .\Quantara.ps1.'
 }
 
 $cmakePath = Resolve-CMakePath
@@ -104,11 +121,7 @@ if ([int]$Matches[1] -lt 3 -or ([int]$Matches[1] -eq 3 -and [int]$Matches[2] -lt
 if (-not $SkipBuild) {
     New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
     $configureArguments = Get-CMakeConfigureArguments
-    $desiredGenerator = if ($configureArguments -contains 'Visual Studio 17 2022') {
-        'Visual Studio 17 2022'
-    } else {
-        'NMake Makefiles'
-    }
+    $desiredGenerator = $configureArguments[1]
 
     $cachePath = Join-Path $buildRoot 'CMakeCache.txt'
     if (Test-Path -LiteralPath $cachePath -PathType Leaf) {
