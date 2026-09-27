@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/application/manual_trade_execution_controller.dart';
 import 'package:quantara_app/features/auto_trade/data/bitunix_local_live_api_client.dart';
@@ -261,9 +262,7 @@ void main() {
       expect(notifications, notificationsBeforeDispose);
     },
   );
-
 }
-
 
 final class _BlockingAccountController implements ManualTradeAccountGateway {
   _BlockingAccountController(this.value, this.gate);
