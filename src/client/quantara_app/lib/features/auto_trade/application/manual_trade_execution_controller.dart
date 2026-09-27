@@ -498,12 +498,10 @@ final class ManualTradeExecutionController extends ChangeNotifier {
 
   Future<ManualTradeExecutionReceipt?> confirmAndExecute() async {
     final prepared = _preparation;
-    if (
-      _busy ||
-      _disposed ||
-      prepared == null ||
-      !prepared.plan.allowed
-    ) {
+    if (_busy ||
+        _disposed ||
+        prepared == null ||
+        !prepared.plan.allowed) {
       return null;
     }
     _busy = true;
