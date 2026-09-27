@@ -8,3 +8,11 @@ node_modules/
 __pycache__/
 .pytest_cache/
 .DS_Store
+
+# Generated build, packaging and local tool outputs
+**/build/
+**/.dart_tool/
+**/.flutter-plugins*
+**/coverage/
+dist/
+release-artifacts/

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quantara_app/features/auto_trade/application/manual_trade_execution_controller.dart';
 import 'package:quantara_app/features/auto_trade/data/bitunix_local_live_api_client.dart';
@@ -228,6 +230,56 @@ void main() {
 
     controller.dispose();
   });
+
+  test(
+    'in-flight preflight does not notify after controller disposal',
+    () async {
+      final gate = Completer<bool>();
+      final accountController = _BlockingAccountController(_account(now), gate);
+      final controller = ManualTradeExecutionController.withGateways(
+        accountGateway: accountController,
+        exchangeGateway: _FakeExchange(),
+        credentialsStore: _FakeCredentialsStore(),
+        executionStore: _MemoryExecutionStore(),
+        journalObserver: ManualTradeJournalObserver(
+          store: _MemoryJournalStore(),
+        ),
+        utcNow: () => now,
+      );
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      final preparation = controller.prepare(_setup(now));
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isBusy, isTrue);
+      final notificationsBeforeDispose = notifications;
+
+      controller.dispose();
+      gate.complete(true);
+
+      expect(await preparation, isNotNull);
+      expect(notifications, notificationsBeforeDispose);
+    },
+  );
+}
+
+final class _BlockingAccountController implements ManualTradeAccountGateway {
+  _BlockingAccountController(this.value, this.gate);
+
+  final AutoTradeAccountSnapshot value;
+  final Completer<bool> gate;
+
+  @override
+  AutoTradeAccountSnapshot? get snapshot => value;
+
+  @override
+  bool get canStartNewEntry => true;
+
+  @override
+  Future<bool> reconcile({
+    required PrivateAccountRefreshReason reason,
+    bool force = false,
+  }) => gate.future;
 }
 
 final class _FakeAccountController implements ManualTradeAccountGateway {

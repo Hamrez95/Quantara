@@ -46,17 +46,214 @@ function Invoke-BoundedNativeTest {
     }
 }
 
-if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
-    throw 'CMake is not available on PATH.'
+function Resolve-CMakePath {
+    $cmakeCommand = Get-Command cmake -ErrorAction SilentlyContinue
+    if ($cmakeCommand) {
+        return $cmakeCommand.Source
+    }
+    foreach ($candidate in @(
+        (Join-Path $env:ProgramFiles 'CMake\bin\cmake.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'CMake\bin\cmake.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\CMake\bin\cmake.exe')
+    )) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Get-CMakeConfigureArguments {
+    $vswhere = Get-Command vswhere.exe -ErrorAction SilentlyContinue
+    if (-not $vswhere) {
+        $candidate = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $vswhere = Get-Item -LiteralPath $candidate
+        }
+    }
+
+    if ($vswhere) {
+        $installation = & $vswhere.Source -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath |
+            Select-Object -First 1
+        $installationVersion = & $vswhere.Source -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion |
+            Select-Object -First 1
+        if (
+            $LASTEXITCODE -eq 0 -and
+            -not [string]::IsNullOrWhiteSpace($installation) -and
+            -not [string]::IsNullOrWhiteSpace($installationVersion)
+        ) {
+            $vsMajor = [int](($installationVersion -split '\.')[0])
+            $vsYear = switch ($vsMajor) {
+                18 { '2026' }
+                17 { '2022' }
+                16 { '2019' }
+                15 { '2017' }
+                default { $null }
+            }
+            if ($null -ne $vsYear) {
+                return @('-G', "Visual Studio $vsMajor $vsYear", '-A', 'x64')
+            }
+        }
+    }
+
+    $cl = Get-Command cl.exe -ErrorAction SilentlyContinue
+    $nmake = Get-Command nmake.exe -ErrorAction SilentlyContinue
+    if ($cl -and $nmake) {
+        return @('-G', 'NMake Makefiles')
+    }
+
+    throw 'A supported Visual Studio x64 toolchain was not found. Install Desktop development with C++ and a Windows SDK, then rerun .\Quantara.ps1.'
+}
+
+$cmakePath = Resolve-CMakePath
+if (-not $cmakePath) {
+    throw 'CMake 3.20 or newer is required. Run .\Quantara.ps1 and choose Windows Install/Update to install prerequisites, or install CMake and add it to PATH.'
+}
+$LASTEXITCODE = 0
+$cmakeVersion = & $cmakePath --version 2>&1 | Select-Object -First 1
+if ($LASTEXITCODE -ne 0 -or $cmakeVersion -notmatch 'cmake version\s+(\d+)\.(\d+)') {
+    throw "CMake was found at '$cmakePath' but its version could not be read. Reinstall CMake and rerun Quantara.ps1."
+}
+if ([int]$Matches[1] -lt 3 -or ([int]$Matches[1] -eq 3 -and [int]$Matches[2] -lt 20)) {
+    throw "CMake 3.20 or newer is required; found '$cmakeVersion' at '$cmakePath'. Upgrade CMake and rerun Quantara.ps1."
 }
 
 if (-not $SkipBuild) {
     New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
+    $configureArguments = Get-CMakeConfigureArguments
+    $desiredGenerator = $configureArguments[1]
 
-    & cmake -S $serviceRoot -B $buildRoot -A x64
+    $cachePath = Join-Path $buildRoot 'CMakeCache.txt'
+    if (Test-Path -LiteralPath $cachePath -PathType Leaf) {
+        $configuredGenerator = Select-String -LiteralPath $cachePath -Pattern '^CMAKE_GENERATOR:INTERNAL=(.+)'
+
+$serviceExe = Join-Path $buildRoot "$Configuration/quantara_windows_service.exe"
+$clientExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_client.exe"
+$credentialsExe = Join-Path $buildRoot "$Configuration/quantara_windows_credentials.exe"
+$trayExe = Join-Path $buildRoot "$Configuration/quantara_windows_tray.exe"
+$credentialVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_vault_test.exe"
+$recoveryEvidenceVaultTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_recovery_evidence_vault_test.exe"
+$credentialReadinessTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_credential_readiness_test.exe"
+$responseTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_response_test.exe"
+$sessionTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_session_test.exe"
+$listenerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_listener_test.exe"
+$networkChangeTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_network_change_test.exe"
+$existingPositionManagementPolicyTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_existing_position_management_policy_test.exe"
+$managementOnlyRecoveryCoordinatorTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_management_only_recovery_coordinator_test.exe"
+$bitunixRequestSignerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_request_signer_test.exe"
+$bitunixRequestAuthorizerTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_request_authorizer_test.exe"
+$bitunixReadOnlyRequestTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_readonly_request_test.exe"
+$bitunixHttpsReadOnlyTransportTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_https_readonly_transport_test.exe"
+$bitunixExchangeTruthParserTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_exchange_truth_parser_test.exe"
+$bitunixExchangeTruthReaderTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_exchange_truth_reader_test.exe"
+$bitunixManagementOnlyReconciliationTestExe = Join-Path $buildRoot "$Configuration/quantara_windows_service_bitunix_management_only_reconciliation_test.exe"
+
+$requiredExecutables = @(
+    @{ Path = $serviceExe; Name = 'Windows service executable' },
+    @{ Path = $clientExe; Name = 'Windows service status client executable' },
+    @{ Path = $credentialsExe; Name = 'Windows credential provisioner executable' },
+    @{ Path = $trayExe; Name = 'Windows tray status monitor executable' },
+    @{ Path = $credentialVaultTestExe; Name = 'credential vault test executable' },
+    @{ Path = $recoveryEvidenceVaultTestExe; Name = 'recovery evidence vault test executable' },
+    @{ Path = $credentialReadinessTestExe; Name = 'credential readiness test executable' },
+    @{ Path = $responseTestExe; Name = 'response test executable' },
+    @{ Path = $sessionTestExe; Name = 'session test executable' },
+    @{ Path = $listenerTestExe; Name = 'listener test executable' },
+    @{ Path = $networkChangeTestExe; Name = 'network-change test executable' },
+    @{ Path = $existingPositionManagementPolicyTestExe; Name = 'existing-position management policy test executable' },
+    @{ Path = $managementOnlyRecoveryCoordinatorTestExe; Name = 'management-only recovery coordinator test executable' },
+    @{ Path = $bitunixRequestSignerTestExe; Name = 'Bitunix request signer parity test executable' },
+    @{ Path = $bitunixRequestAuthorizerTestExe; Name = 'Bitunix protected request authorizer test executable' },
+    @{ Path = $bitunixReadOnlyRequestTestExe; Name = 'Bitunix read-only request contract test executable' },
+    @{ Path = $bitunixHttpsReadOnlyTransportTestExe; Name = 'Bitunix HTTPS read-only transport test executable' },
+    @{ Path = $bitunixExchangeTruthParserTestExe; Name = 'Bitunix exchange-truth parser test executable' },
+    @{ Path = $bitunixExchangeTruthReaderTestExe; Name = 'Bitunix exchange-truth cycle test executable' },
+    @{ Path = $bitunixManagementOnlyReconciliationTestExe; Name = 'Bitunix management-only reconciliation test executable' }
+)
+foreach ($required in $requiredExecutables) {
+    if (-not (Test-Path $required.Path)) {
+        throw "$($required.Name) was not produced at $($required.Path)"
+    }
+}
+
+if (-not $SkipTests) {
+    if ($TestFilter -in @('all', 'service')) {
+        Invoke-BoundedNativeTest -Path $serviceExe -Name 'quantara_windows_service --self-test' -Arguments @('--self-test')
+    }
+    if ($TestFilter -in @('all', 'service', 'recovery', 'recovery-vault')) {
+        Invoke-BoundedNativeTest -Path $recoveryEvidenceVaultTestExe -Name 'quantara_windows_service_recovery_evidence_vault_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'position-management')) {
+        Invoke-BoundedNativeTest -Path $existingPositionManagementPolicyTestExe -Name 'quantara_windows_service_existing_position_management_policy_test'
+    }
+    if ($TestFilter -in @('all', 'position-management', 'recovery')) {
+        Invoke-BoundedNativeTest -Path $managementOnlyRecoveryCoordinatorTestExe -Name 'quantara_windows_service_management_only_recovery_coordinator_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-signing')) {
+        Invoke-BoundedNativeTest -Path $bitunixRequestSignerTestExe -Name 'quantara_windows_service_bitunix_request_signer_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-authorization')) {
+        Invoke-BoundedNativeTest -Path $bitunixRequestAuthorizerTestExe -Name 'quantara_windows_service_bitunix_request_authorizer_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-readonly')) {
+        Invoke-BoundedNativeTest -Path $bitunixReadOnlyRequestTestExe -Name 'quantara_windows_service_bitunix_readonly_request_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-https')) {
+        Invoke-BoundedNativeTest -Path $bitunixHttpsReadOnlyTransportTestExe -Name 'quantara_windows_service_bitunix_https_readonly_transport_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-truth')) {
+        Invoke-BoundedNativeTest -Path $bitunixExchangeTruthParserTestExe -Name 'quantara_windows_service_bitunix_exchange_truth_parser_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-cycle')) {
+        Invoke-BoundedNativeTest -Path $bitunixExchangeTruthReaderTestExe -Name 'quantara_windows_service_bitunix_exchange_truth_reader_test'
+    }
+    if ($TestFilter -in @('all', 'service', 'bitunix-reconcile')) {
+        Invoke-BoundedNativeTest -Path $bitunixManagementOnlyReconciliationTestExe -Name 'quantara_windows_service_bitunix_management_only_reconciliation_test'
+    }
+    if ($TestFilter -in @('all', 'client')) {
+        Invoke-BoundedNativeTest -Path $clientExe -Name 'quantara_windows_service_client --self-test' -Arguments @('--self-test')
+    }
+    if ($TestFilter -in @('all', 'credential', 'provisioner')) {
+        Invoke-BoundedNativeTest -Path $credentialsExe -Name 'quantara_windows_credentials --self-test' -Arguments @('--self-test')
+    }
+    if ($TestFilter -in @('all', 'tray')) {
+        Invoke-BoundedNativeTest -Path $trayExe -Name 'quantara_windows_tray --self-test' -Arguments @('--self-test')
+    }
+    if ($TestFilter -in @('all', 'credential')) {
+        Invoke-BoundedNativeTest -Path $credentialVaultTestExe -Name 'quantara_windows_service_credential_vault_test'
+        Invoke-BoundedNativeTest -Path $credentialReadinessTestExe -Name 'quantara_windows_service_credential_readiness_test'
+    }
+    if ($TestFilter -in @('all', 'response')) {
+        Invoke-BoundedNativeTest -Path $responseTestExe -Name 'quantara_windows_service_response_test'
+    }
+    if ($TestFilter -in @('all', 'session')) {
+        Invoke-BoundedNativeTest -Path $sessionTestExe -Name 'quantara_windows_service_session_test'
+    }
+    if ($TestFilter -in @('all', 'listener')) {
+        Invoke-BoundedNativeTest -Path $listenerTestExe -Name 'quantara_windows_service_listener_test'
+    }
+    if ($TestFilter -in @('all', 'network')) {
+        Invoke-BoundedNativeTest -Path $networkChangeTestExe -Name 'quantara_windows_service_network_change_test'
+    }
+}
+
+Write-Host "Windows service host: $serviceExe"
+Write-Host "Windows service status client: $clientExe"
+Write-Host "Windows credential provisioner: $credentialsExe"
+Write-Host "Windows tray status monitor: $trayExe"
+ |
+            Select-Object -First 1
+        if ($configuredGenerator -and $configuredGenerator.Matches[0].Groups[1].Value -ne $desiredGenerator) {
+            Remove-Item -LiteralPath $buildRoot -Recurse -Force
+            New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
+        }
+    }
+
+    Write-Host "CMake generator: $desiredGenerator"
+    & $cmakePath -S $serviceRoot -B $buildRoot @configureArguments
     Assert-LastExitCode 'cmake configure'
 
-    & cmake --build $buildRoot --config $Configuration --parallel
+    & $cmakePath --build $buildRoot --config $Configuration --parallel
     Assert-LastExitCode 'cmake build'
 }
 

@@ -389,6 +389,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
 
   ManualTradePreparation? _preparation;
   bool _busy = false;
+  bool _disposed = false;
   String? _error;
   ManualTradeExecutionReceipt? _lastReceipt;
 
@@ -398,11 +399,11 @@ final class ManualTradeExecutionController extends ChangeNotifier {
   ManualTradeExecutionReceipt? get lastReceipt => _lastReceipt;
 
   Future<ManualTradePreparation?> prepare(SignalJournalEntry setup) async {
-    if (_busy) return null;
+    if (_busy || _disposed) return null;
     _busy = true;
     _error = null;
     _lastReceipt = null;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     try {
       final credentials = await credentialsStore.load();
       if (credentials == null) {
@@ -469,7 +470,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       return null;
     } finally {
       _busy = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -479,7 +480,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
     required int targetCount,
   }) {
     final current = _preparation;
-    if (current == null || _busy) return;
+    if (current == null || _busy || _disposed) return;
     final plan = ManualTradeSizingPolicy.recalculate(
       setup: current.setup,
       account: current.account,
@@ -497,11 +498,13 @@ final class ManualTradeExecutionController extends ChangeNotifier {
 
   Future<ManualTradeExecutionReceipt?> confirmAndExecute() async {
     final prepared = _preparation;
-    if (_busy || prepared == null || !prepared.plan.allowed) return null;
+    if (_busy || _disposed || prepared == null || !prepared.plan.allowed) {
+      return null;
+    }
     _busy = true;
     _error = null;
     _lastReceipt = null;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     ManualTradeExecutionRecord? intent;
     BitunixLivePosition? openedPosition;
@@ -842,7 +845,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       return null;
     } finally {
       _busy = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -1116,6 +1119,12 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         open: rules.open,
         apiSupported: rules.apiSupported,
       );
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   String _clientId(SignalJournalEntry setup) {
     var hash = 0x811c9dc5;
