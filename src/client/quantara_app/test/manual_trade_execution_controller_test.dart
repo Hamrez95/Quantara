@@ -240,6 +240,7 @@ void main() {
         accountGateway: accountController,
         exchangeGateway: _FakeExchange(),
         credentialsStore: _FakeCredentialsStore(),
+        executionStore: _MemoryExecutionStore(),
         journalObserver: ManualTradeJournalObserver(
           store: _MemoryJournalStore(),
         ),
