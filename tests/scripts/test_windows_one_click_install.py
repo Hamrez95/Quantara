@@ -59,8 +59,9 @@ class WindowsOneClickInstallContractTests(unittest.TestCase):
 
     def test_windows_service_selects_a_real_x64_generator_and_reseeds_mismatched_cache(self) -> None:
         service_build = (ROOT / 'scripts' / 'build-windows-service.ps1').read_text(encoding='utf-8')
-        self.assertIn("'Visual Studio 17 2022'", service_build)
-        self.assertIn("'Visual Studio 18 2026'", service_build)
+        self.assertIn("18 { '2026' }", service_build)
+        self.assertIn("17 { '2022' }", service_build)
+        self.assertIn('Visual Studio $vsMajor $vsYear', service_build)
         self.assertIn("'-A', 'x64'", service_build)
         self.assertIn("'NMake Makefiles'", service_build)
         self.assertIn("'CMakeCache.txt'", service_build)
