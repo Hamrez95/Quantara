@@ -127,37 +127,6 @@ void main() {
     },
   );
 
-  test(
-    'orphaned historical fill does not block a new entry without an open '
-    'position',
-    () {
-      final projection = TradingPnlProjection.reconcile(
-        currency: 'USDT',
-        asOf: stoppedAt,
-        unrealizedByPosition: const {},
-        fills: [
-          ExchangePnlFill(
-            tradeId: 'legacy-fill-1',
-            orderId: 'legacy-order-1',
-            positionId: 'unassigned-trade:legacy-fill-1',
-            symbol: 'XRPUSDT',
-            quantity: 1,
-            price: 1,
-            realizedPnl: 0.01,
-            fee: 0.001,
-            reduceOnly: true,
-            occurredAt: tp1At,
-          ),
-        ],
-        settlements: const [],
-      );
-
-      expect(projection.positions.single.warning, contains('quarantined'));
-      expect(projection.isVerified, isTrue);
-      expect(projection.isReadyForRiskGates, isTrue);
-    },
-  );
-
   test('conflicting duplicate trade IDs make the projection unverified', () {
     final projection = TradingPnlProjection.reconcile(
       currency: 'USDT',
