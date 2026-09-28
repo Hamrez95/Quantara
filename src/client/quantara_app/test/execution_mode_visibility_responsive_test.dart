@@ -7,10 +7,7 @@ import 'support/owner_alpha_test_fakes.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  for (final locale in <Locale>[
-    const Locale('fa'),
-    const Locale('en'),
-  ]) {
+  for (final locale in <Locale>[const Locale('fa'), const Locale('en')]) {
     testWidgets(
       'manual-only boundary remains usable at 320px and large text in ${locale.languageCode}',
       (tester) async {
