@@ -10,6 +10,7 @@ import '../data/secure_auto_trade_credentials_store.dart';
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_entry_preflight.dart';
 import '../domain/local_live_trade_models.dart';
+import '../domain/manual_only_trading_policy.dart';
 import '../domain/private_account_entry_block_policy.dart';
 import '../domain/private_account_reconciliation.dart';
 import 'auto_trade_controller.dart';
@@ -70,6 +71,12 @@ final class LocalLiveTradeController extends ChangeNotifier {
     if (_disposed) return;
     if (raw != null) _applyStatus(raw);
     final running = _isAndroid && await FlutterForegroundTask.isRunningService;
+    if (quantaraManualOnlyMode && running) {
+      // A previously installed local-live service must not keep autonomous
+      // entries alive after the product switches to manual-only execution.
+      await stop(LocalLiveStopPolicy.protectAndStop);
+      return;
+    }
     if (!running && _status.isRunning) {
       _status = LocalLiveTradeStatus(
         state: LocalLiveTradeState.stopped,
@@ -98,6 +105,11 @@ final class LocalLiveTradeController extends ChangeNotifier {
     bool recoveryOnly = false,
   }) async {
     if (_busy || _disposed) return false;
+    if (quantaraManualOnlyMode) {
+      _error = manualOnlyTradingMessage;
+      notifyListeners();
+      return false;
+    }
     _busy = true;
     _error = null;
     notifyListeners();

@@ -26,9 +26,8 @@ void main() {
     expect(page, contains("part 'owner_alpha_auto_trade.dart';"));
     expect(page, contains("part 'owner_alpha_auto_trade_support.dart';"));
     expect(page, contains("'ترید خودکار'"));
-    expect(view, contains('ترید واقعی محلی'));
-    expect(view, contains('شروع ترید'));
-    expect(view, contains('قطع ترید'));
+    expect(view, contains('Manual trading only'));
+    expect(view, contains('باز کردن معامله'));
     expect(view, contains('Capped / Autonomous · قفل انتشار'));
     expect(view, contains('Approval Required'));
     expect(view, contains('ExecutionModePresentation.fromLocalLive'));
@@ -41,6 +40,7 @@ void main() {
     expect(readOnlyClient, isNot(contains('/modify')));
     expect(localClient, contains('/api/v1/futures/trade/place_order'));
     expect(localClient, contains('reduceOnly'));
+    expect(localController, contains('quantaraManualOnlyMode'));
     expect(localController, contains('autoRunOnBoot: false'));
     expect(localController, contains('autoRunOnMyPackageReplaced: false'));
     expect(localController, contains('ForegroundServiceTypes.specialUse'));
