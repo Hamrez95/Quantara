@@ -590,7 +590,10 @@ final class TradingPnlProjection {
           feeMismatch ||
           pendingRealizedMismatch ||
           pendingFeeMismatch;
-      final positionVerified = verified && !totalsMismatch;
+      // Keep orphaned history visibly unverified at position scope even
+      // when it is proven irrelevant to the currently open portfolio.
+      final positionVerified =
+          verified && !totalsMismatch && !unassignedAttribution;
       if (identityConflict ||
           attributionCouldAffectOpenPosition ||
           totalsMismatch) {
