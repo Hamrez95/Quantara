@@ -68,7 +68,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test tool
+        run: dart format lib test tool; git diff -- test/execution_mode_visibility_responsive_test.dart; exit 1
 
       - name: Analyze
         shell: bash
