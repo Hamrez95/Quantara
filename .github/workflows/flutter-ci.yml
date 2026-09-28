@@ -68,7 +68,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format lib test tool; git diff -- lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart; exit 1
+        run: dart format --output=none --set-exit-if-changed lib test tool
 
       - name: Analyze
         shell: bash
