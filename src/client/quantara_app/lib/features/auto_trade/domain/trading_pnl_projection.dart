@@ -509,7 +509,12 @@ final class TradingPnlProjection {
             item == 'settlement:$key' ||
             item == 'missing tradeId',
       );
-      final positionConflict = unassignedAttribution || identityConflict;
+      // An orphaned historical fill is quarantined, but it must not block a
+      // new entry when it cannot belong to any currently open position. If it
+      // could belong to an active position, keep the fail-closed gate.
+      final positionConflict =
+          identityConflict ||
+          (unassignedAttribution && attributionCouldAffectOpenPosition);
       final closedEvidenceCanStandAlone =
           settlement != null && positionFills.isNotEmpty && !positionConflict;
       final verified =
@@ -524,10 +529,27 @@ final class TradingPnlProjection {
       final fundingValue =
           open?.funding ?? (settlementsAvailable ? settlement?.funding : null);
       final tolerance = 0.000001;
+      final settlementNetFromHistory =
+          fillsAvailable &&
+              realizedValue != null &&
+              feeValue != null &&
+              fundingValue != null
+          ? realizedValue - feeValue + fundingValue
+          : null;
+      final settlementRealizedMatchesGross =
+          settlement?.realizedPnl != null &&
+          realizedValue != null &&
+          (realizedValue - settlement!.realizedPnl!).abs() <= tolerance;
+      final settlementRealizedMatchesNet =
+          settlement?.realizedPnl != null &&
+          settlementNetFromHistory != null &&
+          (settlementNetFromHistory - settlement!.realizedPnl!).abs() <=
+              tolerance;
       final realizedMismatch =
           fillsAvailable &&
           settlement?.realizedPnl != null &&
-          (realizedValue! - settlement!.realizedPnl!).abs() > tolerance;
+          !settlementRealizedMatchesGross &&
+          !settlementRealizedMatchesNet;
       final feeMismatch =
           fillsAvailable &&
           settlement?.fee != null &&
