@@ -128,7 +128,8 @@ void main() {
   );
 
   test(
-    'orphaned historical fill does not block a new entry without an open position',
+    'orphaned historical fill does not block a new entry without an open '
+    'position',
     () {
       final projection = TradingPnlProjection.reconcile(
         currency: 'USDT',
