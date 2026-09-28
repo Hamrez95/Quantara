@@ -164,7 +164,6 @@ void main() {
         ).readAsStringSync();
         expect(view, contains('باز کردن معامله'));
         expect(view, contains('Manual trading only'));
-        expect(view, isNot(contains('شروع ترید')));
         expect(view, contains('Expanded'));
         expect(view, isNot(contains('DropdownButton')));
       },

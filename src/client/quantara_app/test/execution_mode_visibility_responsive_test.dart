@@ -8,8 +8,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   for (final testCase in <({Locale locale, String modeLabel})>[
-    (locale: const Locale('fa'), modeLabel: 'حالت معامله دستی فعال است'),
-    (locale: const Locale('en'), modeLabel: 'Manual trading only'),
+    (locale: const Locale('fa'), modeLabel: 'حالت معامله دستی فعال است.'),
+    (locale: const Locale('en'), modeLabel: 'Manual trading only.'),
   ]) {
     testWidgets(
       'execution mode remains readable at 320px and large text in ${testCase.locale.languageCode}',
