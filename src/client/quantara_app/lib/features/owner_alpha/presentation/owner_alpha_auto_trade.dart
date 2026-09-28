@@ -184,7 +184,13 @@ class _AutoTradeViewState extends State<_AutoTradeView>
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _ManualOnlyExecutionCard(),
+            _BoundaryNotice(
+              text: _t(
+                'حالت معامله دستی فعال است. اجرای خودکار محلی و سروری غیرفعال است؛ حساب Bitunix و Setupهای پیشنهادی فعال می‌مانند. برای ورود، خودت Setup را انتخاب کن و دکمه «باز کردن معامله» را بزن. گیت‌های تازگی داده، تطبیق حساب، ریسک، حجم، قوانین صرافی و حفاظت پوزیشن همچنان اجباری هستند.',
+                'Manual trading only. Local and unattended server execution are disabled; your Bitunix account and suggested setups remain available. Choose a setup yourself and tap “Open Trade”. Fresh-data, reconciliation, risk, sizing, exchange-rule, and position-protection gates remain mandatory.',
+              ),
+              color: QuantaraColors.cyan,
+            ),
             const SizedBox(height: 16),
             SectionCard(
               child: Column(
@@ -1424,51 +1430,3 @@ class _LockedServerModeCard extends StatelessWidget {
   }
 }
 
-class _ManualOnlyExecutionCard extends StatelessWidget {
-  const _ManualOnlyExecutionCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final fa = Directionality.of(context) == TextDirection.rtl;
-    return SectionCard(
-      accentColor: QuantaraColors.cyan,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.touch_app_rounded,
-            color: QuantaraColors.cyan,
-            size: 30,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  fa ? 'حالت معامله دستی فعال است' : 'Manual trading only',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  fa
-                      ? 'اجرای خودکار محلی و سروری غیرفعال است. حساب Bitunix و Setupهای پیشنهادی فعال می‌مانند؛ برای ورود، خودت یک Setup را انتخاب کن و دکمه «باز کردن معامله» را بزن.'
-                      : 'Local and unattended server execution are disabled. Your Bitunix account and suggested setups remain available; choose a setup yourself and tap “Open Trade” to enter.',
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  fa
-                      ? 'گیت‌های تازگی داده، تطبیق حساب، ریسک، حجم، قوانین صرافی و حفاظت پوزیشن برای معامله دستی همچنان اجباری هستند.'
-                      : 'Fresh-data, account-reconciliation, risk, sizing, exchange-rule, and position-protection gates remain mandatory for manual orders.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
