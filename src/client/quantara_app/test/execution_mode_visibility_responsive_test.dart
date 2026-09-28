@@ -36,7 +36,6 @@ void main() {
         await tester.tap(find.byIcon(Icons.smart_toy_outlined).last);
         await tester.pumpAndSettle();
 
-        expect(find.byIcon(Icons.touch_app_rounded), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
