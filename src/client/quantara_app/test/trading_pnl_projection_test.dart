@@ -152,10 +152,7 @@ void main() {
         settlements: const [],
       );
 
-      expect(
-        projection.positions.single.warning,
-        contains('quarantined'),
-      );
+      expect(projection.positions.single.warning, contains('quarantined'));
       expect(projection.isVerified, isTrue);
       expect(projection.isReadyForRiskGates, isTrue);
     },
