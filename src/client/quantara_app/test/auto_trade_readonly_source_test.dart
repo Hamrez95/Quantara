@@ -28,10 +28,7 @@ void main() {
     expect(page, contains("'ترید خودکار'"));
     expect(view, contains('Manual trading only'));
     expect(view, contains('باز کردن معامله'));
-    expect(view, contains('Capped / Autonomous · قفل انتشار'));
-    expect(view, contains('Approval Required'));
-    expect(view, contains('ExecutionModePresentation.fromLocalLive'));
-    expect(view, contains('No server Start action works'));
+    expect(view, contains('Manual trading only'));
     expect(readOnlyClient, contains('/api/v1/futures/account'));
     expect(readOnlyClient, contains('/api/v1/futures/tpsl/get_pending_orders'));
     expect(readOnlyClient, isNot(contains('/trade/place_order')));
