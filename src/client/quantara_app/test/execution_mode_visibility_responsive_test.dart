@@ -7,12 +7,9 @@ import 'support/owner_alpha_test_fakes.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  for (final testCase in <({Locale locale, String modeLabel})>[
-    (locale: const Locale('fa'), modeLabel: 'فقط مشاهده · Read Only'),
-    (locale: const Locale('en'), modeLabel: 'Read Only'),
-  ]) {
+  for (final locale in <Locale>[const Locale('fa'), const Locale('en')]) {
     testWidgets(
-      'execution mode remains readable at 320px and large text in ${testCase.locale.languageCode}',
+      'manual-only boundary remains usable at 320px and large text in ${locale.languageCode}',
       (tester) async {
         tester.view.devicePixelRatio = 1;
         tester.view.physicalSize = const Size(320, 760);
@@ -28,7 +25,7 @@ void main() {
             preferencesStore: MemoryAppPreferencesStore(),
             opportunityStateStore: MemoryOpportunityStateStore(),
             notificationGateway: RecordingSetupNotificationGateway(),
-            initialLocale: testCase.locale,
+            initialLocale: locale,
           ),
         );
         await tester.pumpAndSettle();
@@ -39,8 +36,6 @@ void main() {
         await tester.tap(find.byIcon(Icons.smart_toy_outlined).last);
         await tester.pumpAndSettle();
 
-        expect(find.text(testCase.modeLabel), findsOneWidget);
-        expect(find.textContaining('Approval Required'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );

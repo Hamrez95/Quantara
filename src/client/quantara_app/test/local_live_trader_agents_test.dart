@@ -157,14 +157,13 @@ void main() {
     );
 
     test(
-      'Mina accessibility auditor finds explicit Start, Stop, and locked server labels',
+      'Mina accessibility auditor finds the manual-only execution boundary',
       () {
         final view = File(
           'lib/features/owner_alpha/presentation/owner_alpha_auto_trade.dart',
         ).readAsStringSync();
-        expect(view, contains('شروع ترید'));
-        expect(view, contains('قطع ترید'));
-        expect(view, contains('Capped / Autonomous · قفل انتشار'));
+        expect(view, contains('باز کردن معامله'));
+        expect(view, contains('Manual trading only'));
         expect(view, contains('Expanded'));
         expect(view, isNot(contains('DropdownButton')));
       },

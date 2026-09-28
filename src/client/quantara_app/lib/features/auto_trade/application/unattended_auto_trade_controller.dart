@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../data/secure_auto_trade_server_config_store.dart';
 import '../data/unattended_auto_trade_api_client.dart';
 import '../domain/unattended_auto_trade_models.dart';
+import '../domain/manual_only_trading_policy.dart';
 
 final class UnattendedAutoTradeController extends ChangeNotifier {
   UnattendedAutoTradeController({
@@ -37,12 +38,23 @@ final class UnattendedAutoTradeController extends ChangeNotifier {
     if (_disposed || config == null) return;
     _serverConfig = config;
     await refresh();
+    if (quantaraManualOnlyMode && isRunning) {
+      await stop(
+        policy: UnattendedStopPolicy.protectAndManage,
+        hasOpenPositionsOrOrders: true,
+        reason: manualOnlyTradingMessage,
+      );
+    }
   }
 
   Future<bool> configure({
     required String baseUrl,
     required String controlToken,
   }) async {
+    if (quantaraManualOnlyMode) {
+      _setError(manualOnlyTradingMessage);
+      return false;
+    }
     final uri = Uri.tryParse(baseUrl.trim());
     if (uri == null || controlToken.trim().length < 32) {
       _setError(
@@ -81,6 +93,10 @@ final class UnattendedAutoTradeController extends ChangeNotifier {
   }
 
   Future<bool> start(UnattendedRunConfiguration configuration) async {
+    if (quantaraManualOnlyMode) {
+      _setError(manualOnlyTradingMessage);
+      return false;
+    }
     final config = _serverConfig;
     if (config == null || _disposed) return false;
     final requestId = _requestId('start');

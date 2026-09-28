@@ -184,14 +184,12 @@ class _AutoTradeViewState extends State<_AutoTradeView>
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _LocalLiveTradeControlCard(
-              controller: _localController,
-              accountController: widget.controller,
-              analysisController: widget.analysisController,
-            ),
-            const SizedBox(height: 16),
-            _LockedServerModeCard(
-              legacyConfigured: widget.unattendedController.isConfigured,
+            _BoundaryNotice(
+              text: _t(
+                'حالت معامله دستی فعال است. اجرای خودکار محلی و سروری غیرفعال است؛ حساب Bitunix و Setupهای پیشنهادی فعال می‌مانند. برای ورود، خودت Setup را انتخاب کن و دکمه «باز کردن معامله» را بزن. گیت‌های تازگی داده، تطبیق حساب، ریسک، حجم، قوانین صرافی و حفاظت پوزیشن همچنان اجباری هستند.',
+                'Manual trading only. Local and unattended server execution are disabled; your Bitunix account and suggested setups remain available. Choose a setup yourself and tap “Open Trade”. Fresh-data, reconciliation, risk, sizing, exchange-rule, and position-protection gates remain mandatory.',
+              ),
+              color: QuantaraColors.cyan,
             ),
             const SizedBox(height: 16),
             SectionCard(
@@ -1351,82 +1349,6 @@ class _LocalLiveStatusNotice extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _LockedServerModeCard extends StatelessWidget {
-  const _LockedServerModeCard({required this.legacyConfigured});
-
-  final bool legacyConfigured;
-
-  @override
-  Widget build(BuildContext context) {
-    final fa = Directionality.of(context) == TextDirection.rtl;
-    return SectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: QuantaraColors.violet.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Icon(
-                  Icons.cloud_off_outlined,
-                  color: QuantaraColors.violet,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      fa
-                          ? 'Capped / Autonomous · قفل انتشار'
-                          : 'Capped / Autonomous · Release locked',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      fa
-                          ? 'برای اجرای مستقل از گوشی، خاموشی اپ و اینترنت موبایل'
-                          : 'For execution independent from the phone and mobile connectivity',
-                    ),
-                  ],
-                ),
-              ),
-              const StatusPill(
-                label: 'LOCKED',
-                color: QuantaraColors.violet,
-                icon: Icons.lock_outline_rounded,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _BoundaryNotice(
-            text: fa
-                ? 'این contractها production-ready نیستند و عمداً قفل انتشار مانده‌اند تا Vault کلید، worker پایدار، مانیتورینگ، WebSocket خصوصی و certification کامل شوند. هیچ Start سروری در این نسخه عمل نمی‌کند.'
-                : 'These contracts are not production-ready and remain release-locked until the credential vault, durable worker, monitoring, private WebSocket, and certification are complete. No server Start action works in this release.',
-            color: QuantaraColors.violet,
-          ),
-          if (legacyConfigured) ...[
-            const SizedBox(height: 8),
-            Text(
-              fa
-                  ? 'یک تنظیم قدیمی سرور روی دستگاه پیدا شد، اما تا بازشدن رسمی این قابلیت قابل استفاده نیست.'
-                  : 'A legacy server configuration exists on this device, but it remains unusable until the feature is formally unlocked.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-        ],
       ),
     );
   }
