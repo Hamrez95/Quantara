@@ -1423,7 +1423,8 @@ class _LockedServerModeCard extends StatelessWidget {
     );
   }
 }
-\nclass _ManualOnlyExecutionCard extends StatelessWidget {
+
+class _ManualOnlyExecutionCard extends StatelessWidget {
   const _ManualOnlyExecutionCard();
 
   @override
