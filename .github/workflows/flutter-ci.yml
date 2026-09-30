@@ -70,18 +70,6 @@ jobs:
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test tool
 
-      - name: Temporary format probe
-        if: always()
-        shell: bash
-        run: |
-          dart format lib test tool >/dev/null
-          for file in lib/features/auto_trade/application/auto_trade_controller.dart lib/features/auto_trade/application/manual_trade_execution_controller.dart lib/features/owner_alpha/presentation/owner_alpha_signals.dart; do
-            echo "FORMAT_PROBE_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FORMAT_PROBE_END:$file"
-          done
-
       - name: Analyze
         shell: bash
         run: |
