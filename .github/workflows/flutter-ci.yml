@@ -67,10 +67,6 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
-      - name: Print formatted manual gate test
-        run: |
-          dart format test/manual_trade_entry_gate_source_test.dart
-          base64 -w0 test/manual_trade_entry_gate_source_test.dart
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test tool
 
