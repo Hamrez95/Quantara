@@ -449,7 +449,8 @@ final class ManualTradeExecutionController extends ChangeNotifier {
             '${pnl.warning == null ? '' : ': ${pnl.warning}'}. No order was sent.',
           );
         }
-        if (!account.allOpenPositionsFullyProtected) {
+        if (!allowUnprotectedExistingPositions &&
+            !account.allOpenPositionsFullyProtected) {
           throw const ManualTradeExecutionException(
             'An open Bitunix position is not fully protected by a verified stop. No order was sent.',
           );
