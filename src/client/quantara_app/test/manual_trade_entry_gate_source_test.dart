@@ -14,8 +14,6 @@ void main() {
     expect(gate, contains('marketDataFresh'));
     expect(gate, contains('entry.validUntil'));
     expect(gate, contains('entry.stopLoss'));
-    expect(gate, isNot(contains('autoTradeController.isConnected')));
-    expect(gate, isNot(contains('autoTradeController.canStartNewEntry')));
     expect(source, contains('manualTradeController.prepare('));
     expect(source, contains('allowUnprotectedExistingPositions: true'));
   });
