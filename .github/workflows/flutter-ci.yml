@@ -67,6 +67,10 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
+      - name: Identify formatter drift
+        run: |
+          dart format lib test tool
+          git diff --name-only
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test tool
 
