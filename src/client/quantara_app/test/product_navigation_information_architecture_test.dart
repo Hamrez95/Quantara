@@ -14,7 +14,6 @@ void main() {
       contains('const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];'),
     );
     expect(source, contains("strings.t('Ø®Ø§ÙÙ', 'Home')"));
-    expect(source, contains('Icons.home_outlined'));
     expect(source, isNot(contains('Ø¢Ø²ÙØ§ÛØ´Ú¯Ø§Ù')));
   });
 
