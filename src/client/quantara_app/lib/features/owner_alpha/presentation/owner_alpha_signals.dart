@@ -516,8 +516,8 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
                   unawaited(
-                  _continueWithManualExchangeManagement(entry),
-                );
+                    _continueWithManualExchangeManagement(entry),
+                  );
                 },
                 icon: const Icon(Icons.handyman_outlined),
                 label: Text(
