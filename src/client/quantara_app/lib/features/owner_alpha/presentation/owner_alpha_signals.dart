@@ -343,20 +343,130 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     return null;
   }
 
+  Future<void> _exportManualTradeDiagnostics(
+    SignalJournalEntry entry,
+  ) async {
+    final generatedAt = DateTime.now().toUtc();
+    final reconciliation = widget.autoTradeController.reconciliation;
+    final account = widget.autoTradeController.snapshot;
+    final pnl = account?.authoritativePnl;
+    final json = LocalLiveDiagnosticBundle.encode(
+      generatedAt: generatedAt,
+      sections: <String, Object?>{
+        'manualTradePreflight': <String, Object?>{
+          'setupId': entry.setupId,
+          'symbol': entry.symbol,
+          'direction': entry.direction.name,
+          'validUntil': entry.validUntil.toUtc().toIso8601String(),
+          'closed': entry.closed,
+          'hasEntry': entry.entryLower != null && entry.entryUpper != null,
+          'hasStopLoss': entry.stopLoss != null,
+          'targetCount': entry.targets.length,
+          'error': widget.manualTradeController.error,
+        },
+        'privateAccountReconciliation': <String, Object?>{
+          'connected': widget.autoTradeController.isConnected,
+          'canStartNewEntry': widget.autoTradeController.canStartNewEntry,
+          'health': reconciliation.health.name,
+          'refreshing': reconciliation.refreshing,
+          'blocksNewEntries': reconciliation.blocksNewEntries,
+          'warning': reconciliation.warning,
+          'completedAt': reconciliation.completedAt
+              ?.toUtc()
+              .toIso8601String(),
+          'lastAttemptAt': reconciliation.lastAttemptAt
+              ?.toUtc()
+              .toIso8601String(),
+        },
+        'authoritativePnl': pnl == null
+            ? null
+            : <String, Object?>{
+                'isVerified': pnl.isVerified,
+                'isReadyForRiskGates': pnl.isReadyForRiskGates,
+                'fillsAvailable': pnl.fillsAvailable,
+                'settlementsAvailable': pnl.settlementsAvailable,
+                'warning': pnl.warning,
+                'asOf': pnl.asOf.toUtc().toIso8601String(),
+              },
+        'accountSafety': account == null
+            ? null
+            : <String, Object?>{
+                'syncedAt': account.syncedAt.toUtc().toIso8601String(),
+                'openPositionCount': account.positions.length,
+                'allOpenPositionsFullyProtected':
+                    account.allOpenPositionsFullyProtected,
+                'pendingOrderCount': account.totalPendingOrderCount,
+              },
+      },
+    );
+    final stamp = generatedAt.toIso8601String().replaceAll(
+      RegExp(r'[:.]'),
+      '-',
+    );
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          title: _t('گزارش مشکل باز کردن معامله', 'Manual trade diagnostics'),
+          subject: 'Quantara manual trade diagnostics',
+          text: _t(
+            'گزارش تشخیصی بدون کلید API و Secret.',
+            'Secret-free manual trade diagnostic bundle.',
+          ),
+          files: [
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode(json)),
+              mimeType: 'application/json',
+            ),
+          ],
+          fileNameOverrides: ['quantara-manual-trade-$stamp.json'],
+          downloadFallbackEnabled: true,
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'خروجی لاگ ساخته نشد (\${error.runtimeType}).',
+              'Diagnostic export failed (\${error.runtimeType}).',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _showManualTrade(SignalJournalEntry entry) async {
     final preparation = await widget.manualTradeController.prepare(entry);
     if (!mounted) return;
     if (preparation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            widget.manualTradeController.error ??
-                _t(
-                  'پیش‌بررسی معامله کامل نشد.',
-                  'Trade preflight could not be completed.',
-                ),
+      final error = widget.manualTradeController.error ??
+          _t(
+            'پیش‌بررسی معامله کامل نشد.',
+            'Trade preflight could not be completed.',
+          );
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(_t('معامله باز نشد', 'Trade was not opened')),
+          content: SingleChildScrollView(
+            child: SelectableText(error),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(_t('بستن', 'Close')),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                unawaited(_exportManualTradeDiagnostics(entry));
+              },
+              icon: const Icon(Icons.ios_share_rounded),
+              label: Text(_t('خروجی لاگ', 'Export log')),
+            ),
+          ],
         ),
       );
       return;
