@@ -67,6 +67,10 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
+      - name: Print formatted manual controller
+        run: |
+          dart format lib/features/auto_trade/application/manual_trade_execution_controller.dart
+          base64 -w0 lib/features/auto_trade/application/manual_trade_execution_controller.dart
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test tool
 
