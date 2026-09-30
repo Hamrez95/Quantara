@@ -428,8 +428,8 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
         SnackBar(
           content: Text(
             _t(
-              'خروجی لاگ ساخته نشد (\${error.runtimeType}).',
-              'Diagnostic export failed (\${error.runtimeType}).',
+              'خروجی لاگ ساخته نشد (${error.runtimeType}).',
+              'Diagnostic export failed (${error.runtimeType}).',
             ),
           ),
         ),
