@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:file_selector/file_selector.dart' show XTypeGroup, openFile;
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
