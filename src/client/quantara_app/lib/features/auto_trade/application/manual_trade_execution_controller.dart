@@ -81,7 +81,6 @@ final class ManualTradeExecutionReceipt {
 abstract interface class ManualTradeAccountGateway {
   AutoTradeAccountSnapshot? get snapshot;
   bool get canStartNewEntry;
-  bool get canStartNewEntryIgnoringProtection => canStartNewEntry;
 
   Future<bool> reconcile({
     required PrivateAccountRefreshReason reason,
@@ -90,7 +89,7 @@ abstract interface class ManualTradeAccountGateway {
 }
 
 final class AutoTradeManualTradeAccountGateway
-    implements ManualTradeAccountGateway {
+    implements ManualTradeAccountGateway, ManualTradeProtectionOverrideGateway {
   const AutoTradeManualTradeAccountGateway(this.controller);
 
   final AutoTradeController controller;
@@ -110,6 +109,10 @@ final class AutoTradeManualTradeAccountGateway
     required PrivateAccountRefreshReason reason,
     bool force = false,
   }) => controller.reconcile(reason: reason, force: force);
+}
+
+abstract interface class ManualTradeProtectionOverrideGateway {
+  bool get canStartNewEntryIgnoringProtection;
 }
 
 abstract interface class ManualTradeExchangeGateway {
@@ -397,6 +400,12 @@ final class ManualTradeExecutionController extends ChangeNotifier {
   bool _disposed = false;
   String? _error;
   ManualTradeExecutionReceipt? _lastReceipt;
+  bool get _canStartNewEntryIgnoringProtection =>
+      accountGateway is ManualTradeProtectionOverrideGateway
+          ? (accountGateway as ManualTradeProtectionOverrideGateway)
+              .canStartNewEntryIgnoringProtection
+          : accountGateway.canStartNewEntry;
+
   bool _allowUnprotectedExistingPositions = false;
 
   ManualTradePreparation? get preparation => _preparation;
@@ -439,7 +448,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         );
       }
       final canStartNewEntry = allowUnprotectedExistingPositions
-          ? accountGateway.canStartNewEntryIgnoringProtection
+          ? _canStartNewEntryIgnoringProtection
           : accountGateway.canStartNewEntry;
       if (!canStartNewEntry) {
         final pnl = account.authoritativePnl;
@@ -561,7 +570,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       );
       final account = accountGateway.snapshot;
       final canStartNewEntry = _allowUnprotectedExistingPositions
-          ? account != null && accountGateway.canStartNewEntryIgnoringProtection
+          ? account != null && _canStartNewEntryIgnoringProtection
           : account != null && accountGateway.canStartNewEntry;
       if (!reconciled || account == null || !canStartNewEntry) {
         throw const ManualTradeExecutionException(
