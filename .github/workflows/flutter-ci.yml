@@ -67,6 +67,10 @@ jobs:
       - name: Restore packages
         run: flutter pub get
 
+      - name: Print final formatted files
+        run: |
+          dart format lib/features/owner_alpha/presentation/owner_alpha_home.dart test/manual_trade_entry_gate_source_test.dart test/product_navigation_information_architecture_test.dart
+          for f in lib/features/owner_alpha/presentation/owner_alpha_home.dart test/manual_trade_entry_gate_source_test.dart test/product_navigation_information_architecture_test.dart; do echo FORMAT_FILE:$f; base64 -w0 "$f"; echo; done
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test tool
 
