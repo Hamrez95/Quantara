@@ -23,7 +23,7 @@ void main() {
     expect(initBody, isNot(contains('_journalController.initialize()')));
 
     expect(source, contains('_ensureDestinationInitialized'));
-    expect(source, contains('case 4:'));
+    expect(source, isNot(contains('case 4:')));
     expect(source, contains('case 5:'));
     expect(source, contains('case 6:'));
   });
