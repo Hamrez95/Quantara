@@ -416,9 +416,31 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         force: true,
       );
       final account = accountGateway.snapshot;
-      if (!reconciled || account == null || !accountGateway.canStartNewEntry) {
+      if (!reconciled) {
         throw const ManualTradeExecutionException(
-          'A fresh, coherent and fully protected Bitunix account state is required before a new manual entry.',
+          'Bitunix account refresh failed or is still incomplete. No order was sent.',
+        );
+      }
+      if (account == null) {
+        throw const ManualTradeExecutionException(
+          'Bitunix returned no account snapshot. No order was sent.',
+        );
+      }
+      if (!accountGateway.canStartNewEntry) {
+        final pnl = account.authoritativePnl;
+        if (!pnl.isReadyForRiskGates) {
+          throw ManualTradeExecutionException(
+            'Bitunix account PnL truth is not ready for risk checks'
+            \${pnl.warning == null ? '' : ': \${pnl.warning}'}. No order was sent.',
+          );
+        }
+        if (!account.allOpenPositionsFullyProtected) {
+          throw const ManualTradeExecutionException(
+            'An open Bitunix position is not fully protected by a verified stop. No order was sent.',
+          );
+        }
+        throw const ManualTradeExecutionException(
+          'Bitunix account safety gates are not satisfied. No order was sent.',
         );
       }
       await _resolvePreviousIntentIfSafe(
