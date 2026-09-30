@@ -89,7 +89,7 @@ abstract interface class ManualTradeAccountGateway {
 }
 
 final class AutoTradeManualTradeAccountGateway
-    implements ManualTradeAccountGateway {
+    implements ManualTradeAccountGateway, ManualTradeProtectionOverrideGateway {
   const AutoTradeManualTradeAccountGateway(this.controller);
 
   final AutoTradeController controller;
@@ -101,10 +101,18 @@ final class AutoTradeManualTradeAccountGateway
   bool get canStartNewEntry => controller.canStartNewEntry;
 
   @override
+  bool get canStartNewEntryIgnoringProtection =>
+      controller.canStartNewEntryIgnoringProtection;
+
+  @override
   Future<bool> reconcile({
     required PrivateAccountRefreshReason reason,
     bool force = false,
   }) => controller.reconcile(reason: reason, force: force);
+}
+
+abstract interface class ManualTradeProtectionOverrideGateway {
+  bool get canStartNewEntryIgnoringProtection;
 }
 
 abstract interface class ManualTradeExchangeGateway {
@@ -392,17 +400,30 @@ final class ManualTradeExecutionController extends ChangeNotifier {
   bool _disposed = false;
   String? _error;
   ManualTradeExecutionReceipt? _lastReceipt;
+  bool get _canStartNewEntryIgnoringProtection =>
+      accountGateway is ManualTradeProtectionOverrideGateway
+      ? (accountGateway as ManualTradeProtectionOverrideGateway)
+            .canStartNewEntryIgnoringProtection
+      : accountGateway.canStartNewEntry;
+
+  bool _allowUnprotectedExistingPositions = false;
 
   ManualTradePreparation? get preparation => _preparation;
   bool get isBusy => _busy;
   String? get error => _error;
   ManualTradeExecutionReceipt? get lastReceipt => _lastReceipt;
+  bool get manualExchangeManagementAcknowledged =>
+      _allowUnprotectedExistingPositions;
 
-  Future<ManualTradePreparation?> prepare(SignalJournalEntry setup) async {
+  Future<ManualTradePreparation?> prepare(
+    SignalJournalEntry setup, {
+    bool allowUnprotectedExistingPositions = false,
+  }) async {
     if (_busy || _disposed) return null;
     _busy = true;
     _error = null;
     _lastReceipt = null;
+    _allowUnprotectedExistingPositions = allowUnprotectedExistingPositions;
     if (!_disposed) notifyListeners();
     try {
       final credentials = await credentialsStore.load();
@@ -426,7 +447,10 @@ final class ManualTradeExecutionController extends ChangeNotifier {
           'Bitunix returned no account snapshot. No order was sent.',
         );
       }
-      if (!accountGateway.canStartNewEntry) {
+      final canStartNewEntry = allowUnprotectedExistingPositions
+          ? _canStartNewEntryIgnoringProtection
+          : accountGateway.canStartNewEntry;
+      if (!canStartNewEntry) {
         final pnl = account.authoritativePnl;
         if (!pnl.isReadyForRiskGates) {
           throw ManualTradeExecutionException(
@@ -434,7 +458,8 @@ final class ManualTradeExecutionController extends ChangeNotifier {
             '${pnl.warning == null ? '' : ': ${pnl.warning}'}. No order was sent.',
           );
         }
-        if (!account.allOpenPositionsFullyProtected) {
+        if (!allowUnprotectedExistingPositions &&
+            !account.allOpenPositionsFullyProtected) {
           throw const ManualTradeExecutionException(
             'An open Bitunix position is not fully protected by a verified stop. No order was sent.',
           );
@@ -544,7 +569,10 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         force: true,
       );
       final account = accountGateway.snapshot;
-      if (!reconciled || account == null || !accountGateway.canStartNewEntry) {
+      final canStartNewEntry = _allowUnprotectedExistingPositions
+          ? account != null && _canStartNewEntryIgnoringProtection
+          : account != null && accountGateway.canStartNewEntry;
+      if (!reconciled || account == null || !canStartNewEntry) {
         throw const ManualTradeExecutionException(
           'Account truth changed before confirmation; the trade was not submitted.',
         );
