@@ -81,6 +81,7 @@ final class ManualTradeExecutionReceipt {
 abstract interface class ManualTradeAccountGateway {
   AutoTradeAccountSnapshot? get snapshot;
   bool get canStartNewEntry;
+  bool get canStartNewEntryIgnoringProtection => canStartNewEntry;
 
   Future<bool> reconcile({
     required PrivateAccountRefreshReason reason,
@@ -99,6 +100,10 @@ final class AutoTradeManualTradeAccountGateway
 
   @override
   bool get canStartNewEntry => controller.canStartNewEntry;
+
+  @override
+  bool get canStartNewEntryIgnoringProtection =>
+      controller.canStartNewEntryIgnoringProtection;
 
   @override
   Future<bool> reconcile({
@@ -392,17 +397,24 @@ final class ManualTradeExecutionController extends ChangeNotifier {
   bool _disposed = false;
   String? _error;
   ManualTradeExecutionReceipt? _lastReceipt;
+  bool _allowUnprotectedExistingPositions = false;
 
   ManualTradePreparation? get preparation => _preparation;
   bool get isBusy => _busy;
   String? get error => _error;
   ManualTradeExecutionReceipt? get lastReceipt => _lastReceipt;
+  bool get manualExchangeManagementAcknowledged =>
+      _allowUnprotectedExistingPositions;
 
-  Future<ManualTradePreparation?> prepare(SignalJournalEntry setup) async {
+  Future<ManualTradePreparation?> prepare(
+    SignalJournalEntry setup, {
+    bool allowUnprotectedExistingPositions = false,
+  }) async {
     if (_busy || _disposed) return null;
     _busy = true;
     _error = null;
     _lastReceipt = null;
+    _allowUnprotectedExistingPositions = allowUnprotectedExistingPositions;
     if (!_disposed) notifyListeners();
     try {
       final credentials = await credentialsStore.load();
@@ -426,7 +438,10 @@ final class ManualTradeExecutionController extends ChangeNotifier {
           'Bitunix returned no account snapshot. No order was sent.',
         );
       }
-      if (!accountGateway.canStartNewEntry) {
+      final canStartNewEntry = allowUnprotectedExistingPositions
+          ? accountGateway.canStartNewEntryIgnoringProtection
+          : accountGateway.canStartNewEntry;
+      if (!canStartNewEntry) {
         final pnl = account.authoritativePnl;
         if (!pnl.isReadyForRiskGates) {
           throw ManualTradeExecutionException(
@@ -544,7 +559,11 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         force: true,
       );
       final account = accountGateway.snapshot;
-      if (!reconciled || account == null || !accountGateway.canStartNewEntry) {
+      final canStartNewEntry = _allowUnprotectedExistingPositions
+          ? account != null &&
+                accountGateway.canStartNewEntryIgnoringProtection
+          : account != null && accountGateway.canStartNewEntry;
+      if (!reconciled || account == null || !canStartNewEntry) {
         throw const ManualTradeExecutionException(
           'Account truth changed before confirmation; the trade was not submitted.',
         );
