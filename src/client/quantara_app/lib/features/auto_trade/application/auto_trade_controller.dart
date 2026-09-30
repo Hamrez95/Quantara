@@ -55,12 +55,14 @@ final class AutoTradeController extends ChangeNotifier {
       _credentials != null &&
       (_state == AutoTradeConnectionState.readOnly ||
           _state == AutoTradeConnectionState.connecting);
-  bool get canStartNewEntry =>
+  bool get canStartNewEntryIgnoringProtection =>
       isConnected &&
       ExchangeTruthPhaseOneGate.realEntriesAllowed &&
       !_reconciliation.blocksNewEntries &&
       (_reconciliation.snapshot?.authoritativePnl.isReadyForRiskGates ??
-          false) &&
+          false);
+  bool get canStartNewEntry =>
+      canStartNewEntryIgnoringProtection &&
       (_reconciliation.snapshot?.allOpenPositionsFullyProtected ?? false);
   bool get canManageExistingPosition =>
       isConnected && _reconciliation.allowsExistingPositionManagement;
