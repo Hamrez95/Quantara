@@ -431,7 +431,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
         if (!pnl.isReadyForRiskGates) {
           throw ManualTradeExecutionException(
             'Bitunix account PnL truth is not ready for risk checks'
-            ${pnl.warning == null ? '' : ': ${pnl.warning}'}. No order was sent.',
+            '${pnl.warning == null ? '' : ': ${pnl.warning}'}. No order was sent.',
           );
         }
         if (!account.allOpenPositionsFullyProtected) {
