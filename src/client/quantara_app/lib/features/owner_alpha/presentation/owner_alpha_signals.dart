@@ -343,9 +343,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     return null;
   }
 
-  Future<void> _exportManualTradeDiagnostics(
-    SignalJournalEntry entry,
-  ) async {
+  Future<void> _exportManualTradeDiagnostics(SignalJournalEntry entry) async {
     final generatedAt = DateTime.now().toUtc();
     final reconciliation = widget.autoTradeController.reconciliation;
     final account = widget.autoTradeController.snapshot;
@@ -371,9 +369,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
           'refreshing': reconciliation.refreshing,
           'blocksNewEntries': reconciliation.blocksNewEntries,
           'warning': reconciliation.warning,
-          'completedAt': reconciliation.completedAt
-              ?.toUtc()
-              .toIso8601String(),
+          'completedAt': reconciliation.completedAt?.toUtc().toIso8601String(),
           'lastAttemptAt': reconciliation.lastAttemptAt
               ?.toUtc()
               .toIso8601String(),
@@ -515,9 +511,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
               FilledButton.icon(
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _continueWithManualExchangeManagement(entry),
-                  );
+                  unawaited(_continueWithManualExchangeManagement(entry));
                 },
                 icon: const Icon(Icons.handyman_outlined),
                 label: Text(
