@@ -323,16 +323,6 @@ class _HomeQuickActions extends StatelessWidget {
         color: QuantaraColors.magenta,
       ),
       _HomeAction(
-        icon: Icons.science_rounded,
-        label: strings.t('آزمایشگاه بات', 'Bot Lab'),
-        caption: strings.t(
-          'فوروارد تست و خروجی کامل شواهد',
-          'Forward test and full evidence export',
-        ),
-        destination: 4,
-        color: QuantaraColors.warning,
-      ),
-      _HomeAction(
         icon: Icons.inbox_rounded,
         label: strings.setups,
         caption: strings.t('پیشنهادها و نتیجه آن‌ها', 'Setups and outcomes'),
