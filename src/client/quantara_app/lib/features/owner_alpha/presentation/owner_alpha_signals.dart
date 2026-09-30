@@ -437,28 +437,92 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     }
   }
 
+  Future<void> _showManualTradeSheet(SignalJournalEntry entry) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.96,
+        child: ManualTradeExecutionSheet(
+          controller: widget.manualTradeController,
+          setup: entry,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _continueWithManualExchangeManagement(
+    SignalJournalEntry entry,
+  ) async {
+    final preparation = await widget.manualTradeController.prepare(
+      entry,
+      allowUnprotectedExistingPositions: true,
+    );
+    if (!mounted) return;
+    if (preparation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            widget.manualTradeController.error ??
+                _t(
+                  'حساب برای ورود ایمن آماده نیست.',
+                  'The account is not ready for a safe entry.',
+                ),
+          ),
+        ),
+      );
+      return;
+    }
+    await _showManualTradeSheet(entry);
+  }
+
   Future<void> _showManualTrade(SignalJournalEntry entry) async {
     final preparation = await widget.manualTradeController.prepare(entry);
     if (!mounted) return;
     if (preparation == null) {
-      final error =
-          widget.manualTradeController.error ??
+      final error = widget.manualTradeController.error ??
           _t(
             'پیش‌بررسی معامله کامل نشد.',
             'Trade preflight could not be completed.',
           );
+      final canAcknowledgeManualManagement =
+          widget.autoTradeController.canStartNewEntryIgnoringProtection &&
+          widget.autoTradeController.snapshot?.allOpenPositionsFullyProtected ==
+              false;
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text(_t('معامله باز نشد', 'Trade was not opened')),
           content: SingleChildScrollView(
-            child: SelectableText(error),
+            child: Text(
+              canAcknowledgeManualManagement
+                  ? _t(
+                      '$error\n\nپوزیشن قبلی توسط Quantara محافظت‌شده تشخیص داده نشده است. اگر آن را مستقیماً در Bitunix مدیریت می‌کنی، می‌توانی با پذیرش مسئولیت ادامه بدهی.',
+                      '$error\n\nQuantara cannot verify protection for an existing position. If you manage it directly in Bitunix, you can continue with explicit acknowledgement.',
+                    )
+                  : error,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: Text(_t('بستن', 'Close')),
             ),
+            if (canAcknowledgeManualManagement)
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  unawaited(
+                    _continueWithManualExchangeManagement(entry),
+                  );
+                },
+                icon: const Icon(Icons.handyman_outlined),
+                label: Text(
+                  _t('ادامه با مدیریت دستی صرافی', 'Continue with exchange-managed position'),
+                ),
+              ),
             FilledButton.icon(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
@@ -472,18 +536,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
       );
       return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: 0.96,
-        child: ManualTradeExecutionSheet(
-          controller: widget.manualTradeController,
-          setup: entry,
-        ),
-      ),
-    );
+    await _showManualTradeSheet(entry);
   }
 
   Future<void> _showPerformanceReport() async {
