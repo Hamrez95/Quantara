@@ -8,17 +8,14 @@ void main() {
       'lib/features/owner_alpha/presentation/owner_alpha_page.dart',
     ).readAsStringSync();
 
-    expect(
-      source,
-      contains('const _mobileDestinationIndexes = [0, 1, 5, 7];'),
-    );
+    expect(source, contains('const _mobileDestinationIndexes = [0, 1, 5, 7];'));
     expect(
       source,
       contains('const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];'),
     );
-    expect(source, contains("strings.t('خانه', 'Home')"));
+    expect(source, contains("strings.t('Ø®Ø§ÙÙ', 'Home')"));
     expect(source, contains('Icons.home_outlined'));
-    expect(source, isNot(contains('آزمایشگاه')));
+    expect(source, isNot(contains('Ø¢Ø²ÙØ§ÛØ´Ú¯Ø§Ù')));
   });
 
   test('Strategy Lab is absent from the product navigation surface', () {
@@ -45,11 +42,11 @@ void main() {
 
     expect(app, isNot(contains('final class _QuantaraHome')));
     expect(app, isNot(contains('height: 44')));
-    expect(home, contains('کنترل ریسک معاملات'));
-    expect(home, contains('این صفحه خودش هیچ سفارشی ارسال نمی‌کند'));
+    expect(home, contains('Ú©ÙØªØ±Ù Ø±ÛØ³Ú© ÙØ¹Ø§ÙÙØ§Øª'));
+    expect(home, contains('Ø§ÛÙ ØµÙØ­Ù Ø®ÙØ¯Ø´ ÙÛÚ Ø³ÙØ§Ø±Ø´Û Ø§Ø±Ø³Ø§Ù ÙÙÛâÚ©ÙØ¯'));
     expect(home, contains('onOpenPortfolioRisk'));
-    expect(panel, contains('این صفحه بودجه ریسک را نمایش می‌دهد'));
-    expect(panel, contains('شروع ترید واقعی فقط از صفحه ترید خودکار'));
+    expect(panel, contains('Ø§ÛÙ ØµÙØ­Ù Ø¨ÙØ¯Ø¬Ù Ø±ÛØ³Ú© Ø±Ø§ ÙÙØ§ÛØ´ ÙÛâØ¯ÙØ¯'));
+    expect(panel, contains('Ø´Ø±ÙØ¹ ØªØ±ÛØ¯ ÙØ§ÙØ¹Û ÙÙØ· Ø§Ø² ØµÙØ­Ù ØªØ±ÛØ¯ Ø®ÙØ¯Ú©Ø§Ø±'));
   });
 
   test('secondary tools remain reachable from Home quick actions', () {
@@ -60,7 +57,7 @@ void main() {
     for (final destination in const [1, 2, 3, 5, 6]) {
       expect(home, contains('destination: $destination'));
     }
-    expect(home, contains("strings.t('ترید خودکار', 'Auto Trade')"));
-    expect(home, contains("strings.t('ژورنال', 'Journal')"));
+    expect(home, contains("strings.t('ØªØ±ÛØ¯ Ø®ÙØ¯Ú©Ø§Ø±', 'Auto Trade')"));
+    expect(home, contains("strings.t('ÚÙØ±ÙØ§Ù', 'Journal')"));
   });
 }
