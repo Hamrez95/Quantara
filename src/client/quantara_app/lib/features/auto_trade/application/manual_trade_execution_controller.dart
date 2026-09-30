@@ -402,9 +402,9 @@ final class ManualTradeExecutionController extends ChangeNotifier {
   ManualTradeExecutionReceipt? _lastReceipt;
   bool get _canStartNewEntryIgnoringProtection =>
       accountGateway is ManualTradeProtectionOverrideGateway
-          ? (accountGateway as ManualTradeProtectionOverrideGateway)
-              .canStartNewEntryIgnoringProtection
-          : accountGateway.canStartNewEntry;
+      ? (accountGateway as ManualTradeProtectionOverrideGateway)
+            .canStartNewEntryIgnoringProtection
+      : accountGateway.canStartNewEntry;
 
   bool _allowUnprotectedExistingPositions = false;
 
