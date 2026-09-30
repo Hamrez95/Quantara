@@ -561,8 +561,7 @@ final class ManualTradeExecutionController extends ChangeNotifier {
       );
       final account = accountGateway.snapshot;
       final canStartNewEntry = _allowUnprotectedExistingPositions
-          ? account != null &&
-                accountGateway.canStartNewEntryIgnoringProtection
+          ? account != null && accountGateway.canStartNewEntryIgnoringProtection
           : account != null && accountGateway.canStartNewEntry;
       if (!reconciled || account == null || !canStartNewEntry) {
         throw const ManualTradeExecutionException(
