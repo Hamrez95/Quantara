@@ -482,15 +482,16 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     final preparation = await widget.manualTradeController.prepare(entry);
     if (!mounted) return;
     if (preparation == null) {
-      final error = widget.manualTradeController.error ??
+      final error =
+          widget.manualTradeController.error ??
           _t(
             'پیش‌بررسی معامله کامل نشد.',
             'Trade preflight could not be completed.',
           );
+      final existingAccount = widget.autoTradeController.snapshot;
       final canAcknowledgeManualManagement =
           widget.autoTradeController.canStartNewEntryIgnoringProtection &&
-          widget.autoTradeController.snapshot?.allOpenPositionsFullyProtected ==
-              false;
+          existingAccount?.allOpenPositionsFullyProtected == false;
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -515,12 +516,15 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
                   unawaited(
-                    _continueWithManualExchangeManagement(entry),
-                  );
+                  _continueWithManualExchangeManagement(entry),
+                );
                 },
                 icon: const Icon(Icons.handyman_outlined),
                 label: Text(
-                  _t('ادامه با مدیریت دستی صرافی', 'Continue with exchange-managed position'),
+                  _t(
+                    'مدیریت مستقیم در Bitunix',
+                    'I manage it directly in Bitunix',
+                  ),
                 ),
               ),
             FilledButton.icon(
