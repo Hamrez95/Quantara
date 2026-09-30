@@ -17,6 +17,6 @@ void main() {
     expect(gate, isNot(contains('autoTradeController.isConnected')));
     expect(gate, isNot(contains('autoTradeController.canStartNewEntry')));
     expect(source, contains('manualTradeController.prepare('));
-    expect(source, contains('PrivateAccountRefreshReason.startPreflight'));
+    expect(source, contains('allowUnprotectedExistingPositions: true'));
   });
 }
