@@ -669,11 +669,13 @@ const _destinations = [
     Icons.candlestick_chart_rounded,
   ),
   _Destination(Icons.view_list_outlined, Icons.view_list_rounded),
+  // Kept as an unreachable index for stable persisted destination values.
+  _Destination(Icons.science_outlined, Icons.science_rounded),
   _Destination(Icons.smart_toy_outlined, Icons.smart_toy_rounded),
   _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded),
   _Destination(Icons.person_outline_rounded, Icons.person_rounded),
 ];
-const _desktopDestinationIndexes = [0, 1, 2, 3, 4, 5, 6, 7];
+const _desktopDestinationIndexes = [0, 1, 2, 3, 5, 6, 7];
 const _mobileDestinationIndexes = [0, 1, 5, 7];
 
 String _destinationLabel(AppStrings strings, int index) => switch (index) {
