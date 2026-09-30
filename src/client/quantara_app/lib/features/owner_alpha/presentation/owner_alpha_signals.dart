@@ -441,7 +441,8 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     final preparation = await widget.manualTradeController.prepare(entry);
     if (!mounted) return;
     if (preparation == null) {
-      final error = widget.manualTradeController.error ??
+      final error =
+          widget.manualTradeController.error ??
           _t(
             'پیش‌بررسی معامله کامل نشد.',
             'Trade preflight could not be completed.',
