@@ -59,8 +59,7 @@ final class AutoTradeController extends ChangeNotifier {
       isConnected &&
       ExchangeTruthPhaseOneGate.realEntriesAllowed &&
       !_reconciliation.blocksNewEntries &&
-      (_reconciliation.snapshot?.authoritativePnl.isReadyForRiskGates ??
-          false);
+      (_reconciliation.snapshot?.authoritativePnl.isReadyForRiskGates ?? false);
   bool get canStartNewEntry =>
       canStartNewEntryIgnoringProtection &&
       (_reconciliation.snapshot?.allOpenPositionsFullyProtected ?? false);
