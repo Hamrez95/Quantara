@@ -20,8 +20,9 @@ void main() {
     () async {
       var scopedRequests = 0;
       final client = MockClient((request) async {
-        if (request.url.queryParameters.containsKey('positionId'))
+        if (request.url.queryParameters.containsKey('positionId')) {
           scopedRequests++;
+        }
         return _response(request);
       });
       addTearDown(client.close);

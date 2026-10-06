@@ -12,10 +12,14 @@ abstract final class TradingEvidenceExport {
   }) {
     final byStrategy = <String, Map<String, Object?>>{};
     for (final entry in setups) {
-      final key = '${entry.strategy.name}/${entry.strategyVersion}';
+      final evaluationVersion =
+          entry.outcomeEvaluationVersion ?? 'legacy-unversioned';
+      final key =
+          '${entry.strategy.name}/${entry.strategyVersion}|$evaluationVersion';
       final bucket = byStrategy.putIfAbsent(
         key,
         () => {
+          'evaluationVersion': evaluationVersion,
           'count': 0,
           'terminalCount': 0,
           'wins': 0,
@@ -29,8 +33,9 @@ abstract final class TradingEvidenceExport {
       if (!entry.hasTerminalOutcome ||
           entry.outcome == SignalOutcome.expiredUntriggered ||
           entry.simulatedPnl == null ||
-          !entry.simulatedPnl!.isFinite)
+          !entry.simulatedPnl!.isFinite) {
         continue;
+      }
       final pnl = entry.simulatedPnl!;
       bucket['terminalCount'] = (bucket['terminalCount'] as int) + 1;
       final result = pnl > 0
@@ -49,7 +54,7 @@ abstract final class TradingEvidenceExport {
           'type': 'simulated-setups-not-exchange-executions',
           'intrabarPolicy': 'stop-first-when-order-is-unknown',
           'legacyResults':
-              'Stored terminal results are preserved; evaluator version was not recorded per legacy setup.',
+              'Stored terminal results are preserved and grouped separately as legacy-unversioned.',
           'coverage':
               'All setup records currently retained on this device; not a claim of complete market history.',
         },

@@ -103,6 +103,11 @@ void main() {
       evaluatedAt: _origin.add(const Duration(minutes: 31)),
     );
     expect(first.outcome, SignalOutcome.tp1);
+    expect(first.outcomeEvaluationVersion, SignalOutcomeEvaluator.version);
+    expect(
+      SignalJournalEntry.tryFromJson(first.toJson())!.outcomeEvaluationVersion,
+      SignalOutcomeEvaluator.version,
+    );
     expect(repeated.outcome, SignalOutcome.tp1);
     expect(repeated.toJson(), first.toJson());
   });

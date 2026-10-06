@@ -8,6 +8,7 @@ import '../domain/profit_protection_policy.dart';
 /// data cannot prove the intrabar order, so the conservative result avoids
 /// overstating performance.
 abstract final class SignalOutcomeEvaluator {
+  static const version = 'closed-candle-replay/2';
   static const _costBuffer = 0.0017;
 
   static SignalJournalEntry evaluate({
@@ -34,8 +35,9 @@ abstract final class SignalOutcomeEvaluator {
       // A TP raised the stop only after this candle. Replaying that same
       // candle against the raised stop fabricates an earlier stop-out.
       if (entry.resolvedAt != null &&
-          !candle.openTime.isAfter(entry.resolvedAt!))
+          !candle.openTime.isAfter(entry.resolvedAt!)) {
         continue;
+      }
       if (!active && !candle.openTime.isBefore(entry.validUntil)) break;
 
       if (!active) {
@@ -82,6 +84,7 @@ abstract final class SignalOutcomeEvaluator {
       } else if (latest.outcome == SignalOutcome.pendingEntry) {
         latest = latest.copyWith(
           outcome: SignalOutcome.active,
+          outcomeEvaluationVersion: version,
           activatedAt: activatedAt,
         );
       }
@@ -90,6 +93,7 @@ abstract final class SignalOutcomeEvaluator {
     if (!active && !evaluatedAt.toUtc().isBefore(entry.validUntil)) {
       return entry.copyWith(
         outcome: SignalOutcome.expiredUntriggered,
+        outcomeEvaluationVersion: version,
         resolvedAt: entry.validUntil,
       );
     }
@@ -178,6 +182,7 @@ abstract final class SignalOutcomeEvaluator {
         exitPrice <= 0) {
       return entry.copyWith(
         outcome: outcome,
+        outcomeEvaluationVersion: version,
         highestTargetHit: highestTarget,
         activatedAt: activatedAt,
         resolvedAt: eventAt,
@@ -224,6 +229,7 @@ abstract final class SignalOutcomeEvaluator {
         !marginReturn.isFinite) {
       return entry.copyWith(
         outcome: outcome,
+        outcomeEvaluationVersion: version,
         highestTargetHit: highestTarget,
         activatedAt: activatedAt,
         resolvedAt: eventAt,
@@ -232,6 +238,7 @@ abstract final class SignalOutcomeEvaluator {
 
     return entry.copyWith(
       outcome: outcome,
+      outcomeEvaluationVersion: version,
       highestTargetHit: highestTarget,
       activatedAt: activatedAt,
       resolvedAt: eventAt,

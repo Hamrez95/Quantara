@@ -234,6 +234,10 @@ final class BitunixLocalLiveApiClient {
     }
   }
 
+  Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
+    BitunixApiCredentials credentials,
+  ) => fetchCurrentAccountSnapshot(credentials);
+
   Future<List<BitunixLivePosition>> fetchPositions(
     BitunixApiCredentials credentials, {
     String? symbol,

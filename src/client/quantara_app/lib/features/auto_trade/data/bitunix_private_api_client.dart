@@ -250,11 +250,17 @@ final class BitunixPrivateApiClient {
     required BitunixApiCredentials credentials,
   }) async {
     final rows = _mapList(data['tradeList']);
-    Map<String, Object?> attributedRow(Map<String, Object?> row) => {
-      ...row,
-      if (_positionIdsByTradeId[_string(row['tradeId'])] case final id?)
-        'positionId': id,
-    };
+    Map<String, Object?> attributedRow(Map<String, Object?> row) {
+      final cachedId = _positionIdsByTradeId[_string(row['tradeId'])];
+      final directId = _string(row['positionId']);
+      if (cachedId != null && directId.isNotEmpty && directId != cachedId) {
+        throw const AutoTradeSafeException(
+          'Conflicting Bitunix position identity.',
+        );
+      }
+      return {...row, 'positionId': cachedId ?? row['positionId']};
+    }
+
     final initial = BitunixPnlMapper.fills(
       {'tradeList': rows.map(attributedRow).toList(growable: false)},
       openPositions: openPositions,
