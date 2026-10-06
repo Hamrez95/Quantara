@@ -282,6 +282,8 @@ final class SetupPerformanceReport {
       'timeframe',
       'direction',
       'strategy',
+      'strategy_version',
+      'outcome_evaluation_version',
       'analytical_outcome',
       'analytical_classification',
       'analytical_net_pnl_simulated',
@@ -311,6 +313,8 @@ final class SetupPerformanceReport {
           entry.timeframe,
           entry.direction.name,
           entry.strategy.name,
+          entry.strategyVersion,
+          entry.outcomeEvaluationVersion ?? 'legacy-unversioned',
           entry.outcome.name,
           row.analyticalClassification.name,
           row.analyticalNetPnl,
@@ -342,10 +346,7 @@ final class _UtcBounds {
 }
 
 bool _hasVisibleAnalyticalResult(SignalOutcome outcome) =>
-    outcome == SignalOutcome.stopped ||
-    outcome == SignalOutcome.tp1 ||
-    outcome == SignalOutcome.tp2 ||
-    outcome == SignalOutcome.tp3;
+    outcome == SignalOutcome.stopped || outcome == SignalOutcome.tp3;
 
 SetupAnalyticalClassification _classifyAnalytical(SignalJournalEntry entry) {
   final pnl = entry.simulatedPnl;

@@ -8,6 +8,46 @@ void main() {
   final now = DateTime.utc(2026, 9, 7, 12);
 
   group('SetupPerformanceReport analytical evidence', () {
+    test('interim targets are not closed results or realized profits', () {
+      final report = SetupPerformanceReport.build(
+        signals: [
+          _signal(
+            setupId: 'partial-1',
+            resolvedAt: now,
+            outcome: SignalOutcome.tp1,
+            simulatedPnl: 50,
+          ),
+          _signal(
+            setupId: 'partial-2',
+            resolvedAt: now,
+            outcome: SignalOutcome.tp2,
+            simulatedPnl: 80,
+          ),
+          _signal(
+            setupId: 'runner-stop',
+            resolvedAt: now,
+            outcome: SignalOutcome.stopped,
+            simulatedPnl: 3,
+          ),
+          _signal(
+            setupId: 'loss',
+            resolvedAt: now,
+            outcome: SignalOutcome.stopped,
+            simulatedPnl: -1,
+          ),
+        ],
+        projections: const [],
+        filter: const SetupPerformanceFilter(range: SetupPerformanceRange.all),
+        now: now,
+      );
+      expect(report.summary.resolvedCount, 2);
+      expect(report.summary.analyticalWins, 1);
+      expect(report.summary.analyticalLosses, 1);
+      expect(report.summary.analyticalWinRatePercent, 50);
+      expect(report.summary.totalSimulatedNetPnl, 2);
+      expect(report.toCsv(), contains('outcome_evaluation_version'));
+      expect(report.toCsv(), contains('legacy-unversioned'));
+    });
     test('counts all 82 resolved setup outcomes without inventing trades', () {
       final signals = List.generate(
         82,
