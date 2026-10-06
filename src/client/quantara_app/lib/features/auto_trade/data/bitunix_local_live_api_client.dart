@@ -6,9 +6,8 @@ import 'package:http/http.dart' as http;
 
 import '../domain/auto_trade_models.dart';
 import '../domain/local_live_trade_models.dart';
-import '../domain/trading_pnl_projection.dart';
 import 'bitunix_order_book_top.dart';
-import 'bitunix_pnl_mapper.dart';
+import 'bitunix_private_api_client.dart';
 import 'bitunix_request_signer.dart';
 
 final class BitunixInstrumentRules {
@@ -160,6 +159,11 @@ final class BitunixLocalLiveApiClient {
   final http.Client _client;
   final DateTime Function() _utcNow;
   final Random _random;
+  late final BitunixPrivateApiClient _accountClient = BitunixPrivateApiClient(
+    client: _client,
+    utcNow: _utcNow,
+    secureRandom: _random,
+  );
 
   Future<double> fetchMarkPrice(String symbol) async {
     final payload = await _publicGet('/api/v1/futures/market/tickers', {
@@ -223,212 +227,11 @@ final class BitunixLocalLiveApiClient {
   Future<AutoTradeAccountSnapshot> fetchCurrentAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
-    final responses = await Future.wait<Object>([
-      _signedGet('/api/v1/futures/account', {
-        'marginCoin': 'USDT',
-      }, credentials),
-      fetchPositions(credentials),
-      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
-        'limit': '100',
-      }, credentials),
-      fetchPendingProtection(credentials),
-    ]);
-    final accountResponse = responses[0] as Map<String, Object?>;
-    final positions = responses[1] as List<BitunixLivePosition>;
-    final ordersResponse = responses[2] as Map<String, Object?>;
-    final protections = responses[3] as List<BitunixPendingProtection>;
-    final account = _firstMap(accountResponse['data']);
-    if (account == null) {
-      throw const LocalLiveTradeSafeException(
-        'Bitunix current account data was empty or malformed.',
-      );
-    }
-    final orderData = ordersResponse['data'];
-    final orderMaps = orderData is Map<String, Object?>
-        ? _mapList(orderData['orderList'])
-        : const <Map<String, Object?>>[];
-    final asOf = _utcNow().toUtc();
-    final protectionOrders = protections
-        .map(
-          (item) => AutoTradeProtectionOrder(
-            exchangeId: item.orderId,
-            positionId: item.positionId,
-            symbol: item.symbol,
-            takeProfitPrice: item.takeProfitPrice > 0
-                ? item.takeProfitPrice
-                : null,
-            takeProfitQuantity: item.takeProfitQuantity > 0
-                ? item.takeProfitQuantity
-                : null,
-            stopLossPrice: item.stopLossPrice > 0 ? item.stopLossPrice : null,
-            stopLossQuantity: item.stopLossQuantity > 0
-                ? item.stopLossQuantity
-                : null,
-          ),
-        )
-        .toList(growable: false);
-    return AutoTradeAccountSnapshot(
-      marginCoin: _string(account['marginCoin'], fallback: 'USDT'),
-      available: _number(account['available']),
-      frozen: _number(account['frozen']),
-      positionMargin: _number(account['margin']),
-      crossUnrealizedPnl: _number(account['crossUnrealizedPNL']),
-      isolatedUnrealizedPnl: _number(account['isolationUnrealizedPNL']),
-      positionMode: _string(account['positionMode'], fallback: 'UNKNOWN'),
-      positions: positions
-          .map(
-            (item) => AutoTradePosition(
-              positionId: item.positionId,
-              symbol: item.symbol,
-              quantity: item.quantity,
-              side: item.side,
-              marginMode: item.marginMode,
-              positionMode: item.positionMode,
-              leverage: item.leverage,
-              margin: 0,
-              unrealizedPnl: item.unrealizedPnl,
-              liquidationPrice: 0,
-              averageOpenPrice: item.averageOpenPrice,
-              realizedPnl: item.realizedPnl,
-              fee: item.fee,
-              funding: item.funding,
-              openedAt: item.openedAt,
-            ),
-          )
-          .toList(growable: false),
-      orders: orderMaps.map(_orderFromJson).toList(growable: false),
-      protectionOrders: protectionOrders,
-      protectionVerifications: {
-        for (final position in positions)
-          position.positionId: AutoTradeProtectionVerification.verified(
-            asOf: asOf,
-          ),
-      },
-      syncedAt: asOf,
-    );
-  }
-
-  Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
-    BitunixApiCredentials credentials,
-  ) async {
-    final baseResponses = await Future.wait<Object>([
-      _signedGet('/api/v1/futures/account', {
-        'marginCoin': 'USDT',
-      }, credentials),
-      fetchPositions(credentials),
-      _signedGet('/api/v1/futures/trade/get_pending_orders', const {
-        'limit': '100',
-      }, credentials),
-    ]);
-    final accountResponse = baseResponses[0] as Map<String, Object?>;
-    final positions = baseResponses[1] as List<BitunixLivePosition>;
-    final ordersResponse = baseResponses[2] as Map<String, Object?>;
-    final account = _firstMap(accountResponse['data']);
-    if (account == null) {
-      throw const LocalLiveTradeSafeException(
-        'Bitunix account data was empty or malformed.',
-      );
-    }
-    final orderData = ordersResponse['data'];
-    final orderMaps = orderData is Map<String, Object?>
-        ? _mapList(orderData['orderList'])
-        : const <Map<String, Object?>>[];
-    final unrealizedByPosition = <String, ExchangeUnrealizedPnl>{
-      for (final position in positions)
-        position.positionId: ExchangeUnrealizedPnl(
-          positionId: position.positionId,
-          symbol: position.symbol,
-          value: position.unrealizedPnl,
-          realizedPnl: position.realizedPnl,
-          fee: position.fee,
-          funding: position.funding,
-          openedAt: position.openedAt,
-        ),
-    };
-    var settlementsAvailable = true;
-    var fillsAvailable = true;
-    var sourceVerified = true;
-    final warnings = <String>[];
-    List<ExchangePositionSettlement> settlements = const [];
-    List<ExchangePnlFill> fills = const [];
     try {
-      final history = await _signedGet(
-        '/api/v1/futures/position/get_history_positions',
-        const {'limit': '100'},
-        credentials,
-      );
-      final parsed = BitunixPnlMapper.settlements(history['data']);
-      settlements = parsed.values;
-      sourceVerified = sourceVerified && parsed.verified;
-      if (parsed.warning != null) warnings.add(parsed.warning!);
-    } on LocalLiveTradeSafeException catch (error) {
-      settlementsAvailable = false;
-      warnings.add(error.message);
+      return await _accountClient.fetchAccountSnapshot(credentials);
+    } on AutoTradeSafeException catch (error) {
+      throw LocalLiveTradeSafeException(error.message);
     }
-    try {
-      final history = await _signedGet(
-        '/api/v1/futures/trade/get_history_trades',
-        const {'limit': '100'},
-        credentials,
-      );
-      final parsed = BitunixPnlMapper.fills(
-        history['data'],
-        openPositions: unrealizedByPosition.values,
-        settlements: settlements,
-      );
-      fills = parsed.values;
-      sourceVerified = sourceVerified && parsed.verified;
-      if (parsed.warning != null) warnings.add(parsed.warning!);
-    } on LocalLiveTradeSafeException catch (error) {
-      fillsAvailable = false;
-      sourceVerified = false;
-      warnings.add(error.message);
-    }
-    final asOf = _utcNow().toUtc();
-    final pnlProjection = TradingPnlProjection.reconcile(
-      currency: _string(account['marginCoin'], fallback: 'USDT'),
-      asOf: asOf,
-      unrealizedByPosition: unrealizedByPosition,
-      fills: fills,
-      settlements: settlements,
-      fillsAvailable: fillsAvailable,
-      settlementsAvailable: settlementsAvailable,
-      sourceVerified: sourceVerified,
-      warning: warnings.isEmpty ? null : warnings.toSet().join(' '),
-    );
-    return AutoTradeAccountSnapshot(
-      marginCoin: _string(account['marginCoin'], fallback: 'USDT'),
-      available: _number(account['available']),
-      frozen: _number(account['frozen']),
-      positionMargin: _number(account['margin']),
-      crossUnrealizedPnl: _number(account['crossUnrealizedPNL']),
-      isolatedUnrealizedPnl: _number(account['isolationUnrealizedPNL']),
-      positionMode: _string(account['positionMode'], fallback: 'UNKNOWN'),
-      positions: positions
-          .map(
-            (item) => AutoTradePosition(
-              positionId: item.positionId,
-              symbol: item.symbol,
-              quantity: item.quantity,
-              side: item.side,
-              marginMode: item.marginMode,
-              positionMode: item.positionMode,
-              leverage: item.leverage,
-              margin: 0,
-              unrealizedPnl: item.unrealizedPnl,
-              liquidationPrice: 0,
-              averageOpenPrice: item.averageOpenPrice,
-              realizedPnl: item.realizedPnl,
-              fee: item.fee,
-              funding: item.funding,
-              openedAt: item.openedAt,
-            ),
-          )
-          .toList(growable: false),
-      orders: orderMaps.map(_orderFromJson).toList(growable: false),
-      pnlProjection: pnlProjection,
-      syncedAt: asOf,
-    );
   }
 
   Future<List<BitunixLivePosition>> fetchPositions(
@@ -900,20 +703,6 @@ final class BitunixLocalLiveApiClient {
         fee: _number(item['fee']),
         funding: _number(item['funding']),
         openedAt: _timestamp(item['ctime']),
-      );
-
-  static AutoTradeOrder _orderFromJson(Map<String, Object?> item) =>
-      AutoTradeOrder(
-        orderId: _string(item['orderId']),
-        clientId: _string(item['clientId']),
-        symbol: _string(item['symbol']),
-        quantity: _number(item['qty']),
-        filledQuantity: _number(item['tradeQty']),
-        side: _string(item['side'], fallback: 'UNKNOWN'),
-        orderType: _string(item['orderType'], fallback: 'UNKNOWN'),
-        marginMode: _string(item['marginMode'], fallback: 'UNKNOWN'),
-        leverage: _integer(item['leverage'], fallback: 1),
-        reduceOnly: item['reduceOnly'] == true,
       );
 
   static Map<String, Object?>? _firstMap(Object? value) {

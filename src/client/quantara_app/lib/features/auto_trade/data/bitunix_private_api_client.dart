@@ -26,10 +26,20 @@ final class BitunixPrivateApiClient {
   final Random _random;
   final Map<String, Map<String, Object?>> _positionHistoryCache = {};
   final Map<String, Map<String, Object?>> _tradeHistoryCache = {};
+  final Map<String, String> _positionIdsByTradeId = {};
+  BitunixApiCredentials? _historyCredentials;
 
   Future<AutoTradeAccountSnapshot> fetchAccountSnapshot(
     BitunixApiCredentials credentials,
   ) async {
+    final previousCredentials = _historyCredentials;
+    if (previousCredentials?.apiKey != credentials.apiKey ||
+        previousCredentials?.secretKey != credentials.secretKey) {
+      _positionHistoryCache.clear();
+      _tradeHistoryCache.clear();
+      _positionIdsByTradeId.clear();
+      _historyCredentials = credentials;
+    }
     final baseResponses = await Future.wait<Map<String, Object?>>([
       _signedGet('/api/v1/futures/account', const {
         'marginCoin': 'USDT',
@@ -180,14 +190,25 @@ final class BitunixPrivateApiClient {
       sourceVerified = false;
       pnlWarnings.add(fillResult.error!.message);
     } else {
-      final parsed = BitunixPnlMapper.fills(
-        fillResult.data,
-        openPositions: unrealizedByPosition.values,
-        settlements: settlements,
-      );
-      fills = parsed.values;
-      sourceVerified = sourceVerified && parsed.verified;
-      if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
+      try {
+        final attributed = await _attributeHistory(
+          fillResult.data!,
+          openPositions: unrealizedByPosition.values,
+          settlements: settlements,
+          credentials: credentials,
+        );
+        final parsed = BitunixPnlMapper.fills(
+          attributed,
+          openPositions: unrealizedByPosition.values,
+          settlements: settlements,
+        );
+        fills = parsed.values;
+        sourceVerified = sourceVerified && parsed.verified;
+        if (parsed.warning != null) pnlWarnings.add(parsed.warning!);
+      } on AutoTradeSafeException catch (error) {
+        sourceVerified = false;
+        pnlWarnings.add(error.message);
+      }
     }
     final pnlAsOf = _utcNow().toUtc();
     final pnlProjection = TradingPnlProjection.reconcile(
@@ -217,6 +238,104 @@ final class BitunixPrivateApiClient {
       pnlProjection: pnlProjection,
       syncedAt: pnlAsOf,
     );
+  }
+
+  // Bitunix documents positionId as a query filter, not a trade response
+  // field. Use exchange-filtered evidence to repair ambiguous HEDGE history;
+  // never choose between overlapping positions by timestamp proximity.
+  Future<Map<String, Object?>> _attributeHistory(
+    Map<String, Object?> data, {
+    required Iterable<ExchangeUnrealizedPnl> openPositions,
+    required List<ExchangePositionSettlement> settlements,
+    required BitunixApiCredentials credentials,
+  }) async {
+    final rows = _mapList(data['tradeList']);
+    Map<String, Object?> attributedRow(Map<String, Object?> row) => {
+      ...row,
+      if (_positionIdsByTradeId[_string(row['tradeId'])] case final id?)
+        'positionId': id,
+    };
+    final initial = BitunixPnlMapper.fills(
+      {'tradeList': rows.map(attributedRow).toList(growable: false)},
+      openPositions: openPositions,
+      settlements: settlements,
+    );
+    if (!initial.verified) return data;
+    final unresolvedSymbols = initial.values
+        .where(
+          (fill) => fill.positionId.startsWith(
+            BitunixPnlMapper.unassignedPositionPrefix,
+          ),
+        )
+        .map((fill) => fill.symbol)
+        .toSet();
+    if (unresolvedSymbols.isEmpty) {
+      return {'tradeList': rows.map(attributedRow).toList(growable: false)};
+    }
+    final candidates = <String, String>{
+      for (final position in openPositions)
+        if (unresolvedSymbols.contains(position.symbol.toUpperCase()))
+          position.positionId: position.symbol,
+      for (final position in settlements)
+        if (unresolvedSymbols.contains(position.symbol.toUpperCase()))
+          position.positionId: position.symbol,
+    };
+    if (candidates.length > 100) {
+      throw const AutoTradeSafeException(
+        'Bitunix history attribution exceeded the bounded recovery limit.',
+      );
+    }
+    final globalById = {for (final row in rows) _string(row['tradeId']): row};
+    final resolved = <String, String>{
+      for (final entry in _positionIdsByTradeId.entries)
+        if (globalById.containsKey(entry.key)) entry.key: entry.value,
+    };
+    for (final candidate in candidates.entries) {
+      final scoped = await _signedGetCompleteHistory(
+        path: '/api/v1/futures/trade/get_history_trades',
+        listKey: 'tradeList',
+        identityKey: 'tradeId',
+        credentials: credentials,
+        query: {'positionId': candidate.key, 'symbol': candidate.value},
+      );
+      for (final row in _mapList(scoped['tradeList'])) {
+        final tradeId = _string(row['tradeId']);
+        final global = globalById[tradeId];
+        final explicitId = _string(row['positionId']);
+        if (global == null ||
+            (explicitId.isNotEmpty && explicitId != candidate.key) ||
+            (_string(global['positionId']).isNotEmpty &&
+                _string(global['positionId']) != candidate.key) ||
+            (resolved[tradeId] != null && resolved[tradeId] != candidate.key)) {
+          throw const AutoTradeSafeException(
+            'Bitunix position-filtered history was inconsistent; refresh the account before entering.',
+          );
+        }
+        final pair = BitunixPnlMapper.fills(
+          {
+            'tradeList': [
+              {...global, 'positionId': candidate.key},
+              {...row, 'positionId': candidate.key},
+            ],
+          },
+          openPositions: const [],
+          settlements: const [],
+        );
+        if (!pair.verified ||
+            pair.values.length != 2 ||
+            !pair.values[0].sameEconomicEvent(pair.values[1])) {
+          throw const AutoTradeSafeException(
+            'Bitunix position-filtered trade economics did not match account history.',
+          );
+        }
+        resolved[tradeId] = candidate.key;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+    }
+    _positionIdsByTradeId
+      ..clear()
+      ..addAll(resolved);
+    return {'tradeList': rows.map(attributedRow).toList(growable: false)};
   }
 
   Future<Map<String, Object?>> _signedGetCachedCompleteHistory({
@@ -275,14 +394,17 @@ final class BitunixPrivateApiClient {
     required String listKey,
     required String identityKey,
     required BitunixApiCredentials credentials,
+    Map<String, String> query = const {},
   }) async {
     final rows = <Map<String, Object?>>[];
     final seenIdentities = <String>{};
+    final rowsByIdentity = <String, Map<String, Object?>>{};
     var skip = 0;
     int? total;
 
     for (var page = 0; page < _historyMaxPages; page += 1) {
       final response = await _signedGet(path, {
+        ...query,
         'limit': '$_historyPageSize',
         'skip': '$skip',
       }, credentials);
@@ -292,7 +414,12 @@ final class BitunixPrivateApiClient {
           'Bitunix history data was empty or malformed.',
         );
       }
-      final pageRows = _mapList(data[listKey]);
+      final rawRows = data[listKey];
+      if (rawRows is! List<Object?> ||
+          rawRows.any((row) => row is! Map<Object?, Object?>)) {
+        throw const AutoTradeSafeException('Malformed Bitunix history list.');
+      }
+      final pageRows = _mapList(rawRows);
       final pageTotal = _optionalInteger(data['total']);
       if (pageTotal != null && pageTotal >= 0) total = pageTotal;
 
@@ -305,7 +432,21 @@ final class BitunixPrivateApiClient {
           rows.add(row);
           continue;
         }
-        if (seenIdentities.add(identity)) rows.add(row);
+        final previous = rowsByIdentity[identity];
+        if (previous != null &&
+            (previous.length != row.length ||
+                previous.entries.any(
+                  (entry) =>
+                      jsonEncode(entry.value) != jsonEncode(row[entry.key]),
+                ))) {
+          throw const AutoTradeSafeException(
+            'Conflicting Bitunix history event identity.',
+          );
+        }
+        if (seenIdentities.add(identity)) {
+          rows.add(row);
+          rowsByIdentity[identity] = row;
+        }
       }
 
       skip += pageRows.length;
@@ -313,6 +454,11 @@ final class BitunixPrivateApiClient {
       if (pageRows.isEmpty ||
           pageRows.length < _historyPageSize ||
           reachedReportedTotal) {
+        if (total != null && seenIdentities.length != total) {
+          throw const AutoTradeSafeException(
+            'Bitunix history was incomplete or changed during pagination.',
+          );
+        }
         return <String, Object?>{
           listKey: List.unmodifiable(rows),
           'total': total ?? skip,

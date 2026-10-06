@@ -18,6 +18,9 @@ abstract final class SignalOutcomeEvaluator {
     if (entry.hasTerminalOutcome || entry.closed) return entry;
     if (!_hasValidFinancialInputs(entry)) return entry;
 
+    final candleDuration = _candleDuration(entry.timeframe);
+    if (candleDuration == null) return entry;
+    final evaluationTime = evaluatedAt.toUtc();
     var active = entry.activatedAt != null;
     var activatedAt = entry.activatedAt;
     var highestTarget = entry.highestTargetHit;
@@ -26,7 +29,13 @@ abstract final class SignalOutcomeEvaluator {
 
     for (final candle in candles) {
       if (!_validCandle(candle)) continue;
+      if (candle.openTime.add(candleDuration).isAfter(evaluationTime)) continue;
       if (candle.openTime.isBefore(replayFrom)) continue;
+      // A TP raised the stop only after this candle. Replaying that same
+      // candle against the raised stop fabricates an earlier stop-out.
+      if (entry.resolvedAt != null &&
+          !candle.openTime.isAfter(entry.resolvedAt!))
+        continue;
       if (!active && !candle.openTime.isBefore(entry.validUntil)) break;
 
       if (!active) {
@@ -86,6 +95,17 @@ abstract final class SignalOutcomeEvaluator {
     }
     return latest;
   }
+
+  static Duration? _candleDuration(String timeframe) => switch (timeframe) {
+    '1m' => const Duration(minutes: 1),
+    '5m' => const Duration(minutes: 5),
+    '15m' => const Duration(minutes: 15),
+    '30m' => const Duration(minutes: 30),
+    '1h' => const Duration(hours: 1),
+    '4h' => const Duration(hours: 4),
+    '1D' || '1d' => const Duration(days: 1),
+    _ => null,
+  };
 
   static double _activeStop(SignalJournalEntry entry, int highestTarget) {
     if (highestTarget >= 2) return entry.targets.first;
