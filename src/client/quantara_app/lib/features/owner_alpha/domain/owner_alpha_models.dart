@@ -487,6 +487,7 @@ final class SignalJournalEntry {
     this.marketRegime = MarketRegime.transition,
     this.sizingCapital = 0,
     this.outcome = SignalOutcome.pendingEntry,
+    this.outcomeEvaluationVersion,
     this.highestTargetHit = 0,
     this.activatedAt,
     this.resolvedAt,
@@ -580,6 +581,7 @@ final class SignalJournalEntry {
   final MarketRegime marketRegime;
   final double sizingCapital;
   final SignalOutcome outcome;
+  final String? outcomeEvaluationVersion;
   final int highestTargetHit;
   final DateTime? activatedAt;
   final DateTime? resolvedAt;
@@ -623,6 +625,7 @@ final class SignalJournalEntry {
     bool? closed,
     int? selectedLeverage,
     SignalOutcome? outcome,
+    String? outcomeEvaluationVersion,
     int? highestTargetHit,
     DateTime? activatedAt,
     DateTime? resolvedAt,
@@ -669,6 +672,8 @@ final class SignalJournalEntry {
     marketRegime: marketRegime,
     sizingCapital: sizingCapital,
     outcome: outcome ?? this.outcome,
+    outcomeEvaluationVersion:
+        outcomeEvaluationVersion ?? this.outcomeEvaluationVersion,
     highestTargetHit: highestTargetHit ?? this.highestTargetHit,
     activatedAt: activatedAt ?? this.activatedAt,
     resolvedAt: resolvedAt ?? this.resolvedAt,
@@ -719,6 +724,7 @@ final class SignalJournalEntry {
     'marketRegime': marketRegime.name,
     'sizingCapital': sizingCapital,
     'outcome': outcome.name,
+    'outcomeEvaluationVersion': outcomeEvaluationVersion,
     'highestTargetHit': highestTargetHit,
     'activatedAt': activatedAt?.toIso8601String(),
     'resolvedAt': resolvedAt?.toIso8601String(),
@@ -816,6 +822,7 @@ final class SignalJournalEntry {
         ),
         sizingCapital: (value['sizingCapital'] as num?)?.toDouble() ?? 0,
         outcome: outcome,
+        outcomeEvaluationVersion: value['outcomeEvaluationVersion'] as String?,
         highestTargetHit: ((value['highestTargetHit'] as num?)?.toInt() ?? 0)
             .clamp(0, 3)
             .toInt(),

@@ -87,6 +87,51 @@ void main() {
     expect(stopped.simulatedPnl, closeTo(9.5, 0.000001));
   });
 
+  test('repeated scans cannot apply a raised stop to the TP candle', () {
+    final candles = [
+      _candle(minutes: 0, low: 99.5, high: 101),
+      _candle(minutes: 15, low: 100.5, high: 102.5),
+    ];
+    final first = SignalOutcomeEvaluator.evaluate(
+      entry: _entry(),
+      candles: candles,
+      evaluatedAt: _origin.add(const Duration(minutes: 30)),
+    );
+    final repeated = SignalOutcomeEvaluator.evaluate(
+      entry: first,
+      candles: candles,
+      evaluatedAt: _origin.add(const Duration(minutes: 31)),
+    );
+    expect(first.outcome, SignalOutcome.tp1);
+    expect(first.outcomeEvaluationVersion, SignalOutcomeEvaluator.version);
+    expect(
+      SignalJournalEntry.tryFromJson(first.toJson())!.outcomeEvaluationVersion,
+      SignalOutcomeEvaluator.version,
+    );
+    expect(repeated.outcome, SignalOutcome.tp1);
+    expect(repeated.toJson(), first.toJson());
+  });
+
+  test('unclosed candle cannot produce a permanent stop-out', () {
+    final result = SignalOutcomeEvaluator.evaluate(
+      entry: _entry(),
+      candles: [_candle(minutes: 0, low: 97, high: 103)],
+      evaluatedAt: _origin.add(const Duration(minutes: 3)),
+    );
+    expect(result.outcome, SignalOutcome.pendingEntry);
+    expect(result.simulatedPnl, isNull);
+  });
+
+  test('stop without entry touch is not an executed losing setup', () {
+    final result = SignalOutcomeEvaluator.evaluate(
+      entry: _entry(),
+      candles: [_candle(minutes: 0, low: 96, high: 98)],
+      evaluatedAt: _origin.add(const Duration(minutes: 15)),
+    );
+    expect(result.outcome, SignalOutcome.pendingEntry);
+    expect(result.activatedAt, isNull);
+  });
+
   test('ignores a legacy entry with a zero reference price', () {
     final invalid = _entry().copyWith();
     final entry = SignalJournalEntry(

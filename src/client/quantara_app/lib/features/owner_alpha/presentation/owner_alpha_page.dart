@@ -42,6 +42,7 @@ import '../../trading_journal/data/database_trading_journal_store.dart';
 import '../../trading_journal/presentation/trading_journal_view.dart';
 import '../application/owner_alpha_controller.dart';
 import '../application/signal_inbox_query.dart';
+import '../application/trading_evidence_export.dart';
 import '../data/owner_alpha_settings_transfer.dart';
 import '../data/durable_candidate_audit_store.dart';
 import '../data/realtime_production_runtime.dart';
