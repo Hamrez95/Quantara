@@ -2,49 +2,49 @@
   "schemaVersion": 1,
   "version": "1.2.0-rc.3",
   "buildNumber": 127,
-  "softwareCandidateSha": "b5365cf242a060a7e4d21088e93854450fac0d68",
-  "generatedAt": "2026-09-27T20:59:23Z",
+  "softwareCandidateSha": "fd24119e7adb34271fd85a99d177831a278cd307",
+  "generatedAt": "2026-10-07T05:28:05Z",
   "qualityScore": 100,
   "minimumQualityScore": 90,
   "evidence": {
     "repository_integrity": {
       "passed": true,
-      "runId": 36348651682,
-      "checkRunIds": [
-        108702854185,
-        108702854318
-      ]
+      "runId": 37526155783,
+      "jobIds": [
+        112483562783,
+        112483563272
+      ],
+      "scope": "Repository validation and .NET build/tests passed on the software tree before this documentation-only readiness promotion. Exact promotion PR checks are independently required by release-readiness.yml."
     },
     "flutter_android_upgrade": {
       "passed": true,
-      "runId": 36348651695,
+      "runId": 37526156601,
       "jobIds": [
-        108702854158,
-        108704604860,
-        108704604870,
-        108704604897
+        112484033335,
+        112489211561,
+        112489211703,
+        112489211723
       ],
-      "scope": "Exact software candidate b5365cf242a060a7e4d21088e93854450fac0d68: Flutter format/analyze/widget+safety tests, reproducible hot-path stress gate, Android QA build, and API 34/35/36 cold-start plus in-place-upgrade matrix all passed."
+      "scope": "Flutter format/analyze/full test suite, reproducible hot-path software stress gate, Android debug QA build and cold-start/in-place-upgrade matrix on API 34, 35 and 36 passed on PR source 95400f6f9d991790385fb6e5e167aacbbd8496af, an ancestor of this documentation-only promotion. No physical-device speed claim."
     },
     "windows_build": {
       "passed": true,
-      "runId": 36348651686,
-      "checkRunIds": [
-        108702854183
+      "runId": 37526155857,
+      "jobIds": [
+        112483563172
       ],
-      "scope": "Exact software candidate b5365cf242a060a7e4d21088e93854450fac0d68: fail-closed Windows service lifecycle, native desktop build, Inno installer packaging, packaged install with service STOPPED/disarmed, and packaged uninstall smoke all passed."
+      "scope": "Windows service lifecycle tests, native desktop build, installer packaging, and packaged install/uninstall smoke with execution service stopped/disarmed passed on PR source 95400f6f9d991790385fb6e5e167aacbbd8496af, an ancestor of this documentation-only promotion."
     },
     "installable_artifact_smoke": {
       "passed": true,
       "artifactIds": [
-        10909022646,
-        10909177357,
-        10909537145,
-        10909712752,
-        10909553156,
-        10909377275
+        11442364563,
+        11441843169,
+        11442573881,
+        11443556192,
+        11442464529
       ],
-      "scope": "Exact candidate Android QA install/cold-start/in-place-upgrade on API 34/35/36 plus Windows native/Inno packaged install/uninstall smoke. Physical-device and permanent-signing evidence remains explicitly pending."
+      "scope": "Android debug candidate passed emulator cold-start and in-place-upgrade smoke on API 34/35/36; Windows packaged installer install/uninstall smoke passed. CI/emulator only; physical Galaxy A55 and permanent signing remain pending."
     },
     "stability_report": {
       "passed": true,
@@ -60,8 +60,14 @@
     },
     "safety_regression": {
       "passed": true,
-      "runId": 36252014763,
-      "scope": "Exact candidate Flutter safety/regression suite and API 34/35/36 cold-start plus in-place-upgrade matrix. The manual-trade stale-account UI fix keeps forced startPreflight reconciliation and final pre-mutation account/risk checks fail-closed."
+      "runId": 37526156601,
+      "jobIds": [
+        112484033335,
+        112489211561,
+        112489211703,
+        112489211723
+      ],
+      "scope": "Manual account history attribution, fail-closed duplicate/ambiguous submit behavior, repeated setup replay idempotence, closed-candle handling and simulated-vs-exchange evidence regressions passed in the complete Flutter suite; API 34/35/36 upgrade smoke passed. No real exchange order was submitted."
     }
   },
   "manualGates": {

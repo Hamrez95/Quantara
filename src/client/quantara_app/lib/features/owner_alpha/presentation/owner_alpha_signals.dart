@@ -141,6 +141,23 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: OutlinedButton.icon(
+                              key: const Key('setup-evidence-export'),
+                              onPressed: all.isEmpty
+                                  ? null
+                                  : _exportTradingEvidence,
+                              icon: const Icon(Icons.ios_share_rounded),
+                              label: Text(
+                                _t(
+                                  'خروجی تاریخچه ستاپ‌ها',
+                                  'Export setup history',
+                                ),
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 14),
                           Wrap(
                             spacing: 8,
@@ -343,6 +360,49 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
     return null;
   }
 
+  Future<void> _exportTradingEvidence() async {
+    final generatedAt = DateTime.now().toUtc();
+    final json = TradingEvidenceExport.encode(
+      generatedAt: generatedAt,
+      setups: widget.controller.signalJournal,
+      exchangePnl: widget.autoTradeController.snapshot?.authoritativePnl,
+    );
+    final stamp = generatedAt
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: _t(
+            'نتایج فرضی ستاپ‌ها و حسابداری صرافی؛ بدون کلید API.',
+            'Simulated setup outcomes and exchange accounting; no API credentials.',
+          ),
+          files: [
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode(json)),
+              mimeType: 'application/json',
+            ),
+          ],
+          fileNameOverrides: ['quantara-trading-evidence-$stamp.json'],
+          downloadFallbackEnabled: true,
+        ),
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(
+              'خروجی ساخته نشد؛ دوباره تلاش کن.',
+              'Export failed; please try again.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _exportManualTradeDiagnostics(SignalJournalEntry entry) async {
     final generatedAt = DateTime.now().toUtc();
     final reconciliation = widget.autoTradeController.reconciliation;
@@ -374,6 +434,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
               ?.toUtc()
               .toIso8601String(),
         },
+        'exchangeAccounting': pnl?.toJson(),
         'authoritativePnl': pnl == null
             ? null
             : <String, Object?>{
@@ -499,7 +560,7 @@ class _SignalInboxViewState extends State<_SignalInboxView> {
                       '$error\n\nپوزیشن قبلی توسط Quantara محافظت‌شده تشخیص داده نشده است. اگر آن را مستقیماً در Bitunix مدیریت می‌کنی، می‌توانی با پذیرش مسئولیت ادامه بدهی.',
                       '$error\n\nQuantara cannot verify protection for an existing position. If you manage it directly in Bitunix, you can continue with explicit acknowledgement.',
                     )
-                  : error,
+                  : LocalLiveMessageLocalizer.localize(error, persian: _fa),
             ),
           ),
           actions: [
@@ -1096,7 +1157,10 @@ class _SignalJournalCard extends StatelessWidget {
     ).colorScheme.onSurfaceVariant,
     SignalOutcome.active => QuantaraColors.cyan,
     SignalOutcome.expiredUntriggered => Theme.of(context).colorScheme.outline,
-    SignalOutcome.stopped => QuantaraColors.danger,
+    SignalOutcome.stopped =>
+      (entry.simulatedPnl ?? 0) > 0
+          ? QuantaraColors.success
+          : QuantaraColors.danger,
     SignalOutcome.tp1 ||
     SignalOutcome.tp2 ||
     SignalOutcome.tp3 => QuantaraColors.success,

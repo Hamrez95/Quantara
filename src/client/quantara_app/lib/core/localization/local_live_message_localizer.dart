@@ -52,6 +52,9 @@ abstract final class LocalLiveMessageLocalizer {
   static String localize(String message, {required bool persian}) {
     final value = message.trim();
     if (!persian || value.isEmpty || _containsPersian(value)) return value;
+    if (value.startsWith('Bitunix account PnL truth is not ready')) {
+      return 'تاریخچه سود و زیان حساب Bitunix هنوز تطبیق داده نشده است. حساب را تازه‌سازی کن؛ اگر ادامه داشت، خروجی لاگ را ارسال کن. هیچ سفارشی ارسال نشد.';
+    }
     final summary = affordability(value);
     if (summary != null) {
       return 'موجودی قابل استفاده ${summary.availableMargin} USDT است؛ حداقل سرمایه لازم برای ${summary.symbol} حدود ${summary.minimumMargin} USDT و کسری سرمایه ${summary.shortfall} USDT است. با توجه به فاصله حد ضرر و کنترل ریسک ممکن است سرمایه بیشتری لازم باشد.';
