@@ -232,8 +232,8 @@ def render_markdown(payload: dict[str, Any], result: ValidationResult) -> str:
     lines = [
         f"# Quantara {payload['version']} owner-alpha stability report",
         "",
-        f"Software candidate SHA: `{payload['softwareCandidateSha']}`  ",
-        f"Version/build: `{payload['version']}+{payload['buildNumber']}`  ",
+        f"Software candidate SHA: `{payload['softwareCandidateSha']}`",
+        f"Version/build: `{payload['version']}+{payload['buildNumber']}`",
         f"Overall status: **{result.overall_status.upper()}**",
         "",
         "| Gate | Status | Reason |",
